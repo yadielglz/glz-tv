@@ -36,8 +36,13 @@
         #ambient-bg { position: absolute; inset: 0; width: 100%; height: 100%; background-size: cover; background-position: center; opacity: 0; filter: blur(50px) brightness(0.6); transform: scale(1.2); transition: opacity 1000ms ease-in-out; z-index: 0; }
         #video-player { width: 100%; height: 100%; background-color: #000; }
         #tuner-content.video-mode { display: flex; align-items: center; justify-content: center; gap: 0.75rem; color: var(--accent-color); filter: drop-shadow(0 0 5px var(--accent-color)); }
-        /* THIS IS THE FIX: Ensures header and footer are always on top and clickable */
-        #top-bar, #bottom-bar { position: relative; }
+        
+        /* MOBILE-FRIENDLY FIX: This ensures the header and footer are always on top and clickable.
+           A z-index property only affects elements that have a 'position' value other than 'static'.
+           By setting 'position: relative', we create a stacking context, making the z-index effective. */
+        #top-bar, #bottom-bar {
+            position: relative;
+        }
     </style>
 </head>
 <body class="w-full h-full font-sans bg-[var(--bg-color)] text-[var(--text-color)] transition-colors duration-300">
@@ -51,7 +56,7 @@
         </header>
         <div id="tuner-container" class="w-full flex-shrink-0 my-2">
             <div id="tuner-panel" class="w-11/12 h-12 flex items-center p-2 relative mx-auto rounded-lg">
-                <div id="tuner-content" class="w-full h-full flex items-center z-10 opacity-0 transition-opacity duration-300"></div>
+                <div id="tuner-content" class="w-full h-full flex items-center justify-center z-10 opacity-0 transition-opacity duration-300"></div>
             </div>
         </div>
         <main class="z-10 w-full px-4 flex flex-col items-center space-y-4 flex-grow justify-center bg-transparent">
@@ -64,51 +69,51 @@
         <footer id="bottom-bar" class="w-full p-3 flex justify-between items-center text-[var(--text-color)] z-20 bg-transparent flex-shrink-0">
              <span id="bottom-bar-station-name" class="font-bold text-sm h-5 truncate w-1/3"></span>
              <div id="controls-container" class="w-1/3 flex items-center justify-center space-x-4">
-                <button id="options-button" class="bg-[var(--surface-color)] p-3 rounded-full text-[var(--text-color)] hover:bg-[var(--border-color)] transition-all duration-200 border border-[var(--border-color)]" aria-label="Open options">
-                    <i data-lucide="settings-2" class="w-6 h-6"></i>
-                </button>
-                <button id="play-button" class="bg-[var(--play-button-bg)] text-[var(--play-button-text)] p-4 rounded-full shadow-lg hover:opacity-90 transform hover:scale-105" aria-label="Play">
-                    <i data-lucide="play" class="w-8 h-8 fill-current ml-1"></i>
-                </button>
-                <button id="stop-button" class="hidden bg-red-600 text-white p-4 rounded-full shadow-lg hover:bg-red-700 transform hover:scale-105" aria-label="Stop player">
-                    <i data-lucide="square" class="w-8 h-8 fill-current"></i>
-                </button>
-                <div class="p-3 rounded-full w-[52px]"></div> </div>
+                 <button id="options-button" class="bg-[var(--surface-color)] p-3 rounded-full text-[var(--text-color)] hover:bg-[var(--border-color)] transition-all duration-200 border border-[var(--border-color)]" aria-label="Open options">
+                     <i data-lucide="settings-2" class="w-6 h-6"></i>
+                 </button>
+                 <button id="play-button" class="bg-[var(--play-button-bg)] text-[var(--play-button-text)] p-4 rounded-full shadow-lg hover:opacity-90 transform hover:scale-105" aria-label="Play">
+                     <i data-lucide="play" class="w-8 h-8 fill-current ml-1"></i>
+                 </button>
+                 <button id="stop-button" class="hidden bg-red-600 text-white p-4 rounded-full shadow-lg hover:bg-red-700 transform hover:scale-105" aria-label="Stop player">
+                     <i data-lucide="square" class="w-8 h-8 fill-current"></i>
+                 </button>
+                 <div class="p-3 rounded-full w-[52px]"></div> </div>
              <div class="w-1/3"></div> </footer>
         <div id="modals-container">
              <div id="options-modal" class="hidden fixed inset-0 z-50">
-                <div id="options-backdrop" class="absolute inset-0 bg-black/50 transition-opacity duration-300 opacity-0"></div>
-                <div id="options-panel" class="absolute inset-y-0 right-0 w-full max-w-sm bg-[var(--modal-bg)] flex flex-col transform translate-x-full transition-transform duration-300 ease-in-out">
-                    <header class="flex items-center justify-between p-4 border-b border-[var(--border-color)] flex-shrink-0">
-                        <h2 class="text-xl font-bold text-[var(--text-color)]">Options</h2>
-                        <button id="close-options-button" class="p-2 rounded-full hover:bg-[var(--border-color)] text-[var(--text-color)]">
-                            <i data-lucide="x" class="w-6 h-6"></i>
-                        </button>
-                    </header>
-                    <div id="options-container" class="p-4 space-y-3 text-[var(--text-color)] flex-grow overflow-y-auto station-list-scrollbar">
+                 <div id="options-backdrop" class="absolute inset-0 bg-black/50 transition-opacity duration-300 opacity-0"></div>
+                 <div id="options-panel" class="absolute inset-y-0 right-0 w-full max-w-sm bg-[var(--modal-bg)] flex flex-col transform translate-x-full transition-transform duration-300 ease-in-out">
+                     <header class="flex items-center justify-between p-4 border-b border-[var(--border-color)] flex-shrink-0">
+                         <h2 class="text-xl font-bold text-[var(--text-color)]">Options</h2>
+                         <button id="close-options-button" class="p-2 rounded-full hover:bg-[var(--border-color)] text-[var(--text-color)]">
+                             <i data-lucide="x" class="w-6 h-6"></i>
+                         </button>
+                     </header>
+                     <div id="options-container" class="p-4 space-y-3 text-[var(--text-color)] flex-grow overflow-y-auto station-list-scrollbar">
                          <button id="toggle-station-list-button" class="w-full flex justify-between items-center p-3 bg-[var(--surface-color)] hover:bg-[var(--border-color)] rounded-lg">
-                            <span>Channel List</span>
-                            <i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i>
-                        </button>
-                        <div id="station-list-in-options" class="station-list-scrollbar space-y-2 pr-2">
-                            <p class='text-center text-sm text-[var(--text-muted-color)] p-4'>Loading embedded data...</p>
-                        </div>
-                        <button id="random-station-button" class="w-full flex justify-between items-center p-3 bg-[var(--surface-color)] hover:bg-[var(--border-color)] rounded-lg">
-                            <span>Random Channel</span>
-                            <i data-lucide="dice-5" class="w-5 h-5"></i>
-                        </button>
-                        <button id="theme-toggle-button" class="w-full flex justify-between items-center p-3 bg-[var(--surface-color)] hover:bg-[var(--border-color)] rounded-lg">
-                            <span>Toggle Theme</span>
-                            <span id="theme-icon-container"><i data-lucide="moon" class="w-5 h-5"></i></span>
-                        </button>
-                        <div class="w-full grid grid-cols-2 gap-2 items-center p-3 bg-[var(--surface-color)] rounded-lg text-sm">
-                            <span class="text-left">Stream Time</span>
-                            <span id="stopwatch-display" class="font-mono text-right">00:00</span>
-                        </div>
-                    </div>
-                     <div id="version-footer" class="text-center text-[var(--text-faint-color)] text-xs p-4 border-t border-[var(--border-color)] flex-shrink-0"></div>
-                </div>
-            </div>
+                             <span>Channel List</span>
+                             <i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i>
+                         </button>
+                         <div id="station-list-in-options" class="station-list-scrollbar space-y-2 pr-2">
+                             <p class='text-center text-sm text-[var(--text-muted-color)] p-4'>Loading embedded data...</p>
+                         </div>
+                         <button id="random-station-button" class="w-full flex justify-between items-center p-3 bg-[var(--surface-color)] hover:bg-[var(--border-color)] rounded-lg">
+                             <span>Random Channel</span>
+                             <i data-lucide="dice-5" class="w-5 h-5"></i>
+                         </button>
+                         <button id="theme-toggle-button" class="w-full flex justify-between items-center p-3 bg-[var(--surface-color)] hover:bg-[var(--border-color)] rounded-lg">
+                             <span>Toggle Theme</span>
+                             <span id="theme-icon-container"><i data-lucide="moon" class="w-5 h-5"></i></span>
+                         </button>
+                         <div class="w-full grid grid-cols-2 gap-2 items-center p-3 bg-[var(--surface-color)] rounded-lg text-sm">
+                             <span class="text-left">Stream Time</span>
+                             <span id="stopwatch-display" class="font-mono text-right">00:00</span>
+                         </div>
+                     </div>
+                      <div id="version-footer" class="text-center text-[var(--text-faint-color)] text-xs p-4 border-t border-[var(--border-color)] flex-shrink-0"></div>
+                 </div>
+             </div>
         </div>
     </div>
     
@@ -116,15 +121,15 @@
         // --- EMBEDDED DATA ---
         const M3U_DATA = `
 #EXTM3U url-tvg="https://epg.best/1eef8-shw7fc.xml.gz" x-tvg-url="https://epg.best/1eef8-shw7fc.xml.gz"
-#EXTINF:-1 tvg-id="WKAQ.us" tvg-name="WKAQ   TELEMUNDO PR" tvg-logo="https://i.ibb.co/gLVK5Swz/TEL.png" tvg-chno="102" channel-id="102" group-title="TV",WKAQ   TELEMUNDO PR
+#EXTINF:-1 tvg-id="WKAQ.us" tvg-name="WKAQ   TELEMUNDO PR" tvg-logo="https://i.ibb.co/gLVK5Swz/TEL.png" tvg-chno="102" channel-id="102" group-title="TV",WKAQ   TELEMUNDO PR
 https://nbculocallive.akamaized.net/hls/live/2037499/puertorico/stream1/master_1080.m3u8
-#EXTINF:-1 tvg-id="WKAQDT2.us" tvg-name="WKAQ2   PUNTO 2" tvg-logo="https://static.epg.best/us/WKAQDT2.us.png" tvg-chno="103" channel-id="103" group-title="TV",WKAQ2   PUNTO 2
+#EXTINF:-1 tvg-id="WKAQDT2.us" tvg-name="WKAQ2   PUNTO 2" tvg-logo="https://static.epg.best/us/WKAQDT2.us.png" tvg-chno="103" channel-id="103" group-title="TV",WKAQ2   PUNTO 2
 https://nbculocallive.akamaized.net/hls/live/2037499/puertorico/stream2/master_720.m3u8
 #EXTINF:-1 tvg-id="UniMas.us" tvg-name="UNIMAS HD" tvg-logo="https://static.epg.best/us/UniMas.us.png" tvg-chno="104" channel-id="104" group-title="TV",UNIMAS HD
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/unimas.network.east.us.m3u8
-#EXTINF:-1 tvg-id="WLII.us" tvg-name="WLII   TELEONCE" tvg-logo="https://static.epg.best/us/WLII.us.png" tvg-chno="105" channel-id="105" group-title="TV",WLII   TELEONCE
+#EXTINF:-1 tvg-id="WLII.us" tvg-name="WLII   TELEONCE" tvg-logo="https://static.epg.best/us/WLII.us.png" tvg-chno="105" channel-id="105" group-title="TV",WLII   TELEONCE
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/uni.wlii.puerto.rico.us.m3u8
-#EXTINF:-1 tvg-id="WIPRTV.us" tvg-name="WIPR   PUERTO RICO TV" tvg-logo="https://static.epg.best/us/WIPRTV.us.png" tvg-chno="106" channel-id="106" group-title="TV",WIPR   PUERTO RICO TV
+#EXTINF:-1 tvg-id="WIPRTV.us" tvg-name="WIPR   PUERTO RICO TV" tvg-logo="https://static.epg.best/us/WIPRTV.us.png" tvg-chno="106" channel-id="106" group-title="TV",WIPR   PUERTO RICO TV
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/wipr.pr.m3u8
 #EXTINF:-1 tvg-id="ESPN.us" tvg-name="ESPN HD" tvg-logo="https://i.ibb.co/mrs1mDXw/ESPN-png.png" tvg-chno="110" channel-id="110" group-title="TV",ESPN HD
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/espn.us.m3u8
@@ -148,15 +153,15 @@ https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nb
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/yes.network.us.m3u8
 #EXTINF:-1 tvg-id="SportsNetNewYork.us" tvg-name="SPORTSNET NEW YORK" tvg-logo="https://static.epg.best/us/SportsNetNewYork.us.png" tvg-chno="120" channel-id="120" group-title="TV",SPORTSNET NEW YORK
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/sny.sportsnet.new.york.us.m3u8
-#EXTINF:-1 tvg-id="WESH.us" tvg-name="WESH   NBC ORLANDO" tvg-logo="https://static.epg.best/us/WESH.us.png" tvg-chno="121" channel-id="121" group-title="TV",WESH   NBC ORLANDO
+#EXTINF:-1 tvg-id="WESH.us" tvg-name="WESH   NBC ORLANDO" tvg-logo="https://static.epg.best/us/WESH.us.png" tvg-chno="121" channel-id="121" group-title="TV",WESH   NBC ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nbc.wesh.winter.park.fl.us.m3u8
-#EXTINF:-1 tvg-id="WKMG.us" tvg-name="WKMG   CBS ORLANDO" tvg-logo="https://static.epg.best/us/WKMG.us.png" tvg-chno="122" channel-id="122" group-title="TV",WKMG   CBS ORLANDO
+#EXTINF:-1 tvg-id="WKMG.us" tvg-name="WKMG   CBS ORLANDO" tvg-logo="https://static.epg.best/us/WKMG.us.png" tvg-chno="122" channel-id="122" group-title="TV",WKMG   CBS ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cbs.wkmg.orlando.fl.us.m3u8
-#EXTINF:-1 tvg-id="WFTV.us" tvg-name="WFTV   ABC ORLANDO" tvg-logo="https://static.epg.best/us/WFTV.us.png" tvg-chno="123" channel-id="123" group-title="TV",WFTV   ABC ORLANDO
+#EXTINF:-1 tvg-id="WFTV.us" tvg-name="WFTV   ABC ORLANDO" tvg-logo="https://static.epg.best/us/WFTV.us.png" tvg-chno="123" channel-id="123" group-title="TV",WFTV   ABC ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/abc.wftv.orlando.fl.us.m3u8
-#EXTINF:-1 tvg-id="WOFL.us" tvg-name="WOFL   FOX ORLANDO" tvg-logo="https://static.epg.best/us/WOFL.us.png" tvg-chno="124" channel-id="124" group-title="TV",WOFL   FOX ORLANDO
+#EXTINF:-1 tvg-id="WOFL.us" tvg-name="WOFL   FOX ORLANDO" tvg-logo="https://static.epg.best/us/WOFL.us.png" tvg-chno="124" channel-id="124" group-title="TV",WOFL   FOX ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/fox.wofl.orlando.fl.us.m3u8
-#EXTINF:-1 tvg-id="WKCF.us" tvg-name="WKCF   CW 18 ORLANDO" tvg-logo="https://i.ibb.co/cK2GwV7r/CW18-Clear.png" tvg-chno="125" channel-id="125" group-title="TV",WKCF   CW 18 ORLANDO
+#EXTINF:-1 tvg-id="WKCF.us" tvg-name="WKCF   CW 18 ORLANDO" tvg-logo="https://i.ibb.co/cK2GwV7r/CW18-Clear.png" tvg-chno="125" channel-id="125" group-title="TV",WKCF   CW 18 ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cw.wkcf.orlando.fl.us.m3u8
 #EXTINF:-1 tvg-id="ComedyCentral.us" tvg-name="COMEDY CENTRAL" tvg-logo="https://static.epg.best/us/ComedyCentral.us.png" tvg-chno="129" channel-id="129" group-title="TV",COMEDY CENTRAL
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/comedy.central.eastern.us.m3u8
@@ -184,15 +189,15 @@ https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/ni
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cartoon.network.usa.eastern.us.m3u8
 #EXTINF:-1 tvg-id="Boomerang.us" tvg-name="BOOMERANG" tvg-logo="https://static.epg.best/us/Boomerang.us.png" tvg-chno="141" channel-id="141" group-title="TV",BOOMERANG
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/boomerang.us.m3u8
-#EXTINF:-1 tvg-id="WFOR.us" tvg-name="WFOR   CBS MIAMI" tvg-logo="https://static.epg.best/us/WFOR.us.png" tvg-chno="142" channel-id="142" group-title="TV",WFOR   CBS MIAMI
+#EXTINF:-1 tvg-id="WFOR.us" tvg-name="WFOR   CBS MIAMI" tvg-logo="https://static.epg.best/us/WFOR.us.png" tvg-chno="142" channel-id="142" group-title="TV",WFOR   CBS MIAMI
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cbs.wfor.miami.fl.us.m3u8
-#EXTINF:-1 tvg-id="WTVJ.us" tvg-name="WTVJ   NBC MIAMI" tvg-logo="https://static.epg.best/us/WTVJ.us.png" tvg-chno="143" channel-id="143" group-title="TV",WTVJ   NBC MIAMI
+#EXTINF:-1 tvg-id="WTVJ.us" tvg-name="WTVJ   NBC MIAMI" tvg-logo="https://static.epg.best/us/WTVJ.us.png" tvg-chno="143" channel-id="143" group-title="TV",WTVJ   NBC MIAMI
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nbc.wtvj.miami.fl.us.m3u8
-#EXTINF:-1 tvg-id="WSVN.us" tvg-name="WSVN   FOX MIAMI" tvg-logo="https://static.epg.best/us/WSVN.us.png" tvg-chno="144" channel-id="144" group-title="TV",WSVN   FOX MIAMI
+#EXTINF:-1 tvg-id="WSVN.us" tvg-name="WSVN   FOX MIAMI" tvg-logo="https://static.epg.best/us/WSVN.us.png" tvg-chno="144" channel-id="144" group-title="TV",WSVN   FOX MIAMI
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/fox.wsvn.miami.fl.us.m3u8
-#EXTINF:-1 tvg-id="WBFS.us" tvg-name="WBFS   MY TV 33 MIAMI" tvg-logo="https://static.epg.best/us/WBFS.us.png" tvg-chno="145" channel-id="145" group-title="TV",WBFS   MY TV 33 MIAMI
+#EXTINF:-1 tvg-id="WBFS.us" tvg-name="WBFS   MY TV 33 MIAMI" tvg-logo="https://static.epg.best/us/WBFS.us.png" tvg-chno="145" channel-id="145" group-title="TV",WBFS   MY TV 33 MIAMI
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/mnt.wbfs.miami.fl.us.m3u8
-#EXTINF:-1 tvg-id="WLTV.us" tvg-name="WLTV   UNI MIAMI" tvg-logo="https://i.ibb.co/ycTh0gZ6/6d7ecddc-43af-4668-801c-edde6aa56925.jpg" tvg-chno="146" channel-id="146" group-title="TV",WLTV   UNI MIAMI
+#EXTINF:-1 tvg-id="WLTV.us" tvg-name="WLTV   UNI MIAMI" tvg-logo="https://i.ibb.co/ycTh0gZ6/6d7ecddc-43af-4668-801c-edde6aa56925.jpg" tvg-chno="146" channel-id="146" group-title="TV",WLTV   UNI MIAMI
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/uni.wltv.miami.fl.us.m3u8
 #EXTINF:-1 tvg-id="CourtTV.us" tvg-name="COURT TV" tvg-logo="https://static.epg.best/us/CourtTV.us.png" tvg-chno="150" channel-id="150" group-title="TV",COURT TV
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/court.tv.network.us.m3u8
@@ -236,15 +241,15 @@ https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/hb
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/hbo.2.eastern.us.m3u8
 #EXTINF:-1 tvg-id="HBOComedy.us" tvg-name="HBO Comedy" tvg-logo="https://static.epg.best/us/HBOComedy.us.png" tvg-chno="177" channel-id="177" group-title="TV",HBO Comedy
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/hbo.comedy.east.us.m3u8
-#EXTINF:-1 tvg-id="WFLA.us" tvg-name="WFLA   NBC TAMPA" tvg-logo="https://image.roku.com/developer_channels/prod/74a606e94c1077b1b1ae6d33f8b6c9b854fce9dd54784386679e9d10cf002cdd.png" tvg-chno="180" channel-id="180" group-title="TV",WFLA   NBC TAMPA
+#EXTINF:-1 tvg-id="WFLA.us" tvg-name="WFLA   NBC TAMPA" tvg-logo="https://image.roku.com/developer_channels/prod/74a606e94c1077b1b1ae6d33f8b6c9b854fce9dd54784386679e9d10cf002cdd.png" tvg-chno="180" channel-id="180" group-title="TV",WFLA   NBC TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nbc.wfla.tampa.bay.fl.us.m3u8
-#EXTINF:-1 tvg-id="WTSP.us" tvg-name="WTSP   CBS TAMPA" tvg-logo="https://static.epg.best/us/WTSP.us.png" tvg-chno="181" channel-id="181" group-title="TV",WTSP   CBS TAMPA
+#EXTINF:-1 tvg-id="WTSP.us" tvg-name="WTSP   CBS TAMPA" tvg-logo="https://static.epg.best/us/WTSP.us.png" tvg-chno="181" channel-id="181" group-title="TV",WTSP   CBS TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cbs.wtsp.tampa.bay.fl.us.m3u8
-#EXTINF:-1 tvg-id="WTVT.us" tvg-name="WTVT   FOX TAMPA" tvg-logo="https://static.epg.best/us/WTVT.us.png" tvg-chno="182" channel-id="182" group-title="TV",WTVT   FOX TAMPA
+#EXTINF:-1 tvg-id="WTVT.us" tvg-name="WTVT   FOX TAMPA" tvg-logo="https://static.epg.best/us/WTVT.us.png" tvg-chno="182" channel-id="182" group-title="TV",WTVT   FOX TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/fox.wtvt.tampa.bay.fl.us.m3u8
-#EXTINF:-1 tvg-id="WFTS.us" tvg-name="WFTS   ABC TAMPA" tvg-logo="https://static.epg.best/us/WFTS.us.png" tvg-chno="183" channel-id="183" group-title="TV",WFTS   ABC TAMPA
+#EXTINF:-1 tvg-id="WFTS.us" tvg-name="WFTS   ABC TAMPA" tvg-logo="https://static.epg.best/us/WFTS.us.png" tvg-chno="183" channel-id="183" group-title="TV",WFTS   ABC TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/abc.wfts.tampa.bay.fl.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="WRMD   TELEMUNDO TAMPA" tvg-logo="https://static.wikia.nocookie.net/tvstations/images/2/2c/Telemundo_49_2018.png" tvg-chno="184" channel-id="184" group-title="TV",WRMD   TELEMUNDO TAMPA
+#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="WRMD   TELEMUNDO TAMPA" tvg-logo="https://static.wikia.nocookie.net/tvstations/images/2/2c/Telemundo_49_2018.png" tvg-chno="184" channel-id="184" group-title="TV",WRMD   TELEMUNDO TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/telemundo.wrmd.tampa.fl.us.m3u8
 #EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="BALLY SPORTS SUN" tvg-logo="https://i.ibb.co/jv7mZWLM/Bally-Sports-Sun.png" tvg-chno="185" channel-id="185" group-title="TV",BALLY SPORTS SUN
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/bally.sports.sun.us.m3u8
@@ -319,7 +324,6 @@ https://listen.radioking.com/radio/399811/stream/452110
 #EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] La Vieja Z [GLZ Radio]" tvg-logo="https://i.ibb.co/d4VZVjj2/LVZ8-removebg-preview.png" tvg-chno="229" channel-id="229" group-title="TV",[R] La Vieja Z [GLZ Radio]
 https://s3.free-shoutcast.com/stream/18094
 `;
-
         const EPG_DATA = `
 <?xml version="1.0" encoding="UTF-8"?>
 <tv generator-info-name="epg.best" generator-info-url="https://epg.best">
@@ -729,7 +733,6 @@ https://s3.free-shoutcast.com/stream/18094
   </channel>
 </tv>
 `;
-
         // --- DOM Elements & State ---
         const dom = {
             appContainer: document.getElementById('app-container'), body: document.body, playerDisplay: document.getElementById('player-display'), playerContent: document.getElementById('player-content'), ambientBg: document.getElementById('ambient-bg'), playButton: document.getElementById('play-button'), stopButton: document.getElementById('stop-button'), optionsButton: document.getElementById('options-button'), bottomBarStationName: document.getElementById('bottom-bar-station-name'), tunerContent: document.getElementById('tuner-content'), stopwatchDisplay: document.getElementById('stopwatch-display'),
@@ -843,15 +846,21 @@ https://s3.free-shoutcast.com/stream/18094
 
         // --- UI & UX ---
         const updateControlButtons = () => { if (state.isPlaying) { dom.playButton.classList.add('hidden'); dom.stopButton.classList.remove('hidden'); } else { dom.playButton.classList.remove('hidden'); dom.stopButton.classList.add('hidden'); } createIcons(); };
+        
+        // --- MODIFICATION: Simplified Tuner Display ---
+        // This function now only shows the channel name for a cleaner mobile interface.
         const updateTunerDisplay = () => {
             const channel = state.channels[state.currentChannelIndex];
             if (channel && state.isPlaying) {
-                const program = getCurrentProgram(channel.id); const epgText = program ? ` | ${program.title}` : '';
-                dom.tunerContent.innerHTML = `<div class="video-mode"><i data-lucide="tv" class="w-5 h-5"></i><span class="font-bold text-sm truncate">${channel.name}${epgText}</span></div>`;
+                dom.tunerContent.innerHTML = `<div class="video-mode"><span class="font-bold text-sm truncate">${channel.name}</span></div>`;
                 dom.tunerContent.style.opacity = 1;
-            } else { dom.tunerContent.style.opacity = 0; dom.tunerContent.innerHTML = ''; }
+            } else {
+                dom.tunerContent.style.opacity = 0;
+                dom.tunerContent.innerHTML = '';
+            }
             createIcons();
         };
+
         const updateStopwatch = () => { const h = Math.floor(state.elapsedTime / 3600), m = Math.floor((state.elapsedTime % 3600) / 60), s = state.elapsedTime % 60, pad = (num) => String(num).padStart(2, '0'); dom.stopwatchDisplay.textContent = h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`; };
         const updateStatusBar = () => { const now = new Date(); const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' }); dom.statusLeft.innerHTML = `<span class="font-bold text-sm">GLZ Player</span>`; dom.statusCenter.innerHTML = timeString; dom.statusRight.innerHTML = `<i data-lucide="github" class="w-5 h-5"></i>`; createIcons(); };
         const updateMediaSession = () => { if (typeof(navigator.mediaSession) !== 'undefined' && state.currentChannelIndex !== null) { const channel = state.channels[state.currentChannelIndex], program = getCurrentProgram(channel.id); navigator.mediaSession.metadata = new MediaMetadata({ title: channel.name, artist: program ? program.title : 'Glz Player', artwork: [{ src: channel.logo, sizes: '512x512', type: 'image/png' }] }); } };
