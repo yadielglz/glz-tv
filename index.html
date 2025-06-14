@@ -3,510 +3,492 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IPTV Playlist Player</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <title>Cable Box Emulator</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@500;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      --fg: #ffffff;
-      --accent: #00d4ff;
-      --accent-hover: #00b8e6;
-      --bar: rgba(255, 255, 255, 0.1);
-      --bar-border: rgba(255, 255, 255, 0.2);
-      --modal-bg: rgba(0, 0, 0, 0.4);
-      --glass: rgba(255, 255, 255, 0.15);
-      --glass-border: rgba(255, 255, 255, 0.2);
-      --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      --shadow-heavy: 0 20px 60px rgba(0, 0, 0, 0.15);
-      --text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-      --backdrop-blur: blur(20px);
-    }
-    
-    body.light {
-      --bg: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-      --fg: #2d3748;
-      --bar: rgba(255, 255, 255, 0.25);
-      --bar-border: rgba(255, 255, 255, 0.3);
-      --modal-bg: rgba(255, 255, 255, 0.3);
-      --glass: rgba(255, 255, 255, 0.3);
-      --glass-border: rgba(255, 255, 255, 0.4);
-      --text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-    
-    * {
-      box-sizing: border-box;
-    }
-    
     body {
+      background: #101214;
       margin: 0;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--fg);
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      overflow-x: hidden;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Inter', Arial, sans-serif;
     }
-    
-    body::before {
+    .cablebox-shell {
+      max-width: 800px;
+      margin: 2vh auto;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 50%, #0a0e1a 100%);
+      border: 2px solid #2d5aa0;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(45, 90, 160, 0.3);
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .cablebox-header {
+      background: linear-gradient(135deg, #0d1421 0%, #1e2a3a 50%, #0d1421 100%);
+      border: 2px solid #2d5aa0;
+      border-radius: 12px 12px 0 0;
+      padding: 1em 1.5em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(45, 90, 160, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+    .cablebox-header::before {
       content: '';
-      position: fixed;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #4a90e2, transparent);
+      animation: scan 3s linear infinite;
+    }
+    @keyframes scan {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .cablebox-brand {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #0f0;
+      text-shadow: 0 0 10px #0f0;
+      letter-spacing: 2px;
+    }
+    .epg-display {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 0.9em;
+      font-weight: 500;
+      color: #4a90e2;
+      background: rgba(10, 14, 26, 0.8);
+      padding: 0.3em 0.6em;
+      border: 1px solid #2d5aa0;
+      border-radius: 6px;
+      text-shadow: 0 0 5px rgba(74, 144, 226, 0.5);
+      min-width: 200px;
+      max-width: 300px;
+      text-align: left;
+      box-shadow: inset 0 0 10px rgba(45, 90, 160, 0.2);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      backdrop-filter: blur(5px);
+    }
+    .led-display {
+      font-family: 'Digital-7', 'Courier New', monospace;
+      font-size: 1.5em;
+      font-weight: bold;
+      color: #0f0;
+      background: #000;
+      padding: 0.3em 0.6em;
+      border: 2px solid #0f0;
+      border-radius: 6px;
+      text-shadow: 0 0 15px #0f0;
+      min-width: 2.5em;
+      text-align: center;
+      box-shadow: inset 0 0 10px rgba(0,255,0,0.3);
+    }
+    /* .status-indicator { Removed, as not needed for this UI } */
+    /* .time-display { Removed, as not needed for this UI } */
+    .cablebox-led { /* Unused, replaced by .led-display */ }
+    .cablebox-power { /* Unused, replaced by remote button */ }
+    .tv-area {
+      position: relative;
+      background: #0a0e1a;
+      border-radius: 0 0 12px 12px;
+      overflow: hidden;
+      min-height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tv-area video, .tv-area audio {
+      max-width: 100%;
+      max-height: 100%;
+      width: 100%; /* Ensure video takes full width */
+      height: 100%; /* Ensure video takes full height */
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(45, 90, 160, 0.2);
+      object-fit: contain; /* Ensure content fits within bounds */
+    }
+    /* .stop-btn { Handled by remote now } */
+    .cablebox-info-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(135deg, rgba(13, 20, 33, 0.95) 0%, rgba(30, 42, 58, 0.95) 100%);
+      color: #4a90e2;
+      padding: 0.8em 1.2em;
+      display: flex;
+      align-items: center;
+      gap: 1em;
+      font-size: 1.1em;
+      font-weight: 500;
+      border-top: 2px solid #2d5aa0;
+      backdrop-filter: blur(10px);
+      transition: opacity 0.5s ease-out; /* Added for smooth fade-out */
+    }
+    .cablebox-info-bar.fadeout {
+        opacity: 0 !important;
+    }
+    .info-logo {
+      height: 2em;
+      width: auto;
+      border-radius: 4px;
+      border: 1px solid #2d5aa0;
+      background-color: #000; /* Added background for logos with transparency */
+    }
+    .cablebox-standby {
+      position: absolute;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: 
-        radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
-        radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.2) 0%, transparent 50%);
-      z-index: -1;
-      animation: float 20s ease-in-out infinite;
-    }
-    
-    @keyframes float {
-      0%, 100% { transform: translateY(0px) rotate(0deg); }
-      33% { transform: translateY(-20px) rotate(1deg); }
-      66% { transform: translateY(10px) rotate(-1deg); }
-    }
-    
-    .top-bar {
-      background: var(--glass);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
-      border: 1px solid var(--glass-border);
-      border-bottom: 1px solid var(--bar-border);
-      color: var(--fg);
-      padding: 1em 1.5em;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%);
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      font-size: 1.1em;
-      font-weight: 600;
-      box-shadow: var(--shadow);
-      z-index: 2;
-      text-shadow: var(--text-shadow);
-      letter-spacing: 0.5px;
+      justify-content: center;
+      border-radius: 0 0 12px 12px;
+      z-index: 10; /* Ensure it's above the video/audio */
     }
-    
-    .bottom-bar {
-      background: var(--glass);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
-      border: 1px solid var(--glass-border);
-      border-top: 1px solid var(--bar-border);
-      color: var(--fg);
-      padding: 1em 1.5em;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 1.1em;
+    .standby-text {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 2em;
       font-weight: 600;
-      box-shadow: var(--shadow);
-      z-index: 2;
+      color: #4a90e2;
+      text-shadow: 0 0 20px rgba(74, 144, 226, 0.6);
+      letter-spacing: 3px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+    /* .cablebox-numpad { Removed from main shell, only on remote } */
+    /* .settings-btn { Removed, as not needed for this UI } */
+
+    @media (max-width: 700px) {
+      .cablebox-shell {
+        max-width: 99vw;
+        border-radius: 10px;
+        padding-bottom: 0.5em;
+      }
+      .cablebox-header {
+        padding: 0.8em 1em;
+        flex-wrap: wrap;
+        gap: 0.5em;
+      }
+      .cablebox-brand {
+        font-size: 1em;
+        letter-spacing: 1px;
+      }
+      .epg-display {
+        font-size: 0.8em; /* Adjusted for mobile */
+        padding: 0.2em 0.4em;
+        min-width: unset; /* Remove min-width for mobile */
+        max-width: 150px; /* Adjusted max-width for mobile */
+      }
+      .led-display {
+        font-size: 1.2em;
+        padding: 0.2em 0.4em;
+        min-width: 2em;
+      }
+      /* Removed status-indicator, time-display media queries */
+      .cablebox-info-bar {
+        padding: 0.5em 0.7em;
+        font-size: 0.9em; /* Adjusted for mobile */
+        border-radius: 0 0 10px 10px;
+      }
+      .info-logo {
+        height: 1.5em; /* Adjusted for mobile */
+      }
+      /* Numpad styles handled by remote styles now */
+      .standby-text {
+        font-size: 1.3em;
+        padding: 0.3em 0.7em;
+      }
+      .remote-outer {
+        right: 1vw;
+        bottom: 1vw;
+      }
+      .cablebox-remote {
+        min-width: 80px;
+        padding: 0.7em 0.7em 0.5em 0.7em;
+      }
+      .remote-btn {
+        height: 36px;
+        width: 36px;
+        font-size: 1em;
+      }
+      .remote-ch {
+        width: 60px;
+        font-size: 1em;
+      }
+    }
+    /* Remote styles */
+    .remote-outer {
       position: fixed;
-      bottom: 0; left: 0; right: 0;
-      text-shadow: var(--text-shadow);
-      letter-spacing: 0.5px;
-    }
-    
-    .channel-info {
-      display: flex;
-      align-items: center;
-      gap: 1em;
-    }
-    
-    .channel-logo {
-      width: 40px; height: 40px;
-      object-fit: contain;
-      background: var(--glass);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
-      border: 1px solid var(--glass-border);
-      border-radius: 12px;
-      box-shadow: var(--shadow);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    .channel-logo:hover {
-      transform: scale(1.05);
-      box-shadow: var(--shadow-heavy);
-    }
-    
-    .settings-btn {
-      background: var(--glass);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
-      border: 1px solid var(--glass-border);
-      color: var(--fg);
-      font-size: 1.3em;
-      cursor: pointer;
-      padding: 0.5em;
-      border-radius: 12px;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      width: 44px;
-      height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-shadow: var(--text-shadow);
-    }
-    
-    .settings-btn:hover { 
-      background: var(--accent);
-      transform: scale(1.05);
-      box-shadow: var(--shadow-heavy);
-    }
-    
-    .player-wrap {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      min-height: 300px;
-      background: rgba(0, 0, 0, 0.3);
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-      border-radius: 20px;
-      margin: 1em;
-      border: 1px solid var(--glass-border);
-    }
-    
-    body.light .player-wrap {
-      background: rgba(255, 255, 255, 0.2);
-    }
-    
-    video, audio {
-      max-width: 95vw;
-      max-height: 75vh;
-      background: rgba(0, 0, 0, 0.8);
-      border-radius: 16px;
-      box-shadow: var(--shadow-heavy);
-      outline: none;
-      border: 1px solid var(--glass-border);
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-    }
-    
-    body.light video, body.light audio {
-      background: rgba(255, 255, 255, 0.9);
-    }
-    
-    .stop-btn {
-      position: absolute;
-      top: 1.5em; right: 1.5em;
-      background: linear-gradient(135deg, #ff6b6b, #ee5a52);
-      color: #fff;
-      border: none;
-      border-radius: 50%;
-      width: 50px; height: 50px;
-      font-size: 1.5em;
-      cursor: pointer;
-      box-shadow: var(--shadow-heavy);
-      z-index: 3;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      font-weight: 600;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    }
-    
-    .stop-btn:hover { 
-      background: linear-gradient(135deg, #ff5252, #d32f2f);
-      transform: scale(1.1);
-      box-shadow: 0 25px 50px rgba(255, 82, 82, 0.3);
-    }
-    
-    .modal {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: var(--modal-bg);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10;
-      animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    @keyframes fadeIn { 
-      from { opacity: 0; transform: scale(0.95); } 
-      to { opacity: 1; transform: scale(1); } 
-    }
-    
-    .modal-content {
-      background: var(--glass);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
-      border: 1px solid var(--glass-border);
-      color: var(--fg);
-      border-radius: 24px;
-      padding: 2.5em 2em 2em 2em;
-      min-width: 380px;
-      max-width: 95vw;
-      max-height: 85vh;
-      overflow-y: auto;
-      box-shadow: var(--shadow-heavy);
-      position: relative;
-      text-shadow: var(--text-shadow);
-    }
-    
-    .modal-close {
-      position: absolute;
-      top: 1em; right: 1.5em;
-      background: var(--glass);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
-      border: 1px solid var(--glass-border);
-      color: var(--fg);
-      font-size: 1.5em;
-      cursor: pointer;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      font-weight: 600;
-    }
-    
-    .modal-close:hover {
-      background: var(--accent);
-      transform: scale(1.1);
-    }
-    
-    .channel-list {
+      right: 2vw;
+      bottom: 2vw;
+      z-index: 200;
       display: flex;
       flex-direction: column;
-      gap: 0.8em;
-      margin-bottom: 2em;
-      max-height: 50vh;
-      overflow-y: auto;
-      padding-right: 0.5em;
+      align-items: flex-end;
+      user-select: none;
     }
-    
-    .channel-list::-webkit-scrollbar {
-      width: 6px;
-    }
-    
-    .channel-list::-webkit-scrollbar-track {
-      background: var(--glass);
-      border-radius: 3px;
-    }
-    
-    .channel-list::-webkit-scrollbar-thumb {
-      background: var(--accent);
-      border-radius: 3px;
-    }
-    
-    .channel-item {
-      display: flex;
-      align-items: center;
-      gap: 1em;
-      padding: 1em 1.2em;
-      border-radius: 16px;
+    .remote-toggle {
+      background: linear-gradient(135deg, #0d1421 0%, #1e2a3a 100%);
+      color: #4a90e2;
+      border: 2px solid #2d5aa0;
+      border-radius: 8px 8px 0 0;
+      font-size: 1.3em;
+      padding: 0.2em 1.2em;
       cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      border: 1px solid transparent;
-      background: var(--glass);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
-      font-weight: 500;
-      letter-spacing: 0.3px;
+      margin-bottom: -2px;
+      box-shadow: 0 4px 15px rgba(45, 90, 160, 0.3);
+      transition: all 0.2s ease;
     }
-    
-    .channel-item.selected, .channel-item:hover {
-      background: rgba(0, 212, 255, 0.2);
-      border-color: var(--accent);
-      transform: translateX(5px);
-      box-shadow: var(--shadow);
+    .remote-toggle.collapsed { border-radius: 8px; }
+    .cablebox-remote {
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%);
+      border: 2px solid #2d5aa0;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(45, 90, 160, 0.3);
+      padding: 1.2em 1.2em 1em 1.2em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5em;
+      min-width: 120px;
+      transition: max-height 0.3s, opacity 0.3s;
     }
-    
-    .channel-item img {
-      width: 32px; height: 32px;
+    .cablebox-remote.collapsed {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      padding: 0 1.2em;
+      border-width: 0 2px 2px 2px;
+    }
+    .remote-row {
+      display: flex;
+      justify-content: center;
+      gap: 0.5em;
+      margin-bottom: 0.3em;
+    }
+    .remote-btn {
+      background: linear-gradient(135deg, #1a2332 0%, #2d5aa0 100%);
+      color: #ffffff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 1.1em;
+      font-weight: 600;
+      border: 2px solid #4a90e2;
       border-radius: 8px;
-      background: var(--glass);
-      border: 1px solid var(--glass-border);
-    }
-    
-    .modal-section h3 {
-      font-weight: 700;
-      font-size: 1.4em;
-      margin-bottom: 1em;
-      color: var(--fg);
-      text-shadow: var(--text-shadow);
-      letter-spacing: 0.5px;
-    }
-    
-    .toggle-row {
+      box-shadow: 0 4px 15px rgba(45, 90, 160, 0.3);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      height: 44px;
+      width: 44px;
+      outline: none;
+      user-select: none;
       display: flex;
       align-items: center;
-      gap: 1.5em;
-      margin-bottom: 1em;
-      padding: 0.8em 1em;
-      background: var(--glass);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
-      border: 1px solid var(--glass-border);
-      border-radius: 12px;
+      justify-content: center;
     }
-    
-    .toggle-label {
-      flex: 1;
-      font-weight: 500;
-      letter-spacing: 0.3px;
+    .remote-btn:hover {
+      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(45, 90, 160, 0.4);
     }
-    
-    .toggle-switch {
-      width: 52px; height: 28px;
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 14px;
-      position: relative;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      display: inline-block;
-      border: 1px solid var(--glass-border);
+    .remote-btn:active {
+      background: #4a90e2;
+      color: #0a0e1a;
+      transform: translateY(0);
     }
-    
-    .toggle-switch[data-on="true"] {
-      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-      box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
-    }
-    
-    .toggle-knob {
-      position: absolute;
-      top: 2px; left: 2px;
-      width: 24px; height: 24px;
-      background: #fff;
+    .remote-power .power-icon {
+      width: 18px; height: 18px;
+      display: block;
+      border: 2.5px solid #4a90e2;
       border-radius: 50%;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      border-bottom: none;
+      border-right: none;
+      margin: 0 auto;
+      position: relative;
     }
-    
-    .toggle-switch[data-on="true"] .toggle-knob {
-      left: 26px;
-      box-shadow: 0 2px 8px rgba(0, 212, 255, 0.3);
+    .remote-power .power-icon::after {
+      content: '';
+      display: block;
+      width: 2.5px; height: 10px;
+      background: #4a90e2;
+      position: absolute;
+      left: 7px; top: -6px;
+      border-radius: 2px;
     }
-    
-    .error-msg {
-      color: #ff6b6b;
-      margin-top: 1em;
-      font-weight: 600;
+    .remote-stop {
+      color: #ffffff;
+      background: linear-gradient(135deg, #8b0000 0%, #dc143c 100%);
+      border-color: #dc143c;
+    }
+    .remote-stop:hover {
+      background: linear-gradient(135deg, #dc143c 0%, #ff4444 100%);
+    }
+    .remote-stop:active {
+      background: #4a90e2;
+      color: #0a0e1a;
+    }
+    .remote-list {
+      color: #ffffff;
+      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%);
+      font-size: 1.3em;
+    }
+    .remote-list:hover {
+      background: linear-gradient(135deg, #4a90e2 0%, #6ba6e8 100%);
+    }
+    .remote-list:active {
+      background: #4a90e2;
+      color: #0a0e1a;
+    }
+    .remote-ch {
+      width: 90px;
+      font-size: 1.1em;
+    }
+    .remote-numpad .remote-btn {
+      width: 44px;
+    }
+    #modal {
+      z-index: 99999 !important;
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 10px; /* Add padding for mobile */
+      box-sizing: border-box; /* Include padding in width/height */
+    }
+    #modal-content {
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%) !important;
+      color: #fff !important;
+      padding: 2em 1em !important;
+      max-width: 400px !important;
+      margin: 5vh auto !important;
+      border-radius: 12px !important;
+      position: relative !important;
+      border: 2px solid #2d5aa0;
+      box-shadow: 0 8px 32px rgba(45, 90, 160, 0.5);
+      max-height: 90vh; /* Limit height for scrollability */
+      overflow-y: auto; /* Enable scrolling for long lists */
+    }
+    #modal-content h2 {
+      color: #0f0;
+      text-shadow: 0 0 8px #0f0;
       text-align: center;
-      text-shadow: var(--text-shadow);
-      background: rgba(255, 107, 107, 0.1);
-      padding: 1em;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 107, 107, 0.3);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
+      margin-top: 0;
+      margin-bottom: 1em;
+      border-bottom: 1px solid #2d5aa0;
+      padding-bottom: 0.5em;
     }
-    
-    #clock {
-      font-family: 'JetBrains Mono', 'Courier New', monospace;
-      font-weight: 600;
-      letter-spacing: 1px;
-      background: var(--glass);
-      backdrop-filter: var(--backdrop-blur);
-      -webkit-backdrop-filter: var(--backdrop-blur);
-      padding: 0.5em 1em;
-      border-radius: 12px;
-      border: 1px solid var(--glass-border);
-      box-shadow: var(--shadow);
+    #channel-list-modal div {
+      padding: 0.7em 0.5em;
+      border-bottom: 1px solid #1a2332;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s;
     }
-    
-    @media (max-width: 600px) {
-      .modal-content { 
-        padding: 1.5em 1em 1em 1em; 
-        min-width: 320px;
-      }
-      .top-bar, .bottom-bar { 
-        font-size: 1em; 
-        padding: 0.8em 1em; 
-      }
-      .channel-logo { 
-        width: 32px; height: 32px; 
-      }
-      .player-wrap {
-        margin: 0.5em;
-        border-radius: 16px;
-      }
-      .stop-btn {
-        top: 1em; right: 1em;
-        width: 44px; height: 44px;
-        font-size: 1.3em;
-      }
+    #channel-list-modal div:hover {
+      background-color: rgba(45, 90, 160, 0.3);
+      color: #fff;
     }
-    
-    /* Custom scrollbar for the entire page */
-    ::-webkit-scrollbar {
-      width: 8px;
+    #channel-list-modal div.active-channel {
+      color: #0f0;
+      font-weight: bold;
+      background-color: rgba(45, 90, 160, 0.5);
+      border-left: 3px solid #0f0;
     }
-    
-    ::-webkit-scrollbar-track {
-      background: var(--glass);
+    #modal-close {
+      margin-top: 1.5em !important;
+      padding: 0.8em 1.5em !important;
+      background: linear-gradient(135deg, #1a2332 0%, #2d5aa0 100%) !important;
+      color: #ffffff !important;
+      border: 2px solid #4a90e2 !important;
+      border-radius: 8px !important;
+      cursor: pointer !important;
+      width: 100% !important;
+      font-weight: 600 !important;
+      box-shadow: 0 4px 15px rgba(45, 90, 160, 0.3) !important;
+      transition: all 0.2s ease !important;
     }
-    
-    ::-webkit-scrollbar-thumb {
-      background: var(--accent);
-      border-radius: 4px;
+    #modal-close:hover {
+      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%) !important;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(45, 90, 160, 0.4) !important;
     }
-    
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--accent-hover);
+    #modal-close:active {
+      background: #4a90e2 !important;
+      color: #0a0e1a !important;
+      transform: translateY(0);
     }
   </style>
 </head>
 <body>
-  <div id="app" style="display:flex; flex:1; flex-direction:column; min-height:100vh;">
-    <div class="top-bar">
-      <span>IPTV Player</span>
-      <span id="clock"></span>
+  <div class="cablebox-shell">
+    <div class="cablebox-header">
+      <div class="cablebox-brand">GLZ TV</div>
+      <div class="epg-display" id="epg-display">Loading EPG...</div>
+      <div class="led-display" id="led-display">000</div>
     </div>
-    <div class="player-wrap">
-      <button class="stop-btn" id="stop-btn" title="Stop">&#9632;</button>
-      <video id="video" controls autoplay playsinline style="display:none"></video>
-      <audio id="audio" controls autoplay style="display:none"></audio>
-      <div id="player-error" class="error-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:none"></div>
-    </div>
-    <div class="bottom-bar">
-      <div class="channel-info">
-        <img id="current-logo" class="channel-logo" src="" alt="" style="display:none">
-        <span id="current-name"></span>
+    <div class="tv-area">
+      <video id="video" controls autoplay playsinline></video>
+      <audio id="audio" controls autoplay></audio>
+      <div id="player-error" class="error-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:none; color: #ff0000; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 8px;"></div>
+      <div class="cablebox-info-bar" id="info-bar" style="display:none">
+        <img id="info-logo" src="" alt="" class="info-logo" onerror="this.style.display='none'">
+        <span id="info-chno"></span>
+        <span id="info-name"></span>
       </div>
-      <button class="settings-btn" id="settings-btn" title="Settings">&#9881;</button>
+      <div class="cablebox-standby" id="standby-overlay" style="display:none">
+        <div class="standby-text">STANDBY</div>
+      </div>
+    </div>
+    <div class="remote-outer" id="remote-outer">
+      <div class="remote-toggle" id="remote-toggle">&#x25BC;</div> <!-- Default to collapsed -->
+      <div class="cablebox-remote collapsed" id="cablebox-remote"> <!-- Default to collapsed -->
+        <div class="remote-row">
+          <button class="remote-btn remote-power" id="power-btn" title="Power"><span class="power-icon"></span></button>
+          <button class="remote-btn remote-stop" id="stop-btn" title="Stop" style="display:none;">&#9632;</button> <!-- Hidden by default -->
+          <button class="remote-btn remote-list" id="channel-list-btn" title="Channel List">&#9776;</button>
+        </div>
+        <div class="remote-row">
+          <button class="remote-btn remote-ch" data-num="ch-up">CH &#8593;</button>
+        </div>
+        <div class="remote-row remote-numpad">
+          <button class="remote-btn numpad-btn" data-num="1">1</button>
+          <button class="remote-btn numpad-btn" data-num="2">2</button>
+          <button class="remote-btn numpad-btn" data-num="3">3</button>
+        </div>
+        <div class="remote-row remote-numpad">
+          <button class="remote-btn numpad-btn" data-num="4">4</button>
+          <button class="remote-btn numpad-btn" data-num="5">5</button>
+          <button class="remote-btn numpad-btn" data-num="6">6</button>
+        </div>
+        <div class="remote-row remote-numpad">
+          <button class="remote-btn numpad-btn" data-num="7">7</button>
+          <button class="remote-btn numpad-btn" data-num="8">8</button>
+          <button class="remote-btn numpad-btn" data-num="9">9</button>
+        </div>
+        <div class="remote-row remote-numpad">
+          <button class="remote-btn numpad-btn" data-num="0">0</button>
+        </div>
+        <div class="remote-row">
+          <button class="remote-btn remote-ch" data-num="ch-down">CH &#8595;</button>
+        </div>
+      </div>
     </div>
   </div>
-  <div id="modal" class="modal" style="display:none">
-    <div class="modal-content">
-      <button class="modal-close" id="modal-close" title="Close">&times;</button>
-      <div class="modal-section">
-        <h3>Channel List</h3>
-        <div class="channel-list" id="channel-list"></div>
-      </div>
-      <div class="modal-section">
-        <h3>Settings</h3>
-        <div class="toggle-row">
-          <span class="toggle-label">Light Mode</span>
-          <span class="toggle-switch" id="light-toggle" data-on="false"><span class="toggle-knob"></span></span>
-        </div>
-        <div class="toggle-row">
-          <span class="toggle-label">Auto-hide Controls</span>
-          <span class="toggle-switch" id="autohide-toggle" data-on="false"><span class="toggle-knob"></span></span>
-        </div>
-        <div class="toggle-row">
-          <span class="toggle-label">24h Clock</span>
-          <span class="toggle-switch" id="clock-toggle" data-on="false"><span class="toggle-knob"></span></span>
-        </div>
-      </div>
-    </div>
-  </div>
+
   <!-- hls.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
   <script>
@@ -588,11 +570,11 @@ https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cb
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/fox.wtvt.tampa.bay.fl.us.m3u8
 #EXTINF:-1 tvg-id="WFTS.us" tvg-name="WFTS   ABC TAMPA" tvg-logo="https://static.epg.best/us/WFTS.us.png" tvg-chno="183" channel-id="183" group-title="TV",WFTS   ABC TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/abc.wfts.tampa.bay.fl.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="WRMD   TELEMUNDO TAMPA" tvg-logo="https://static.wikia.nocookie.net/tvstations/images/2/2c/Telemundo_49_2018.png" tvg-chno="184" channel-id="184" group-title="TV",WRMD   TELEMUNDO TAMPA
+#EXTINF:-1 tvg-id="WRMD.us" tvg-name="WRMD   TELEMUNDO TAMPA" tvg-logo="https://static.wikia.nocookie.net/tvstations/images/2/2c/Telemundo_49_2018.png" tvg-chno="184" channel-id="184" group-title="TV",WRMD   TELEMUNDO TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/telemundo.wrmd.tampa.fl.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="BALLY SPORTS SUN" tvg-logo="https://i.ibb.co/jv7mZWLM/Bally-Sports-Sun.png" tvg-chno="185" channel-id="185" group-title="TV",BALLY SPORTS SUN
+#EXTINF:-1 tvg-id="BallySportsSun.us" tvg-name="BALLY SPORTS SUN" tvg-logo="https://i.ibb.co/jv7mZWLM/Bally-Sports-Sun.png" tvg-chno="185" channel-id="185" group-title="TV",BALLY SPORTS SUN
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/bally.sports.sun.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="BALLY SPORTS FLORIDA" tvg-logo="https://i.ibb.co/cXyJC9Nf/Bally-Sports-Florida-logo.png" tvg-chno="186" channel-id="186" group-title="TV",BALLY SPORTS FLORIDA
+#EXTINF:-1 tvg-id="BallySportsFlorida.us" tvg-name="BALLY SPORTS FLORIDA" tvg-logo="https://i.ibb.co/cXyJC9Nf/Bally-Sports-Florida-logo.png" tvg-chno="186" channel-id="186" group-title="TV",BALLY SPORTS FLORIDA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/fox.sports.florida.us.m3u8
 #EXTINF:-1 tvg-id="DiscoveryEspanol.us" tvg-name="DISCOVERY EN ESPAÑOL" tvg-logo="https://static.epg.best/us/DiscoveryEspanol.us.png" tvg-chno="187" channel-id="187" group-title="TV",DISCOVERY EN ESPAÑOL
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/discovery.en.espanol.us.m3u8
@@ -602,325 +584,928 @@ https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/di
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/discovery.turbo.co.m3u8
 #EXTINF:-1 tvg-id="DiscoveryWorld.mx" tvg-name="DISCOVERY WORLD" tvg-logo="https://static.epg.best/mx/DiscoveryWorld.mx.png" tvg-chno="190" channel-id="190" group-title="TV",DISCOVERY WORLD
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/discovery.world.co.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[MLB PPV] NY YANKEES" tvg-logo="https://logos-world.net/wp-content/uploads/2020/05/New-York-Yankees-Logo.png" tvg-chno="200" channel-id="200" group-title="TV",[MLB PPV] NY YANKEES
+#EXTINF:-1 tvg-id="MLB.NYYankees.us" tvg-name="[MLB PPV] NY YANKEES" tvg-logo="https://logos-world.net/wp-content/uploads/2020/05/New-York-Yankees-Logo.png" tvg-chno="200" channel-id="200" group-title="TV",[MLB PPV] NY YANKEES
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/mlb.teams.nyy.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[MLB PPV] NY METS" tvg-logo="https://logos-world.net/wp-content/uploads/2020/05/New-York-Mets-Emblem.png" tvg-chno="201" channel-id="201" group-title="TV",[MLB PPV] NY METS
+#EXTINF:-1 tvg-id="MLB.NYMets.us" tvg-name="[MLB PPV] NY METS" tvg-logo="https://logos-world.net/wp-content/uploads/2020/05/New-York-Mets-Emblem.png" tvg-chno="201" channel-id="201" group-title="TV",[MLB PPV] NY METS
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/mlb.teams.nym.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[MLB PPV] MIA MARLINS" tvg-logo="https://brandlogos.net/wp-content/uploads/2025/02/miami_marlins-logo_brandlogos.net_9fcup.png" tvg-chno="202" channel-id="202" group-title="TV",[MLB PPV] MIA MARLINS
+#EXTINF:-1 tvg-id="MLB.MIAmarlins.us" tvg-name="[MLB PPV] MIA MARLINS" tvg-logo="https://brandlogos.net/wp-content/uploads/2025/02/miami_marlins-logo_brandlogos.net_9fcup.png" tvg-chno="202" channel-id="202" group-title="TV",[MLB PPV] MIA MARLINS
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/mlb.teams.mia.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[MLB PPV] DET TIGERS" tvg-logo="https://loodibee.com/wp-content/uploads/Detroit-Tigers-Logo-1994-2005.png" tvg-chno="203" channel-id="203" group-title="TV",[MLB PPV] DET TIGERS
+#EXTINF:-1 tvg-id="MLB.DETTigers.us" tvg-name="[MLB PPV] DET TIGERS" tvg-logo="https://loodibee.com/wp-content/uploads/Detroit-Tigers-Logo-1994-2005.png" tvg-chno="203" channel-id="203" group-title="TV",[MLB PPV] DET TIGERS
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/mlb.teams.det.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[MLB PPV] TB RAYS" tvg-logo="https://nbcsports.brightspotcdn.com/dims4/default/08447de/2147483647/strip/true/crop/1708x961+0+2/resize/1440x810!/quality/90/?url=https%3A%2F%2Fnbc-sports-production-nbc-sports.s3.us-east-1.amazonaws.com%2Fbrightspot%2Fda%2Fb1%2F467bd3792de4c26bd6743d2b7266%2Ftbr2015-3d-primary-rgb-e1442678074633.png" tvg-chno="204" channel-id="204" group-title="TV",[MLB PPV] TB RAYS
+#EXTINF:-1 tvg-id="MLB.TBRays.us" tvg-name="[MLB PPV] TB RAYS" tvg-logo="https://nbcsports.brightspotcdn.com/dims4/default/08447de/2147483647/strip/true/crop/1708x961+0+2/resize/1440x810!/quality/90/?url=https%3A%2F%2Fnbc-sports-production-nbc-sports.s3.us-east-1.amazonaws.com%2Fbrightspot%2Fda%2Fb1%2F467bd3792de4c26bd6743d2b7266%2Ftbr2015-3d-primary-rgb-e1442678074633.png" tvg-chno="204" channel-id="204" group-title="TV",[MLB PPV] TB RAYS
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/mlb.teams.tb.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[NBA PPV] GS WARRIORS" tvg-logo="https://athlonsports.com/.image/c_limit%2Ccs_srgb%2Cq_auto:good%2Cw_500/MjA1MjcyMjkxNzYxNDY0ODUy/golden-state-warriors-logo.webp" tvg-chno="205" channel-id="205" group-title="TV",[NBA PPV] GS WARRIORS
+#EXTINF:-1 tvg-id="NBA.GSWarriors.us" tvg-name="[NBA PPV] GS WARRIORS" tvg-logo="https://athlonsports.com/.image/c_limit%2Ccs_srgb%2Cq_auto:good%2Cw_500/MjA1MjcyMjkxNzYxNDY0ODUy/golden-state-warriors-logo.webp" tvg-chno="205" channel-id="205" group-title="TV",[NBA PPV] GS WARRIORS
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nba.golden.state.warriors.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[NBA PPV] NY KNICKS" tvg-logo="https://upload.wikimedia.org/wikipedia/sco/d/d8/NewYorkKnicks.PNG" tvg-chno="206" channel-id="206" group-title="TV",[NBA PPV] NY KNICKS
+#EXTINF:-1 tvg-id="NBA.NYKnicks.us" tvg-name="[NBA PPV] NY KNICKS" tvg-logo="https://upload.wikimedia.org/wikipedia/sco/d/d8/NewYorkKnicks.PNG" tvg-chno="206" channel-id="206" group-title="TV",[NBA PPV] NY KNICKS
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nba.new.york.knicks.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[NBA PPV] DEN NUGGETS" tvg-logo="https://www.flagcolorcodes.com/data/NBA-Denver-Nuggets.png" tvg-chno="207" channel-id="207" group-title="TV",[NBA PPV] DEN NUGGETS
+#EXTINF:-1 tvg-id="NBA.DENGGuggets.us" tvg-name="[NBA PPV] DEN NUGGETS" tvg-logo="https://www.flagcolorcodes.com/data/NBA-Denver-Nuggets.png" tvg-chno="207" channel-id="207" group-title="TV",[NBA PPV] DEN NUGGETS
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nba.denver.nuggets.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[NBA PPV] OKC THUNDER" tvg-logo="https://i.pinimg.com/736x/47/ea/93/47ea93e7a7b5f898d833ef218f3cd833.jpg" tvg-chno="208" channel-id="208" group-title="TV",[NBA PPV] OKC THUNDER
+#EXTINF:-1 tvg-id="NBA.OKCThunder.us" tvg-name="[NBA PPV] OKC THUNDER" tvg-logo="https://i.pinimg.com/736x/47/ea/93/47ea93e7a7b5f898d833ef218f3cd833.jpg" tvg-chno="208" channel-id="208" group-title="TV",[NBA PPV] OKC THUNDER
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nba.oklahoma.city.thunder.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[NBA PPV] IND PACERS" tvg-logo="https://www.flagcolorcodes.com/data/NBA-Indiana-Pacers.png" tvg-chno="209" channel-id="209" group-title="TV",[NBA PPV] IND PACERS
+#EXTINF:-1 tvg-id="NBA.INDPacers.us" tvg-name="[NBA PPV] IND PACERS" tvg-logo="https://www.flagcolorcodes.com/data/NBA-Indiana-Pacers.png" tvg-chno="209" channel-id="209" group-title="TV",[NBA PPV] IND PACERS
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nba.indiana.pacers.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] WKAQ 580 [AM: 580 Khz] WKAQ-AM" tvg-logo="https://i.ibb.co/Vc9wh11d/wkaqam.png" tvg-chno="210" channel-id="210" group-title="TV",[R] WKAQ 580 [AM: 580 Khz] WKAQ-AM
+#EXTINF:-1 tvg-id="WKAQAM.us" tvg-name="[R] WKAQ 580 [AM: 580 Khz] WKAQ-AM" tvg-logo="https://i.ibb.co/Vc9wh11d/wkaqam.png" tvg-chno="210" channel-id="210" group-title="TV",[R] WKAQ 580 [AM: 580 Khz] WKAQ-AM
 https://televicentro.streamguys1.com/wkaqqam-icy?key=ae6a3b84b2caabf9d96d28dc1d8e3ebc2cc0ecce9ef074936108cb8cccf7964d&source=tunein&source=TuneIn&gdpr=0&us_privacy=1YNY&bundle=tunein.com&lat=28.0699&long=-81.8107
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] NotiUno [AM: 630 Khz] WUNO-AM" tvg-logo="https://www.unoradio.com/logos/logos/notiuno/notiuno630.png" tvg-chno="211" channel-id="211" group-title="TV",[R] NotiUno [AM: 630 Khz] WUNO-AM
+#EXTINF:-1 tvg-id="WUNOAM.us" tvg-name="[R] NotiUno [AM: 630 Khz] WUNO-AM" tvg-logo="https://www.unoradio.com/logos/logos/notiuno/notiuno630.png" tvg-chno="211" channel-id="211" group-title="TV",[R] NotiUno [AM: 630 Khz] WUNO-AM
 https://server20.servistreaming.com:9022/stream
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Radio Once [AM: 1120 Khz] WMSW-AM" tvg-logo="https://www.radioonce.com/templates/rt_galatea/custom/images/demo/home/header/logo-radio11.png" tvg-chno="212" channel-id="212" group-title="TV",[R] Radio Once [AM: 1120 Khz] WMSW-AM
+#EXTINF:-1 tvg-id="WMSWAM.us" tvg-name="[R] Radio Once [AM: 1120 Khz] WMSW-AM" tvg-logo="https://www.radioonce.com/templates/rt_galatea/custom/images/demo/home/header/logo-radio11.png" tvg-chno="212" channel-id="212" group-title="TV",[R] Radio Once [AM: 1120 Khz] WMSW-AM
 http://whsh4u-panel.com:14167/stream
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Radio Isla [AM: 1320 Khz] WSKN-AM" tvg-logo="https://radioisla.tv/wp-content/uploads/2019/06/Logo-Radio-Isla.png" tvg-chno="213" channel-id="213" group-title="TV",[R] Radio Isla [AM: 1320 Khz] WSKN-AM
+#EXTINF:-1 tvg-id="WSKNAM.us" tvg-name="[R] Radio Isla [AM: 1320 Khz] WSKN-AM" tvg-logo="https://radioisla.tv/wp-content/uploads/2019/06/Logo-Radio-Isla.png" tvg-chno="213" channel-id="213" group-title="TV",[R] Radio Isla [AM: 1320 Khz] WSKN-AM
 https://server7.servistreaming.com/proxy/RadioIsla?mp=%2Fstream%3Ftype%3D.mp3&_=1
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Radio Tiempo [AM: 1430 Khz] WNLE-AM" tvg-logo="https://radiotiempo.net/wp-content/uploads/2022/08/tiempo-172x128.png" tvg-chno="214" channel-id="214" group-title="TV",[R] Radio Tiempo [AM: 1430 Khz] WNLE-AM
+#EXTINF:-1 tvg-id="WNLEAM.us" tvg-name="[R] Radio Tiempo [AM: 1430 Khz] WNLE-AM" tvg-logo="https://radiotiempo.net/wp-content/uploads/2022/08/tiempo-172x128.png" tvg-chno="214" channel-id="214" group-title="TV",[R] Radio Tiempo [AM: 1430 Khz] WNLE-AM
 https://server7.servistreaming.com/proxy/tiempo?mp=%2Fstream%3Ftype%3D.mp3&_=1
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Radio Cumbre [AM: 1470 Khz] WKUM-AM" tvg-logo="https://i.ibb.co/5g2402Cc/wkum-png.png" tvg-chno="215" channel-id="215" group-title="TV",[R] Radio Cumbre [AM: 1470 Khz] WKUM-AM
+#EXTINF:-1 tvg-id="WKUMAM.us" tvg-name="[R] Radio Cumbre [AM: 1470 Khz] WKUM-AM" tvg-logo="https://i.ibb.co/5g2402Cc/wkum-png.png" tvg-chno="215" channel-id="215" group-title="TV",[R] Radio Cumbre [AM: 1470 Khz] WKUM-AM
 https://sp.unoredcdn.net/8158/stream/1/
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Radio Oro [FM: 92.5 Mhz] WORO-FM" tvg-logo="https://i.ibb.co/nqbSmS1M/worofm-processed.png" tvg-chno="216" channel-id="216" group-title="TV",[R] Radio Oro [FM: 92.5 Mhz] WORO-FM
+#EXTINF:-1 tvg-id="WOROFM.us" tvg-name="[R] Radio Oro [FM: 92.5 Mhz] WORO-FM" tvg-logo="https://i.ibb.co/nqbSmS1M/worofm-processed.png" tvg-chno="216" channel-id="216" group-title="TV",[R] Radio Oro [FM: 92.5 Mhz] WORO-FM
 https://us2.internet-radio.com/proxy/woro?mp=/stream
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Z 93 [FM: 93.7 Mhz] WZNT-FM" tvg-logo="https://i.ibb.co/23BMsKBY/wznt-png.png" tvg-chno="217" channel-id="217" group-title="TV",[R] Z 93 [FM: 93.7 Mhz] WZNT-FM
+#EXTINF:-1 tvg-id="WZNTFM.us" tvg-name="[R] Z 93 [FM: 93.7 Mhz] WZNT-FM" tvg-logo="https://i.ibb.co/23BMsKBY/wznt-png.png" tvg-chno="217" channel-id="217" group-title="TV",[R] Z 93 [FM: 93.7 Mhz] WZNT-FM
 https://liveaudio.lamusica.com/PR_WZNT_icy
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] La Nueva 94 [FM: 94.7 Mhz] WODA-FM" tvg-logo="https://i.ibb.co/sv1RBc08/wodalogo.png" tvg-chno="218" channel-id="218" group-title="TV",[R] La Nueva 94 [FM: 94.7 Mhz] WODA-FM
+#EXTINF:-1 tvg-id="WODAFM.us" tvg-name="[R] La Nueva 94 [FM: 94.7 Mhz] WODA-FM" tvg-logo="https://i.ibb.co/sv1RBc08/wodalogo.png" tvg-chno="218" channel-id="218" group-title="TV",[R] La Nueva 94 [FM: 94.7 Mhz] WODA-FM
 https://liveaudio.lamusica.com/PR_WODA_icy
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Fidelity [FM: 95.7 Mhz] WFID-FM" tvg-logo="https://fidelitypr.com/wp-content/uploads/2022/01/cropped-Redisen%CC%83o-Logo-Fidelity-3-15-2048x677.png" tvg-chno="219" channel-id="219" group-title="TV",[R] Fidelity [FM: 95.7 Mhz] WFID-FM
+#EXTINF:-1 tvg-id="WFIDFM.us" tvg-name="[R] Fidelity [FM: 95.7 Mhz] WFID-FM" tvg-logo="https://fidelitypr.com/wp-content/uploads/2022/01/cropped-Redisen%CC%83o-Logo-Fidelity-3-15-2048x677.png" tvg-chno="219" channel-id="219" group-title="TV",[R] Fidelity [FM: 95.7 Mhz] WFID-FM
 https://server7.servistreaming.com/proxy/fidelity?mp=%2Fstream%3Ftype%3D.mp3&_=1
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Estéreotempo [FM; 96.5 Mhz] WRXD-FM" tvg-logo="https://i.ibb.co/F4GM0W81/wrxr.png" tvg-chno="220" channel-id="220" group-title="TV",[R] Estéreotempo [FM; 96.5 Mhz] WRXD-FM
+#EXTINF:-1 tvg-id="WRXDFM.us" tvg-name="[R] Estéreotempo [FM; 96.5 Mhz] WRXD-FM" tvg-logo="https://i.ibb.co/F4GM0W81/wrxr.png" tvg-chno="220" channel-id="220" group-title="TV",[R] Estéreotempo [FM; 96.5 Mhz] WRXD-FM
 https://liveaudio.lamusica.com/PR_WRXD_icy
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Magic [FM; 97.3 Mhz] WOYE-FM" tvg-logo="https://i.ibb.co/Z6WqXPzV/woye.png" tvg-chno="221" channel-id="221" group-title="TV",[R] Magic [FM; 97.3 Mhz] WOYE-FM
+#EXTINF:-1 tvg-id="WOYEFM.us" tvg-name="[R] Magic [FM; 97.3 Mhz] WOYE-FM" tvg-logo="https://i.ibb.co/Z6WqXPzV/woye.png" tvg-chno="221" channel-id="221" group-title="TV",[R] Magic [FM; 97.3 Mhz] WOYE-FM
 https://stream.eleden.com:8210/magic.aac
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Salsoul [FM: 99.1 Mhz] WPRM-FM" tvg-logo="https://salsoul.com/wp-content/uploads/2020/12/cropped-salsoul-2.png" tvg-chno="222" channel-id="222" group-title="TV",[R] Salsoul [FM: 99.1 Mhz] WPRM-FM
+#EXTINF:-1 tvg-id="WPRMFM.us" tvg-name="[R] Salsoul [FM: 99.1 Mhz] WPRM-FM" tvg-logo="https://salsoul.com/wp-content/uploads/2020/12/cropped-salsoul-2.png" tvg-chno="222" channel-id="222" group-title="TV",[R] Salsoul [FM: 99.1 Mhz] WPRM-FM
 https://server20.servistreaming.com:9023/stream?type=.mp3&_=1
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] LA X [FM: 100.7 Mhz] WXYX-FM" tvg-logo="https://i.ibb.co/zWDcRnBw/laxpng.png" tvg-chno="223" channel-id="223" group-title="TV",[R] LA X [FM: 100.7 Mhz] WXYX-FM
+#EXTINF:-1 tvg-id="WXYXFM.us" tvg-name="[R] LA X [FM: 100.7 Mhz] WXYX-FM" tvg-logo="https://i.ibb.co/zWDcRnBw/laxpng.png" tvg-chno="223" channel-id="223" group-title="TV",[R] LA X [FM: 100.7 Mhz] WXYX-FM
 https://stream.eleden.com:8230/La X.aac
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] HOT 102 [FM 102.5 Mhz] WTOK-FM" tvg-logo="https://hot102pr.com/wp-content/uploads/2023/10/Artboard-4.png" tvg-chno="224" channel-id="224" group-title="TV",[R] HOT 102 [FM 102.5 Mhz] WTOK-FM
+#EXTINF:-1 tvg-id="WTOKFMA.us" tvg-name="[R] HOT 102 [FM 102.5 Mhz] WTOK-FM" tvg-logo="https://hot102pr.com/wp-content/uploads/2023/10/Artboard-4.png" tvg-chno="224" channel-id="224" group-title="TV",[R] HOT 102 [FM 102.5 Mhz] WTOK-FM
 https://server7.servistreaming.com/proxy/hot?mp=%2Fstream%3Ftype%3D.mp3&_=1
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] La Mega PR [FM: 106.9 Mhz] WMEG-FM" tvg-logo="https://i.ibb.co/Xrp2nhpQ/WMEG-PNG.png" tvg-chno="225" channel-id="225" group-title="TV",[R] La Mega PR [FM: 106.9 Mhz] WMEG-FM
+#EXTINF:-1 tvg-id="WMEGFM.us" tvg-name="[R] La Mega PR [FM: 106.9 Mhz] WMEG-FM" tvg-logo="https://i.ibb.co/Xrp2nhpQ/WMEG-PNG.png" tvg-chno="225" channel-id="225" group-title="TV",[R] La Mega PR [FM: 106.9 Mhz] WMEG-FM
 https://liveaudio.lamusica.com/PR_WMEG_icy
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] KQ105 [FM: 104.7 Mhz] WKAQ-FM" tvg-logo="https://upload.wikimedia.org/wikipedia/en/8/80/KQ_105_WKAQ-FM_2014_logo.png" tvg-chno="226" channel-id="226" group-title="TV",[R] KQ105 [FM: 104.7 Mhz] WKAQ-FM
+#EXTINF:-1 tvg-id="WKAQFM.us" tvg-name="[R] KQ105 [FM: 104.7 Mhz] WKAQ-FM" tvg-logo="https://upload.wikimedia.org/wikipedia/en/8/80/KQ_105_WKAQ-FM_2014_logo.png" tvg-chno="226" channel-id="226" group-title="TV",[R] KQ105 [FM: 104.7 Mhz] WKAQ-FM
 https://televicentro.streamguys1.com/wkaqfm-icy?key=ae6a3b84b2caabf9d96d28dc1d8e3ebc2cc0ecce9ef074936108cb8cccf7964d&source=tunein&source=TuneIn&gdpr=0&us_privacy=1YNY&bundle=tunein.com&lat=28.0699&long=-81.8107
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Latino 99" tvg-logo="https://mm.aiircdn.com/371/5928f28889f51.png" tvg-chno="227" channel-id="227" group-title="TV",[R] Latino 99
+#EXTINF:-1 tvg-id="Latino99.us" tvg-name="[R] Latino 99" tvg-logo="https://mm.aiircdn.com/371/5928f28889f51.png" tvg-chno="227" channel-id="227" group-title="TV",[R] Latino 99
 https://lmmradiocast.com/Latino99fm?_=68068
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] Salseo Radio" tvg-logo="https://static.wixstatic.com/media/8dfec0_3e265a2f0fb5417c90c55be4e4e7d3cf~mv2.png/v1/fill/w_276,h_120,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/LOGOSALSEORADIO_clipped_rev_2_v2%20(1).png" tvg-chno="228" channel-id="228" group-title="TV",[R] Salseo Radio
+#EXTINF:-1 tvg-id="SalseoRadio.us" tvg-name="[R] Salseo Radio" tvg-logo="https://static.wixstatic.com/media/8dfec0_3e265a2f0fb5417c90c55be4e4e7d3cf~mv2.png/v1/fill/w_276,h_120,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/LOGOSALSEORADIO_clipped_rev_2_v2%20(1).png" tvg-chno="228" channel-id="228" group-title="TV",[R] Salseo Radio
 https://listen.radioking.com/radio/399811/stream/452110
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] La Vieja Z [GLZ Radio]" tvg-logo="https://i.ibb.co/d4VZVjj2/LVZ8-removebg-preview.png" tvg-chno="229" channel-id="229" group-title="TV",[R] La Vieja Z [GLZ Radio]
+#EXTINF:-1 tvg-id="LaViejaZ.us" tvg-name="[R] La Vieja Z [GLZ Radio]" tvg-logo="https://i.ibb.co/d4VZVjj2/LVZ8-removebg-preview.png" tvg-chno="229" channel-id="229" group-title="TV",[R] La Vieja Z [GLZ Radio]
 https://s3.free-shoutcast.com/stream/18094
 `;
+
+    // --- M3U Parser Function ---
+    function parseM3U(m3uContent) {
+      const channels = [];
+      const lines = m3uContent.split('\n');
+      let currentChannel = null;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        if (line.startsWith('#EXTINF:')) {
+          // Parse channel info line
+          currentChannel = {};
+
+          // Extract channel name (after the last comma)
+          const lastCommaIndex = line.lastIndexOf(',');
+          if (lastCommaIndex !== -1) {
+            currentChannel.name = line.substring(lastCommaIndex + 1).trim();
+          }
+
+          // Extract tvg-logo
+          const logoMatch = line.match(/tvg-logo="([^"]*)"/);
+          if (logoMatch) {
+            currentChannel.logo = logoMatch[1];
+          }
+
+          // Extract tvg-chno
+          const chnoMatch = line.match(/tvg-chno="([^"]*)"/);
+          if (chnoMatch) {
+            currentChannel.chno = chnoMatch[1];
+          }
+
+          // Extract tvg-id (Crucial for EPG lookup)
+          const idMatch = line.match(/tvg-id="([^"]*)"/);
+          if (idMatch) {
+            currentChannel.id = idMatch[1];
+          }
+
+          // Extract tvg-name (fallback for name if not found)
+          const nameMatch = line.match(/tvg-name="([^"]*)"/);
+          if (nameMatch && !currentChannel.name) {
+            currentChannel.name = nameMatch[1];
+          }
+
+        } else if (line && !line.startsWith('#') && currentChannel) {
+          // This is the URL line
+          currentChannel.url = line.trim();
+          channels.push(currentChannel);
+          currentChannel = null;
+        }
+      }
+
+      return channels;
+    }
+
     // --- State ---
     let channels = [];
     let current = 0;
-    let lightMode = false;
-    let autoHide = false;
-    let clock24 = false;
+    let lightMode = false; // Not fully implemented in UI, but kept for future use
+    let autoHide = false; // Not fully implemented in UI, but kept for future use
+    let clock24 = false; // Not fully implemented in UI, but kept for future use
     let lastType = 'video';
     let hls = null;
+    let standby = true; // Start in standby mode
+    let numEntry = '';
+    let numEntryTimeout = null;
+    let epgData = {}; // Stores parsed EPG data
+    let currentEPGUrl = 'https://epg.best/1eef8-shw7fc.xml.gz'; // Default EPG URL
+
     // --- Elements ---
     const video = document.getElementById('video');
     const audio = document.getElementById('audio');
-    const stopBtn = document.getElementById('stop-btn');
     const playerError = document.getElementById('player-error');
-    const currentLogo = document.getElementById('current-logo');
-    const currentName = document.getElementById('current-name');
-    const settingsBtn = document.getElementById('settings-btn');
-    const modal = document.getElementById('modal');
-    const modalClose = document.getElementById('modal-close');
-    const channelList = document.getElementById('channel-list');
-    const lightToggle = document.getElementById('light-toggle');
-    const autohideToggle = document.getElementById('autohide-toggle');
-    const clockToggle = document.getElementById('clock-toggle');
-    const clock = document.getElementById('clock');
-    // --- Helpers ---
-    function parseM3U(m3u) {
-      const lines = m3u.split(/\r?\n/);
-      const chs = [];
-      let cur = null;
-      for (let i = 0; i < lines.length; ++i) {
-        const l = lines[i].trim();
-        if (l.startsWith('#EXTINF')) {
-          const attrs = {};
-          const attrRe = /(\w+\-?\w*)="([^"]*)"/g;
-          let m;
-          while ((m = attrRe.exec(l))) attrs[m[1]] = m[2];
-          const name = l.split(',').pop().trim();
-          cur = {
-            name: attrs['tvg-name'] || name,
-            logo: attrs['tvg-logo'] || '',
-            url: '',
-            group: attrs['group-title'] || '',
-            id: attrs['tvg-id'] || '',
-            chno: attrs['tvg-chno'] || '',
-            raw: l
-          };
-        } else if (cur && l && !l.startsWith('#')) {
-          cur.url = l;
-          chs.push(cur);
-          cur = null;
-        }
-      }
-      return chs;
-    }
+    // --- Remote Elements ---
+    const stopBtn = document.getElementById('stop-btn');
+    const powerBtn = document.getElementById('power-btn');
+    const channelListBtn = document.getElementById('channel-list-btn');
+    const remoteToggle = document.getElementById('remote-toggle');
+    const cableboxRemote = document.getElementById('cablebox-remote');
+    // --- Cable box elements ---
+    const epgDisplay = document.getElementById('epg-display');
+    const ledDisplay = document.getElementById('led-display');
+    const infoBar = document.getElementById('info-bar');
+    const infoLogo = document.getElementById('info-logo');
+    const infoChno = document.getElementById('info-chno');
+    const infoName = document.getElementById('info-name');
+    const standbyOverlay = document.getElementById('standby-overlay');
+
+    // --- Utility Functions ---
     function saveState() {
-      localStorage.setItem('iptv_last', current);
-      localStorage.setItem('iptv_light', lightMode ? '1' : '0');
-      localStorage.setItem('iptv_autohide', autoHide ? '1' : '0');
-      localStorage.setItem('iptv_clock24', clock24 ? '1' : '0');
-      localStorage.setItem('iptv_channels', JSON.stringify(channels));
-    }
-    function loadState() {
-      current = +(localStorage.getItem('iptv_last') || 0);
-      lightMode = localStorage.getItem('iptv_light') === '1';
-      autoHide = localStorage.getItem('iptv_autohide') === '1';
-      clock24 = localStorage.getItem('iptv_clock24') === '1';
-      const chs = localStorage.getItem('iptv_channels');
-      if (chs) channels = JSON.parse(chs);
-    }
-    function setLight(l) {
-      lightMode = l;
-      document.body.classList.toggle('light', l);
-      lightToggle.setAttribute('data-on', l);
-      saveState();
-    }
-    function setAutohide(a) {
-      autoHide = a;
-      autohideToggle.setAttribute('data-on', a);
-      if (a) {
-        video.setAttribute('controls', false);
-        audio.setAttribute('controls', false);
-      } else {
-        video.setAttribute('controls', true);
-        audio.setAttribute('controls', true);
+      try {
+        localStorage.setItem('glz-tv-state', JSON.stringify({
+          current: current,
+          lightMode: lightMode,
+          autoHide: autoHide,
+          clock24: clock24,
+          standby: standby // Save standby state
+        }));
+      } catch (e) {
+        console.error("Failed to save state:", e);
       }
-      saveState();
     }
-    function setClock24(c) {
-      clock24 = c;
-      clockToggle.setAttribute('data-on', c);
-      saveState();
+
+    function loadState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('glz-tv-state') || '{}');
+        current = saved.current || 0;
+        lightMode = saved.lightMode || false;
+        autoHide = saved.autoHide || false;
+        clock24 = saved.clock24 || false;
+        standby = (typeof saved.standby === 'boolean') ? saved.standby : true; // Default to true (standby) if not found
+      } catch (e) {
+        console.error("Failed to load state:", e);
+      }
     }
+
     function showError(msg) {
-      playerError.textContent = msg;
-      playerError.style.display = '';
+      if (playerError) {
+        playerError.textContent = msg;
+        playerError.style.display = '';
+      }
     }
+
     function hideError() {
-      playerError.style.display = 'none';
-      playerError.textContent = '';
+      if (playerError) {
+        playerError.style.display = 'none';
+      }
     }
-    function playChannel(idx) {
-      if (!channels[idx]) return;
-      current = idx;
-      saveState();
-      const ch = channels[idx];
-      // Detect audio-only
-      const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
-      const isHls = /\.m3u8(\?|$)/i.test(ch.url);
-      video.style.display = isAudio ? 'none' : '';
-      audio.style.display = isAudio ? '' : 'none';
-      stopBtn.style.display = '';
-      hideError();
-      // Clean up previous hls.js instance
+
+    function stopPlayback() {
       if (hls) {
         hls.destroy();
         hls = null;
       }
+      video.pause();
+      video.src = ''; // Clear video source
+      audio.pause();
+      audio.src = ''; // Clear audio source
+
+      stopBtn.style.display = 'none'; // Hide stop button when stopped
+      hideInfoBar(); // Hide info bar
+      hideError(); // Clear any error messages
+    }
+
+    // Function to hide the info bar completely
+    function hideInfoBar() {
+        infoBar.style.display = 'none';
+        infoBar.classList.remove('fadeout'); // Ensure fadeout class is removed
+        infoBar.style.opacity = '0.98'; // Reset opacity
+    }
+
+    function updateClock() {
+      const now = new Date();
+      const hours = clock24 ? now.getHours() : (now.getHours() % 12 || 12);
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const timeStr = `${hours}:${minutes}`;
+
+      // Update LED display with time only when in standby
+      if (standby) {
+        ledDisplay.textContent = timeStr;
+      }
+    }
+
+    // --- Remote toggle logic ---
+    let remoteCollapsed = true; // Initial state matches HTML
+    remoteToggle.onclick = () => {
+      remoteCollapsed = !remoteCollapsed;
+      cableboxRemote.classList.toggle('collapsed', remoteCollapsed);
+      remoteToggle.innerHTML = remoteCollapsed ? '&#x25BC;' : '&#x25B2;';
+    };
+
+    // --- Power button logic ---
+    powerBtn.onclick = () => {
+      standby = !standby;
+      standbyOverlay.style.display = standby ? '' : 'none';
+      saveState(); // Save standby state
+
+      if (standby) {
+        stopPlayback(); // Stop playback when entering standby
+        ledDisplay.textContent = '-- --'; // Clear LED or show standby indication
+        updateEPGDisplay('STANDBY'); // Show standby in EPG display
+      } else {
+        playChannel(current); // Resume channel when exiting standby
+        updateLedDisplay(); // Show channel number
+        updateEPGDisplay(); // Show EPG info
+      }
+    };
+
+    // --- Stop button logic ---
+    stopBtn.onclick = () => {
+      stopPlayback();
+      // After stopping, if not in standby, update LED to channel number and EPG to 'No Program'
+      if (!standby) {
+        updateLedDisplay();
+        updateEPGDisplay('No Program Playing');
+      }
+    };
+
+    // --- Channel list button logic (opens modal) ---
+    channelListBtn.onclick = showChannelListModal;
+
+    // --- Number pad and channel up/down logic ---
+    function handleNumpad(num) {
+      if (standby) { // Do not process input if in standby
+          showError("Please power on the device first.");
+          setTimeout(hideError, 2000);
+          return;
+      }
+
+      if (num === 'ch-up') {
+        playChannel((current + 1) % channels.length);
+        showInfoBar();
+        updateLedDisplay();
+        return;
+      }
+      if (num === 'ch-down') {
+        playChannel((current - 1 + channels.length) % channels.length);
+        showInfoBar();
+        updateLedDisplay();
+        return;
+      }
+
+      if (num.match(/^[0-9]$/)) {
+        numEntry += num;
+        if (numEntry.length > 3) numEntry = numEntry.slice(-3); // Limit to last 3 digits
+        ledDisplay.textContent = numEntry.padStart(3, '0');
+
+        if (numEntryTimeout) clearTimeout(numEntryTimeout);
+        numEntryTimeout = setTimeout(() => {
+          let targetChannelNo = numEntry;
+          let idx = -1;
+
+          // Try to find by tvg-chno first
+          idx = channels.findIndex(ch => ch.chno === targetChannelNo);
+
+          // If not found by tvg-chno, try sequential index (1-based)
+          if (idx === -1 && parseInt(targetChannelNo, 10) > 0 && parseInt(targetChannelNo, 10) <= channels.length) {
+            idx = parseInt(targetChannelNo, 10) - 1;
+          }
+
+          if (idx >= 0) {
+            playChannel(idx);
+            showInfoBar();
+          } else {
+            // Optional: Show an error if channel not found
+            showError(`Channel ${targetChannelNo} not found.`);
+            setTimeout(hideError, 1500);
+            updateLedDisplay(); // Revert LED to current channel
+          }
+          numEntry = ''; // Reset for next entry
+        }, 1200); // 1.2 seconds to enter channel number
+      }
+    }
+
+    document.querySelectorAll('.remote-btn[data-num]').forEach(btn => {
+      btn.onclick = () => handleNumpad(btn.dataset.num);
+    });
+
+    // --- playChannel logic (only one player visible) ---
+    function playChannel(idx) {
+      if (standby) {
+          // If in standby, power on first
+          powerBtn.click();
+          // After power on, this function will be called again to play the channel
+          // No return here, as powerBtn.click() will toggle standby and re-call playChannel
+      }
+
+      if (!channels[idx]) {
+        showError('Channel not found.');
+        return;
+      }
+
+      current = idx;
+      saveState(); // Save current channel
+
+      const ch = channels[idx];
+      const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
+      const isHls = /\.m3u8(\?|$)/i.test(ch.url);
+
+      // Reset players and hide previous error
+      hideError();
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+      video.src = '';
+      audio.src = '';
+      video.style.display = 'none';
+      audio.style.display = 'none';
+
+      // Show stop button when playing
+      stopBtn.style.display = '';
+
       if (isAudio) {
         lastType = 'audio';
         audio.src = ch.url;
-        audio.play().catch(()=>{});
-        video.pause();
-        video.src = '';
+        audio.style.display = '';
+        audio.play().catch(e => showError('Failed to play audio stream: ' + e.message));
       } else if (isHls) {
         lastType = 'video';
-        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.style.display = '';
+        if (video.canPlayType && video.canPlayType('application/vnd.apple.mpegurl')) {
           video.src = ch.url;
         } else if (window.Hls) {
           hls = new Hls();
           hls.loadSource(ch.url);
           hls.attachMedia(video);
+          hls.on(Hls.Events.ERROR, function (event, data) {
+            if (data.fatal) {
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  showError("Network error while loading HLS stream.");
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  showError("Media error during HLS playback.");
+                  hls.recoverMediaError(); // Attempt to recover
+                  break;
+                default:
+                  showError("Fatal HLS error: " + data.details);
+                  break;
+              }
+            }
+          });
         } else {
-          showError('HLS not supported.');
+          showError('HLS not supported in this browser.');
         }
-        video.play().catch(()=>{});
-        audio.pause();
-        audio.src = '';
+        video.play().catch(e => showError('Failed to play video stream: ' + e.message));
       } else {
         lastType = 'video';
         video.src = ch.url;
-        video.play().catch(()=>{});
-        audio.pause();
-        audio.src = '';
+        video.style.display = '';
+        video.play().catch(e => showError('Failed to play video stream: ' + e.message));
       }
-      currentName.textContent = ch.name;
-      if (ch.logo) {
-        currentLogo.src = ch.logo;
-        currentLogo.style.display = '';
-      } else {
-        currentLogo.style.display = 'none';
-      }
-      // Highlight in channel list
-      document.querySelectorAll('.channel-item').forEach((el,i)=>{
-        el.classList.toggle('selected', i===idx);
-      });
+
+      updateLedDisplay();
+      showInfoBar();
+      updateEPGDisplay();
     }
-    function stopPlayback() {
-      if (hls) { hls.destroy(); hls = null; }
-      video.pause();
-      video.src = '';
-      audio.pause();
-      audio.src = '';
-      stopBtn.style.display = 'none';
-      hideError();
-    }
-    function showModal() {
-      modal.style.display = '';
-      channelList.scrollTop = current*48-60;
-      setTimeout(()=>modal.querySelector('.modal-content').focus(), 100);
-    }
-    function hideModal() {
-      modal.style.display = 'none';
-    }
-    function renderChannelList() {
-      channelList.innerHTML = '';
-      channels.forEach((ch,i)=>{
-        const div = document.createElement('div');
-        div.className = 'channel-item'+(i===current?' selected':'');
-        div.tabIndex = 0;
-        div.innerHTML = `<img class=\"channel-logo\" src=\"${ch.logo}\" alt=\"\" onerror=\"this.style.display='none'\"> <span>${ch.name}</span>`;
-        div.onclick = ()=>{ playChannel(i); hideModal(); };
-        div.onkeydown = e=>{
-          if (e.key==='Enter') { playChannel(i); hideModal(); }
-        };
-        channelList.appendChild(div);
-      });
-    }
-    function updateClock() {
-      const now = new Date();
-      let h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
-      let ampm = '';
-      if (!clock24) {
-        ampm = h>=12?' PM':' AM';
-        h = h%12; if (h===0) h=12;
-      }
-      clock.textContent = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}${ampm}`;
-    }
-    // --- Event Listeners ---
-    stopBtn.onclick = stopPlayback;
-    settingsBtn.onclick = ()=>{ renderChannelList(); showModal(); };
-    modalClose.onclick = hideModal;
-    lightToggle.onclick = ()=> setLight(!lightMode);
-    autohideToggle.onclick = ()=> setAutohide(!autoHide);
-    clockToggle.onclick = ()=> setClock24(!clock24);
-    // Keyboard navigation
-    document.addEventListener('keydown', e=>{
-      if (modal.style.display!=='none') {
-        if (e.key==='Escape') { hideModal(); }
+
+    // --- Initial LED display & Info Bar ---
+    function updateLedDisplay() {
+      if (standby) {
+        ledDisplay.textContent = '-- --';
         return;
       }
-      if (e.target.tagName==='TEXTAREA') return;
-      if (e.key==='ArrowRight') {
-        playChannel((current+1)%channels.length);
-      } else if (e.key==='ArrowLeft') {
-        playChannel((current-1+channels.length)%channels.length);
-      } else if (e.key==='s' || e.key==='S') {
+      if (!channels.length) {
+        ledDisplay.textContent = '000';
+        return;
+      }
+      let chno = channels[current]?.chno || (current + 1).toString();
+      ledDisplay.textContent = chno.padStart(3, '0').slice(-3);
+    }
+
+    function showInfoBar() {
+      if (standby || !channels.length) {
+          hideInfoBar(); // Ensure info bar is hidden if in standby or no channels
+          return;
+      }
+      const ch = channels[current];
+      infoLogo.src = ch.logo || ''; // Use empty string if no logo to prevent broken image icon
+      infoLogo.style.display = ch.logo ? '' : 'none'; // Hide logo if no URL
+      infoChno.textContent = ch.chno ? `#${ch.chno}` : `#${current + 1}`;
+      infoName.textContent = ch.name;
+
+      infoBar.style.display = '';
+      infoBar.style.opacity = '0.98';
+      infoBar.classList.remove('fadeout');
+
+      // Set timeout to fade out info bar
+      setTimeout(() => {
+        infoBar.classList.add('fadeout');
+        setTimeout(() => { hideInfoBar(); }, 800); // Fully hide after fadeout
+      }, 3000); // Display for 3 seconds
+    }
+
+
+    // --- Event Listeners ---
+    // Keyboard navigation
+    document.addEventListener('keydown', e => {
+      // Allow escape to close modal first
+      if (modal && modal.style.display !== 'none') {
+        if (e.key === 'Escape') {
+          hideModal();
+        }
+        return;
+      }
+
+      // Prevent input in textareas/inputs from triggering controls
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (e.key === 'ArrowRight') {
+        handleNumpad('ch-up');
+      } else if (e.key === 'ArrowLeft') {
+        handleNumpad('ch-down');
+      } else if (e.key === 's' || e.key === 'S') {
         stopPlayback();
-      } else if (e.key==='c' || e.key==='C') {
-        renderChannelList(); showModal();
+      } else if (e.key === 'c' || e.key === 'C') {
+        showChannelListModal();
+      } else if (e.key.match(/^[0-9]$/)) {
+        handleNumpad(e.key);
+      } else if (e.key === 'p' || e.key === 'P') { // 'p' for power
+        powerBtn.click();
       }
     });
-    // Error handling
-    video.onerror = audio.onerror = ()=>{
-      showError('Failed to load stream.');
+
+    // Error handling for media elements
+    video.onerror = audio.onerror = (e) => {
+      console.error('Media error:', e);
+      showError('Failed to load stream. Please try another channel.');
+      stopBtn.style.display = 'none'; // Hide stop button on error
     };
-    video.onplay = audio.onplay = hideError;
-    video.onloadeddata = audio.onloadeddata = hideError;
-    video.oncanplay = audio.oncanplay = hideError;
-    // Auto-hide controls
-    let hideTimeout = null;
+
+    video.onplay = audio.onplay = hideError; // Hide error when playback starts
+    video.onloadeddata = audio.onloadeddata = hideError; // Hide error when data is loaded
+    video.oncanplay = audio.oncanplay = hideError; // Hide error when media can play
+
+    // Auto-hide controls (basic implementation)
+    let hideControlsTimeout = null;
     function setAutohideEvents() {
-      if (!autoHide) return;
-      const player = lastType==='audio'?audio:video;
-      player.removeAttribute('controls');
-      player.onmousemove = ()=>{
-        player.setAttribute('controls','');
-        clearTimeout(hideTimeout);
-        hideTimeout = setTimeout(()=>{
-          player.removeAttribute('controls');
-        }, 2000);
+        // This function is currently not fully hooked up to a UI toggle,
+        // but it provides the basic logic if `autoHide` is true.
+        const player = lastType === 'audio' ? audio : video;
+        if (autoHide) {
+            // Remove native controls and manage custom logic
+            player.removeAttribute('controls');
+            player.addEventListener('mousemove', function onMouseMove() {
+                player.setAttribute('controls', '');
+                clearTimeout(hideControlsTimeout);
+                hideControlsTimeout = setTimeout(() => {
+                    player.removeAttribute('controls');
+                }, 2000); // Hide after 2 seconds of inactivity
+            });
+            player.addEventListener('mouseleave', function onMouseLeave() {
+                player.removeAttribute('controls');
+                clearTimeout(hideControlsTimeout);
+            });
+        } else {
+            // Ensure native controls are always present if autoHide is false
+            player.setAttribute('controls', '');
+            player.removeEventListener('mousemove', onMouseMove); // Remove listeners if toggled off
+            player.removeEventListener('mouseleave', onMouseLeave);
+        }
+    }
+
+
+    // Update clock every second
+    setInterval(updateClock, 1000);
+    // Update EPG display every minute to ensure current program is shown
+    setInterval(updateEPGDisplay, 60000);
+
+
+    // --- EPG Functionality ---
+    // Function to fetch and parse EPG data
+    async function loadEPGData(epgUrl) {
+      try {
+        console.log('Loading EPG data from:', epgUrl);
+        
+        // Try to fetch with CORS handling
+        const response = await fetch(epgUrl, {
+          method: 'GET',
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/xml, text/xml, */*',
+            'Accept-Encoding': 'gzip, deflate, br'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const xmlText = await response.text();
+        parseEPGXML(xmlText);
+        
+      } catch (error) {
+        console.log('EPG loading failed:', error.message);
+        
+        // Try alternative approach for CORS issues
+        if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+          console.log('CORS detected, trying alternative method...');
+          loadEPGWithProxy(epgUrl);
+        } else {
+          // Fallback to basic program display
+          updateEPGDisplay('EPG Unavailable');
+        }
+      }
+    }
+    
+    // Alternative method using JSONP or proxy approach
+    function loadEPGWithProxy(epgUrl) {
+      // Try using a CORS proxy
+      const corsProxy = 'https://api.allorigins.win/raw?url=';
+      const proxyUrl = corsProxy + encodeURIComponent(epgUrl);
+      
+      fetch(proxyUrl)
+        .then(response => response.text())
+        .then(xmlText => {
+          console.log('EPG loaded via proxy');
+          parseEPGXML(xmlText);
+        })
+        .catch(error => {
+          console.log('Proxy method also failed:', error.message);
+          // Final fallback - show basic channel info
+          updateEPGDisplay('EPG Unavailable');
+        });
+    }
+
+    // Parse EPG XML data
+    function parseEPGXML(xmlText) {
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+        // Check for parsing errors
+        const errorNode = xmlDoc.querySelector('parsererror');
+        if (errorNode) {
+            console.error('Error parsing EPG XML:', errorNode.textContent);
+            updateEPGDisplay('EPG Parsing Error');
+            return;
+        }
+
+        const programmes = xmlDoc.querySelectorAll('programme');
+
+        epgData = {};
+
+        programmes.forEach(programme => {
+          const channelIdFromEPG = programme.getAttribute('channel'); // This is the tvg-id from M3U
+          const start = programme.getAttribute('start');
+          const stop = programme.getAttribute('stop');
+          const title = programme.querySelector('title')?.textContent || 'No Title';
+
+          if (!epgData[channelIdFromEPG]) {
+            epgData[channelIdFromEPG] = [];
+          }
+
+          epgData[channelIdFromEPG].push({
+            start: parseEPGTime(start),
+            stop: parseEPGTime(stop),
+            title: title
+          });
+        });
+
+        console.log('EPG data loaded for', Object.keys(epgData).length, 'channels');
+        updateEPGDisplay(); // Update EPG display after data load
+
+      } catch (error) {
+        console.error('EPG parsing failed:', error.message);
+        updateEPGDisplay('EPG Error');
+      }
+    }
+
+    // Parse EPG time format (YYYYMMDDHHMMSS +0000)
+    function parseEPGTime(timeStr) {
+      if (!timeStr) return null;
+
+      // Ensure timezone offset is correctly handled or ignored based on spec
+      const dateTimePart = timeStr.substring(0, 14);
+      // Constructing date in YYYY-MM-DDTHH:MM:SS format
+      const year = dateTimePart.substring(0, 4);
+      const month = dateTimePart.substring(4, 6);
+      const day = dateTimePart.substring(6, 8);
+      const hour = dateTimePart.substring(8, 10);
+      const minute = dateTimePart.substring(10, 12);
+      const second = dateTimePart.substring(12, 14);
+
+      // Directly create Date object using parts (local time) or ISO string if offset is included
+      // For simplicity and common browser behavior, we often rely on browser's interpretation.
+      return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+    }
+
+    // Get current program for a channel
+    function getCurrentProgram(channelTvGId) {
+      if (!epgData[channelTvGId]) return null;
+
+      const now = new Date();
+      const channelPrograms = epgData[channelTvGId];
+
+      // Sort programs by start time to ensure correct lookup if not already sorted
+      channelPrograms.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+      for (let program of channelPrograms) {
+        if (program.start <= now && program.stop > now) {
+          return program;
+        }
+      }
+
+      return null;
+    }
+
+    // Update EPG display
+    function updateEPGDisplay(customMessage = null) {
+      const epgDisplay = document.getElementById('epg-display');
+      
+      if (customMessage) {
+        if (customMessage === 'EPG Unavailable') {
+          // Show basic channel info when EPG is unavailable
+          if (channels.length && channels[current]) {
+            const channelName = abbreviateChannelName(channels[current].name);
+            const currentTime = new Date().toLocaleTimeString('en-US', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: true 
+            });
+            epgDisplay.textContent = `${channelName} : ${currentTime}`;
+          } else {
+            epgDisplay.textContent = 'No Channel Info';
+          }
+        } else {
+          epgDisplay.textContent = customMessage;
+        }
+        return;
+      }
+      
+      if (!channels.length || !channels[current]) {
+        epgDisplay.textContent = 'No Channel';
+        return;
+      }
+      
+      const currentChannel = channels[current];
+      const channelId = currentChannel.name?.replace(/\s+/g, '') || `channel${current}`;
+      const program = getCurrentProgram(channelId);
+      
+      if (program) {
+        const channelName = abbreviateChannelName(currentChannel.name);
+        const programName = abbreviateProgramName(program.title);
+        epgDisplay.textContent = `${channelName} : ${programName}`;
+      } else {
+        const channelName = abbreviateChannelName(currentChannel.name);
+        const currentTime = new Date().toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: true 
+        });
+        epgDisplay.textContent = `${channelName} : ${currentTime}`;
+      }
+    }
+
+    // Abbreviate channel name if too long
+    function abbreviateChannelName(name) {
+      if (!name) return 'Unknown';
+      // Prioritize full name if it fits, otherwise use common abbreviations or truncate
+      if (name.length <= 15) return name; // Allow slightly longer for better readability on wider screens
+
+      const abbreviations = {
+        'ESPN': 'ESPN', 'ESPN 2': 'ESPN2', 'ESPN NEWS': 'ESPNN', 'ESPN U': 'ESPNU',
+        'FOX SPORTS 1': 'FS1', 'FOX SPORTS 2': 'FS2', 'MLB NETWORK': 'MLB NET', 'NFL NETWORK': 'NFL NET',
+        'NBA TV': 'NBA TV', 'YES NETWORK': 'YES NET', 'SPORTSNET NEW YORK': 'SNY',
+        'COMEDY CENTRAL': 'COMEDY C.', 'USA NETWORK': 'USA NET', 'PARAMOUNT NETWORK': 'PARAMOUNT',
+        'DISNEY': 'DISNEY', 'DISNEY JR': 'DISNEY JR', 'NICK': 'NICK', 'CARTOON HD': 'CARTOON',
+        'TELEMUNDO PR': 'TELE PR', 'UNIMAS HD': 'UNIMAS', 'PUERTO RICO TV': 'PR TV',
+        'BALLY SPORTS SUN': 'BALLY SUN', 'BALLY SPORTS FLORIDA': 'BALLY FL',
+        'DISCOVERY EN ESPAÑOL': 'DISC ESP', 'DISCOVERY FAMILIA': 'DISC FAM',
+        'DISCOVERY TURBO': 'DISC TURBO', 'DISCOVERY WORLD': 'DISC WORLD',
+        '[MLB PPV] NY YANKEES': 'MLB NYY', '[MLB PPV] NY METS': 'MLB NYM', '[MLB PPV] MIA MARLINS': 'MLB MIA',
+        '[MLB PPV] DET TIGERS': 'MLB DET', '[MLB PPV] TB RAYS': 'MLB TBR',
+        '[NBA PPV] GS WARRIORS': 'NBA GSW', '[NBA PPV] NY KNICKS': 'NBA NYK',
+        '[NBA PPV] DEN NUGGETS': 'NBA DEN', '[NBA PPV] OKC THUNDER': 'NBA OKC',
+        '[NBA PPV] IND PACERS': 'NBA IND'
       };
-      player.onmouseleave = ()=>{
-        player.removeAttribute('controls');
+
+      for (const [full, abbr] of Object.entries(abbreviations)) {
+        if (name.includes(full)) {
+            // Apply abbreviation only if it makes the name shorter
+            const newName = name.replace(full, abbr);
+            if (newName.length <= 15) return newName;
+        }
+      }
+
+      // Generic truncation as a last resort
+      return name.substring(0, 12) + '...';
+    }
+
+    // Abbreviate program name if too long
+    function abbreviateProgramName(name) {
+      if (!name) return 'No Program Info';
+      if (name.length <= 25) return name; // Allow slightly longer for EPG display
+
+      // Remove common words to save space
+      const shortName = name
+        .replace(/\b(HD|Live|News|Sports|Show|Program|Series|Special)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (shortName.length <= 25) return shortName;
+
+      return shortName.substring(0, 22) + '...';
+    }
+
+    // --- Channel List Modal (robust version) ---
+    let modal = document.createElement('div');
+    modal.id = 'modal';
+    document.body.appendChild(modal);
+
+    function showChannelListModal() {
+      // Ensure the modal content is fresh
+      modal.innerHTML = `
+        <div id="modal-content">
+          <h2>Channel List</h2>
+          <div id="channel-list-modal-body"></div>
+          <button id="modal-close">Close</button>
+        </div>
+      `;
+      const listDiv = modal.querySelector('#channel-list-modal-body');
+
+      if (listDiv) {
+        if (channels && channels.length) {
+          listDiv.innerHTML = channels.map((ch, i) =>
+            `<div class="${i === current ? 'active-channel' : ''}" onclick="window.playChannelFromModal && window.playChannelFromModal(${i})">
+              <strong>${ch.chno ? ch.chno : ('' + (i + 1))}</strong> - ${ch.name}
+            </div>`
+          ).join('');
+        } else {
+          listDiv.innerHTML = '<div style="color:#aaa; text-align: center; padding: 20px;">No channels available.</div>';
+        }
+      }
+      modal.style.display = 'flex'; // Use flex for centering modal-content
+      modal.style.justifyContent = 'center';
+      modal.style.alignItems = 'center';
+
+      // Attach close button handler
+      modal.querySelector('#modal-close').onclick = () => {
+        modal.style.display = 'none';
+      };
+      // Close modal if background is clicked
+      modal.onclick = (e) => {
+        if (e.target === modal) modal.style.display = 'none';
       };
     }
-    setInterval(updateClock, 1000);
+
+    // Make playChannelFromModal globally accessible for onclick in modal
+    window.playChannelFromModal = function(idx) {
+      playChannel(idx);
+      modal.style.display = 'none';
+    };
+
+
     // --- Init ---
     (function init() {
-      loadState();
-      setLight(lightMode);
-      setAutohide(autoHide);
-      setClock24(clock24);
-      if (!channels.length) {
-        channels = parseM3U(EMBEDDED_M3U);
-        saveState();
+      loadState(); // Load saved state first
+      channels = parseM3U(EMBEDDED_M3U); // Parse channels from M3U content
+
+      // Initial power state
+      if (standby) {
+        standbyOverlay.style.display = '';
+        updateEPGDisplay('STANDBY');
+        ledDisplay.textContent = '-- --';
+        stopBtn.style.display = 'none';
+      } else {
+        standbyOverlay.style.display = 'none';
+        playChannel(current); // Play last remembered channel if not in standby
       }
-      renderChannelList();
-      playChannel(current);
+
+      // Load EPG data
+      loadEPGFromURL();
+      
+      // Add EPG refresh button
+      addEPGRefreshButton();
+
+      console.log('GLZ TV Initialized.');
+      console.log('Channels loaded:', channels.length);
+      console.log('Current channel index:', current);
+      if (channels[current]) {
+          console.log('Current channel:', channels[current].name, 'ID:', channels[current].id);
+      }
     })();
+
+    // Function to load EPG data (you can call this with your EPG URL)
+    function loadEPGFromURL(epgUrl = null) {
+      if (epgUrl) {
+        // Try external URL if provided
+        loadEPGData(epgUrl);
+      } else {
+        // Use embedded EPG data by default (no CORS issues)
+        console.log('Loading embedded EPG data...');
+        loadEmbeddedEPG();
+        
+        // Optionally try external EPG as backup (will fail due to CORS but won't hang)
+        setTimeout(() => {
+          const defaultEPGUrl = 'https://epg.best/1eef8-shw7fc.xml.gz';
+          console.log('Trying external EPG as backup:', defaultEPGUrl);
+          loadEPGData(defaultEPGUrl);
+        }, 2000);
+      }
+    }
+    
+    // Add manual EPG refresh button
+    function addEPGRefreshButton() {
+      const refreshBtn = document.createElement('button');
+      refreshBtn.textContent = '🔄 EPG';
+      refreshBtn.style.cssText = 'position: fixed; top: 10px; right: 10px; background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%); color: #ffffff; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; z-index: 1001; font-weight: 600; box-shadow: 0 4px 15px rgba(45, 90, 160, 0.3); transition: all 0.2s ease; font-size: 12px;';
+      refreshBtn.onmouseover = () => {
+        refreshBtn.style.background = 'linear-gradient(135deg, #4a90e2 0%, #6ba6e8 100%)';
+        refreshBtn.style.transform = 'translateY(-2px)';
+        refreshBtn.style.boxShadow = '0 6px 20px rgba(45, 90, 160, 0.4)';
+      };
+      refreshBtn.onmouseout = () => {
+        refreshBtn.style.background = 'linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%)';
+        refreshBtn.style.transform = 'translateY(0)';
+        refreshBtn.style.boxShadow = '0 4px 15px rgba(45, 90, 160, 0.3)';
+      };
+      refreshBtn.onclick = () => {
+        console.log('Manual EPG refresh requested');
+        updateEPGDisplay('Loading EPG...');
+        loadEPGFromURL();
+      };
+      document.body.appendChild(refreshBtn);
+    }
+
+    // --- Embedded EPG Data (Alternative to external fetch) ---
+    const EMBEDDED_EPG = `<?xml version="1.0" encoding="UTF-8"?>
+<tv generator-info-name="EPG.best" generator-info-url="https://epg.best">
+  <!-- Sample EPG data - replace with your actual EPG content -->
+  <programme start="20250114120000 +0000" stop="20250114130000 +0000" channel="ESPN">
+    <title>SportsCenter</title>
+  </programme>
+  <programme start="20250114130000 +0000" stop="20250114150000 +0000" channel="ESPN">
+    <title>NBA Basketball</title>
+  </programme>
+  <programme start="20250114120000 +0000" stop="20250114130000 +0000" channel="FOXSPORTS1">
+    <title>MLB Game</title>
+  </programme>
+  <programme start="20250114120000 +0000" stop="20250114130000 +0000" channel="TELEMUNDO">
+    <title>Noticias Telemundo</title>
+  </programme>
+  <programme start="20250114120000 +0000" stop="20250114130000 +0000" channel="DISNEY">
+    <title>Mickey Mouse Club</title>
+  </programme>
+</tv>`;
+
+    // Function to load embedded EPG data
+    function loadEmbeddedEPG() {
+      try {
+        console.log('Loading embedded EPG data...');
+        parseEPGXML(EMBEDDED_EPG);
+        console.log('Embedded EPG loaded successfully');
+      } catch (error) {
+        console.log('Embedded EPG parsing failed:', error.message);
+        updateEPGDisplay('EPG Unavailable');
+      }
+    }
+
+    // Utility function to convert external EPG to embedded format
+    function convertEPGToEmbedded(epgUrl) {
+      console.log('To convert your EPG data to embedded format:');
+      console.log('1. Download the XML.gz file from:', epgUrl);
+      console.log('2. Decompress it to get the XML file');
+      console.log('3. Copy the XML content');
+      console.log('4. Replace the EMBEDDED_EPG constant with your XML content');
+      console.log('5. Remove the external EPG loading code');
+      
+      // Example of how to structure the embedded EPG
+      console.log('Example structure:');
+      console.log('const EMBEDDED_EPG = `<?xml version="1.0" encoding="UTF-8"?>');
+      console.log('<tv generator-info-name="EPG.best">');
+      console.log('  <programme start="YYYYMMDDHHMMSS +0000" stop="YYYYMMDDHHMMSS +0000" channel="CHANNEL_ID">');
+      console.log('    <title>Program Title</title>');
+      console.log('  </programme>');
+      console.log('</tv>`;');
+    }
+    
+    // Call this function to get conversion instructions
+    // convertEPGToEmbedded('https://epg.best/1eef8-shw7fc.xml.gz');
   </script>
 </body>
 </html>
