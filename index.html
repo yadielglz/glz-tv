@@ -1,135 +1,294 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://unpkg.com; object-src 'self'">
-    <title>Glz Player</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Segoe+UI+Mono&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    
-    <style>
-        :root { /* Default: Dark Theme */ --bg-color: #1a1a1a; --text-color: #ffffff; --text-muted-color: #b0b0b0; --text-faint-color: #555555; --surface-color: rgba(43, 43, 43, 0.85); --border-color: rgba(74, 74, 74, 0.5); --modal-bg: #1a1a1a; --play-button-bg: #00a3e0; --play-button-text: #ffffff; --accent-color: #00a3e0; --player-text-shadow: 1px 1px 5px rgba(0,0,0,0.7); }
-        .theme-light { /* Light Theme */ --bg-color: #F7F2FA; --text-color: #1D1B20; --text-muted-color: #48464C; --text-faint-color: #79767D; --surface-color: rgba(231, 222, 237, 0.85); --border-color: rgba(202, 196, 208, 0.5); --modal-bg: #F7F2FA; --player-text-shadow: 1px 1px 3px rgba(0,0,0,0.25); }
-        .theme-oled { /* OLED "Super Dark" Theme */ --bg-color: #000000; --text-color: #ffffff; --text-muted-color: #a0a0a0; --text-faint-color: #444444; --surface-color: rgba(20, 20, 20, 0.85); --border-color: rgba(50, 50, 50, 0.5); --modal-bg: #000000; }
-        html { overflow-y: hidden; }
-        body, .font-sans { font-family: 'Inter', 'Segoe UI', sans-serif; }
-        .font-mono { font-family: 'Segoe UI Mono', monospace; }
-        .station-list-scrollbar::-webkit-scrollbar { width: 8px; }
-        .station-list-scrollbar::-webkit-scrollbar-track { background: var(--surface-color); }
-        .station-list-scrollbar::-webkit-scrollbar-thumb { background: var(--accent-color); border-radius: 4px; }
-        #player-display { background: black; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); transition: all 0.4s ease-in-out; height: auto; min-height: 200px; }
-        #station-list-in-options { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out; }
-        #station-list-in-options.expanded { max-height: 40vh; overflow-y: auto; }
-        .station-item:hover, .station-item.selected { background-color: var(--accent-color) !important; color: var(--play-button-text) !important; }
-        .station-item:hover p, .station-item.selected p { color: var(--play-button-text) !important; }
-        #tuner-panel { background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-top: 1px solid rgba(255, 255, 255, 0.15); border-bottom: 1px solid rgba(255, 255, 255, 0.15); }
-        #options-modal { transition: visibility 0.3s; }
-        #options-modal.hidden { visibility: hidden; }
-        #options-backdrop { transition: opacity 0.3s ease-in-out; }
-        #options-panel { transition: transform 0.3s ease-in-out; }
-        #options-modal.is-open #options-backdrop { opacity: 1; }
-        #options-modal.is-open #options-panel { transform: translateX(0); }
-        #ambient-bg { position: absolute; inset: 0; width: 100%; height: 100%; background-size: cover; background-position: center; opacity: 0; filter: blur(50px) brightness(0.6); transform: scale(1.2); transition: opacity 1000ms ease-in-out; z-index: 0; }
-        #video-player { width: 100%; height: 100%; background-color: #000; }
-        #tuner-content.video-mode { display: flex; align-items: center; justify-content: center; gap: 0.75rem; color: var(--accent-color); filter: drop-shadow(0 0 5px var(--accent-color)); }
-        
-        /* MOBILE-FRIENDLY FIX: This ensures the header and footer are always on top and clickable.
-           A z-index property only affects elements that have a 'position' value other than 'static'.
-           By setting 'position: relative', we create a stacking context, making the z-index effective. */
-        #top-bar, #bottom-bar {
-            position: relative;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IPTV Playlist Player</title>
+  <style>
+    :root {
+      --bg: #181818;
+      --fg: #fff;
+      --accent: #2196f3;
+      --bar: #222;
+      --modal-bg: rgba(0,0,0,0.85);
+      --shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    body.light {
+      --bg: #f5f5f5;
+      --fg: #181818;
+      --bar: #fff;
+      --modal-bg: rgba(255,255,255,0.95);
+      --shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background 0.3s, color 0.3s;
+    }
+    .top-bar {
+      background: var(--bar);
+      color: var(--fg);
+      padding: 0.5em 1em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 1.1em;
+      box-shadow: var(--shadow);
+      z-index: 2;
+    }
+    .bottom-bar {
+      background: var(--bar);
+      color: var(--fg);
+      padding: 0.5em 1em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 1.1em;
+      box-shadow: var(--shadow);
+      z-index: 2;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+    }
+    .channel-info {
+      display: flex;
+      align-items: center;
+      gap: 0.7em;
+    }
+    .channel-logo {
+      width: 36px; height: 36px;
+      object-fit: contain;
+      background: #fff2;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px #0004;
+    }
+    body.light .channel-logo {
+      background: #0001;
+      box-shadow: 0 1px 4px #0001;
+    }
+    .settings-btn {
+      background: none;
+      border: none;
+      color: var(--fg);
+      font-size: 1.5em;
+      cursor: pointer;
+      padding: 0 0.3em;
+      transition: color 0.2s;
+    }
+    .settings-btn:hover { color: var(--accent); }
+    .player-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      min-height: 300px;
+      background: #000;
+    }
+    body.light .player-wrap {
+      background: #eaeaea;
+    }
+    video, audio {
+      max-width: 100vw;
+      max-height: 70vh;
+      background: #000;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      outline: none;
+    }
+    body.light video, body.light audio {
+      background: #fff;
+    }
+    .stop-btn {
+      position: absolute;
+      top: 1em; right: 1em;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 44px; height: 44px;
+      font-size: 1.5em;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .stop-btn:hover { background: #f44336; }
+    .modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--modal-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      animation: fadeIn 0.2s;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-content {
+      background: var(--bar);
+      color: var(--fg);
+      border-radius: 12px;
+      padding: 2em 1.5em 1.5em 1.5em;
+      min-width: 320px;
+      max-width: 95vw;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+    .modal-close {
+      position: absolute;
+      top: 0.7em; right: 1em;
+      background: none;
+      border: none;
+      color: var(--fg);
+      font-size: 1.5em;
+      cursor: pointer;
+    }
+    .channel-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.7em;
+      margin-bottom: 1.5em;
+      max-height: 45vh;
+      overflow-y: auto;
+    }
+    .channel-item {
+      display: flex;
+      align-items: center;
+      gap: 0.7em;
+      padding: 0.5em 0.7em;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: 2px solid transparent;
+    }
+    .channel-item.selected, .channel-item:hover {
+      background: #333b;
+      border-color: var(--accent);
+    }
+    body.light .channel-item.selected, body.light .channel-item:hover {
+      background: #e3eaff;
+      border-color: var(--accent);
+    }
+    .modal-section {
+      margin-bottom: 1.2em;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 1em;
+      margin-bottom: 0.7em;
+    }
+    .toggle-label {
+      flex: 1;
+    }
+    .toggle-switch {
+      width: 44px; height: 24px;
+      background: #444;
+      border-radius: 12px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: inline-block;
+    }
+    .toggle-switch[data-on="true"] {
+      background: var(--accent);
+    }
+    .toggle-knob {
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 20px; height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      transition: left 0.2s;
+    }
+    .toggle-switch[data-on="true"] .toggle-knob {
+      left: 22px;
+    }
+    .error-msg {
+      color: #f44336;
+      margin-top: 1em;
+      font-weight: bold;
+      text-align: center;
+      text-shadow: 0 1px 2px #0008;
+    }
+    body.light .error-msg {
+      text-shadow: none;
+    }
+    @media (max-width: 600px) {
+      .modal-content { padding: 1em 0.5em 1em 0.5em; }
+      .top-bar, .bottom-bar { font-size: 1em; padding: 0.5em 0.3em; }
+      .channel-logo { width: 28px; height: 28px; }
+    }
+  </style>
 </head>
-<body class="w-full h-full font-sans bg-[var(--bg-color)] text-[var(--text-color)] transition-colors duration-300">
-
-    <div id="app-container" class="w-full h-full flex flex-col bg-[var(--bg-color)] transition-colors duration-300 relative overflow-hidden">
-        <div id="ambient-bg"></div>
-        <header id="top-bar" class="w-full p-3 flex justify-between items-center text-[var(--text-color)] z-20 bg-transparent flex-shrink-0">
-             <div id="status-left" class="w-1/3 text-left flex items-center h-full"></div>
-            <div id="status-center" class="w-1/3 text-center font-bold text-sm"></div>
-            <div id="status-right" class="w-1/3 flex justify-end"></div>
-        </header>
-        <div id="tuner-container" class="w-full flex-shrink-0 my-2">
-            <div id="tuner-panel" class="w-11/12 h-12 flex items-center p-2 relative mx-auto rounded-lg">
-                <div id="tuner-content" class="w-full h-full flex items-center justify-center z-10 opacity-0 transition-opacity duration-300"></div>
-            </div>
-        </div>
-        <main class="z-10 w-full px-4 flex flex-col items-center space-y-4 flex-grow justify-center bg-transparent">
-            <div id="player-display" class="w-full h-full rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
-                <div id="player-content" class="w-full h-full flex items-center justify-center text-center">
-                    <i data-lucide="tv" class="w-16 h-16 text-[var(--text-faint-color)]"></i>
-                </div>
-            </div>
-        </main>
-        <footer id="bottom-bar" class="w-full p-3 flex justify-between items-center text-[var(--text-color)] z-20 bg-transparent flex-shrink-0">
-             <span id="bottom-bar-station-name" class="font-bold text-sm h-5 truncate w-1/3"></span>
-             <div id="controls-container" class="w-1/3 flex items-center justify-center space-x-4">
-                 <button id="options-button" class="bg-[var(--surface-color)] p-3 rounded-full text-[var(--text-color)] hover:bg-[var(--border-color)] transition-all duration-200 border border-[var(--border-color)]" aria-label="Open options">
-                     <i data-lucide="settings-2" class="w-6 h-6"></i>
-                 </button>
-                 <button id="play-button" class="bg-[var(--play-button-bg)] text-[var(--play-button-text)] p-4 rounded-full shadow-lg hover:opacity-90 transform hover:scale-105" aria-label="Play">
-                     <i data-lucide="play" class="w-8 h-8 fill-current ml-1"></i>
-                 </button>
-                 <button id="stop-button" class="hidden bg-red-600 text-white p-4 rounded-full shadow-lg hover:bg-red-700 transform hover:scale-105" aria-label="Stop player">
-                     <i data-lucide="square" class="w-8 h-8 fill-current"></i>
-                 </button>
-                 <div class="p-3 rounded-full w-[52px]"></div> </div>
-             <div class="w-1/3"></div> </footer>
-        <div id="modals-container">
-             <div id="options-modal" class="hidden fixed inset-0 z-50">
-                 <div id="options-backdrop" class="absolute inset-0 bg-black/50 transition-opacity duration-300 opacity-0"></div>
-                 <div id="options-panel" class="absolute inset-y-0 right-0 w-full max-w-sm bg-[var(--modal-bg)] flex flex-col transform translate-x-full transition-transform duration-300 ease-in-out">
-                     <header class="flex items-center justify-between p-4 border-b border-[var(--border-color)] flex-shrink-0">
-                         <h2 class="text-xl font-bold text-[var(--text-color)]">Options</h2>
-                         <button id="close-options-button" class="p-2 rounded-full hover:bg-[var(--border-color)] text-[var(--text-color)]">
-                             <i data-lucide="x" class="w-6 h-6"></i>
-                         </button>
-                     </header>
-                     <div id="options-container" class="p-4 space-y-3 text-[var(--text-color)] flex-grow overflow-y-auto station-list-scrollbar">
-                         <button id="toggle-station-list-button" class="w-full flex justify-between items-center p-3 bg-[var(--surface-color)] hover:bg-[var(--border-color)] rounded-lg">
-                             <span>Channel List</span>
-                             <i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i>
-                         </button>
-                         <div id="station-list-in-options" class="station-list-scrollbar space-y-2 pr-2">
-                             <p class='text-center text-sm text-[var(--text-muted-color)] p-4'>Loading embedded data...</p>
-                         </div>
-                         <button id="random-station-button" class="w-full flex justify-between items-center p-3 bg-[var(--surface-color)] hover:bg-[var(--border-color)] rounded-lg">
-                             <span>Random Channel</span>
-                             <i data-lucide="dice-5" class="w-5 h-5"></i>
-                         </button>
-                         <button id="theme-toggle-button" class="w-full flex justify-between items-center p-3 bg-[var(--surface-color)] hover:bg-[var(--border-color)] rounded-lg">
-                             <span>Toggle Theme</span>
-                             <span id="theme-icon-container"><i data-lucide="moon" class="w-5 h-5"></i></span>
-                         </button>
-                         <div class="w-full grid grid-cols-2 gap-2 items-center p-3 bg-[var(--surface-color)] rounded-lg text-sm">
-                             <span class="text-left">Stream Time</span>
-                             <span id="stopwatch-display" class="font-mono text-right">00:00</span>
-                         </div>
-                     </div>
-                      <div id="version-footer" class="text-center text-[var(--text-faint-color)] text-xs p-4 border-t border-[var(--border-color)] flex-shrink-0"></div>
-                 </div>
-             </div>
-        </div>
+<body>
+  <div id="app" style="display:flex; flex:1; flex-direction:column; min-height:100vh;">
+    <div class="top-bar">
+      <span>IPTV Player</span>
+      <span id="clock"></span>
     </div>
-    
-    <script>
-        // --- EMBEDDED DATA ---
-        const M3U_DATA = `
-#EXTM3U url-tvg="https://epg.best/1eef8-shw7fc.xml.gz" x-tvg-url="https://epg.best/1eef8-shw7fc.xml.gz"
-#EXTINF:-1 tvg-id="WKAQ.us" tvg-name="WKAQ   TELEMUNDO PR" tvg-logo="https://i.ibb.co/gLVK5Swz/TEL.png" tvg-chno="102" channel-id="102" group-title="TV",WKAQ   TELEMUNDO PR
+    <div class="player-wrap">
+      <button class="stop-btn" id="stop-btn" title="Stop">&#9632;</button>
+      <video id="video" controls autoplay playsinline style="display:none"></video>
+      <audio id="audio" controls autoplay style="display:none"></audio>
+      <div id="player-error" class="error-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:none"></div>
+    </div>
+    <div class="bottom-bar">
+      <div class="channel-info">
+        <img id="current-logo" class="channel-logo" src="" alt="" style="display:none">
+        <span id="current-name"></span>
+      </div>
+      <button class="settings-btn" id="settings-btn" title="Settings">&#9881;</button>
+    </div>
+  </div>
+  <div id="modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <button class="modal-close" id="modal-close" title="Close">&times;</button>
+      <div class="modal-section">
+        <h3>Channel List</h3>
+        <div class="channel-list" id="channel-list"></div>
+      </div>
+      <div class="modal-section">
+        <h3>Settings</h3>
+        <div class="toggle-row">
+          <span class="toggle-label">Light Mode</span>
+          <span class="toggle-switch" id="light-toggle" data-on="false"><span class="toggle-knob"></span></span>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">Auto-hide Controls</span>
+          <span class="toggle-switch" id="autohide-toggle" data-on="false"><span class="toggle-knob"></span></span>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">24h Clock</span>
+          <span class="toggle-switch" id="clock-toggle" data-on="false"><span class="toggle-knob"></span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- hls.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+  <script>
+    // --- Embedded M3U Content ---
+    const EMBEDDED_M3U = `#EXTM3U url-tvg="https://epg.best/1eef8-shw7fc.xml.gz" x-tvg-url="https://epg.best/1eef8-shw7fc.xml.gz"
+#EXTINF:-1 tvg-id="WKAQ.us" tvg-name="WKAQ   TELEMUNDO PR" tvg-logo="https://i.ibb.co/gLVK5Swz/TEL.png" tvg-chno="102" channel-id="102" group-title="TV",WKAQ   TELEMUNDO PR
 https://nbculocallive.akamaized.net/hls/live/2037499/puertorico/stream1/master_1080.m3u8
-#EXTINF:-1 tvg-id="WKAQDT2.us" tvg-name="WKAQ2   PUNTO 2" tvg-logo="https://static.epg.best/us/WKAQDT2.us.png" tvg-chno="103" channel-id="103" group-title="TV",WKAQ2   PUNTO 2
+#EXTINF:-1 tvg-id="WKAQDT2.us" tvg-name="WKAQ2   PUNTO 2" tvg-logo="https://static.epg.best/us/WKAQDT2.us.png" tvg-chno="103" channel-id="103" group-title="TV",WKAQ2   PUNTO 2
 https://nbculocallive.akamaized.net/hls/live/2037499/puertorico/stream2/master_720.m3u8
 #EXTINF:-1 tvg-id="UniMas.us" tvg-name="UNIMAS HD" tvg-logo="https://static.epg.best/us/UniMas.us.png" tvg-chno="104" channel-id="104" group-title="TV",UNIMAS HD
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/unimas.network.east.us.m3u8
-#EXTINF:-1 tvg-id="WLII.us" tvg-name="WLII   TELEONCE" tvg-logo="https://static.epg.best/us/WLII.us.png" tvg-chno="105" channel-id="105" group-title="TV",WLII   TELEONCE
+#EXTINF:-1 tvg-id="WLII.us" tvg-name="WLII   TELEONCE" tvg-logo="https://static.epg.best/us/WLII.us.png" tvg-chno="105" channel-id="105" group-title="TV",WLII   TELEONCE
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/uni.wlii.puerto.rico.us.m3u8
-#EXTINF:-1 tvg-id="WIPRTV.us" tvg-name="WIPR   PUERTO RICO TV" tvg-logo="https://static.epg.best/us/WIPRTV.us.png" tvg-chno="106" channel-id="106" group-title="TV",WIPR   PUERTO RICO TV
+#EXTINF:-1 tvg-id="WIPRTV.us" tvg-name="WIPR   PUERTO RICO TV" tvg-logo="https://static.epg.best/us/WIPRTV.us.png" tvg-chno="106" channel-id="106" group-title="TV",WIPR   PUERTO RICO TV
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/wipr.pr.m3u8
 #EXTINF:-1 tvg-id="ESPN.us" tvg-name="ESPN HD" tvg-logo="https://i.ibb.co/mrs1mDXw/ESPN-png.png" tvg-chno="110" channel-id="110" group-title="TV",ESPN HD
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/espn.us.m3u8
@@ -153,15 +312,15 @@ https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nb
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/yes.network.us.m3u8
 #EXTINF:-1 tvg-id="SportsNetNewYork.us" tvg-name="SPORTSNET NEW YORK" tvg-logo="https://static.epg.best/us/SportsNetNewYork.us.png" tvg-chno="120" channel-id="120" group-title="TV",SPORTSNET NEW YORK
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/sny.sportsnet.new.york.us.m3u8
-#EXTINF:-1 tvg-id="WESH.us" tvg-name="WESH   NBC ORLANDO" tvg-logo="https://static.epg.best/us/WESH.us.png" tvg-chno="121" channel-id="121" group-title="TV",WESH   NBC ORLANDO
+#EXTINF:-1 tvg-id="WESH.us" tvg-name="WESH   NBC ORLANDO" tvg-logo="https://static.epg.best/us/WESH.us.png" tvg-chno="121" channel-id="121" group-title="TV",WESH   NBC ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nbc.wesh.winter.park.fl.us.m3u8
-#EXTINF:-1 tvg-id="WKMG.us" tvg-name="WKMG   CBS ORLANDO" tvg-logo="https://static.epg.best/us/WKMG.us.png" tvg-chno="122" channel-id="122" group-title="TV",WKMG   CBS ORLANDO
+#EXTINF:-1 tvg-id="WKMG.us" tvg-name="WKMG   CBS ORLANDO" tvg-logo="https://static.epg.best/us/WKMG.us.png" tvg-chno="122" channel-id="122" group-title="TV",WKMG   CBS ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cbs.wkmg.orlando.fl.us.m3u8
-#EXTINF:-1 tvg-id="WFTV.us" tvg-name="WFTV   ABC ORLANDO" tvg-logo="https://static.epg.best/us/WFTV.us.png" tvg-chno="123" channel-id="123" group-title="TV",WFTV   ABC ORLANDO
+#EXTINF:-1 tvg-id="WFTV.us" tvg-name="WFTV   ABC ORLANDO" tvg-logo="https://static.epg.best/us/WFTV.us.png" tvg-chno="123" channel-id="123" group-title="TV",WFTV   ABC ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/abc.wftv.orlando.fl.us.m3u8
-#EXTINF:-1 tvg-id="WOFL.us" tvg-name="WOFL   FOX ORLANDO" tvg-logo="https://static.epg.best/us/WOFL.us.png" tvg-chno="124" channel-id="124" group-title="TV",WOFL   FOX ORLANDO
+#EXTINF:-1 tvg-id="WOFL.us" tvg-name="WOFL   FOX ORLANDO" tvg-logo="https://static.epg.best/us/WOFL.us.png" tvg-chno="124" channel-id="124" group-title="TV",WOFL   FOX ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/fox.wofl.orlando.fl.us.m3u8
-#EXTINF:-1 tvg-id="WKCF.us" tvg-name="WKCF   CW 18 ORLANDO" tvg-logo="https://i.ibb.co/cK2GwV7r/CW18-Clear.png" tvg-chno="125" channel-id="125" group-title="TV",WKCF   CW 18 ORLANDO
+#EXTINF:-1 tvg-id="WKCF.us" tvg-name="WKCF   CW 18 ORLANDO" tvg-logo="https://i.ibb.co/cK2GwV7r/CW18-Clear.png" tvg-chno="125" channel-id="125" group-title="TV",WKCF   CW 18 ORLANDO
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cw.wkcf.orlando.fl.us.m3u8
 #EXTINF:-1 tvg-id="ComedyCentral.us" tvg-name="COMEDY CENTRAL" tvg-logo="https://static.epg.best/us/ComedyCentral.us.png" tvg-chno="129" channel-id="129" group-title="TV",COMEDY CENTRAL
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/comedy.central.eastern.us.m3u8
@@ -189,67 +348,15 @@ https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/ni
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cartoon.network.usa.eastern.us.m3u8
 #EXTINF:-1 tvg-id="Boomerang.us" tvg-name="BOOMERANG" tvg-logo="https://static.epg.best/us/Boomerang.us.png" tvg-chno="141" channel-id="141" group-title="TV",BOOMERANG
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/boomerang.us.m3u8
-#EXTINF:-1 tvg-id="WFOR.us" tvg-name="WFOR   CBS MIAMI" tvg-logo="https://static.epg.best/us/WFOR.us.png" tvg-chno="142" channel-id="142" group-title="TV",WFOR   CBS MIAMI
+#EXTINF:-1 tvg-id="WFOR.us" tvg-name="WFOR   CBS MIAMI" tvg-logo="https://image.roku.com/developer_channels/prod/74a606e94c1077b1b1ae6d33f8b6c9b854fce9dd54784386679e9d10cf002cdd.png" tvg-chno="142" channel-id="142" group-title="TV",WFOR   CBS MIAMI
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cbs.wfor.miami.fl.us.m3u8
-#EXTINF:-1 tvg-id="WTVJ.us" tvg-name="WTVJ   NBC MIAMI" tvg-logo="https://static.epg.best/us/WTVJ.us.png" tvg-chno="143" channel-id="143" group-title="TV",WTVJ   NBC MIAMI
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nbc.wtvj.miami.fl.us.m3u8
-#EXTINF:-1 tvg-id="WSVN.us" tvg-name="WSVN   FOX MIAMI" tvg-logo="https://static.epg.best/us/WSVN.us.png" tvg-chno="144" channel-id="144" group-title="TV",WSVN   FOX MIAMI
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/fox.wsvn.miami.fl.us.m3u8
-#EXTINF:-1 tvg-id="WBFS.us" tvg-name="WBFS   MY TV 33 MIAMI" tvg-logo="https://static.epg.best/us/WBFS.us.png" tvg-chno="145" channel-id="145" group-title="TV",WBFS   MY TV 33 MIAMI
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/mnt.wbfs.miami.fl.us.m3u8
-#EXTINF:-1 tvg-id="WLTV.us" tvg-name="WLTV   UNI MIAMI" tvg-logo="https://i.ibb.co/ycTh0gZ6/6d7ecddc-43af-4668-801c-edde6aa56925.jpg" tvg-chno="146" channel-id="146" group-title="TV",WLTV   UNI MIAMI
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/uni.wltv.miami.fl.us.m3u8
-#EXTINF:-1 tvg-id="CourtTV.us" tvg-name="COURT TV" tvg-logo="https://static.epg.best/us/CourtTV.us.png" tvg-chno="150" channel-id="150" group-title="TV",COURT TV
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/court.tv.network.us.m3u8
-#EXTINF:-1 tvg-id="AMC.us" tvg-name="AMC HD" tvg-logo="https://static.epg.best/us/AMC.us.png" tvg-chno="151" channel-id="151" group-title="TV",AMC HD
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/amc.eastern.us.m3u8
-#EXTINF:-1 tvg-id="PopTV.us" tvg-name="POP TV" tvg-logo="https://static.epg.best/us/PopTV.us.png" tvg-chno="152" channel-id="152" group-title="TV",POP TV
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/pop.east.us.m3u8
-#EXTINF:-1 tvg-id="truTV.us" tvg-name="TRU TV" tvg-logo="https://static.epg.best/us/truTV.us.png" tvg-chno="153" channel-id="153" group-title="TV",TRU TV
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/trutv.usa.east.us.m3u8
-#EXTINF:-1 tvg-id="Telecinco.es" tvg-name="TELECINCO ES" tvg-logo="https://static.epg.best/es/Telecinco.es.png" tvg-chno="160" channel-id="160" group-title="TV",TELECINCO ES
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/telecinco.es.m3u8
-#EXTINF:-1 tvg-id="Antena3.es" tvg-name="ANTENA 3" tvg-logo="https://static.epg.best/es/Antena3.es.png" tvg-chno="161" channel-id="161" group-title="TV",ANTENA 3
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/antena.3.es.m3u8
-#EXTINF:-1 tvg-id="TeleAmazonas.ec" tvg-name="TELEAMAZONAS EC" tvg-logo="https://i.ibb.co/B2pq2sKq/TATV.jpg" tvg-chno="163" channel-id="163" group-title="TV",TELEAMAZONAS EC
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/teleamazonas.lat.m3u8
-#EXTINF:-1 tvg-id="CNNEspanol.us" tvg-name="CNN EN ESPANOL" tvg-logo="https://static.epg.best/us/CNNEspanol.us.png" tvg-chno="164" channel-id="164" group-title="TV",CNN EN ESPANOL
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cnn.en.espanol.mx.m3u8
-#EXTINF:-1 tvg-id="CNNInt.es" tvg-name="CNN COLOMBIA" tvg-logo="https://i.ibb.co/YTbGBh6x/CNNCO.jpg" tvg-chno="165" channel-id="165" group-title="TV",CNN COLOMBIA
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cnn.espanol.co.m3u8
-#EXTINF:-1 tvg-id="CNNInternational.us" tvg-name="CNN INTERNATIONAL" tvg-logo="https://static.epg.best/us/CNNInternational.us.png" tvg-chno="166" channel-id="166" group-title="TV",CNN INTERNATIONAL
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cnn.international.north.america.us.m3u8
-#EXTINF:-1 tvg-id="CNN.us" tvg-name="CNN HD" tvg-logo="https://static.epg.best/us/CNN.us.png" tvg-chno="167" channel-id="167" group-title="TV",CNN HD
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cnn.us.m3u8
-#EXTINF:-1 tvg-id="CSPAN.us" tvg-name="C-SPAN" tvg-logo="https://static.epg.best/us/CSPAN.us.png" tvg-chno="168" channel-id="168" group-title="TV",C-SPAN
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cspan.us.m3u8
-#EXTINF:-1 tvg-id="CSPAN2.us" tvg-name="CSPAN 2" tvg-logo="https://static.epg.best/us/CSPAN2.us.png" tvg-chno="169" channel-id="169" group-title="TV",CSPAN 2
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/c.span.2.us.m3u8
-#EXTINF:-1 tvg-id="FoxNews.us" tvg-name="FOX NEWS" tvg-logo="https://static.epg.best/us/FoxNews.us.png" tvg-chno="170" channel-id="170" group-title="TV",FOX NEWS
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/fox.news.us.m3u8
-#EXTINF:-1 tvg-id="WeatherChannel.us" tvg-name="WEATHER HD" tvg-logo="https://static.epg.best/us/WeatherChannel.us.png" tvg-chno="171" channel-id="171" group-title="TV",WEATHER HD
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/the.weather.channel.us.m3u8
-#EXTINF:-1 tvg-id="WeatherNation.us" tvg-name="WEATHERNATION" tvg-logo="https://static.epg.best/us/WeatherNation.us.png" tvg-chno="172" channel-id="172" group-title="TV",WEATHERNATION
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/weathernation.us.m3u8
-#EXTINF:-1 tvg-id="TheWeatherNetwork.ca" tvg-name="WEATHER NETWORK CANADA" tvg-logo="https://static.epg.best/ca/TheWeatherNetwork.ca.png" tvg-chno="173" channel-id="173" group-title="TV",WEATHER NETWORK CANADA
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/weather.network.ca.m3u8
-#EXTINF:-1 tvg-id="Accuweather.us" tvg-name="ACCUWEATHER" tvg-logo="https://i.ibb.co/xnLzN1K/aw-logo.png" tvg-chno="174" channel-id="174" group-title="TV",ACCUWEATHER
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/accuweather.us.m3u8
-#EXTINF:-1 tvg-id="HBO.us" tvg-name="HBO" tvg-logo="https://static.epg.best/us/HBO.us.png" tvg-chno="175" channel-id="175" group-title="TV",HBO
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/hbo.eastern.us.m3u8
-#EXTINF:-1 tvg-id="HBO2.us" tvg-name="HBO 2" tvg-logo="https://static.epg.best/us/HBO2.us.png" tvg-chno="176" channel-id="176" group-title="TV",HBO 2
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/hbo.2.eastern.us.m3u8
-#EXTINF:-1 tvg-id="HBOComedy.us" tvg-name="HBO Comedy" tvg-logo="https://static.epg.best/us/HBOComedy.us.png" tvg-chno="177" channel-id="177" group-title="TV",HBO Comedy
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/hbo.comedy.east.us.m3u8
-#EXTINF:-1 tvg-id="WFLA.us" tvg-name="WFLA   NBC TAMPA" tvg-logo="https://image.roku.com/developer_channels/prod/74a606e94c1077b1b1ae6d33f8b6c9b854fce9dd54784386679e9d10cf002cdd.png" tvg-chno="180" channel-id="180" group-title="TV",WFLA   NBC TAMPA
-https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nbc.wfla.tampa.bay.fl.us.m3u8
-#EXTINF:-1 tvg-id="WTSP.us" tvg-name="WTSP   CBS TAMPA" tvg-logo="https://static.epg.best/us/WTSP.us.png" tvg-chno="181" channel-id="181" group-title="TV",WTSP   CBS TAMPA
+#EXTINF:-1 tvg-id="WTSP.us" tvg-name="WTSP   CBS TAMPA" tvg-logo="https://static.epg.best/us/WTSP.us.png" tvg-chno="181" channel-id="181" group-title="TV",WTSP   CBS TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cbs.wtsp.tampa.bay.fl.us.m3u8
-#EXTINF:-1 tvg-id="WTVT.us" tvg-name="WTVT   FOX TAMPA" tvg-logo="https://static.epg.best/us/WTVT.us.png" tvg-chno="182" channel-id="182" group-title="TV",WTVT   FOX TAMPA
+#EXTINF:-1 tvg-id="WTVT.us" tvg-name="WTVT   FOX TAMPA" tvg-logo="https://static.epg.best/us/WTVT.us.png" tvg-chno="182" channel-id="182" group-title="TV",WTVT   FOX TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/fox.wtvt.tampa.bay.fl.us.m3u8
-#EXTINF:-1 tvg-id="WFTS.us" tvg-name="WFTS   ABC TAMPA" tvg-logo="https://static.epg.best/us/WFTS.us.png" tvg-chno="183" channel-id="183" group-title="TV",WFTS   ABC TAMPA
+#EXTINF:-1 tvg-id="WFTS.us" tvg-name="WFTS   ABC TAMPA" tvg-logo="https://static.epg.best/us/WFTS.us.png" tvg-chno="183" channel-id="183" group-title="TV",WFTS   ABC TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/abc.wfts.tampa.bay.fl.us.m3u8
-#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="WRMD   TELEMUNDO TAMPA" tvg-logo="https://static.wikia.nocookie.net/tvstations/images/2/2c/Telemundo_49_2018.png" tvg-chno="184" channel-id="184" group-title="TV",WRMD   TELEMUNDO TAMPA
+#EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="WRMD   TELEMUNDO TAMPA" tvg-logo="https://static.wikia.nocookie.net/tvstations/images/2/2c/Telemundo_49_2018.png" tvg-chno="184" channel-id="184" group-title="TV",WRMD   TELEMUNDO TAMPA
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/telemundo.wrmd.tampa.fl.us.m3u8
 #EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="BALLY SPORTS SUN" tvg-logo="https://i.ibb.co/jv7mZWLM/Bally-Sports-Sun.png" tvg-chno="185" channel-id="185" group-title="TV",BALLY SPORTS SUN
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/bally.sports.sun.us.m3u8
@@ -324,572 +431,264 @@ https://listen.radioking.com/radio/399811/stream/452110
 #EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] La Vieja Z [GLZ Radio]" tvg-logo="https://i.ibb.co/d4VZVjj2/LVZ8-removebg-preview.png" tvg-chno="229" channel-id="229" group-title="TV",[R] La Vieja Z [GLZ Radio]
 https://s3.free-shoutcast.com/stream/18094
 `;
-        const EPG_DATA = `
-<?xml version="1.0" encoding="UTF-8"?>
-<tv generator-info-name="epg.best" generator-info-url="https://epg.best">
-  <channel id="WKAQ.us">
-    <display-name>WKAQ TELEMUNDO PR</display-name>
-    <icon src="https://i.ibb.co/gLVK5Swz/TEL.png"/>
-  </channel>
-  <channel id="WKAQDT2.us">
-    <display-name>WKAQ2 PUNTO 2</display-name>
-    <icon src="https://static.epg.best/us/WKAQDT2.us.png"/>
-  </channel>
-    <channel id="UniMas.us">
-    <display-name>UNIMAS HD</display-name>
-    <icon src="https://static.epg.best/us/UniMas.us.png"/>
-  </channel>
-  <channel id="WLII.us">
-    <display-name>WLII TELEONCE</display-name>
-    <icon src="https://static.epg.best/us/WLII.us.png"/>
-  </channel>
-  <channel id="WIPRTV.us">
-    <display-name>WIPR PUERTO RICO TV</display-name>
-    <icon src="https://static.epg.best/us/WIPRTV.us.png"/>
-  </channel>
-    <channel id="ESPN.us">
-    <display-name>ESPN HD</display-name>
-    <icon src="https://i.ibb.co/mrs1mDXw/ESPN-png.png"/>
-  </channel>
-  <channel id="ESPN2.us">
-    <display-name>ESPN 2 HD</display-name>
-    <icon src="https://static.epg.best/us/ESPN2.us.png"/>
-  </channel>
-  <channel id="ESPNNews.us">
-    <display-name>ESPN NEWS HD</display-name>
-    <icon src="https://static.epg.best/us/ESPNNews.us.png"/>
-  </channel>
-    <channel id="ESPNU.us">
-    <display-name>ESPN U HD</display-name>
-    <icon src="https://static.epg.best/us/ESPNU.us.png"/>
-  </channel>
-  <channel id="FoxSports1.us">
-    <display-name>FOX SPORTS 1</display-name>
-    <icon src="https://i.ibb.co/0pqwYytp/FS1.png"/>
-  </channel>
-  <channel id="FoxSports2.us">
-    <display-name>FOX SPORTS 2</display-name>
-    <icon src="https://i.ibb.co/PGYdrN3r/FS2.png"/>
-  </channel>
-    <channel id="MLBNetwork.us">
-    <display-name>MLB NETWORK</display-name>
-    <icon src="https://static.epg.best/us/MLBNetwork.us.png"/>
-  </channel>
-  <channel id="NFLNetwork.us">
-    <display-name>NFL NETWORK</display-name>
-    <icon src="https://static.epg.best/us/NFLNetwork.us.png"/>
-  </channel>
-    <channel id="NBATV.us">
-    <display-name>NBA TV</display-name>
-    <icon src="https://static.epg.best/us/NBATV.us.png"/>
-  </channel>
-  <channel id="YESNetwork.us">
-    <display-name>YES NETWORK</display-name>
-    <icon src="https://static.epg.best/us/YESNetwork.us.png"/>
-  </channel>
-  <channel id="SportsNetNewYork.us">
-    <display-name>SPORTSNET NEW YORK</display-name>
-    <icon src="https://static.epg.best/us/SportsNetNewYork.us.png"/>
-  </channel>
-  <channel id="WESH.us">
-    <display-name>WESH NBC ORLANDO</display-name>
-    <icon src="https://static.epg.best/us/WESH.us.png"/>
-  </channel>
-    <channel id="WKMG.us">
-    <display-name>WKMG CBS ORLANDO</display-name>
-    <icon src="https://static.epg.best/us/WKMG.us.png"/>
-  </channel>
-  <channel id="WFTV.us">
-    <display-name>WFTV ABC ORLANDO</display-name>
-    <icon src="https://static.epg.best/us/WFTV.us.png"/>
-  </channel>
-    <channel id="WOFL.us">
-    <display-name>WOFL FOX ORLANDO</display-name>
-    <icon src="https://static.epg.best/us/WOFL.us.png"/>
-  </channel>
-  <channel id="WKCF.us">
-    <display-name>WKCF CW 18 ORLANDO</display-name>
-    <icon src="https://i.ibb.co/cK2GwV7r/CW18-Clear.png"/>
-  </channel>
-  <channel id="ComedyCentral.us">
-    <display-name>COMEDY CENTRAL</display-name>
-    <icon src="https://static.epg.best/us/ComedyCentral.us.png"/>
-  </channel>
-  <channel id="USANetwork.us">
-    <display-name>USA NETWORK</display-name>
-    <icon src="https://i.ibb.co/VprcTcV8/USAN.png"/>
-  </channel>
-  <channel id="TBS.us">
-    <display-name>TBS HD</display-name>
-    <icon src="https://static.epg.best/us/TBS.us.png"/>
-  </channel>
-  <channel id="ParamountNetwork.us">
-    <display-name>PARAMOUNT NETWORK</display-name>
-    <icon src="https://static.epg.best/us/ParamountNetwork.us.png"/>
-  </channel>
-    <channel id="TNT.us">
-    <display-name>TNT HD</display-name>
-    <icon src="https://static.epg.best/us/TNT.us.png"/>
-  </channel>
-  <channel id="FX.us">
-    <display-name>FX NETWORK</display-name>
-    <icon src="https://static.epg.best/us/FX.us.png"/>
-  </channel>
-    <channel id="FXX.us">
-    <display-name>FXX HD</display-name>
-    <icon src="https://static.epg.best/us/FXX.us.png"/>
-  </channel>
-    <channel id="FXMovieChannel.us">
-    <display-name>FX MOVIE</display-name>
-    <icon src="https://static.epg.best/us/FXMovieChannel.us.png"/>
-  </channel>
-    <channel id="DisneyChannel.us">
-    <display-name>DISNEY</display-name>
-    <icon src="https://static.epg.best/us/DisneyChannel.us.png"/>
-  </channel>
-  <channel id="DisneyJunior.us">
-    <display-name>DISNEY JR</display-name>
-    <icon src="https://static.epg.best/us/DisneyJunior.us.png"/>
-  </channel>
-    <channel id="Nickelodeon.us">
-    <display-name>NICK</display-name>
-    <icon src="https://i.ibb.co/4w26j1Bj/nick-nickelodeon-logo-removebg-preview.png"/>
-  </channel>
-  <channel id="CartoonNetwork.us">
-    <display-name>CARTOON HD</display-name>
-    <icon src="https://static.epg.best/us/CartoonNetwork.us.png"/>
-  </channel>
-    <channel id="Boomerang.us">
-    <display-name>BOOMERANG</display-name>
-    <icon src="https://static.epg.best/us/Boomerang.us.png"/>
-  </channel>
-  <channel id="WFOR.us">
-    <display-name>WFOR CBS MIAMI</display-name>
-    <icon src="https://static.epg.best/us/WFOR.us.png"/>
-  </channel>
-  <channel id="WTVJ.us">
-    <display-name>WTVJ NBC MIAMI</display-name>
-    <icon src="https://static.epg.best/us/WTVJ.us.png"/>
-  </channel>
-    <channel id="WSVN.us">
-    <display-name>WSVN FOX MIAMI</display-name>
-    <icon src="https://static.epg.best/us/WSVN.us.png"/>
-  </channel>
-  <channel id="WBFS.us">
-    <display-name>WBFS MY TV 33 MIAMI</display-name>
-    <icon src="https://static.epg.best/us/WBFS.us.png"/>
-  </channel>
-  <channel id="WLTV.us">
-    <display-name>WLTV UNI MIAMI</display-name>
-    <icon src="https://i.ibb.co/ycTh0gZ6/6d7ecddc-43af-4668-801c-edde6aa56925.jpg"/>
-  </channel>
-    <channel id="CourtTV.us">
-    <display-name>COURT TV</display-name>
-    <icon src="https://static.epg.best/us/CourtTV.us.png"/>
-  </channel>
-  <channel id="AMC.us">
-    <display-name>AMC HD</display-name>
-    <icon src="https://static.epg.best/us/AMC.us.png"/>
-  </channel>
-    <channel id="PopTV.us">
-    <display-name>POP TV</display-name>
-    <icon src="https://static.epg.best/us/PopTV.us.png"/>
-  </channel>
-  <channel id="truTV.us">
-    <display-name>TRU TV</display-name>
-    <icon src="https://static.epg.best/us/truTV.us.png"/>
-  </channel>
-  <channel id="Telecinco.es">
-    <display-name>TELECINCO ES</display-name>
-    <icon src="https://static.epg.best/es/Telecinco.es.png"/>
-  </channel>
-  <channel id="Antena3.es">
-    <display-name>ANTENA 3</display-name>
-    <icon src="https://static.epg.best/es/Antena3.es.png"/>
-  </channel>
-  <channel id="TeleAmazonas.ec">
-    <display-name>TELEAMAZONAS EC</display-name>
-    <icon src="https://i.ibb.co/B2pq2sKq/TATV.jpg"/>
-  </channel>
-  <channel id="CNNEspanol.us">
-    <display-name>CNN EN ESPANOL</display-name>
-    <icon src="https://static.epg.best/us/CNNEspanol.us.png"/>
-  </channel>
-  <channel id="CNNInt.es">
-    <display-name>CNN COLOMBIA</display-name>
-    <icon src="https://i.ibb.co/YTbGBh6x/CNNCO.jpg"/>
-  </channel>
-  <channel id="CNNInternational.us">
-    <display-name>CNN INTERNATIONAL</display-name>
-    <icon src="https://static.epg.best/us/CNNInternational.us.png"/>
-  </channel>
-    <channel id="CNN.us">
-    <display-name>CNN HD</display-name>
-    <icon src="https://static.epg.best/us/CNN.us.png"/>
-  </channel>
-  <channel id="CSPAN.us">
-    <display-name>C-SPAN</display-name>
-    <icon src="https://static.epg.best/us/CSPAN.us.png"/>
-  </channel>
-    <channel id="CSPAN2.us">
-    <display-name>CSPAN 2</display-name>
-    <icon src="https://static.epg.best/us/CSPAN2.us.png"/>
-  </channel>
-  <channel id="FoxNews.us">
-    <display-name>FOX NEWS</display-name>
-    <icon src="https://static.epg.best/us/FoxNews.us.png"/>
-  </channel>
-  <channel id="WeatherChannel.us">
-    <display-name>WEATHER HD</display-name>
-    <icon src="https://static.epg.best/us/WeatherChannel.us.png"/>
-  </channel>
-  <channel id="WeatherNation.us">
-    <display-name>WEATHERNATION</display-name>
-    <icon src="https://static.epg.best/us/WeatherNation.us.png"/>
-  </channel>
-    <channel id="TheWeatherNetwork.ca">
-    <display-name>WEATHER NETWORK CANADA</display-name>
-    <icon src="https://static.epg.best/ca/TheWeatherNetwork.ca.png"/>
-  </channel>
-  <channel id="Accuweather.us">
-    <display-name>ACCUWEATHER</display-name>
-    <icon src="https://i.ibb.co/xnLzN1K/aw-logo.png"/>
-  </channel>
-  <channel id="HBO.us">
-    <display-name>HBO</display-name>
-    <icon src="https://static.epg.best/us/HBO.us.png"/>
-  </channel>
-    <channel id="HBO2.us">
-    <display-name>HBO 2</display-name>
-    <icon src="https://static.epg.best/us/HBO2.us.png"/>
-  </channel>
-    <channel id="HBOComedy.us">
-    <display-name>HBO Comedy</display-name>
-    <icon src="https://static.epg.best/us/HBOComedy.us.png"/>
-  </channel>
-  <channel id="WFLA.us">
-    <display-name>WFLA NBC TAMPA</display-name>
-    <icon src="https://image.roku.com/developer_channels/prod/74a606e94c1077b1b1ae6d33f8b6c9b854fce9dd54784386679e9d10cf002cdd.png"/>
-  </channel>
-    <channel id="WTSP.us">
-    <display-name>WTSP CBS TAMPA</display-name>
-    <icon src="https://static.epg.best/us/WTSP.us.png"/>
-  </channel>
-  <channel id="WTVT.us">
-    <display-name>WTVT FOX TAMPA</display-name>
-    <icon src="https://static.epg.best/us/WTVT.us.png"/>
-  </channel>
-  <channel id="WFTS.us">
-    <display-name>WFTS ABC TAMPA</display-name>
-    <icon src="https://static.epg.best/us/WFTS.us.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>WRMD TELEMUNDO TAMPA</display-name>
-    <icon src="https://static.wikia.nocookie.net/tvstations/images/2/2c/Telemundo_49_2018.png"/>
-  </channel>
-    <channel id="DummyChannel.us">
-    <display-name>BALLY SPORTS SUN</display-name>
-    <icon src="https://i.ibb.co/jv7mZWLM/Bally-Sports-Sun.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>BALLY SPORTS FLORIDA</display-name>
-    <icon src="https://i.ibb.co/cXyJC9Nf/Bally-Sports-Florida-logo.png"/>
-  </channel>
-  <channel id="DiscoveryEspanol.us">
-    <display-name>DISCOVERY EN ESPAÑOL</display-name>
-    <icon src="https://static.epg.best/us/DiscoveryEspanol.us.png"/>
-  </channel>
-  <channel id="DiscoveryFamilia.us">
-    <display-name>DISCOVERY FAMILIA</display-name>
-    <icon src="https://static.epg.best/us/DiscoveryFamilia.us.png"/>
-  </channel>
-    <channel id="DiscoveryTurboLatinAmerica.pa">
-    <display-name>DISCOVERY TURBO</display-name>
-    <icon src="https://static.epg.best/pa/DiscoveryTurboLatinAmerica.pa.png"/>
-  </channel>
-  <channel id="DiscoveryWorld.mx">
-    <display-name>DISCOVERY WORLD</display-name>
-    <icon src="https://static.epg.best/mx/DiscoveryWorld.mx.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[MLB PPV] NY YANKEES</display-name>
-    <icon src="https://logos-world.net/wp-content/uploads/2020/05/New-York-Yankees-Logo.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[MLB PPV] NY METS</display-name>
-    <icon src="https://logos-world.net/wp-content/uploads/2020/05/New-York-Mets-Emblem.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[MLB PPV] MIA MARLINS</display-name>
-    <icon src="https://brandlogos.net/wp-content/uploads/2025/02/miami_marlins-logo_brandlogos.net_9fcup.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[MLB PPV] DET TIGERS</display-name>
-    <icon src="https://loodibee.com/wp-content/uploads/Detroit-Tigers-Logo-1994-2005.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[MLB PPV] TB RAYS</display-name>
-    <icon src="https://nbcsports.brightspotcdn.com/dims4/default/08447de/2147483647/strip/true/crop/1708x961+0+2/resize/1440x810!/quality/90/?url=https%3A%2F%2Fnbc-sports-production-nbc-sports.s3.us-east-1.amazonaws.com%2Fbrightspot%2Fda%2Fb1%2F467bd3792de4c26bd6743d2b7266%2Ftbr2015-3d-primary-rgb-e1442678074633.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[NBA PPV] GS WARRIORS</display-name>
-    <icon src="https://athlonsports.com/.image/c_limit%2Ccs_srgb%2Cq_auto:good%2Cw_500/MjA1MjcyMjkxNzYxNDY0ODUy/golden-state-warriors-logo.webp"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[NBA PPV] NY KNICKS</display-name>
-    <icon src="https://upload.wikimedia.org/wikipedia/sco/d/d8/NewYorkKnicks.PNG"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[NBA PPV] DEN NUGGETS</display-name>
-    <icon src="https://www.flagcolorcodes.com/data/NBA-Denver-Nuggets.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[NBA PPV] OKC THUNDER</display-name>
-    <icon src="https://i.pinimg.com/736x/47/ea/93/47ea93e7a7b5f898d833ef218f3cd833.jpg"/>
-  </channel>
-    <channel id="DummyChannel.us">
-    <display-name>[NBA PPV] IND PACERS</display-name>
-    <icon src="https://www.flagcolorcodes.com/data/NBA-Indiana-Pacers.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] WKAQ 580 [AM: 580 Khz] WKAQ-AM</display-name>
-    <icon src="https://i.ibb.co/Vc9wh11d/wkaqam.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] NotiUno [AM: 630 Khz] WUNO-AM</display-name>
-    <icon src="https://www.unoradio.com/logos/logos/notiuno/notiuno630.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] Radio Once [AM: 1120 Khz] WMSW-AM</display-name>
-    <icon src="https://www.radioonce.com/templates/rt_galatea/custom/images/demo/home/header/logo-radio11.png"/>
-  </channel>
-    <channel id="DummyChannel.us">
-    <display-name>[R] Radio Isla [AM: 1320 Khz] WSKN-AM</display-name>
-    <icon src="https://radioisla.tv/wp-content/uploads/2019/06/Logo-Radio-Isla.png"/>
-  </channel>
-    <channel id="DummyChannel.us">
-    <display-name>[R] Radio Tiempo [AM: 1430 Khz] WNLE-AM</display-name>
-    <icon src="https://radiotiempo.net/wp-content/uploads/2022/08/tiempo-172x128.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] Radio Cumbre [AM: 1470 Khz] WKUM-AM</display-name>
-    <icon src="https://i.ibb.co/5g2402Cc/wkum-png.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] Radio Oro [FM: 92.5 Mhz] WORO-FM</display-name>
-    <icon src="https://i.ibb.co/nqbSmS1M/worofm-processed.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] Z 93 [FM: 93.7 Mhz] WZNT-FM</display-name>
-    <icon src="https://i.ibb.co/23BMsKBY/wznt-png.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] La Nueva 94 [FM: 94.7 Mhz] WODA-FM</display-name>
-    <icon src="https://i.ibb.co/sv1RBc08/wodalogo.png"/>
-  </channel>
-    <channel id="DummyChannel.us">
-    <display-name>[R] Fidelity [FM: 95.7 Mhz] WFID-FM</display-name>
-    <icon src="https://fidelitypr.com/wp-content/uploads/2022/01/cropped-Redisen%CC%83o-Logo-Fidelity-3-15-2048x677.png"/>
-  </channel>
-    <channel id="DummyChannel.us">
-    <display-name>[R] Estéreotempo [FM; 96.5 Mhz] WRXD-FM</display-name>
-    <icon src="https://i.ibb.co/F4GM0W81/wrxr.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] Magic [FM; 97.3 Mhz] WOYE-FM</display-name>
-    <icon src="https://i.ibb.co/Z6WqXPzV/woye.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] Salsoul [FM: 99.1 Mhz] WPRM-FM</display-name>
-    <icon src="https://salsoul.com/wp-content/uploads/2020/12/cropped-salsoul-2.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] LA X [FM: 100.7 Mhz] WXYX-FM</display-name>
-    <icon src="https://i.ibb.co/zWDcRnBw/laxpng.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] HOT 102 [FM 102.5 Mhz] WTOK-FM</display-name>
-    <icon src="https://hot102pr.com/wp-content/uploads/2023/10/Artboard-4.png"/>
-  </channel>
-    <channel id="DummyChannel.us">
-    <display-name>[R] La Mega PR [FM: 106.9 Mhz] WMEG-FM</display-name>
-    <icon src="https://i.ibb.co/Xrp2nhpQ/WMEG-PNG.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] KQ105 [FM: 104.7 Mhz] WKAQ-FM</display-name>
-    <icon src="https://upload.wikimedia.org/wikipedia/en/8/80/KQ_105_WKAQ-FM_2014_logo.png"/>
-  </channel>
-    <channel id="DummyChannel.us">
-    <display-name>[R] Latino 99</display-name>
-    <icon src="https://mm.aiircdn.com/371/5928f28889f51.png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] Salseo Radio</display-name>
-    <icon src="https://static.wixstatic.com/media/8dfec0_3e265a2f0fb5417c90c55be4e4e7d3cf~mv2.png/v1/fill/w_276,h_120,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/LOGOSALSEORADIO_clipped_rev_2_v2%20(1).png"/>
-  </channel>
-  <channel id="DummyChannel.us">
-    <display-name>[R] La Vieja Z [GLZ Radio]</display-name>
-    <icon src="https://i.ibb.co/d4VZVjj2/LVZ8-removebg-preview.png"/>
-  </channel>
-</tv>
-`;
-        // --- DOM Elements & State ---
-        const dom = {
-            appContainer: document.getElementById('app-container'), body: document.body, playerDisplay: document.getElementById('player-display'), playerContent: document.getElementById('player-content'), ambientBg: document.getElementById('ambient-bg'), playButton: document.getElementById('play-button'), stopButton: document.getElementById('stop-button'), optionsButton: document.getElementById('options-button'), bottomBarStationName: document.getElementById('bottom-bar-station-name'), tunerContent: document.getElementById('tuner-content'), stopwatchDisplay: document.getElementById('stopwatch-display'),
-            optionsModal: document.getElementById('options-modal'), optionsBackdrop: document.getElementById('options-backdrop'), optionsPanel: document.getElementById('options-panel'), closeOptionsButton: document.getElementById('close-options-button'),
-            toggleStationListButton: document.getElementById('toggle-station-list-button'), stationListInOptions: document.getElementById('station-list-in-options'), randomStationButton: document.getElementById('random-station-button'), themeToggleButton: document.getElementById('theme-toggle-button'), themeIconContainer: document.getElementById('theme-icon-container'),
-            versionFooter: document.getElementById('version-footer'), statusLeft: document.getElementById('status-left'), statusCenter: document.getElementById('status-center'), statusRight: document.getElementById('status-right'),
+    // --- State ---
+    let channels = [];
+    let current = 0;
+    let lightMode = false;
+    let autoHide = false;
+    let clock24 = false;
+    let lastType = 'video';
+    let hls = null;
+    // --- Elements ---
+    const video = document.getElementById('video');
+    const audio = document.getElementById('audio');
+    const stopBtn = document.getElementById('stop-btn');
+    const playerError = document.getElementById('player-error');
+    const currentLogo = document.getElementById('current-logo');
+    const currentName = document.getElementById('current-name');
+    const settingsBtn = document.getElementById('settings-btn');
+    const modal = document.getElementById('modal');
+    const modalClose = document.getElementById('modal-close');
+    const channelList = document.getElementById('channel-list');
+    const lightToggle = document.getElementById('light-toggle');
+    const autohideToggle = document.getElementById('autohide-toggle');
+    const clockToggle = document.getElementById('clock-toggle');
+    const clock = document.getElementById('clock');
+    // --- Helpers ---
+    function parseM3U(m3u) {
+      const lines = m3u.split(/\r?\n/);
+      const chs = [];
+      let cur = null;
+      for (let i = 0; i < lines.length; ++i) {
+        const l = lines[i].trim();
+        if (l.startsWith('#EXTINF')) {
+          const attrs = {};
+          const attrRe = /(\w+\-?\w*)="([^"]*)"/g;
+          let m;
+          while ((m = attrRe.exec(l))) attrs[m[1]] = m[2];
+          const name = l.split(',').pop().trim();
+          cur = {
+            name: attrs['tvg-name'] || name,
+            logo: attrs['tvg-logo'] || '',
+            url: '',
+            group: attrs['group-title'] || '',
+            id: attrs['tvg-id'] || '',
+            chno: attrs['tvg-chno'] || '',
+            raw: l
+          };
+        } else if (cur && l && !l.startsWith('#')) {
+          cur.url = l;
+          chs.push(cur);
+          cur = null;
+        }
+      }
+      return chs;
+    }
+    function saveState() {
+      localStorage.setItem('iptv_last', current);
+      localStorage.setItem('iptv_light', lightMode ? '1' : '0');
+      localStorage.setItem('iptv_autohide', autoHide ? '1' : '0');
+      localStorage.setItem('iptv_clock24', clock24 ? '1' : '0');
+      localStorage.setItem('iptv_channels', JSON.stringify(channels));
+    }
+    function loadState() {
+      current = +(localStorage.getItem('iptv_last') || 0);
+      lightMode = localStorage.getItem('iptv_light') === '1';
+      autoHide = localStorage.getItem('iptv_autohide') === '1';
+      clock24 = localStorage.getItem('iptv_clock24') === '1';
+      const chs = localStorage.getItem('iptv_channels');
+      if (chs) channels = JSON.parse(chs);
+    }
+    function setLight(l) {
+      lightMode = l;
+      document.body.classList.toggle('light', l);
+      lightToggle.setAttribute('data-on', l);
+      saveState();
+    }
+    function setAutohide(a) {
+      autoHide = a;
+      autohideToggle.setAttribute('data-on', a);
+      if (a) {
+        video.setAttribute('controls', false);
+        audio.setAttribute('controls', false);
+      } else {
+        video.setAttribute('controls', true);
+        audio.setAttribute('controls', true);
+      }
+      saveState();
+    }
+    function setClock24(c) {
+      clock24 = c;
+      clockToggle.setAttribute('data-on', c);
+      saveState();
+    }
+    function showError(msg) {
+      playerError.textContent = msg;
+      playerError.style.display = '';
+    }
+    function hideError() {
+      playerError.style.display = 'none';
+      playerError.textContent = '';
+    }
+    function playChannel(idx) {
+      if (!channels[idx]) return;
+      current = idx;
+      saveState();
+      const ch = channels[idx];
+      // Detect audio-only
+      const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
+      const isHls = /\.m3u8(\?|$)/i.test(ch.url);
+      video.style.display = isAudio ? 'none' : '';
+      audio.style.display = isAudio ? '' : 'none';
+      stopBtn.style.display = '';
+      hideError();
+      // Clean up previous hls.js instance
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+      if (isAudio) {
+        lastType = 'audio';
+        audio.src = ch.url;
+        audio.play().catch(()=>{});
+        video.pause();
+        video.src = '';
+      } else if (isHls) {
+        lastType = 'video';
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = ch.url;
+        } else if (window.Hls) {
+          hls = new Hls();
+          hls.loadSource(ch.url);
+          hls.attachMedia(video);
+        } else {
+          showError('HLS not supported.');
+        }
+        video.play().catch(()=>{});
+        audio.pause();
+        audio.src = '';
+      } else {
+        lastType = 'video';
+        video.src = ch.url;
+        video.play().catch(()=>{});
+        audio.pause();
+        audio.src = '';
+      }
+      currentName.textContent = ch.name;
+      if (ch.logo) {
+        currentLogo.src = ch.logo;
+        currentLogo.style.display = '';
+      } else {
+        currentLogo.style.display = 'none';
+      }
+      // Highlight in channel list
+      document.querySelectorAll('.channel-item').forEach((el,i)=>{
+        el.classList.toggle('selected', i===idx);
+      });
+    }
+    function stopPlayback() {
+      if (hls) { hls.destroy(); hls = null; }
+      video.pause();
+      video.src = '';
+      audio.pause();
+      audio.src = '';
+      stopBtn.style.display = 'none';
+      hideError();
+    }
+    function showModal() {
+      modal.style.display = '';
+      channelList.scrollTop = current*48-60;
+      setTimeout(()=>modal.querySelector('.modal-content').focus(), 100);
+    }
+    function hideModal() {
+      modal.style.display = 'none';
+    }
+    function renderChannelList() {
+      channelList.innerHTML = '';
+      channels.forEach((ch,i)=>{
+        const div = document.createElement('div');
+        div.className = 'channel-item'+(i===current?' selected':'');
+        div.tabIndex = 0;
+        div.innerHTML = `<img class=\"channel-logo\" src=\"${ch.logo}\" alt=\"\" onerror=\"this.style.display='none'\"> <span>${ch.name}</span>`;
+        div.onclick = ()=>{ playChannel(i); hideModal(); };
+        div.onkeydown = e=>{
+          if (e.key==='Enter') { playChannel(i); hideModal(); }
         };
-        let state = { channels: [], epgData: {}, currentChannelIndex: null, isPlaying: false, elapsedTime: 0, stopwatchInterval: null, epgUpdateInterval: null, hls: null };
-
-        // --- Safe Icon Creation ---
-        const createIcons = () => { if (typeof lucide !== 'undefined') { try { lucide.createIcons(); } catch (e) { console.error("Lucide icon creation failed:", e); } } };
-        
-        // --- DATA PARSING & PROCESSING ---
-        const upgradeToHttps = (url) => { if (url && url.startsWith('http://')) { return url.replace('http://', 'https://'); } return url; };
-        const parseM3U = (data) => {
-            const channels = [];
-            const lines = data.split('\n').filter(line => line.trim() !== '');
-            for (let i = 0; i < lines.length; i++) {
-                if (lines[i].startsWith('#EXTINF:')) {
-                    const infoLine = lines[i];
-                    if (i + 1 < lines.length && !lines[i + 1].startsWith('#')) {
-                        const urlLine = lines[++i];
-                        const nameMatch = infoLine.match(/,(.+)$/);
-                        const logoMatch = infoLine.match(/tvg-logo="([^"]+)"/);
-                        const idMatch = infoLine.match(/tvg-id="([^"]+)"/);
-                        if (nameMatch) {
-                            channels.push({ id: idMatch ? idMatch[1] : null, logo: logoMatch ? logoMatch[1] : '', name: nameMatch[1].trim(), url: upgradeToHttps(urlLine.trim()) });
-                        }
-                    }
-                }
-            } return channels;
-        };
-        const parseEpgTime = (timeStr) => {
-            const parts = timeStr.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-])(\d{2})(\d{2})$/);
-            if (!parts) return null;
-            const isoStr = `${parts[1]}-${parts[2]}-${parts[3]}T${parts[4]}:${parts[5]}:${parts[6]}${parts[7]}${parts[8]}:${parts[9]}`;
-            return new Date(isoStr);
-        };
-        const parseEPG = (xmlString) => {
-            if (!xmlString || xmlString.trim() === '') return {};
-            const parser = new DOMParser(), xmlDoc = parser.parseFromString(xmlString, "text/xml"), programs = xmlDoc.getElementsByTagName('programme'), epg = {};
-            for (const program of programs) {
-                const channelId = program.getAttribute('channel'), title = program.getElementsByTagName('title')[0]?.textContent, start = program.getAttribute('start'), stop = program.getAttribute('stop');
-                if (channelId && title && start && stop) { if (!epg[channelId]) epg[channelId] = []; epg[channelId].push({ title: title, start: parseEpgTime(start), stop: parseEpgTime(stop) }); }
-            }
-            for(const channelId in epg) epg[channelId].sort((a,b) => a.start - b.start); return epg;
-        };
-        const loadEmbeddedData = () => {
-            try {
-                state.channels = parseM3U(M3U_DATA);
-                state.epgData = parseEPG(EPG_DATA);
-                populateChannelList();
-            } catch (error) { console.error("Failed to parse embedded data:", error); alert("A critical error occurred while loading channel data."); }
-        };
-        const populateChannelList = () => {
-             if (state.channels.length === 0) { dom.stationListInOptions.innerHTML = `<p class='text-center text-sm text-[var(--text-muted-color)] p-4'>No channels found.</p>`; return; }
-            dom.stationListInOptions.innerHTML = state.channels.map((channel, index) => `<div data-channel-index="${index}" class="station-item flex items-center p-3 space-x-4 cursor-pointer hover:bg-[var(--border-color)] rounded-lg transition-colors duration-200"><img src="${channel.logo}" class="w-10 h-10 object-contain bg-black/10 p-1 rounded-md flex-shrink-0" onerror="this.style.display='none'"><div class="flex-grow truncate"><p class="font-bold text-[var(--text-color)]">${channel.name}</p></div></div>`).join('');
-            dom.stationListInOptions.querySelectorAll('.station-item').forEach(item => { item.onclick = () => selectChannel(parseInt(item.dataset.channelIndex)); });
-        };
-        
-        // --- CORE PLAYER LOGIC ---
-        const selectChannel = (index) => { if (state.isPlaying && state.currentChannelIndex === index) return; if (state.isPlaying) stopPlayer(false).then(() => playChannel(index)); else playChannel(index); };
-        const playChannel = (index) => {
-            if (index == null || index < 0 || index >= state.channels.length) return;
-            state.currentChannelIndex = index; const channel = state.channels[index];
-            document.querySelectorAll('.station-item').forEach(item => { item.classList.remove('selected'); if (parseInt(item.dataset.channelIndex) === index) item.classList.add('selected'); });
-            dom.ambientBg.style.backgroundImage = `url(${channel.logo})`; dom.ambientBg.style.opacity = 1;
-            const video = document.createElement('video'); video.id = 'video-player'; video.controls = false; video.autoplay = true; video.playsInline = true;
-            dom.playerContent.innerHTML = ''; dom.playerContent.appendChild(video);
-            if (Hls.isSupported() && channel.url.includes('.m3u8')) {
-                if (state.hls) state.hls.destroy();
-                state.hls = new Hls({ manifestLoadTimeout: 10000, fragLoadTimeout: 20000 });
-                state.hls.on(Hls.Events.ERROR, (event, data) => { if (data.fatal) { alert(`Cannot play stream: ${data.details}`); stopPlayer(true); }});
-                state.hls.loadSource(channel.url);
-                state.hls.attachMedia(video);
-            } else { video.src = channel.url; }
-            video.onplay = handlePlay; video.onpause = handlePause;
-            video.onerror = (e) => { alert("Cannot play stream. It may be offline, incompatible, or blocked by your browser's security policy (Mixed Content)."); stopPlayer(true); };
-            closeOptions();
-        };
-        const handlePlay = () => {
-            state.isPlaying = true; updateControlButtons(); updateMediaSession();
-            dom.bottomBarStationName.textContent = state.channels[state.currentChannelIndex].name;
-            clearInterval(state.stopwatchInterval); state.elapsedTime = 0; updateStopwatch();
-            state.stopwatchInterval = setInterval(() => { state.elapsedTime++; updateStopwatch(); }, 1000);
-            clearInterval(state.epgUpdateInterval); updateTunerDisplay(); state.epgUpdateInterval = setInterval(updateTunerDisplay, 60000);
-        };
-        const handlePause = () => { state.isPlaying = false; updateControlButtons(); dom.bottomBarStationName.textContent = "Paused"; clearInterval(state.stopwatchInterval); clearInterval(state.epgUpdateInterval); };
-        const stopPlayer = async (withAnimation = true) => {
-            const delay = ms => new Promise(res => setTimeout(res, ms));
-            dom.ambientBg.style.opacity = 0; if (state.hls) { state.hls.destroy(); state.hls = null; }
-            const video = document.getElementById('video-player'); if(video) { video.pause(); video.removeAttribute('src'); video.load(); }
-            state.isPlaying = false;
-            if (withAnimation) {
-                dom.playerContent.style.transition = 'opacity 0.3s ease-out'; dom.playerContent.style.opacity = 0;
-                await delay(300);
-                dom.playerContent.innerHTML = `<i data-lucide="tv" class="w-16 h-16 text-[var(--text-faint-color)]"></i>`;
-                createIcons();
-                dom.playerContent.style.opacity = 1;
-            } else {
-                dom.playerContent.innerHTML = `<i data-lucide="tv" class="w-16 h-16 text-[var(--text-faint-color)]"></i>`;
-                createIcons();
-            }
-            state.currentChannelIndex = null; updateControlButtons(); updateTunerDisplay();
-            clearInterval(state.stopwatchInterval); clearInterval(state.epgUpdateInterval); state.elapsedTime = 0; updateStopwatch();
-            dom.bottomBarStationName.textContent = "Standby"; document.querySelectorAll('.station-item').forEach(item => item.classList.remove('selected'));
-            if (typeof(navigator.mediaSession) !== 'undefined') { navigator.mediaSession.playbackState = "none"; navigator.mediaSession.metadata = null; }
-        };
-        const togglePlay = () => { if (state.currentChannelIndex === null) { openOptions(); const list = dom.stationListInOptions; if (!list.classList.contains('expanded')) { list.classList.add('expanded'); const icon = dom.toggleStationListButton.querySelector('svg'); if (icon) icon.classList.add('rotate-180'); }} else { const video = document.getElementById('video-player'); if (video) video.paused ? video.play() : video.pause(); }};
-        const getCurrentProgram = (channelId) => { if (!channelId || !state.epgData[channelId]) return null; const now = new Date(); return state.epgData[channelId].find(p => now >= p.start && now < p.stop); };
-
-        // --- UI & UX ---
-        const updateControlButtons = () => { if (state.isPlaying) { dom.playButton.classList.add('hidden'); dom.stopButton.classList.remove('hidden'); } else { dom.playButton.classList.remove('hidden'); dom.stopButton.classList.add('hidden'); } createIcons(); };
-        
-        // --- MODIFICATION: Simplified Tuner Display ---
-        // This function now only shows the channel name for a cleaner mobile interface.
-        const updateTunerDisplay = () => {
-            const channel = state.channels[state.currentChannelIndex];
-            if (channel && state.isPlaying) {
-                dom.tunerContent.innerHTML = `<div class="video-mode"><span class="font-bold text-sm truncate">${channel.name}</span></div>`;
-                dom.tunerContent.style.opacity = 1;
-            } else {
-                dom.tunerContent.style.opacity = 0;
-                dom.tunerContent.innerHTML = '';
-            }
-            createIcons();
-        };
-
-        const updateStopwatch = () => { const h = Math.floor(state.elapsedTime / 3600), m = Math.floor((state.elapsedTime % 3600) / 60), s = state.elapsedTime % 60, pad = (num) => String(num).padStart(2, '0'); dom.stopwatchDisplay.textContent = h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`; };
-        const updateStatusBar = () => { const now = new Date(); const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' }); dom.statusLeft.innerHTML = `<span class="font-bold text-sm">GLZ Player</span>`; dom.statusCenter.innerHTML = timeString; dom.statusRight.innerHTML = `<i data-lucide="github" class="w-5 h-5"></i>`; createIcons(); };
-        const updateMediaSession = () => { if (typeof(navigator.mediaSession) !== 'undefined' && state.currentChannelIndex !== null) { const channel = state.channels[state.currentChannelIndex], program = getCurrentProgram(channel.id); navigator.mediaSession.metadata = new MediaMetadata({ title: channel.name, artist: program ? program.title : 'Glz Player', artwork: [{ src: channel.logo, sizes: '512x512', type: 'image/png' }] }); } };
-        const openOptions = () => { dom.appContainer.classList.add('options-open'); dom.optionsModal.classList.remove('hidden'); requestAnimationFrame(() => dom.optionsModal.classList.add('is-open')); };
-        const closeOptions = () => { dom.appContainer.classList.remove('options-open'); dom.optionsModal.classList.remove('is-open'); const list = dom.stationListInOptions; if (list.classList.contains('expanded')) { list.classList.remove('expanded'); const icon = dom.toggleStationListButton.querySelector('svg'); if (icon) icon.classList.remove('rotate-180'); } };
-        
-        // --- INITIALIZATION ---
-        const setupEventListeners = () => {
-            dom.optionsButton.onclick = openOptions; dom.closeOptionsButton.onclick = closeOptions; dom.optionsBackdrop.onclick = closeOptions;
-            dom.playButton.onclick = togglePlay; dom.stopButton.onclick = () => stopPlayer(true);
-            dom.toggleStationListButton.onclick = () => { const list = dom.stationListInOptions, icon = dom.toggleStationListButton.querySelector('svg'); list.classList.toggle('expanded'); if (icon) icon.classList.toggle('rotate-180'); };
-            dom.randomStationButton.onclick = () => { if(state.channels.length === 0) return; const randomIndex = Math.floor(Math.random() * state.channels.length); selectChannel(randomIndex); };
-        };
-        const setupTheming = () => {
-            const themes = ['dark', 'light', 'oled']; let currentThemeIndex = 0; const savedTheme = localStorage.getItem('glz-player-theme'); if (savedTheme && themes.includes(savedTheme)) currentThemeIndex = themes.indexOf(savedTheme);
-            const applyTheme = (themeName) => { dom.body.classList.remove('theme-light', 'theme-dark', 'theme-oled'); if (themeName !== 'dark') dom.body.classList.add(`theme-${themeName}`); dom.themeIconContainer.innerHTML = `<i data-lucide="${themeName === 'light' ? 'moon' : 'sun'}" class="w-5 h-5"></i>`; createIcons(); localStorage.setItem('glz-player-theme', themeName); const themeAccentColor = getComputedStyle(dom.body).getPropertyValue('--play-button-bg').trim(); dom.appContainer.style.setProperty('--accent-color', themeAccentColor); };
-            applyTheme(themes[currentThemeIndex]); dom.themeToggleButton.onclick = () => { currentThemeIndex = (currentThemeIndex + 1) % themes.length; applyTheme(themes[currentThemeIndex]); };
-        };
-        const init = () => {
-            updateStatusBar(); setInterval(updateStatusBar, 10000); 
-            updateControlButtons(); 
-            setupEventListeners(); 
-            setupTheming();
-            loadEmbeddedData();
-            createIcons(); 
-            dom.bottomBarStationName.textContent = "Standby"; 
-            dom.versionFooter.innerHTML = `<p>® ©Glz Technical Services | Ver: 14.0 | Build: ${new Date().toISOString().slice(0, 10).replace(/-/g,'.')}</p>`;
-        };
-        init();
-    </script>
+        channelList.appendChild(div);
+      });
+    }
+    function updateClock() {
+      const now = new Date();
+      let h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+      let ampm = '';
+      if (!clock24) {
+        ampm = h>=12?' PM':' AM';
+        h = h%12; if (h===0) h=12;
+      }
+      clock.textContent = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}${ampm}`;
+    }
+    // --- Event Listeners ---
+    stopBtn.onclick = stopPlayback;
+    settingsBtn.onclick = ()=>{ renderChannelList(); showModal(); };
+    modalClose.onclick = hideModal;
+    lightToggle.onclick = ()=> setLight(!lightMode);
+    autohideToggle.onclick = ()=> setAutohide(!autoHide);
+    clockToggle.onclick = ()=> setClock24(!clock24);
+    // Keyboard navigation
+    document.addEventListener('keydown', e=>{
+      if (modal.style.display!=='none') {
+        if (e.key==='Escape') { hideModal(); }
+        return;
+      }
+      if (e.target.tagName==='TEXTAREA') return;
+      if (e.key==='ArrowRight') {
+        playChannel((current+1)%channels.length);
+      } else if (e.key==='ArrowLeft') {
+        playChannel((current-1+channels.length)%channels.length);
+      } else if (e.key==='s' || e.key==='S') {
+        stopPlayback();
+      } else if (e.key==='c' || e.key==='C') {
+        renderChannelList(); showModal();
+      }
+    });
+    // Error handling
+    video.onerror = audio.onerror = ()=>{
+      showError('Failed to load stream.');
+    };
+    video.onplay = audio.onplay = hideError;
+    video.onloadeddata = audio.onloadeddata = hideError;
+    video.oncanplay = audio.oncanplay = hideError;
+    // Auto-hide controls
+    let hideTimeout = null;
+    function setAutohideEvents() {
+      if (!autoHide) return;
+      const player = lastType==='audio'?audio:video;
+      player.removeAttribute('controls');
+      player.onmousemove = ()=>{
+        player.setAttribute('controls','');
+        clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(()=>{
+          player.removeAttribute('controls');
+        }, 2000);
+      };
+      player.onmouseleave = ()=>{
+        player.removeAttribute('controls');
+      };
+    }
+    setInterval(updateClock, 1000);
+    // --- Init ---
+    (function init() {
+      loadState();
+      setLight(lightMode);
+      setAutohide(autoHide);
+      setClock24(clock24);
+      if (!channels.length) {
+        channels = parseM3U(EMBEDDED_M3U);
+        saveState();
+      }
+      renderChannelList();
+      playChannel(current);
+    })();
+  </script>
 </body>
 </html>
