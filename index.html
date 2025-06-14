@@ -59,23 +59,19 @@
       text-shadow: 0 0 10px #0f0;
       letter-spacing: 2px;
     }
-    .epg-display {
+    .channel-display {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      font-size: 0.9em;
-      font-weight: 500;
+      font-size: 1.1em;
+      font-weight: 600;
       color: #4a90e2;
       background: rgba(10, 14, 26, 0.8);
-      padding: 0.3em 0.6em;
+      padding: 0.4em 0.8em;
       border: 1px solid #2d5aa0;
       border-radius: 6px;
       text-shadow: 0 0 5px rgba(74, 144, 226, 0.5);
-      min-width: 200px;
-      max-width: 300px;
-      text-align: left;
+      min-width: 120px;
+      text-align: center;
       box-shadow: inset 0 0 10px rgba(45, 90, 160, 0.2);
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
       backdrop-filter: blur(5px);
     }
     .led-display {
@@ -131,10 +127,6 @@
       font-weight: 500;
       border-top: 2px solid #2d5aa0;
       backdrop-filter: blur(10px);
-      transition: opacity 0.5s ease-out; /* Added for smooth fade-out */
-    }
-    .cablebox-info-bar.fadeout {
-        opacity: 0 !important;
     }
     .info-logo {
       height: 2em;
@@ -187,7 +179,7 @@
         font-size: 1em;
         letter-spacing: 1px;
       }
-      .epg-display {
+      .channel-display {
         font-size: 0.8em; /* Adjusted for mobile */
         padding: 0.2em 0.4em;
         min-width: unset; /* Remove min-width for mobile */
@@ -437,7 +429,7 @@
   <div class="cablebox-shell">
     <div class="cablebox-header">
       <div class="cablebox-brand">GLZ TV</div>
-      <div class="epg-display" id="epg-display">Loading EPG...</div>
+      <div class="channel-display" id="channel-display">Loading Channel...</div>
       <div class="led-display" id="led-display">000</div>
     </div>
     <div class="tv-area">
@@ -725,7 +717,7 @@ https://s3.free-shoutcast.com/stream/18094
     const remoteToggle = document.getElementById('remote-toggle');
     const cableboxRemote = document.getElementById('cablebox-remote');
     // --- Cable box elements ---
-    const epgDisplay = document.getElementById('epg-display');
+    const channelDisplay = document.getElementById('channel-display');
     const ledDisplay = document.getElementById('led-display');
     const infoBar = document.getElementById('info-bar');
     const infoLogo = document.getElementById('info-logo');
@@ -792,8 +784,6 @@ https://s3.free-shoutcast.com/stream/18094
     // Function to hide the info bar completely
     function hideInfoBar() {
         infoBar.style.display = 'none';
-        infoBar.classList.remove('fadeout'); // Ensure fadeout class is removed
-        infoBar.style.opacity = '0.98'; // Reset opacity
     }
 
     function updateClock() {
@@ -825,21 +815,24 @@ https://s3.free-shoutcast.com/stream/18094
       if (standby) {
         stopPlayback(); // Stop playback when entering standby
         ledDisplay.textContent = '-- --'; // Clear LED or show standby indication
-        updateEPGDisplay('STANDBY'); // Show standby in EPG display
+        updateChannelDisplay('STANDBY'); // Show standby in channel display
+        hideInfoBar(); // Hide info bar in standby
       } else {
         playChannel(current); // Resume channel when exiting standby
         updateLedDisplay(); // Show channel number
-        updateEPGDisplay(); // Show EPG info
+        updateChannelDisplay(); // Show channel info
+        showInfoBar(); // Show info bar
       }
     };
 
     // --- Stop button logic ---
     stopBtn.onclick = () => {
       stopPlayback();
-      // After stopping, if not in standby, update LED to channel number and EPG to 'No Program'
+      // After stopping, if not in standby, update LED to channel number and show info bar
       if (!standby) {
         updateLedDisplay();
-        updateEPGDisplay('No Program Playing');
+        updateChannelDisplay('No Program Playing');
+        showInfoBar(); // Show info bar when stopped
       }
     };
 
@@ -981,7 +974,7 @@ https://s3.free-shoutcast.com/stream/18094
 
       updateLedDisplay();
       showInfoBar();
-      updateEPGDisplay();
+      updateChannelDisplay();
     }
 
     // --- Initial LED display & Info Bar ---
@@ -1010,14 +1003,6 @@ https://s3.free-shoutcast.com/stream/18094
       infoName.textContent = ch.name;
 
       infoBar.style.display = '';
-      infoBar.style.opacity = '0.98';
-      infoBar.classList.remove('fadeout');
-
-      // Set timeout to fade out info bar
-      setTimeout(() => {
-        infoBar.classList.add('fadeout');
-        setTimeout(() => { hideInfoBar(); }, 800); // Fully hide after fadeout
-      }, 3000); // Display for 3 seconds
     }
 
 
@@ -1506,6 +1491,61 @@ https://s3.free-shoutcast.com/stream/18094
     
     // Call this function to get conversion instructions
     // convertEPGToEmbedded('https://epg.best/1eef8-shw7fc.xml.gz');
+
+    // --- Channel Display Function ---
+    function updateChannelDisplay(customMessage = null) {
+      const channelDisplay = document.getElementById('channel-display');
+      
+      if (customMessage) {
+        channelDisplay.textContent = customMessage;
+        return;
+      }
+      
+      if (!channels.length || !channels[current]) {
+        channelDisplay.textContent = 'No Channel';
+        return;
+      }
+      
+      const currentChannel = channels[current];
+      const channelNumber = currentChannel.chno ? currentChannel.chno : (current + 1).toString();
+      const channelName = abbreviateChannelName(currentChannel.name);
+      channelDisplay.textContent = `CH ${channelNumber} - ${channelName}`;
+    }
+
+    // Abbreviate channel name if too long
+    function abbreviateChannelName(name) {
+      if (!name) return 'Unknown';
+      // Prioritize full name if it fits, otherwise use common abbreviations or truncate
+      if (name.length <= 15) return name; // Allow slightly longer for better readability on wider screens
+
+      const abbreviations = {
+        'ESPN': 'ESPN', 'ESPN 2': 'ESPN2', 'ESPN NEWS': 'ESPNN', 'ESPN U': 'ESPNU',
+        'FOX SPORTS 1': 'FS1', 'FOX SPORTS 2': 'FS2', 'MLB NETWORK': 'MLB NET', 'NFL NETWORK': 'NFL NET',
+        'NBA TV': 'NBA TV', 'YES NETWORK': 'YES NET', 'SPORTSNET NEW YORK': 'SNY',
+        'COMEDY CENTRAL': 'COMEDY C.', 'USA NETWORK': 'USA NET', 'PARAMOUNT NETWORK': 'PARAMOUNT',
+        'DISNEY': 'DISNEY', 'DISNEY JR': 'DISNEY JR', 'NICK': 'NICK', 'CARTOON HD': 'CARTOON',
+        'TELEMUNDO PR': 'TELE PR', 'UNIMAS HD': 'UNIMAS', 'PUERTO RICO TV': 'PR TV',
+        'BALLY SPORTS SUN': 'BALLY SUN', 'BALLY SPORTS FLORIDA': 'BALLY FL',
+        'DISCOVERY EN ESPAÑOL': 'DISC ESP', 'DISCOVERY FAMILIA': 'DISC FAM',
+        'DISCOVERY TURBO': 'DISC TURBO', 'DISCOVERY WORLD': 'DISC WORLD',
+        '[MLB PPV] NY YANKEES': 'MLB NYY', '[MLB PPV] NY METS': 'MLB NYM', '[MLB PPV] MIA MARLINS': 'MLB MIA',
+        '[MLB PPV] DET TIGERS': 'MLB DET', '[MLB PPV] TB RAYS': 'MLB TBR',
+        '[NBA PPV] GS WARRIORS': 'NBA GSW', '[NBA PPV] NY KNICKS': 'NBA NYK',
+        '[NBA PPV] DEN NUGGETS': 'NBA DEN', '[NBA PPV] OKC THUNDER': 'NBA OKC',
+        '[NBA PPV] IND PACERS': 'NBA IND'
+      };
+
+      for (const [full, abbr] of Object.entries(abbreviations)) {
+        if (name.includes(full)) {
+            // Apply abbreviation only if it makes the name shorter
+            const newName = name.replace(full, abbr);
+            if (newName.length <= 15) return newName;
+        }
+      }
+
+      // Generic truncation as a last resort
+      return name.substring(0, 12) + '...';
+    }
   </script>
 </body>
 </html>
