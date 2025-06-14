@@ -5,81 +5,177 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IPTV Playlist Player</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+    
     :root {
-      --bg: #181818;
-      --fg: #fff;
-      --accent: #2196f3;
-      --bar: #222;
-      --modal-bg: rgba(0,0,0,0.85);
-      --shadow: 0 2px 8px rgba(0,0,0,0.3);
+      --bg: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+      --fg: #ffffff;
+      --accent: #00d4ff;
+      --accent-glow: #00d4ff40;
+      --bar: rgba(255, 255, 255, 0.1);
+      --bar-border: rgba(255, 255, 255, 0.2);
+      --modal-bg: rgba(0, 0, 0, 0.8);
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      --glass: rgba(255, 255, 255, 0.1);
+      --glass-border: rgba(255, 255, 255, 0.2);
+      --text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
     }
+    
     body.light {
-      --bg: #f5f5f5;
-      --fg: #181818;
-      --bar: #fff;
-      --modal-bg: rgba(255,255,255,0.95);
-      --shadow: 0 2px 8px rgba(0,0,0,0.08);
+      --bg: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 50%, #f5f9ff 100%);
+      --fg: #1a1a2e;
+      --bar: rgba(255, 255, 255, 0.8);
+      --bar-border: rgba(0, 0, 0, 0.1);
+      --modal-bg: rgba(255, 255, 255, 0.9);
+      --glass: rgba(255, 255, 255, 0.7);
+      --glass-border: rgba(0, 0, 0, 0.1);
+      --text-shadow: none;
     }
+    
+    * {
+      box-sizing: border-box;
+    }
+    
     body {
       margin: 0;
-      font-family: system-ui, sans-serif;
+      font-family: 'Orbitron', monospace;
       background: var(--bg);
       color: var(--fg);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      transition: background 0.3s, color 0.3s;
+      transition: all 0.3s ease;
+      overflow: hidden;
     }
-    .top-bar {
-      background: var(--bar);
+    
+    /* Splash Screen */
+    .splash {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+    
+    .splash.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+    
+    .splash-logo {
+      font-size: 3.5rem;
+      font-weight: 900;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow), var(--text-shadow);
+      margin-bottom: 1rem;
+      letter-spacing: 0.2em;
+    }
+    
+    .splash-subtitle {
+      font-size: 1.2rem;
       color: var(--fg);
-      padding: 0.5em 1em;
+      opacity: 0.8;
+      margin-bottom: 2rem;
+      letter-spacing: 0.1em;
+    }
+    
+    .splash-loading {
+      width: 60px;
+      height: 60px;
+      border: 3px solid var(--glass-border);
+      border-top: 3px solid var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .top-bar {
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--glass-border);
+      color: var(--fg);
+      padding: 1rem 1.5rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
       font-size: 1.1em;
+      font-weight: 700;
       box-shadow: var(--shadow);
       z-index: 2;
+      letter-spacing: 0.05em;
     }
+    
     .bottom-bar {
-      background: var(--bar);
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--glass-border);
       color: var(--fg);
-      padding: 0.5em 1em;
+      padding: 1rem 1.5rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
       font-size: 1.1em;
+      font-weight: 700;
       box-shadow: var(--shadow);
       z-index: 2;
       position: fixed;
       bottom: 0; left: 0; right: 0;
+      letter-spacing: 0.05em;
     }
+    
     .channel-info {
       display: flex;
       align-items: center;
-      gap: 0.7em;
+      gap: 1rem;
     }
+    
     .channel-logo {
-      width: 36px; height: 36px;
+      width: 40px; height: 40px;
       object-fit: contain;
-      background: #fff2;
-      border-radius: 6px;
-      box-shadow: 0 1px 4px #0004;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
-    body.light .channel-logo {
-      background: #0001;
-      box-shadow: 0 1px 4px #0001;
-    }
+    
     .settings-btn {
-      background: none;
-      border: none;
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 50%;
       color: var(--fg);
       font-size: 1.5em;
       cursor: pointer;
-      padding: 0 0.3em;
-      transition: color 0.2s;
+      padding: 0.5rem;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow);
     }
-    .settings-btn:hover { color: var(--accent); }
+    
+    .settings-btn:hover {
+      background: var(--accent);
+      color: #fff;
+      transform: scale(1.1);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    
     .player-wrap {
       flex: 1;
       display: flex;
@@ -87,30 +183,47 @@
       justify-content: center;
       position: relative;
       min-height: 300px;
-      background: #000;
+      background: linear-gradient(135deg, #000 0%, #1a1a2e 100%);
+      overflow: hidden;
     }
+    
+    .player-wrap::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(circle at 50% 50%, rgba(0, 212, 255, 0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    
     body.light .player-wrap {
-      background: #eaeaea;
+      background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
     }
+    
     video, audio {
       max-width: 100vw;
       max-height: 70vh;
       background: #000;
-      border-radius: 10px;
-      box-shadow: var(--shadow);
+      border-radius: 15px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       outline: none;
+      border: 1px solid var(--glass-border);
     }
+    
     body.light video, body.light audio {
       background: #fff;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
     }
+    
     .stop-btn {
       position: absolute;
-      top: 1em; right: 1em;
-      background: var(--accent);
-      color: #fff;
-      border: none;
+      top: 1.5rem; right: 1.5rem;
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      color: var(--fg);
       border-radius: 50%;
-      width: 44px; height: 44px;
+      width: 50px; height: 50px;
       font-size: 1.5em;
       cursor: pointer;
       box-shadow: var(--shadow);
@@ -118,127 +231,224 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s;
+      transition: all 0.3s ease;
+      font-weight: 700;
     }
-    .stop-btn:hover { background: #f44336; }
+    
+    .stop-btn:hover {
+      background: #ff4757;
+      color: #fff;
+      transform: scale(1.1);
+      box-shadow: 0 0 20px rgba(255, 71, 87, 0.5);
+    }
+    
     .modal {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background: var(--modal-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 10;
-      animation: fadeIn 0.2s;
+      animation: fadeIn 0.3s ease;
     }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    
     .modal-content {
-      background: var(--bar);
+      background: var(--glass);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border: 1px solid var(--glass-border);
       color: var(--fg);
-      border-radius: 12px;
-      padding: 2em 1.5em 1.5em 1.5em;
-      min-width: 320px;
+      border-radius: 20px;
+      padding: 2rem;
+      min-width: 400px;
       max-width: 95vw;
       max-height: 80vh;
       overflow-y: auto;
       box-shadow: var(--shadow);
       position: relative;
     }
+    
     .modal-close {
       position: absolute;
-      top: 0.7em; right: 1em;
-      background: none;
-      border: none;
+      top: 1rem; right: 1.5rem;
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 50%;
       color: var(--fg);
       font-size: 1.5em;
       cursor: pointer;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
     }
+    
+    .modal-close:hover {
+      background: #ff4757;
+      color: #fff;
+      transform: scale(1.1);
+    }
+    
     .channel-list {
       display: flex;
       flex-direction: column;
-      gap: 0.7em;
-      margin-bottom: 1.5em;
+      gap: 0.8rem;
+      margin-bottom: 2rem;
       max-height: 45vh;
       overflow-y: auto;
+      padding-right: 0.5rem;
     }
+    
+    .channel-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .channel-list::-webkit-scrollbar-track {
+      background: var(--glass);
+      border-radius: 3px;
+    }
+    
+    .channel-list::-webkit-scrollbar-thumb {
+      background: var(--accent);
+      border-radius: 3px;
+    }
+    
     .channel-item {
       display: flex;
       align-items: center;
-      gap: 0.7em;
-      padding: 0.5em 0.7em;
-      border-radius: 7px;
+      gap: 1rem;
+      padding: 1rem;
+      border-radius: 12px;
       cursor: pointer;
-      transition: background 0.2s;
-      border: 2px solid transparent;
+      transition: all 0.3s ease;
+      border: 1px solid transparent;
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
+    
     .channel-item.selected, .channel-item:hover {
-      background: #333b;
+      background: var(--accent);
+      color: #fff;
       border-color: var(--accent);
+      transform: translateX(5px);
+      box-shadow: 0 5px 20px var(--accent-glow);
     }
-    body.light .channel-item.selected, body.light .channel-item:hover {
-      background: #e3eaff;
-      border-color: var(--accent);
+    
+    .channel-item.selected .channel-logo, .channel-item:hover .channel-logo {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.3);
     }
-    .modal-section {
-      margin-bottom: 1.2em;
+    
+    .modal-section h3 {
+      margin: 0 0 1rem 0;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-shadow: var(--text-shadow);
+      letter-spacing: 0.1em;
     }
+    
     .toggle-row {
       display: flex;
       align-items: center;
-      gap: 1em;
-      margin-bottom: 0.7em;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      padding: 0.8rem;
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
     }
+    
     .toggle-label {
       flex: 1;
+      font-weight: 500;
+      letter-spacing: 0.05em;
     }
+    
     .toggle-switch {
-      width: 44px; height: 24px;
-      background: #444;
-      border-radius: 12px;
+      width: 50px; height: 28px;
+      background: var(--glass-border);
+      border-radius: 14px;
       position: relative;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.3s ease;
       display: inline-block;
+      border: 1px solid var(--glass-border);
     }
+    
     .toggle-switch[data-on="true"] {
       background: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
     }
+    
     .toggle-knob {
       position: absolute;
       top: 2px; left: 2px;
-      width: 20px; height: 20px;
+      width: 24px; height: 24px;
       background: #fff;
       border-radius: 50%;
-      transition: left 0.2s;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
+    
     .toggle-switch[data-on="true"] .toggle-knob {
-      left: 22px;
+      left: 24px;
+      box-shadow: 0 2px 8px rgba(0, 212, 255, 0.3);
     }
+    
     .error-msg {
-      color: #f44336;
-      margin-top: 1em;
-      font-weight: bold;
+      color: #ff4757;
+      margin-top: 1rem;
+      font-weight: 700;
       text-align: center;
-      text-shadow: 0 1px 2px #0008;
+      text-shadow: var(--text-shadow);
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 71, 87, 0.3);
+      border-radius: 10px;
+      padding: 1rem;
     }
-    body.light .error-msg {
-      text-shadow: none;
-    }
+    
     @media (max-width: 600px) {
-      .modal-content { padding: 1em 0.5em 1em 0.5em; }
-      .top-bar, .bottom-bar { font-size: 1em; padding: 0.5em 0.3em; }
-      .channel-logo { width: 28px; height: 28px; }
+      .modal-content { padding: 1.5rem; min-width: 320px; }
+      .top-bar, .bottom-bar { font-size: 1em; padding: 1rem; }
+      .channel-logo { width: 32px; height: 32px; }
+      .splash-logo { font-size: 2.5rem; }
+      .splash-subtitle { font-size: 1rem; }
     }
   </style>
 </head>
 <body>
+  <!-- Splash Screen -->
+  <div id="splash" class="splash">
+    <div class="splash-logo">GLZ TV</div>
+    <div class="splash-subtitle">Premium IPTV Experience</div>
+    <div class="splash-loading"></div>
+  </div>
+
   <div id="app" style="display:flex; flex:1; flex-direction:column; min-height:100vh;">
     <div class="top-bar">
-      <span>IPTV Player</span>
+      <span>GLZ TV</span>
       <span id="clock"></span>
     </div>
     <div class="player-wrap">
-      <button class="stop-btn" id="stop-btn" title="Stop">&#9632;</button>
+      <button class="stop-btn" id="stop-btn" title="Stop">⏹</button>
       <video id="video" controls autoplay playsinline style="display:none"></video>
       <audio id="audio" controls autoplay style="display:none"></audio>
       <div id="player-error" class="error-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:none"></div>
@@ -248,7 +458,7 @@
         <img id="current-logo" class="channel-logo" src="" alt="" style="display:none">
         <span id="current-name"></span>
       </div>
-      <button class="settings-btn" id="settings-btn" title="Settings">&#9881;</button>
+      <button class="settings-btn" id="settings-btn" title="Settings">⚙</button>
     </div>
   </div>
   <div id="modal" class="modal" style="display:none">
@@ -440,6 +650,7 @@ https://s3.free-shoutcast.com/stream/18094
     let lastType = 'video';
     let hls = null;
     // --- Elements ---
+    const splash = document.getElementById('splash');
     const video = document.getElementById('video');
     const audio = document.getElementById('audio');
     const stopBtn = document.getElementById('stop-btn');
@@ -619,13 +830,13 @@ https://s3.free-shoutcast.com/stream/18094
     }
     function updateClock() {
       const now = new Date();
-      let h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+      let h = now.getHours(), m = now.getMinutes();
       let ampm = '';
       if (!clock24) {
         ampm = h>=12?' PM':' AM';
         h = h%12; if (h===0) h=12;
       }
-      clock.textContent = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}${ampm}`;
+      clock.textContent = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}${ampm}`;
     }
     // --- Event Listeners ---
     stopBtn.onclick = stopPlayback;
@@ -687,7 +898,15 @@ https://s3.free-shoutcast.com/stream/18094
         saveState();
       }
       renderChannelList();
-      playChannel(current);
+      
+      // Hide splash screen after a short delay
+      setTimeout(() => {
+        splash.classList.add('hidden');
+        setTimeout(() => {
+          splash.style.display = 'none';
+          playChannel(current);
+        }, 500);
+      }, 2000);
     })();
   </script>
 </body>
