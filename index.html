@@ -3,139 +3,393 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cable Box Emulator</title>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@500;700&display=swap" rel="stylesheet">
+  <title>GLZ TV - TiviMate Style</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
   <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
-      background: #101214;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 50%, #0a0e1a 100%);
       margin: 0;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: 'Inter', Arial, sans-serif;
-    }
-    .cablebox-shell {
-      max-width: 800px;
-      margin: 2vh auto;
-      background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 50%, #0a0e1a 100%);
-      border: 2px solid #2d5aa0;
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(45, 90, 160, 0.3);
+      font-family: 'Roboto', 'Inter', Arial, sans-serif;
+      color: #ffffff;
       overflow: hidden;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    .cablebox-header {
-      background: linear-gradient(135deg, #0d1421 0%, #1e2a3a 50%, #0d1421 100%);
-      border: 2px solid #2d5aa0;
-      border-radius: 12px 12px 0 0;
-      padding: 1em 1.5em;
+
+    /* Main Container */
+    .tv-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Header Bar */
+    .header-bar {
+      background: linear-gradient(135deg, rgba(13, 20, 33, 0.95) 0%, rgba(30, 42, 58, 0.95) 100%);
+      border-bottom: 2px solid #2d5aa0;
+      padding: 0.8em 1.5em;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      backdrop-filter: blur(10px);
+      z-index: 100;
       box-shadow: 0 4px 20px rgba(45, 90, 160, 0.2);
-      position: relative;
-      overflow: hidden;
     }
-    .cablebox-header::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, #4a90e2, transparent);
-      animation: scan 3s linear infinite;
-    }
-    @keyframes scan {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(100%); }
-    }
-    .cablebox-brand {
+
+    .brand-logo {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 1.2em;
+      font-size: 1.4em;
       font-weight: bold;
-      color: #0f0;
-      text-shadow: 0 0 10px #0f0;
+      color: #00ff88;
+      text-shadow: 0 0 15px #00ff88;
       letter-spacing: 2px;
     }
-    .channel-display {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      font-size: 1.1em;
-      font-weight: 600;
+
+    .channel-info {
+      display: flex;
+      align-items: center;
+      gap: 1em;
+      font-weight: 500;
+    }
+
+    .channel-number {
+      background: rgba(45, 90, 160, 0.3);
       color: #4a90e2;
-      background: rgba(10, 14, 26, 0.8);
       padding: 0.4em 0.8em;
       border: 1px solid #2d5aa0;
       border-radius: 6px;
-      text-shadow: 0 0 5px rgba(74, 144, 226, 0.5);
-      min-width: 120px;
+      font-weight: 600;
+      min-width: 80px;
       text-align: center;
-      box-shadow: inset 0 0 10px rgba(45, 90, 160, 0.2);
-      backdrop-filter: blur(5px);
     }
-    .led-display {
-      font-family: 'Digital-7', 'Courier New', monospace;
-      font-size: 1.5em;
-      font-weight: bold;
-      color: #0f0;
-      background: #000;
-      padding: 0.3em 0.6em;
-      border: 2px solid #0f0;
-      border-radius: 6px;
-      text-shadow: 0 0 15px #0f0;
-      min-width: 2.5em;
-      text-align: center;
-      box-shadow: inset 0 0 10px rgba(0,255,0,0.3);
-    }
-    /* .status-indicator { Removed, as not needed for this UI } */
-    /* .time-display { Removed, as not needed for this UI } */
-    .cablebox-led { /* Unused, replaced by .led-display */ }
-    .cablebox-power { /* Unused, replaced by remote button */ }
-    .tv-area {
-      position: relative;
-      background: #0a0e1a;
-      border-radius: 0 0 12px 12px;
+
+    .channel-name {
+      color: #ffffff;
+      font-size: 1.1em;
+      max-width: 300px;
       overflow: hidden;
-      min-height: 400px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .time-display {
+      color: #4a90e2;
+      font-weight: 500;
+      font-size: 1.1em;
+    }
+
+    /* Main Content Area */
+    .main-content {
+      flex: 1;
+      position: relative;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Video Player Area */
+    .video-area {
+      flex: 1;
+      position: relative;
+      background: #000;
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
     }
-    .tv-area video, .tv-area audio {
+
+    .video-area video,
+    .video-area audio {
       max-width: 100%;
       max-height: 100%;
-      width: 100%; /* Ensure video takes full width */
-      height: 100%; /* Ensure video takes full height */
-      border-radius: 8px;
-      box-shadow: 0 4px 20px rgba(45, 90, 160, 0.2);
-      object-fit: contain; /* Ensure content fits within bounds */
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
     }
-    /* .stop-btn { Handled by remote now } */
-    .cablebox-info-bar {
+
+    /* Multi-View Grid */
+    .multiview-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 4px;
+      width: 100%;
+      height: 100%;
+      padding: 4px;
+      background: #000;
+    }
+
+    .multiview-cell {
+      position: relative;
+      background: #111;
+      border: 1px solid #333;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .multiview-cell:hover {
+      border-color: #4a90e2;
+      transform: scale(1.02);
+    }
+
+    .multiview-cell.active {
+      border-color: #00ff88;
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+    }
+
+    .multiview-cell video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .cell-overlay {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+      padding: 0.5em;
+      color: #fff;
+      font-size: 0.9em;
+      font-weight: 500;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 300px;
       background: linear-gradient(135deg, rgba(13, 20, 33, 0.95) 0%, rgba(30, 42, 58, 0.95) 100%);
+      border-left: 2px solid #2d5aa0;
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(10px);
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      z-index: 50;
+    }
+
+    .sidebar.open {
+      transform: translateX(0);
+    }
+
+    .sidebar-header {
+      padding: 1em;
+      border-bottom: 1px solid #2d5aa0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .sidebar-title {
+      font-weight: 600;
       color: #4a90e2;
-      padding: 0.8em 1.2em;
+    }
+
+    .close-sidebar {
+      background: none;
+      border: none;
+      color: #4a90e2;
+      font-size: 1.2em;
+      cursor: pointer;
+      padding: 0.2em;
+    }
+
+    .channel-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5em;
+    }
+
+    .channel-item {
+      padding: 0.8em;
+      margin-bottom: 0.2em;
+      background: rgba(45, 90, 160, 0.1);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
       display: flex;
       align-items: center;
-      gap: 1em;
-      font-size: 1.1em;
-      font-weight: 500;
-      border-top: 2px solid #2d5aa0;
-      backdrop-filter: blur(10px);
+      gap: 0.8em;
     }
-    .info-logo {
-      height: 2em;
-      width: auto;
+
+    .channel-item:hover {
+      background: rgba(45, 90, 160, 0.3);
+      border-color: #2d5aa0;
+    }
+
+    .channel-item.active {
+      background: rgba(0, 255, 136, 0.2);
+      border-color: #00ff88;
+      color: #00ff88;
+    }
+
+    .channel-logo {
+      width: 40px;
+      height: 40px;
       border-radius: 4px;
-      border: 1px solid #2d5aa0;
-      background-color: #000; /* Added background for logos with transparency */
+      object-fit: cover;
+      background: #000;
     }
-    .cablebox-standby {
+
+    .channel-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .channel-number-small {
+      font-size: 0.9em;
+      color: #4a90e2;
+      font-weight: 600;
+    }
+
+    .channel-name-small {
+      font-size: 0.9em;
+      margin-top: 0.2em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Remote Control */
+    .remote-control {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%);
+      border: 2px solid #2d5aa0;
+      border-radius: 12px;
+      padding: 1.2em;
+      box-shadow: 0 8px 32px rgba(45, 90, 160, 0.3);
+      z-index: 200;
+      min-width: 280px;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+
+    .remote-control.visible {
+      transform: translateY(0);
+    }
+
+    .remote-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1em;
+    }
+
+    .remote-title {
+      font-weight: 600;
+      color: #4a90e2;
+    }
+
+    .toggle-remote {
+      background: none;
+      border: none;
+      color: #4a90e2;
+      font-size: 1.2em;
+      cursor: pointer;
+      padding: 0.2em;
+    }
+
+    .remote-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.8em;
+    }
+
+    .remote-btn {
+      background: linear-gradient(135deg, #1a2332 0%, #2d5aa0 100%);
+      color: #ffffff;
+      border: 2px solid #4a90e2;
+      border-radius: 8px;
+      padding: 0.8em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 50px;
+    }
+
+    .remote-btn:hover {
+      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(45, 90, 160, 0.4);
+    }
+
+    .remote-btn:active {
+      background: #4a90e2;
+      color: #0a0e1a;
+      transform: translateY(0);
+    }
+
+    .remote-btn.power {
+      background: linear-gradient(135deg, #8b0000 0%, #dc143c 100%);
+      border-color: #dc143c;
+    }
+
+    .remote-btn.power:hover {
+      background: linear-gradient(135deg, #dc143c 0%, #ff4444 100%);
+    }
+
+    .remote-btn.multiview {
+      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%);
+    }
+
+    .remote-btn.multiview:hover {
+      background: linear-gradient(135deg, #4a90e2 0%, #6ba6e8 100%);
+    }
+
+    .remote-btn.channels {
+      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%);
+    }
+
+    .remote-btn.channels:hover {
+      background: linear-gradient(135deg, #4a90e2 0%, #6ba6e8 100%);
+    }
+
+    /* Number Pad */
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5em;
+      margin-top: 1em;
+    }
+
+    .numpad-btn {
+      background: linear-gradient(135deg, #1a2332 0%, #2d5aa0 100%);
+      color: #ffffff;
+      border: 2px solid #4a90e2;
+      border-radius: 8px;
+      padding: 0.8em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 45px;
+    }
+
+    .numpad-btn:hover {
+      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%);
+      transform: translateY(-2px);
+    }
+
+    /* Standby Overlay */
+    .standby-overlay {
       position: absolute;
       top: 0;
       left: 0;
@@ -145,340 +399,444 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 0 0 12px 12px;
-      z-index: 10; /* Ensure it's above the video/audio */
+      z-index: 150;
     }
+
+    .standby-content {
+      text-align: center;
+      color: #4a90e2;
+    }
+
+    .standby-logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 3em;
+      font-weight: bold;
+      color: #00ff88;
+      text-shadow: 0 0 30px #00ff88;
+      margin-bottom: 1em;
+    }
+
     .standby-text {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      font-size: 2em;
+      font-size: 1.5em;
       font-weight: 600;
       color: #4a90e2;
       text-shadow: 0 0 20px rgba(74, 144, 226, 0.6);
       letter-spacing: 3px;
       animation: pulse 2s ease-in-out infinite;
     }
+
     @keyframes pulse {
       0%, 100% { opacity: 0.7; }
       50% { opacity: 1; }
     }
-    /* .cablebox-numpad { Removed from main shell, only on remote } */
-    /* .settings-btn { Removed, as not needed for this UI } */
 
-    @media (max-width: 700px) {
-      .cablebox-shell {
-        max-width: 99vw;
-        border-radius: 10px;
-        padding-bottom: 0.5em;
+    /* Error Messages */
+    .error-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(220, 20, 60, 0.9);
+      color: #ffffff;
+      padding: 1em 2em;
+      border-radius: 8px;
+      font-weight: 500;
+      z-index: 300;
+      display: none;
+    }
+
+    /* Loading Spinner */
+    .loading-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 50px;
+      height: 50px;
+      border: 4px solid #2d5aa0;
+      border-top: 4px solid #4a90e2;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      z-index: 250;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .sidebar {
+        width: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        transform: translateX(100%);
       }
-      .cablebox-header {
-        padding: 0.8em 1em;
+
+      .remote-control {
+        right: 10px;
+        bottom: 10px;
+        min-width: 250px;
+        max-width: 90vw;
+        padding: 1em;
+      }
+
+      .channel-name {
+        max-width: 150px;
+      }
+
+      .brand-logo {
+        font-size: 1.2em;
+      }
+      
+      /* Mobile-specific improvements */
+      .header-bar {
+        padding: 0.6em 1em;
         flex-wrap: wrap;
         gap: 0.5em;
       }
-      .cablebox-brand {
-        font-size: 1em;
-        letter-spacing: 1px;
+      
+      .channel-info {
+        order: 2;
+        flex: 1;
+        min-width: 0;
       }
-      .channel-display {
-        font-size: 0.8em; /* Adjusted for mobile */
-        padding: 0.2em 0.4em;
-        min-width: unset; /* Remove min-width for mobile */
-        max-width: 150px; /* Adjusted max-width for mobile */
+      
+      .channel-name {
+        max-width: 120px;
+        font-size: 0.9em;
       }
-      .led-display {
+      
+      .time-display {
+        order: 3;
+        font-size: 0.9em;
+      }
+      
+      .brand-logo {
+        order: 1;
+        font-size: 1.1em;
+      }
+      
+      /* Mobile remote control */
+      .remote-control {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
+        width: 100%;
+        max-width: none;
+        border-radius: 12px 12px 0 0;
+        transform: translateY(100%);
+        z-index: 200;
+        background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%);
+        border: 2px solid #2d5aa0;
+        border-bottom: none;
+        box-shadow: 0 -8px 32px rgba(45, 90, 160, 0.3);
+      }
+      
+      .remote-control.visible {
+        transform: translateY(0);
+      }
+      
+      .remote-header {
+        padding: 0.5em 1em;
+        border-bottom: 1px solid #2d5aa0;
+      }
+      
+      .remote-buttons {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.6em;
+        padding: 1em;
+      }
+      
+      .remote-btn {
+        min-height: 60px;
+        font-size: 1.1em;
+        border-radius: 10px;
+      }
+      
+      .numpad {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.4em;
+        padding: 0 1em 1em 1em;
+      }
+      
+      .numpad-btn {
+        min-height: 55px;
         font-size: 1.2em;
-        padding: 0.2em 0.4em;
-        min-width: 2em;
+        border-radius: 10px;
       }
-      /* Removed status-indicator, time-display media queries */
-      .cablebox-info-bar {
-        padding: 0.5em 0.7em;
-        font-size: 0.9em; /* Adjusted for mobile */
-        border-radius: 0 0 10px 10px;
+      
+      /* Mobile sidebar */
+      .sidebar {
+        background: linear-gradient(135deg, rgba(13, 20, 33, 0.98) 0%, rgba(30, 42, 58, 0.98) 100%);
+        backdrop-filter: blur(20px);
       }
-      .info-logo {
-        height: 1.5em; /* Adjusted for mobile */
+      
+      .sidebar-header {
+        padding: 1.2em 1em;
+        border-bottom: 2px solid #2d5aa0;
       }
-      /* Numpad styles handled by remote styles now */
+      
+      .close-sidebar {
+        font-size: 1.5em;
+        padding: 0.3em;
+      }
+      
+      .channel-list {
+        padding: 0.5em;
+      }
+      
+      .channel-item {
+        padding: 1em;
+        margin-bottom: 0.3em;
+        border-radius: 8px;
+      }
+      
+      .channel-logo {
+        width: 50px;
+        height: 50px;
+      }
+      
+      .channel-name-small {
+        font-size: 1em;
+      }
+      
+      /* Mobile multiview */
+      .multiview-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, 1fr);
+        gap: 2px;
+        padding: 2px;
+      }
+      
+      .multiview-cell {
+        min-height: 200px;
+      }
+      
+      .cell-overlay {
+        padding: 0.8em;
+        font-size: 1em;
+      }
+      
+      /* Mobile standby */
+      .standby-logo {
+        font-size: 2.5em;
+      }
+      
       .standby-text {
         font-size: 1.3em;
-        padding: 0.3em 0.7em;
       }
-      .remote-outer {
-        right: 1vw;
-        bottom: 1vw;
+      
+      /* Mobile error and loading */
+      .error-message {
+        max-width: 90vw;
+        padding: 1em 1.5em;
+        font-size: 0.9em;
       }
-      .cablebox-remote {
-        min-width: 80px;
-        padding: 0.7em 0.7em 0.5em 0.7em;
-      }
-      .remote-btn {
-        height: 36px;
-        width: 36px;
-        font-size: 1em;
-      }
-      .remote-ch {
+      
+      .loading-spinner {
         width: 60px;
-        font-size: 1em;
+        height: 60px;
+        border-width: 5px;
       }
     }
-    /* Remote styles */
-    .remote-outer {
-      position: fixed;
-      right: 2vw;
-      bottom: 2vw;
-      z-index: 200;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      user-select: none;
+    
+    /* Extra small screens */
+    @media (max-width: 480px) {
+      .header-bar {
+        padding: 0.5em 0.8em;
+      }
+      
+      .brand-logo {
+        font-size: 1em;
+      }
+      
+      .channel-number {
+        min-width: 60px;
+        font-size: 0.9em;
+        padding: 0.3em 0.6em;
+      }
+      
+      .channel-name {
+        max-width: 100px;
+        font-size: 0.8em;
+      }
+      
+      .time-display {
+        font-size: 0.8em;
+      }
+      
+      .remote-btn {
+        min-height: 55px;
+        font-size: 1em;
+      }
+      
+      .numpad-btn {
+        min-height: 50px;
+        font-size: 1.1em;
+      }
+      
+      .channel-logo {
+        width: 45px;
+        height: 45px;
+      }
+      
+      .channel-item {
+        padding: 0.8em;
+      }
     }
-    .remote-toggle {
-      background: linear-gradient(135deg, #0d1421 0%, #1e2a3a 100%);
-      color: #4a90e2;
-      border: 2px solid #2d5aa0;
-      border-radius: 8px 8px 0 0;
-      font-size: 1.3em;
-      padding: 0.2em 1.2em;
-      cursor: pointer;
-      margin-bottom: -2px;
-      box-shadow: 0 4px 15px rgba(45, 90, 160, 0.3);
-      transition: all 0.2s ease;
+    
+    /* Touch-friendly improvements */
+    @media (hover: none) and (pointer: coarse) {
+      .remote-btn:hover,
+      .numpad-btn:hover,
+      .channel-item:hover {
+        transform: none;
+      }
+      
+      .remote-btn:active,
+      .numpad-btn:active,
+      .channel-item:active {
+        transform: scale(0.95);
+        background: #4a90e2;
+      }
+      
+      .multiview-cell:active {
+        transform: scale(0.98);
+      }
     }
-    .remote-toggle.collapsed { border-radius: 8px; }
-    .cablebox-remote {
-      background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%);
-      border: 2px solid #2d5aa0;
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(45, 90, 160, 0.3);
-      padding: 1.2em 1.2em 1em 1.2em;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.5em;
-      min-width: 120px;
-      transition: max-height 0.3s, opacity 0.3s;
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 8px;
     }
-    .cablebox-remote.collapsed {
-      max-height: 0;
-      opacity: 0;
-      overflow: hidden;
-      padding: 0 1.2em;
-      border-width: 0 2px 2px 2px;
+
+    ::-webkit-scrollbar-track {
+      background: rgba(45, 90, 160, 0.1);
+      border-radius: 4px;
     }
-    .remote-row {
-      display: flex;
-      justify-content: center;
-      gap: 0.5em;
-      margin-bottom: 0.3em;
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(45, 90, 160, 0.5);
+      border-radius: 4px;
     }
-    .remote-btn {
-      background: linear-gradient(135deg, #1a2332 0%, #2d5aa0 100%);
-      color: #ffffff;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      font-size: 1.1em;
-      font-weight: 600;
-      border: 2px solid #4a90e2;
-      border-radius: 8px;
-      box-shadow: 0 4px 15px rgba(45, 90, 160, 0.3);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      height: 44px;
-      width: 44px;
-      outline: none;
-      user-select: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .remote-btn:hover {
-      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(45, 90, 160, 0.4);
-    }
-    .remote-btn:active {
-      background: #4a90e2;
-      color: #0a0e1a;
-      transform: translateY(0);
-    }
-    .remote-power .power-icon {
-      width: 18px; height: 18px;
-      display: block;
-      border: 2.5px solid #4a90e2;
-      border-radius: 50%;
-      border-bottom: none;
-      border-right: none;
-      margin: 0 auto;
-      position: relative;
-    }
-    .remote-power .power-icon::after {
-      content: '';
-      display: block;
-      width: 2.5px; height: 10px;
-      background: #4a90e2;
-      position: absolute;
-      left: 7px; top: -6px;
-      border-radius: 2px;
-    }
-    .remote-stop {
-      color: #ffffff;
-      background: linear-gradient(135deg, #8b0000 0%, #dc143c 100%);
-      border-color: #dc143c;
-    }
-    .remote-stop:hover {
-      background: linear-gradient(135deg, #dc143c 0%, #ff4444 100%);
-    }
-    .remote-stop:active {
-      background: #4a90e2;
-      color: #0a0e1a;
-    }
-    .remote-list {
-      color: #ffffff;
-      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%);
-      font-size: 1.3em;
-    }
-    .remote-list:hover {
-      background: linear-gradient(135deg, #4a90e2 0%, #6ba6e8 100%);
-    }
-    .remote-list:active {
-      background: #4a90e2;
-      color: #0a0e1a;
-    }
-    .remote-ch {
-      width: 90px;
-      font-size: 1.1em;
-    }
-    .remote-numpad .remote-btn {
-      width: 44px;
-    }
-    #modal {
-      z-index: 99999 !important;
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.85);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      padding: 10px; /* Add padding for mobile */
-      box-sizing: border-box; /* Include padding in width/height */
-    }
-    #modal-content {
-      background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%) !important;
-      color: #fff !important;
-      padding: 2em 1em !important;
-      max-width: 400px !important;
-      margin: 5vh auto !important;
-      border-radius: 12px !important;
-      position: relative !important;
-      border: 2px solid #2d5aa0;
-      box-shadow: 0 8px 32px rgba(45, 90, 160, 0.5);
-      max-height: 90vh; /* Limit height for scrollability */
-      overflow-y: auto; /* Enable scrolling for long lists */
-    }
-    #modal-content h2 {
-      color: #0f0;
-      text-shadow: 0 0 8px #0f0;
-      text-align: center;
-      margin-top: 0;
-      margin-bottom: 1em;
-      border-bottom: 1px solid #2d5aa0;
-      padding-bottom: 0.5em;
-    }
-    #channel-list-modal div {
-      padding: 0.7em 0.5em;
-      border-bottom: 1px solid #1a2332;
-      cursor: pointer;
-      transition: background-color 0.2s, color 0.2s;
-    }
-    #channel-list-modal div:hover {
-      background-color: rgba(45, 90, 160, 0.3);
-      color: #fff;
-    }
-    #channel-list-modal div.active-channel {
-      color: #0f0;
-      font-weight: bold;
-      background-color: rgba(45, 90, 160, 0.5);
-      border-left: 3px solid #0f0;
-    }
-    #modal-close {
-      margin-top: 1.5em !important;
-      padding: 0.8em 1.5em !important;
-      background: linear-gradient(135deg, #1a2332 0%, #2d5aa0 100%) !important;
-      color: #ffffff !important;
-      border: 2px solid #4a90e2 !important;
-      border-radius: 8px !important;
-      cursor: pointer !important;
-      width: 100% !important;
-      font-weight: 600 !important;
-      box-shadow: 0 4px 15px rgba(45, 90, 160, 0.3) !important;
-      transition: all 0.2s ease !important;
-    }
-    #modal-close:hover {
-      background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%) !important;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(45, 90, 160, 0.4) !important;
-    }
-    #modal-close:active {
-      background: #4a90e2 !important;
-      color: #0a0e1a !important;
-      transform: translateY(0);
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(45, 90, 160, 0.7);
     }
   </style>
 </head>
 <body>
-  <div class="cablebox-shell">
-    <div class="cablebox-header">
-      <div class="cablebox-brand">GLZ TV</div>
-      <div class="channel-display" id="channel-display">Loading Channel...</div>
-      <div class="led-display" id="led-display">000</div>
-    </div>
-    <div class="tv-area">
-      <video id="video" controls autoplay playsinline></video>
-      <audio id="audio" controls autoplay></audio>
-      <div id="player-error" class="error-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:none; color: #ff0000; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 8px;"></div>
-      <div class="cablebox-info-bar" id="info-bar" style="display:none">
-        <img id="info-logo" src="" alt="" class="info-logo" onerror="this.style.display='none'">
-        <span id="info-chno"></span>
-        <span id="info-name"></span>
+  <div class="tv-container">
+    <!-- Header Bar -->
+    <div class="header-bar">
+      <div class="brand-logo">GLZ TV</div>
+      <div class="channel-info">
+        <div class="channel-number" id="channel-number">000</div>
+        <div class="channel-name" id="channel-name">Loading...</div>
       </div>
-      <div class="cablebox-standby" id="standby-overlay" style="display:none">
-        <div class="standby-text">STANDBY</div>
+      <div class="time-display" id="time-display">00:00</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Video Area -->
+      <div class="video-area" id="video-area">
+        <video id="video" controls autoplay playsinline></video>
+        <audio id="audio" controls autoplay></audio>
+        
+        <!-- Multi-View Grid -->
+        <div class="multiview-grid" id="multiview-grid" style="display: none;">
+          <div class="multiview-cell active" data-channel="0">
+            <video></video>
+            <div class="cell-overlay">
+              <div class="channel-number-small">102</div>
+              <div class="channel-name-small">TELEMUNDO PR</div>
+            </div>
+          </div>
+          <div class="multiview-cell" data-channel="1">
+            <video></video>
+            <div class="cell-overlay">
+              <div class="channel-number-small">103</div>
+              <div class="channel-name-small">PUNTO 2</div>
+            </div>
+          </div>
+          <div class="multiview-cell" data-channel="2">
+            <video></video>
+            <div class="cell-overlay">
+              <div class="channel-number-small">104</div>
+              <div class="channel-name-small">UNIMAS HD</div>
+            </div>
+          </div>
+          <div class="multiview-cell" data-channel="3">
+            <video></video>
+            <div class="cell-overlay">
+              <div class="channel-number-small">105</div>
+              <div class="channel-name-small">TELEONCE</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Standby Overlay -->
+        <div class="standby-overlay" id="standby-overlay">
+          <div class="standby-content">
+            <div class="standby-logo">GLZ TV</div>
+            <div class="standby-text">STANDBY</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title">Channel List</div>
+          <button class="close-sidebar" id="close-sidebar">×</button>
+        </div>
+        <div class="channel-list" id="channel-list">
+          <!-- Channels will be populated here -->
+        </div>
       </div>
     </div>
-    <div class="remote-outer" id="remote-outer">
-      <div class="remote-toggle" id="remote-toggle">&#x25BC;</div> <!-- Default to collapsed -->
-      <div class="cablebox-remote collapsed" id="cablebox-remote"> <!-- Default to collapsed -->
-        <div class="remote-row">
-          <button class="remote-btn remote-power" id="power-btn" title="Power"><span class="power-icon"></span></button>
-          <button class="remote-btn remote-stop" id="stop-btn" title="Stop" style="display:none;">&#9632;</button> <!-- Hidden by default -->
-          <button class="remote-btn remote-list" id="channel-list-btn" title="Channel List">&#9776;</button>
-        </div>
-        <div class="remote-row">
-          <button class="remote-btn remote-ch" data-num="ch-up">CH &#8593;</button>
-        </div>
-        <div class="remote-row remote-numpad">
-          <button class="remote-btn numpad-btn" data-num="1">1</button>
-          <button class="remote-btn numpad-btn" data-num="2">2</button>
-          <button class="remote-btn numpad-btn" data-num="3">3</button>
-        </div>
-        <div class="remote-row remote-numpad">
-          <button class="remote-btn numpad-btn" data-num="4">4</button>
-          <button class="remote-btn numpad-btn" data-num="5">5</button>
-          <button class="remote-btn numpad-btn" data-num="6">6</button>
-        </div>
-        <div class="remote-row remote-numpad">
-          <button class="remote-btn numpad-btn" data-num="7">7</button>
-          <button class="remote-btn numpad-btn" data-num="8">8</button>
-          <button class="remote-btn numpad-btn" data-num="9">9</button>
-        </div>
-        <div class="remote-row remote-numpad">
-          <button class="remote-btn numpad-btn" data-num="0">0</button>
-        </div>
-        <div class="remote-row">
-          <button class="remote-btn remote-ch" data-num="ch-down">CH &#8595;</button>
-        </div>
+
+    <!-- Remote Control -->
+    <div class="remote-control" id="remote-control">
+      <div class="remote-header">
+        <div class="remote-title">Remote Control</div>
+        <button class="toggle-remote" id="toggle-remote">−</button>
+      </div>
+      
+      <div class="remote-buttons">
+        <button class="remote-btn power" id="power-btn" title="Power">⏻</button>
+        <button class="remote-btn multiview" id="multiview-btn" title="Multi-View">⊞</button>
+        <button class="remote-btn channels" id="channels-btn" title="Channel List">☰</button>
+      </div>
+
+      <div class="numpad">
+        <button class="numpad-btn" data-num="1">1</button>
+        <button class="numpad-btn" data-num="2">2</button>
+        <button class="numpad-btn" data-num="3">3</button>
+        <button class="numpad-btn" data-num="4">4</button>
+        <button class="numpad-btn" data-num="5">5</button>
+        <button class="numpad-btn" data-num="6">6</button>
+        <button class="numpad-btn" data-num="7">7</button>
+        <button class="numpad-btn" data-num="8">8</button>
+        <button class="numpad-btn" data-num="9">9</button>
+        <button class="numpad-btn" data-num="0">0</button>
       </div>
     </div>
+
+    <!-- Error Message -->
+    <div class="error-message" id="error-message"></div>
+
+    <!-- Loading Spinner -->
+    <div class="loading-spinner" id="loading-spinner"></div>
   </div>
 
   <!-- hls.js CDN -->
@@ -643,908 +1001,698 @@ https://s3.free-shoutcast.com/stream/18094
       const channels = [];
       const lines = m3uContent.split('\n');
       let currentChannel = null;
-
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-
         if (line.startsWith('#EXTINF:')) {
-          // Parse channel info line
           currentChannel = {};
-
-          // Extract channel name (after the last comma)
           const lastCommaIndex = line.lastIndexOf(',');
           if (lastCommaIndex !== -1) {
             currentChannel.name = line.substring(lastCommaIndex + 1).trim();
           }
-
-          // Extract tvg-logo
           const logoMatch = line.match(/tvg-logo="([^"]*)"/);
-          if (logoMatch) {
-            currentChannel.logo = logoMatch[1];
-          }
-
-          // Extract tvg-chno
+          if (logoMatch) currentChannel.logo = logoMatch[1];
           const chnoMatch = line.match(/tvg-chno="([^"]*)"/);
-          if (chnoMatch) {
-            currentChannel.chno = chnoMatch[1];
-          }
-
-          // Extract tvg-id (Crucial for EPG lookup)
+          if (chnoMatch) currentChannel.chno = chnoMatch[1];
           const idMatch = line.match(/tvg-id="([^"]*)"/);
-          if (idMatch) {
-            currentChannel.id = idMatch[1];
-          }
-
-          // Extract tvg-name (fallback for name if not found)
+          if (idMatch) currentChannel.id = idMatch[1];
           const nameMatch = line.match(/tvg-name="([^"]*)"/);
-          if (nameMatch && !currentChannel.name) {
-            currentChannel.name = nameMatch[1];
-          }
-
+          if (nameMatch && !currentChannel.name) currentChannel.name = nameMatch[1];
         } else if (line && !line.startsWith('#') && currentChannel) {
-          // This is the URL line
           currentChannel.url = line.trim();
           channels.push(currentChannel);
           currentChannel = null;
         }
       }
-
       return channels;
     }
 
     // --- State ---
     let channels = [];
     let current = 0;
-    let lightMode = false; // Not fully implemented in UI, but kept for future use
-    let autoHide = false; // Not fully implemented in UI, but kept for future use
-    let clock24 = false; // Not fully implemented in UI, but kept for future use
-    let lastType = 'video';
-    let hls = null;
-    let standby = true; // Start in standby mode
+    let standby = true;
     let numEntry = '';
     let numEntryTimeout = null;
-    let epgData = {}; // Stores parsed EPG data
-    let currentEPGUrl = 'https://epg.best/1eef8-shw7fc.xml.gz'; // Default EPG URL
+    let hls = null;
+    let multiviewMode = false;
+    let multiviewStreams = []; // Array to hold multiple HLS instances
 
     // --- Elements ---
     const video = document.getElementById('video');
     const audio = document.getElementById('audio');
-    const playerError = document.getElementById('player-error');
-    // --- Remote Elements ---
-    const stopBtn = document.getElementById('stop-btn');
-    const powerBtn = document.getElementById('power-btn');
-    const channelListBtn = document.getElementById('channel-list-btn');
-    const remoteToggle = document.getElementById('remote-toggle');
-    const cableboxRemote = document.getElementById('cablebox-remote');
-    // --- Cable box elements ---
-    const channelDisplay = document.getElementById('channel-display');
-    const ledDisplay = document.getElementById('led-display');
-    const infoBar = document.getElementById('info-bar');
-    const infoLogo = document.getElementById('info-logo');
-    const infoChno = document.getElementById('info-chno');
-    const infoName = document.getElementById('info-name');
+    const channelNumber = document.getElementById('channel-number');
+    const channelName = document.getElementById('channel-name');
+    const timeDisplay = document.getElementById('time-display');
     const standbyOverlay = document.getElementById('standby-overlay');
+    const sidebar = document.getElementById('sidebar');
+    const channelList = document.getElementById('channel-list');
+    const closeSidebar = document.getElementById('close-sidebar');
+    const remoteControl = document.getElementById('remote-control');
+    const toggleRemote = document.getElementById('toggle-remote');
+    const powerBtn = document.getElementById('power-btn');
+    const multiviewBtn = document.getElementById('multiview-btn');
+    const channelsBtn = document.getElementById('channels-btn');
+    const numpadBtns = document.querySelectorAll('.numpad-btn');
+    const errorMessage = document.getElementById('error-message');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const multiviewGrid = document.getElementById('multiview-grid');
+    const videoArea = document.getElementById('video-area');
+    
+    // --- Mobile Detection (moved to top) ---
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                     (window.innerWidth <= 768);
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    // Create help overlay
+    const helpOverlay = document.createElement('div');
+    helpOverlay.id = 'help-overlay';
+    helpOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      color: white;
+      font-family: 'Roboto', sans-serif;
+    `;
+    
+    // Create different help content for mobile and desktop
+    const helpContent = isMobile ? `
+      <div style="background: #1a2332; padding: 2em; border-radius: 12px; border: 2px solid #2d5aa0; max-width: 90vw; max-height: 80vh; overflow-y: auto;">
+        <h2 style="color: #4a90e2; margin-bottom: 1em; text-align: center;">Mobile Controls</h2>
+        <div style="display: grid; gap: 0.8em; font-size: 0.9em;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="background: #2d5aa0; padding: 0.3em 0.6em; border-radius: 6px; font-size: 0.8em;">👆 Tap Video</span>
+            <span>Show Remote Control</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="background: #2d5aa0; padding: 0.3em 0.6em; border-radius: 6px; font-size: 0.8em;">👆👆 Double Tap</span>
+            <span>Toggle Remote</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="background: #2d5aa0; padding: 0.3em 0.6em; border-radius: 6px; font-size: 0.8em;">⬅️ Swipe Left</span>
+            <span>Next Channel</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="background: #2d5aa0; padding: 0.3em 0.6em; border-radius: 6px; font-size: 0.8em;">➡️ Swipe Right</span>
+            <span>Previous Channel</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="background: #2d5aa0; padding: 0.3em 0.6em; border-radius: 6px; font-size: 0.8em;">⬆️ Swipe Up</span>
+            <span>Show Channel List</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="background: #2d5aa0; padding: 0.3em 0.6em; border-radius: 6px; font-size: 0.8em;">⬇️ Swipe Down</span>
+            <span>Toggle Remote</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="background: #2d5aa0; padding: 0.3em 0.6em; border-radius: 6px; font-size: 0.8em;">👆 Hold (1s)</span>
+            <span>Power Menu</span>
+          </div>
+          <hr style="border: none; border-top: 1px solid #2d5aa0; margin: 1em 0;">
+          <div style="text-align: center; font-size: 0.8em; color: #4a90e2;">
+            Remote auto-hides after 8 seconds of inactivity
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 1em;">
+          <button onclick="document.getElementById('help-overlay').style.display='none'" style="background: #2d5aa0; color: white; border: none; padding: 0.8em 1.5em; border-radius: 8px; cursor: pointer; font-size: 1em;">Close</button>
+        </div>
+      </div>
+    ` : `
+      <div style="background: #1a2332; padding: 2em; border-radius: 12px; border: 2px solid #2d5aa0; max-width: 500px;">
+        <h2 style="color: #4a90e2; margin-bottom: 1em; text-align: center;">Keyboard Shortcuts</h2>
+        <div style="display: grid; gap: 0.5em; font-size: 0.9em;">
+          <div style="display: flex; justify-content: space-between;">
+            <span><kbd style="background: #2d5aa0; padding: 0.2em 0.5em; border-radius: 4px;">F1</kbd></span>
+            <span>Show/Hide Remote Control</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span><kbd style="background: #2d5aa0; padding: 0.2em 0.5em; border-radius: 4px;">F2</kbd></span>
+            <span>Show Channel List</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span><kbd style="background: #2d5aa0; padding: 0.2em 0.5em; border-radius: 4px;">F3</kbd></span>
+            <span>Toggle Multi-View</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span><kbd style="background: #2d5aa0; padding: 0.2em 0.5em; border-radius: 4px;">F4</kbd></span>
+            <span>Power On/Off</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span><kbd style="background: #2d5aa0; padding: 0.2em 0.5em; border-radius: 4px;">Space</kbd></span>
+            <span>Show Remote (5s)</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span><kbd style="background: #2d5aa0; padding: 0.2em 0.5em; border-radius: 4px;">Esc</kbd></span>
+            <span>Hide Remote & Sidebar</span>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 1em;">
+          <button onclick="document.getElementById('help-overlay').style.display='none'" style="background: #2d5aa0; color: white; border: none; padding: 0.5em 1em; border-radius: 6px; cursor: pointer;">Close</button>
+        </div>
+      </div>
+    `;
+    
+    helpOverlay.innerHTML = helpContent;
+    document.body.appendChild(helpOverlay);
 
     // --- Utility Functions ---
-    function saveState() {
-      try {
-        localStorage.setItem('glz-tv-state', JSON.stringify({
-          current: current,
-          lightMode: lightMode,
-          autoHide: autoHide,
-          clock24: clock24,
-          standby: standby // Save standby state
-        }));
-      } catch (e) {
-        console.error("Failed to save state:", e);
-      }
-    }
-
-    function loadState() {
-      try {
-        const saved = JSON.parse(localStorage.getItem('glz-tv-state') || '{}');
-        current = saved.current || 0;
-        lightMode = saved.lightMode || false;
-        autoHide = saved.autoHide || false;
-        clock24 = saved.clock24 || false;
-        standby = (typeof saved.standby === 'boolean') ? saved.standby : true; // Default to true (standby) if not found
-      } catch (e) {
-        console.error("Failed to load state:", e);
-      }
-    }
-
     function showError(msg) {
-      if (playerError) {
-        playerError.textContent = msg;
-        playerError.style.display = '';
-      }
+      errorMessage.textContent = msg;
+      errorMessage.style.display = '';
     }
-
     function hideError() {
-      if (playerError) {
-        playerError.style.display = 'none';
-      }
+      errorMessage.style.display = 'none';
     }
-
-    function stopPlayback() {
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
-      video.pause();
-      video.src = ''; // Clear video source
-      audio.pause();
-      audio.src = ''; // Clear audio source
-
-      stopBtn.style.display = 'none'; // Hide stop button when stopped
-      hideInfoBar(); // Hide info bar
-      hideError(); // Clear any error messages
+    function showLoading() {
+      loadingSpinner.style.display = '';
     }
-
-    // Function to hide the info bar completely
-    function hideInfoBar() {
-        infoBar.style.display = 'none';
+    function hideLoading() {
+      loadingSpinner.style.display = 'none';
     }
-
-    function updateClock() {
+    function updateTime() {
       const now = new Date();
-      const hours = clock24 ? now.getHours() : (now.getHours() % 12 || 12);
+      const hours = now.getHours().toString().padStart(2, '0');
       const minutes = now.getMinutes().toString().padStart(2, '0');
-      const timeStr = `${hours}:${minutes}`;
-
-      // Update LED display with time only when in standby
-      if (standby) {
-        ledDisplay.textContent = timeStr;
-      }
+      timeDisplay.textContent = `${hours}:${minutes}`;
     }
-
-    // --- Remote toggle logic ---
-    let remoteCollapsed = true; // Initial state matches HTML
-    remoteToggle.onclick = () => {
-      remoteCollapsed = !remoteCollapsed;
-      cableboxRemote.classList.toggle('collapsed', remoteCollapsed);
-      remoteToggle.innerHTML = remoteCollapsed ? '&#x25BC;' : '&#x25B2;';
-    };
-
-    // --- Power button logic ---
-    powerBtn.onclick = () => {
-      standby = !standby;
-      standbyOverlay.style.display = standby ? '' : 'none';
-      saveState(); // Save standby state
-
+    setInterval(updateTime, 1000);
+    function updateChannelDisplay(idx = current) {
+      if (!channels.length || !channels[idx]) {
+        channelNumber.textContent = '000';
+        channelName.textContent = 'No Channel';
+        return;
+      }
+      channelNumber.textContent = channels[idx].chno ? channels[idx].chno : (idx + 1).toString().padStart(3, '0');
+      channelName.textContent = channels[idx].name;
+    }
+    function stopPlayback() {
+      if (hls) { hls.destroy(); hls = null; }
+      video.pause();
+      video.src = '';
+      audio.pause();
+      audio.src = '';
+    }
+    function stopMultiviewStreams() {
+      multiviewStreams.forEach(stream => {
+        if (stream && stream.destroy) {
+          stream.destroy();
+        }
+      });
+      multiviewStreams = [];
+      
+      // Clear all multiview video elements
+      const multiviewVideos = multiviewGrid.querySelectorAll('video');
+      multiviewVideos.forEach(video => {
+        video.pause();
+        video.src = '';
+      });
+    }
+    
+    function startMultiview() {
       if (standby) {
-        stopPlayback(); // Stop playback when entering standby
-        ledDisplay.textContent = '-- --'; // Clear LED or show standby indication
-        updateChannelDisplay('STANDBY'); // Show standby in channel display
-        hideInfoBar(); // Hide info bar in standby
-      } else {
-        playChannel(current); // Resume channel when exiting standby
-        updateLedDisplay(); // Show channel number
-        updateChannelDisplay(); // Show channel info
-        showInfoBar(); // Show info bar
-      }
-    };
-
-    // --- Stop button logic ---
-    stopBtn.onclick = () => {
-      stopPlayback();
-      // After stopping, if not in standby, update LED to channel number and show info bar
-      if (!standby) {
-        updateLedDisplay();
-        updateChannelDisplay('No Program Playing');
-        showInfoBar(); // Show info bar when stopped
-      }
-    };
-
-    // --- Channel list button logic (opens modal) ---
-    channelListBtn.onclick = showChannelListModal;
-
-    // --- Number pad and channel up/down logic ---
-    function handleNumpad(num) {
-      if (standby) { // Do not process input if in standby
-          showError("Please power on the device first.");
-          setTimeout(hideError, 2000);
-          return;
-      }
-
-      if (num === 'ch-up') {
-        playChannel((current + 1) % channels.length);
-        showInfoBar();
-        updateLedDisplay();
+        showError('Power on first.');
+        setTimeout(hideError, 1500);
         return;
       }
-      if (num === 'ch-down') {
-        playChannel((current - 1 + channels.length) % channels.length);
-        showInfoBar();
-        updateLedDisplay();
-        return;
-      }
-
-      if (num.match(/^[0-9]$/)) {
-        numEntry += num;
-        if (numEntry.length > 3) numEntry = numEntry.slice(-3); // Limit to last 3 digits
-        ledDisplay.textContent = numEntry.padStart(3, '0');
-
-        if (numEntryTimeout) clearTimeout(numEntryTimeout);
-        numEntryTimeout = setTimeout(() => {
-          let targetChannelNo = numEntry;
-          let idx = -1;
-
-          // Try to find by tvg-chno first
-          idx = channels.findIndex(ch => ch.chno === targetChannelNo);
-
-          // If not found by tvg-chno, try sequential index (1-based)
-          if (idx === -1 && parseInt(targetChannelNo, 10) > 0 && parseInt(targetChannelNo, 10) <= channels.length) {
-            idx = parseInt(targetChannelNo, 10) - 1;
+      
+      multiviewMode = true;
+      stopPlayback(); // Stop single video
+      multiviewGrid.style.display = '';
+      video.style.display = 'none';
+      
+      // Start 4 streams (channels 0-3)
+      const startChannel = Math.max(0, current - 1); // Start from current channel - 1
+      const multiviewVideos = multiviewGrid.querySelectorAll('video');
+      
+      for (let i = 0; i < 4; i++) {
+        const channelIndex = (startChannel + i) % channels.length;
+        const videoElement = multiviewVideos[i];
+        const cell = multiviewGrid.children[i];
+        
+        if (channels[channelIndex] && videoElement) {
+          const ch = channels[channelIndex];
+          const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
+          
+          if (isAudio) {
+            // Skip audio channels in multiview
+            continue;
           }
-
-          if (idx >= 0) {
-            playChannel(idx);
-            showInfoBar();
+          
+          const isHls = /\.m3u8(\?|$)/i.test(ch.url);
+          
+          if (isHls && window.Hls) {
+            const hlsInstance = new Hls();
+            hlsInstance.loadSource(ch.url);
+            hlsInstance.attachMedia(videoElement);
+            hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+              if (data.fatal) {
+                console.error(`Multiview stream error for channel ${channelIndex}:`, data);
+              }
+            });
+            multiviewStreams.push(hlsInstance);
           } else {
-            // Optional: Show an error if channel not found
-            showError(`Channel ${targetChannelNo} not found.`);
-            setTimeout(hideError, 1500);
-            updateLedDisplay(); // Revert LED to current channel
+            videoElement.src = ch.url;
           }
-          numEntry = ''; // Reset for next entry
-        }, 1200); // 1.2 seconds to enter channel number
+          
+          // Update cell overlay
+          const overlay = cell.querySelector('.cell-overlay');
+          if (overlay) {
+            const numberEl = overlay.querySelector('.channel-number-small');
+            const nameEl = overlay.querySelector('.channel-name-small');
+            if (numberEl) numberEl.textContent = ch.chno || (channelIndex + 1);
+            if (nameEl) nameEl.textContent = ch.name;
+          }
+          
+          // Set active state
+          cell.classList.toggle('active', channelIndex === current);
+          
+          // Add click handler to switch to this channel
+          cell.onclick = () => {
+            current = channelIndex;
+            updateChannelDisplay();
+            // Update active state
+            multiviewGrid.querySelectorAll('.multiview-cell').forEach(c => c.classList.remove('active'));
+            cell.classList.add('active');
+          };
+          
+          videoElement.play().catch(e => {
+            console.error(`Failed to play multiview stream ${channelIndex}:`, e);
+          });
+        }
+      }
+    }
+    
+    function stopMultiview() {
+      multiviewMode = false;
+      stopMultiviewStreams();
+      multiviewGrid.style.display = 'none';
+      video.style.display = '';
+      
+      // Resume single channel playback
+      if (!standby && channels.length > 0 && current >= 0 && current < channels.length) {
+        playChannel(current);
       }
     }
 
-    document.querySelectorAll('.remote-btn[data-num]').forEach(btn => {
-      btn.onclick = () => handleNumpad(btn.dataset.num);
-    });
-
-    // --- playChannel logic (only one player visible) ---
     function playChannel(idx) {
-      if (standby) {
-          // If in standby, power on first
-          powerBtn.click();
-          // After power on, this function will be called again to play the channel
-          // No return here, as powerBtn.click() will toggle standby and re-call playChannel
-      }
-
-      if (!channels[idx]) {
-        showError('Channel not found.');
+      if (!channels[idx]) return;
+      current = idx;
+      
+      // If in multiview mode, just update the display and active cell
+      if (multiviewMode) {
+        updateChannelDisplay();
+        multiviewGrid.querySelectorAll('.multiview-cell').forEach((cell, i) => {
+          const channelIndex = (Math.max(0, current - 1) + i) % channels.length;
+          cell.classList.toggle('active', channelIndex === current);
+        });
         return;
       }
-
-      current = idx;
-      saveState(); // Save current channel
-
+      
+      stopPlayback();
+      hideError();
       const ch = channels[idx];
       const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
       const isHls = /\.m3u8(\?|$)/i.test(ch.url);
-
-      // Reset players and hide previous error
-      hideError();
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
-      video.src = '';
-      audio.src = '';
-      video.style.display = 'none';
-      audio.style.display = 'none';
-
-      // Show stop button when playing
-      stopBtn.style.display = '';
-
+      video.style.display = isAudio ? 'none' : '';
+      audio.style.display = isAudio ? '' : 'none';
       if (isAudio) {
-        lastType = 'audio';
         audio.src = ch.url;
-        audio.style.display = '';
         audio.play().catch(e => showError('Failed to play audio stream: ' + e.message));
-      } else if (isHls) {
-        lastType = 'video';
-        video.style.display = '';
-        if (video.canPlayType && video.canPlayType('application/vnd.apple.mpegurl')) {
-          video.src = ch.url;
-        } else if (window.Hls) {
-          hls = new Hls();
-          hls.loadSource(ch.url);
-          hls.attachMedia(video);
-          hls.on(Hls.Events.ERROR, function (event, data) {
-            if (data.fatal) {
-              switch (data.type) {
-                case Hls.ErrorTypes.NETWORK_ERROR:
-                  showError("Network error while loading HLS stream.");
-                  break;
-                case Hls.ErrorTypes.MEDIA_ERROR:
-                  showError("Media error during HLS playback.");
-                  hls.recoverMediaError(); // Attempt to recover
-                  break;
-                default:
-                  showError("Fatal HLS error: " + data.details);
-                  break;
-              }
-            }
-          });
-        } else {
-          showError('HLS not supported in this browser.');
-        }
+      } else if (isHls && window.Hls) {
+        hls = new Hls();
+        hls.loadSource(ch.url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.ERROR, function (event, data) {
+          if (data.fatal) showError('Stream error.');
+        });
         video.play().catch(e => showError('Failed to play video stream: ' + e.message));
       } else {
-        lastType = 'video';
         video.src = ch.url;
-        video.style.display = '';
         video.play().catch(e => showError('Failed to play video stream: ' + e.message));
       }
-
-      updateLedDisplay();
-      showInfoBar();
       updateChannelDisplay();
+      remoteControl.classList.add('visible');
     }
-
-    // --- Initial LED display & Info Bar ---
-    function updateLedDisplay() {
+    function setStandby(on) {
+      standby = on;
+      standbyOverlay.style.display = standby ? '' : 'none';
       if (standby) {
-        ledDisplay.textContent = '-- --';
-        return;
-      }
-      if (!channels.length) {
-        ledDisplay.textContent = '000';
-        return;
-      }
-      let chno = channels[current]?.chno || (current + 1).toString();
-      ledDisplay.textContent = chno.padStart(3, '0').slice(-3);
-    }
-
-    function showInfoBar() {
-      if (standby || !channels.length) {
-          hideInfoBar(); // Ensure info bar is hidden if in standby or no channels
-          return;
-      }
-      const ch = channels[current];
-      infoLogo.src = ch.logo || ''; // Use empty string if no logo to prevent broken image icon
-      infoLogo.style.display = ch.logo ? '' : 'none'; // Hide logo if no URL
-      infoChno.textContent = ch.chno ? `#${ch.chno}` : `#${current + 1}`;
-      infoName.textContent = ch.name;
-
-      infoBar.style.display = '';
-    }
-
-
-    // --- Event Listeners ---
-    // Keyboard navigation
-    document.addEventListener('keydown', e => {
-      // Allow escape to close modal first
-      if (modal && modal.style.display !== 'none') {
-        if (e.key === 'Escape') {
-          hideModal();
-        }
-        return;
-      }
-
-      // Prevent input in textareas/inputs from triggering controls
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-      if (e.key === 'ArrowRight') {
-        handleNumpad('ch-up');
-      } else if (e.key === 'ArrowLeft') {
-        handleNumpad('ch-down');
-      } else if (e.key === 's' || e.key === 'S') {
         stopPlayback();
-      } else if (e.key === 'c' || e.key === 'C') {
-        showChannelListModal();
-      } else if (e.key.match(/^[0-9]$/)) {
-        handleNumpad(e.key);
-      } else if (e.key === 'p' || e.key === 'P') { // 'p' for power
-        powerBtn.click();
+        if (multiviewMode) {
+          stopMultiview();
+        }
+        channelNumber.textContent = '-- --';
+        channelName.textContent = 'STANDBY';
+      } else {
+        if (channels.length > 0 && current >= 0 && current < channels.length) {
+          playChannel(current);
+        } else {
+          updateChannelDisplay();
+        }
+      }
+    }
+    function showSidebar() {
+      sidebar.classList.add('open');
+      renderChannelList();
+    }
+    function hideSidebar() {
+      sidebar.classList.remove('open');
+    }
+    function renderChannelList() {
+      channelList.innerHTML = channels.map((ch, i) =>
+        `<div class="channel-item${i === current ? ' active' : ''}" data-idx="${i}">
+          <img class="channel-logo" src="${ch.logo || ''}" onerror="this.style.display='none'" />
+          <div class="channel-details">
+            <div class="channel-number-small">${ch.chno || (i + 1)}</div>
+            <div class="channel-name-small">${ch.name}</div>
+          </div>
+        </div>`
+      ).join('');
+      channelList.querySelectorAll('.channel-item').forEach(item => {
+        item.onclick = () => {
+          playChannel(Number(item.dataset.idx));
+          hideSidebar();
+        };
+      });
+    }
+    // --- Event Listeners ---
+    powerBtn.onclick = () => setStandby(!standby);
+    channelsBtn.onclick = showSidebar;
+    closeSidebar.onclick = hideSidebar;
+    toggleRemote.onclick = () => {
+      remoteControl.classList.toggle('visible');
+    };
+    multiviewBtn.onclick = () => {
+      if (multiviewMode) {
+        stopMultiview();
+      } else {
+        startMultiview();
+      }
+    };
+    
+    // Keyboard shortcuts for remote control
+    let f1PressCount = 0;
+    let f1PressTimeout;
+    
+    document.addEventListener('keydown', (e) => {
+      // Prevent default behavior for our shortcuts
+      if (['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'].includes(e.key)) {
+        e.preventDefault();
+      }
+      
+      switch(e.key) {
+        case 'F1': // Show/hide remote or help
+          f1PressCount++;
+          if (f1PressCount === 1) {
+            f1PressTimeout = setTimeout(() => {
+              // Single F1 press - toggle remote
+              remoteControl.classList.toggle('visible');
+              f1PressCount = 0;
+            }, 300);
+          } else if (f1PressCount === 2) {
+            // Double F1 press - show help
+            clearTimeout(f1PressTimeout);
+            f1PressCount = 0;
+            helpOverlay.style.display = 'flex';
+          }
+          break;
+        case 'F2': // Show channel list
+          if (!standby) {
+            showSidebar();
+          }
+          break;
+        case 'F3': // Toggle multiview
+          if (!standby) {
+            if (multiviewMode) {
+              stopMultiview();
+            } else {
+              startMultiview();
+            }
+          }
+          break;
+        case 'F4': // Power toggle
+          setStandby(!standby);
+          break;
+        case 'Escape': // Hide remote and sidebar
+          remoteControl.classList.remove('visible');
+          hideSidebar();
+          helpOverlay.style.display = 'none';
+          break;
+        case ' ': // Spacebar - show remote temporarily
+          e.preventDefault();
+          remoteControl.classList.add('visible');
+          // Auto-hide after 5 seconds
+          setTimeout(() => {
+            if (!remoteControl.matches(':hover')) {
+              remoteControl.classList.remove('visible');
+            }
+          }, 5000);
+          break;
       }
     });
-
-    // Error handling for media elements
-    video.onerror = audio.onerror = (e) => {
-      console.error('Media error:', e);
-      showError('Failed to load stream. Please try another channel.');
-      stopBtn.style.display = 'none'; // Hide stop button on error
-    };
-
-    video.onplay = audio.onplay = hideError; // Hide error when playback starts
-    video.onloadeddata = audio.onloadeddata = hideError; // Hide error when data is loaded
-    video.oncanplay = audio.oncanplay = hideError; // Hide error when media can play
-
-    // Auto-hide controls (basic implementation)
-    let hideControlsTimeout = null;
-    function setAutohideEvents() {
-        // This function is currently not fully hooked up to a UI toggle,
-        // but it provides the basic logic if `autoHide` is true.
-        const player = lastType === 'audio' ? audio : video;
-        if (autoHide) {
-            // Remove native controls and manage custom logic
-            player.removeAttribute('controls');
-            player.addEventListener('mousemove', function onMouseMove() {
-                player.setAttribute('controls', '');
-                clearTimeout(hideControlsTimeout);
-                hideControlsTimeout = setTimeout(() => {
-                    player.removeAttribute('controls');
-                }, 2000); // Hide after 2 seconds of inactivity
-            });
-            player.addEventListener('mouseleave', function onMouseLeave() {
-                player.removeAttribute('controls');
-                clearTimeout(hideControlsTimeout);
-            });
-        } else {
-            // Ensure native controls are always present if autoHide is false
-            player.setAttribute('controls', '');
-            player.removeEventListener('mousemove', onMouseMove); // Remove listeners if toggled off
-            player.removeEventListener('mouseleave', onMouseLeave);
-        }
-    }
-
-
-    // Update clock every second
-    setInterval(updateClock, 1000);
-    // Update EPG display every minute to ensure current program is shown
-    setInterval(updateEPGDisplay, 60000);
-
-
-    // --- EPG Functionality ---
-    // Function to fetch and parse EPG data
-    async function loadEPGData(epgUrl) {
-      try {
-        console.log('Loading EPG data from:', epgUrl);
-        
-        // Try to fetch with CORS handling
-        const response = await fetch(epgUrl, {
-          method: 'GET',
-          mode: 'cors',
-          headers: {
-            'Accept': 'application/xml, text/xml, */*',
-            'Accept-Encoding': 'gzip, deflate, br'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const xmlText = await response.text();
-        parseEPGXML(xmlText);
-        
-      } catch (error) {
-        console.log('EPG loading failed:', error.message);
-        
-        // Try alternative approach for CORS issues
-        if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
-          console.log('CORS detected, trying alternative method...');
-          loadEPGWithProxy(epgUrl);
-        } else {
-          // Fallback to basic program display
-          updateEPGDisplay('EPG Unavailable');
-        }
-      }
-    }
     
-    // Alternative method using JSONP or proxy approach
-    function loadEPGWithProxy(epgUrl) {
-      // Try using a CORS proxy
-      const corsProxy = 'https://api.allorigins.win/raw?url=';
-      const proxyUrl = corsProxy + encodeURIComponent(epgUrl);
-      
-      fetch(proxyUrl)
-        .then(response => response.text())
-        .then(xmlText => {
-          console.log('EPG loaded via proxy');
-          parseEPGXML(xmlText);
-        })
-        .catch(error => {
-          console.log('Proxy method also failed:', error.message);
-          // Final fallback - show basic channel info
-          updateEPGDisplay('EPG Unavailable');
-        });
-    }
-
-    // Parse EPG XML data
-    function parseEPGXML(xmlText) {
-      try {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-        // Check for parsing errors
-        const errorNode = xmlDoc.querySelector('parsererror');
-        if (errorNode) {
-            console.error('Error parsing EPG XML:', errorNode.textContent);
-            updateEPGDisplay('EPG Parsing Error');
-            return;
+    // Keep remote visible when hovering over it
+    remoteControl.addEventListener('mouseenter', () => {
+      remoteControl.classList.add('visible');
+    });
+    
+    // Auto-hide remote when mouse leaves (with delay)
+    let remoteHideTimeout;
+    remoteControl.addEventListener('mouseleave', () => {
+      remoteHideTimeout = setTimeout(() => {
+        if (!remoteControl.matches(':hover')) {
+          remoteControl.classList.remove('visible');
         }
-
-        const programmes = xmlDoc.querySelectorAll('programme');
-
-        epgData = {};
-
-        programmes.forEach(programme => {
-          const channelIdFromEPG = programme.getAttribute('channel'); // This is the tvg-id from M3U
-          const start = programme.getAttribute('start');
-          const stop = programme.getAttribute('stop');
-          const title = programme.querySelector('title')?.textContent || 'No Title';
-
-          if (!epgData[channelIdFromEPG]) {
-            epgData[channelIdFromEPG] = [];
+      }, 2000);
+    });
+    
+    // Cancel auto-hide if mouse re-enters
+    remoteControl.addEventListener('mouseenter', () => {
+      if (remoteHideTimeout) {
+        clearTimeout(remoteHideTimeout);
+      }
+    });
+    numpadBtns.forEach(btn => {
+      btn.onclick = () => {
+        if (standby) {
+          showError('Power on first.');
+          setTimeout(hideError, 1500);
+          return;
+        }
+        numEntry += btn.dataset.num;
+        if (numEntry.length > 3) numEntry = numEntry.slice(-3);
+        channelNumber.textContent = numEntry.padStart(3, '0');
+        if (numEntryTimeout) clearTimeout(numEntryTimeout);
+        numEntryTimeout = setTimeout(() => {
+          let idx = channels.findIndex(ch => ch.chno === numEntry);
+          if (idx === -1 && parseInt(numEntry, 10) > 0 && parseInt(numEntry, 10) <= channels.length) {
+            idx = parseInt(numEntry, 10) - 1;
           }
-
-          epgData[channelIdFromEPG].push({
-            start: parseEPGTime(start),
-            stop: parseEPGTime(stop),
-            title: title
-          });
-        });
-
-        console.log('EPG data loaded for', Object.keys(epgData).length, 'channels');
-        updateEPGDisplay(); // Update EPG display after data load
-
-      } catch (error) {
-        console.error('EPG parsing failed:', error.message);
-        updateEPGDisplay('EPG Error');
-      }
-    }
-
-    // Parse EPG time format (YYYYMMDDHHMMSS +0000)
-    function parseEPGTime(timeStr) {
-      if (!timeStr) return null;
-
-      // Ensure timezone offset is correctly handled or ignored based on spec
-      const dateTimePart = timeStr.substring(0, 14);
-      // Constructing date in YYYY-MM-DDTHH:MM:SS format
-      const year = dateTimePart.substring(0, 4);
-      const month = dateTimePart.substring(4, 6);
-      const day = dateTimePart.substring(6, 8);
-      const hour = dateTimePart.substring(8, 10);
-      const minute = dateTimePart.substring(10, 12);
-      const second = dateTimePart.substring(12, 14);
-
-      // Directly create Date object using parts (local time) or ISO string if offset is included
-      // For simplicity and common browser behavior, we often rely on browser's interpretation.
-      return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
-    }
-
-    // Get current program for a channel
-    function getCurrentProgram(channelTvGId) {
-      if (!epgData[channelTvGId]) return null;
-
-      const now = new Date();
-      const channelPrograms = epgData[channelTvGId];
-
-      // Sort programs by start time to ensure correct lookup if not already sorted
-      channelPrograms.sort((a, b) => a.start.getTime() - b.start.getTime());
-
-      for (let program of channelPrograms) {
-        if (program.start <= now && program.stop > now) {
-          return program;
-        }
-      }
-
-      return null;
-    }
-
-    // Update EPG display
-    function updateEPGDisplay(customMessage = null) {
-      const epgDisplay = document.getElementById('epg-display');
-      
-      if (customMessage) {
-        if (customMessage === 'EPG Unavailable') {
-          // Show basic channel info when EPG is unavailable
-          if (channels.length && channels[current]) {
-            const channelName = abbreviateChannelName(channels[current].name);
-            const currentTime = new Date().toLocaleTimeString('en-US', { 
-              hour: '2-digit', 
-              minute: '2-digit',
-              hour12: true 
-            });
-            epgDisplay.textContent = `${channelName} : ${currentTime}`;
+          if (idx >= 0) {
+            playChannel(idx);
           } else {
-            epgDisplay.textContent = 'No Channel Info';
+            showError(`Channel ${numEntry} not found.`);
+            setTimeout(hideError, 1500);
+            updateChannelDisplay();
           }
-        } else {
-          epgDisplay.textContent = customMessage;
-        }
-        return;
-      }
-      
-      if (!channels.length || !channels[current]) {
-        epgDisplay.textContent = 'No Channel';
-        return;
-      }
-      
-      const currentChannel = channels[current];
-      const channelId = currentChannel.name?.replace(/\s+/g, '') || `channel${current}`;
-      const program = getCurrentProgram(channelId);
-      
-      if (program) {
-        const channelName = abbreviateChannelName(currentChannel.name);
-        const programName = abbreviateProgramName(program.title);
-        epgDisplay.textContent = `${channelName} : ${programName}`;
-      } else {
-        const channelName = abbreviateChannelName(currentChannel.name);
-        const currentTime = new Date().toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit',
-          hour12: true 
-        });
-        epgDisplay.textContent = `${channelName} : ${currentTime}`;
-      }
-    }
-
-    // Abbreviate channel name if too long
-    function abbreviateChannelName(name) {
-      if (!name) return 'Unknown';
-      // Prioritize full name if it fits, otherwise use common abbreviations or truncate
-      if (name.length <= 15) return name; // Allow slightly longer for better readability on wider screens
-
-      const abbreviations = {
-        'ESPN': 'ESPN', 'ESPN 2': 'ESPN2', 'ESPN NEWS': 'ESPNN', 'ESPN U': 'ESPNU',
-        'FOX SPORTS 1': 'FS1', 'FOX SPORTS 2': 'FS2', 'MLB NETWORK': 'MLB NET', 'NFL NETWORK': 'NFL NET',
-        'NBA TV': 'NBA TV', 'YES NETWORK': 'YES NET', 'SPORTSNET NEW YORK': 'SNY',
-        'COMEDY CENTRAL': 'COMEDY C.', 'USA NETWORK': 'USA NET', 'PARAMOUNT NETWORK': 'PARAMOUNT',
-        'DISNEY': 'DISNEY', 'DISNEY JR': 'DISNEY JR', 'NICK': 'NICK', 'CARTOON HD': 'CARTOON',
-        'TELEMUNDO PR': 'TELE PR', 'UNIMAS HD': 'UNIMAS', 'PUERTO RICO TV': 'PR TV',
-        'BALLY SPORTS SUN': 'BALLY SUN', 'BALLY SPORTS FLORIDA': 'BALLY FL',
-        'DISCOVERY EN ESPAÑOL': 'DISC ESP', 'DISCOVERY FAMILIA': 'DISC FAM',
-        'DISCOVERY TURBO': 'DISC TURBO', 'DISCOVERY WORLD': 'DISC WORLD',
-        '[MLB PPV] NY YANKEES': 'MLB NYY', '[MLB PPV] NY METS': 'MLB NYM', '[MLB PPV] MIA MARLINS': 'MLB MIA',
-        '[MLB PPV] DET TIGERS': 'MLB DET', '[MLB PPV] TB RAYS': 'MLB TBR',
-        '[NBA PPV] GS WARRIORS': 'NBA GSW', '[NBA PPV] NY KNICKS': 'NBA NYK',
-        '[NBA PPV] DEN NUGGETS': 'NBA DEN', '[NBA PPV] OKC THUNDER': 'NBA OKC',
-        '[NBA PPV] IND PACERS': 'NBA IND'
+          numEntry = '';
+        }, 1200);
       };
-
-      for (const [full, abbr] of Object.entries(abbreviations)) {
-        if (name.includes(full)) {
-            // Apply abbreviation only if it makes the name shorter
-            const newName = name.replace(full, abbr);
-            if (newName.length <= 15) return newName;
-        }
-      }
-
-      // Generic truncation as a last resort
-      return name.substring(0, 12) + '...';
-    }
-
-    // Abbreviate program name if too long
-    function abbreviateProgramName(name) {
-      if (!name) return 'No Program Info';
-      if (name.length <= 25) return name; // Allow slightly longer for EPG display
-
-      // Remove common words to save space
-      const shortName = name
-        .replace(/\b(HD|Live|News|Sports|Show|Program|Series|Special)\b/gi, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      if (shortName.length <= 25) return shortName;
-
-      return shortName.substring(0, 22) + '...';
-    }
-
-    // --- Channel List Modal (robust version) ---
-    let modal = document.createElement('div');
-    modal.id = 'modal';
-    document.body.appendChild(modal);
-
-    function showChannelListModal() {
-      // Ensure the modal content is fresh
-      modal.innerHTML = `
-        <div id="modal-content">
-          <h2>Channel List</h2>
-          <div id="channel-list-modal-body"></div>
-          <button id="modal-close">Close</button>
-        </div>
-      `;
-      const listDiv = modal.querySelector('#channel-list-modal-body');
-
-      if (listDiv) {
-        if (channels && channels.length) {
-          listDiv.innerHTML = channels.map((ch, i) =>
-            `<div class="${i === current ? 'active-channel' : ''}" onclick="window.playChannelFromModal && window.playChannelFromModal(${i})">
-              <strong>${ch.chno ? ch.chno : ('' + (i + 1))}</strong> - ${ch.name}
-            </div>`
-          ).join('');
-        } else {
-          listDiv.innerHTML = '<div style="color:#aaa; text-align: center; padding: 20px;">No channels available.</div>';
-        }
-      }
-      modal.style.display = 'flex'; // Use flex for centering modal-content
-      modal.style.justifyContent = 'center';
-      modal.style.alignItems = 'center';
-
-      // Attach close button handler
-      modal.querySelector('#modal-close').onclick = () => {
-        modal.style.display = 'none';
-      };
-      // Close modal if background is clicked
-      modal.onclick = (e) => {
-        if (e.target === modal) modal.style.display = 'none';
-      };
-    }
-
-    // Make playChannelFromModal globally accessible for onclick in modal
-    window.playChannelFromModal = function(idx) {
-      playChannel(idx);
-      modal.style.display = 'none';
-    };
-
-
+    });
     // --- Init ---
     (function init() {
-      loadState(); // Load saved state first
-      channels = parseM3U(EMBEDDED_M3U); // Parse channels from M3U content
-
-      // Initial power state
-      if (standby) {
-        standbyOverlay.style.display = '';
-        updateEPGDisplay('STANDBY');
-        ledDisplay.textContent = '-- --';
-        stopBtn.style.display = 'none';
-      } else {
-        standbyOverlay.style.display = 'none';
-        playChannel(current); // Play last remembered channel if not in standby
-      }
-
-      // Load EPG data
-      loadEPGFromURL();
-      
-      // Add EPG refresh button
-      addEPGRefreshButton();
-
-      console.log('GLZ TV Initialized.');
-      console.log('Channels loaded:', channels.length);
-      console.log('Current channel index:', current);
-      if (channels[current]) {
-          console.log('Current channel:', channels[current].name, 'ID:', channels[current].id);
+      try {
+        channels = parseM3U(EMBEDDED_M3U);
+        console.log('Channels loaded:', channels.length);
+        
+        // Ensure we have a valid current index
+        if (channels.length > 0) {
+          current = 0; // Start with first channel
+        }
+        
+        setStandby(true);
+        updateTime();
+        updateChannelDisplay();
+        remoteControl.classList.add('visible');
+        
+        console.log('GLZ TV initialized successfully');
+      } catch (error) {
+        console.error('Initialization error:', error);
+        showError('Failed to initialize. Please refresh the page.');
       }
     })();
 
-    // Function to load EPG data (you can call this with your EPG URL)
-    function loadEPGFromURL(epgUrl = null) {
-      if (epgUrl) {
-        // Try external URL if provided
-        loadEPGData(epgUrl);
-      } else {
-        // Use embedded EPG data by default (no CORS issues)
-        console.log('Loading embedded EPG data...');
-        loadEmbeddedEPG();
+    // --- Mobile Detection and Touch Support ---
+    // const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+    //                  (window.innerWidth <= 768);
+    // const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    // Mobile-specific state
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let touchEndY = 0;
+    let lastTapTime = 0;
+    let doubleTapDelay = 300;
+    
+    // --- Mobile Touch Gestures ---
+    if (isTouchDevice) {
+      // Swipe gestures for navigation
+      document.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+      });
+      
+      document.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
+        handleSwipe();
+      });
+      
+      function handleSwipe() {
+        const diffX = touchStartX - touchEndX;
+        const diffY = touchStartY - touchEndY;
+        const minSwipeDistance = 50;
         
-        // Optionally try external EPG as backup (will fail due to CORS but won't hang)
-        setTimeout(() => {
-          const defaultEPGUrl = 'https://epg.best/1eef8-shw7fc.xml.gz';
-          console.log('Trying external EPG as backup:', defaultEPGUrl);
-          loadEPGData(defaultEPGUrl);
-        }, 2000);
-      }
-    }
-    
-    // Add manual EPG refresh button
-    function addEPGRefreshButton() {
-      const refreshBtn = document.createElement('button');
-      refreshBtn.textContent = '🔄 EPG';
-      refreshBtn.style.cssText = 'position: fixed; top: 10px; right: 10px; background: linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%); color: #ffffff; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; z-index: 1001; font-weight: 600; box-shadow: 0 4px 15px rgba(45, 90, 160, 0.3); transition: all 0.2s ease; font-size: 12px;';
-      refreshBtn.onmouseover = () => {
-        refreshBtn.style.background = 'linear-gradient(135deg, #4a90e2 0%, #6ba6e8 100%)';
-        refreshBtn.style.transform = 'translateY(-2px)';
-        refreshBtn.style.boxShadow = '0 6px 20px rgba(45, 90, 160, 0.4)';
-      };
-      refreshBtn.onmouseout = () => {
-        refreshBtn.style.background = 'linear-gradient(135deg, #2d5aa0 0%, #4a90e2 100%)';
-        refreshBtn.style.transform = 'translateY(0)';
-        refreshBtn.style.boxShadow = '0 4px 15px rgba(45, 90, 160, 0.3)';
-      };
-      refreshBtn.onclick = () => {
-        console.log('Manual EPG refresh requested');
-        updateEPGDisplay('Loading EPG...');
-        loadEPGFromURL();
-      };
-      document.body.appendChild(refreshBtn);
-    }
-
-    // --- Embedded EPG Data (Alternative to external fetch) ---
-    const EMBEDDED_EPG = `<?xml version="1.0" encoding="UTF-8"?>
-<tv generator-info-name="EPG.best" generator-info-url="https://epg.best">
-  <!-- Sample EPG data - replace with your actual EPG content -->
-  <programme start="20250114120000 +0000" stop="20250114130000 +0000" channel="ESPN">
-    <title>SportsCenter</title>
-  </programme>
-  <programme start="20250114130000 +0000" stop="20250114150000 +0000" channel="ESPN">
-    <title>NBA Basketball</title>
-  </programme>
-  <programme start="20250114120000 +0000" stop="20250114130000 +0000" channel="FOXSPORTS1">
-    <title>MLB Game</title>
-  </programme>
-  <programme start="20250114120000 +0000" stop="20250114130000 +0000" channel="TELEMUNDO">
-    <title>Noticias Telemundo</title>
-  </programme>
-  <programme start="20250114120000 +0000" stop="20250114130000 +0000" channel="DISNEY">
-    <title>Mickey Mouse Club</title>
-  </programme>
-</tv>`;
-
-    // Function to load embedded EPG data
-    function loadEmbeddedEPG() {
-      try {
-        console.log('Loading embedded EPG data...');
-        parseEPGXML(EMBEDDED_EPG);
-        console.log('Embedded EPG loaded successfully');
-      } catch (error) {
-        console.log('Embedded EPG parsing failed:', error.message);
-        updateEPGDisplay('EPG Unavailable');
-      }
-    }
-
-    // Utility function to convert external EPG to embedded format
-    function convertEPGToEmbedded(epgUrl) {
-      console.log('To convert your EPG data to embedded format:');
-      console.log('1. Download the XML.gz file from:', epgUrl);
-      console.log('2. Decompress it to get the XML file');
-      console.log('3. Copy the XML content');
-      console.log('4. Replace the EMBEDDED_EPG constant with your XML content');
-      console.log('5. Remove the external EPG loading code');
-      
-      // Example of how to structure the embedded EPG
-      console.log('Example structure:');
-      console.log('const EMBEDDED_EPG = `<?xml version="1.0" encoding="UTF-8"?>');
-      console.log('<tv generator-info-name="EPG.best">');
-      console.log('  <programme start="YYYYMMDDHHMMSS +0000" stop="YYYYMMDDHHMMSS +0000" channel="CHANNEL_ID">');
-      console.log('    <title>Program Title</title>');
-      console.log('  </programme>');
-      console.log('</tv>`;');
-    }
-    
-    // Call this function to get conversion instructions
-    // convertEPGToEmbedded('https://epg.best/1eef8-shw7fc.xml.gz');
-
-    // --- Channel Display Function ---
-    function updateChannelDisplay(customMessage = null) {
-      const channelDisplay = document.getElementById('channel-display');
-      
-      if (customMessage) {
-        channelDisplay.textContent = customMessage;
-        return;
-      }
-      
-      if (!channels.length || !channels[current]) {
-        channelDisplay.textContent = 'No Channel';
-        return;
-      }
-      
-      const currentChannel = channels[current];
-      const channelNumber = currentChannel.chno ? currentChannel.chno : (current + 1).toString();
-      const channelName = abbreviateChannelName(currentChannel.name);
-      channelDisplay.textContent = `CH ${channelNumber} - ${channelName}`;
-    }
-
-    // Abbreviate channel name if too long
-    function abbreviateChannelName(name) {
-      if (!name) return 'Unknown';
-      // Prioritize full name if it fits, otherwise use common abbreviations or truncate
-      if (name.length <= 15) return name; // Allow slightly longer for better readability on wider screens
-
-      const abbreviations = {
-        'ESPN': 'ESPN', 'ESPN 2': 'ESPN2', 'ESPN NEWS': 'ESPNN', 'ESPN U': 'ESPNU',
-        'FOX SPORTS 1': 'FS1', 'FOX SPORTS 2': 'FS2', 'MLB NETWORK': 'MLB NET', 'NFL NETWORK': 'NFL NET',
-        'NBA TV': 'NBA TV', 'YES NETWORK': 'YES NET', 'SPORTSNET NEW YORK': 'SNY',
-        'COMEDY CENTRAL': 'COMEDY C.', 'USA NETWORK': 'USA NET', 'PARAMOUNT NETWORK': 'PARAMOUNT',
-        'DISNEY': 'DISNEY', 'DISNEY JR': 'DISNEY JR', 'NICK': 'NICK', 'CARTOON HD': 'CARTOON',
-        'TELEMUNDO PR': 'TELE PR', 'UNIMAS HD': 'UNIMAS', 'PUERTO RICO TV': 'PR TV',
-        'BALLY SPORTS SUN': 'BALLY SUN', 'BALLY SPORTS FLORIDA': 'BALLY FL',
-        'DISCOVERY EN ESPAÑOL': 'DISC ESP', 'DISCOVERY FAMILIA': 'DISC FAM',
-        'DISCOVERY TURBO': 'DISC TURBO', 'DISCOVERY WORLD': 'DISC WORLD',
-        '[MLB PPV] NY YANKEES': 'MLB NYY', '[MLB PPV] NY METS': 'MLB NYM', '[MLB PPV] MIA MARLINS': 'MLB MIA',
-        '[MLB PPV] DET TIGERS': 'MLB DET', '[MLB PPV] TB RAYS': 'MLB TBR',
-        '[NBA PPV] GS WARRIORS': 'NBA GSW', '[NBA PPV] NY KNICKS': 'NBA NYK',
-        '[NBA PPV] DEN NUGGETS': 'NBA DEN', '[NBA PPV] OKC THUNDER': 'NBA OKC',
-        '[NBA PPV] IND PACERS': 'NBA IND'
-      };
-
-      for (const [full, abbr] of Object.entries(abbreviations)) {
-        if (name.includes(full)) {
-            // Apply abbreviation only if it makes the name shorter
-            const newName = name.replace(full, abbr);
-            if (newName.length <= 15) return newName;
+        // Horizontal swipe
+        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > minSwipeDistance) {
+          if (diffX > 0) {
+            // Swipe left - next channel
+            if (!standby && channels.length > 0) {
+              const nextChannel = (current + 1) % channels.length;
+              playChannel(nextChannel);
+            }
+          } else {
+            // Swipe right - previous channel
+            if (!standby && channels.length > 0) {
+              const prevChannel = current === 0 ? channels.length - 1 : current - 1;
+              playChannel(prevChannel);
+            }
+          }
+        }
+        
+        // Vertical swipe
+        if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > minSwipeDistance) {
+          if (diffY > 0) {
+            // Swipe up - show channel list
+            if (!standby) {
+              showSidebar();
+            }
+          } else {
+            // Swipe down - toggle remote
+            remoteControl.classList.toggle('visible');
+          }
         }
       }
-
-      // Generic truncation as a last resort
-      return name.substring(0, 12) + '...';
+      
+      // Double tap to show/hide remote
+      document.addEventListener('touchend', (e) => {
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTapTime;
+        
+        if (tapLength < doubleTapDelay && tapLength > 0) {
+          // Double tap detected
+          e.preventDefault();
+          remoteControl.classList.toggle('visible');
+        }
+        lastTapTime = currentTime;
+      });
+      
+      // Long press for power menu
+      let longPressTimer;
+      document.addEventListener('touchstart', (e) => {
+        longPressTimer = setTimeout(() => {
+          // Long press detected - show power options
+          showPowerMenu();
+        }, 1000);
+      });
+      
+      document.addEventListener('touchend', () => {
+        clearTimeout(longPressTimer);
+      });
+      
+      document.addEventListener('touchmove', () => {
+        clearTimeout(longPressTimer);
+      });
+    }
+    
+    // --- Mobile Power Menu ---
+    function showPowerMenu() {
+      const powerMenu = document.createElement('div');
+      powerMenu.id = 'power-menu';
+      powerMenu.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%);
+        border: 2px solid #2d5aa0;
+        border-radius: 12px;
+        padding: 1.5em;
+        z-index: 1000;
+        color: white;
+        font-family: 'Roboto', sans-serif;
+        min-width: 250px;
+        text-align: center;
+      `;
+      
+      powerMenu.innerHTML = `
+        <h3 style="color: #4a90e2; margin-bottom: 1em;">Power Options</h3>
+        <div style="display: flex; flex-direction: column; gap: 0.8em;">
+          <button onclick="setStandby(!standby); this.parentElement.parentElement.remove();" 
+                  style="background: #2d5aa0; color: white; border: none; padding: 0.8em; border-radius: 8px; cursor: pointer; font-size: 1em;">
+            ${standby ? 'Power On' : 'Power Off'}
+          </button>
+          <button onclick="this.parentElement.parentElement.remove();" 
+                  style="background: #666; color: white; border: none; padding: 0.8em; border-radius: 8px; cursor: pointer; font-size: 1em;">
+            Cancel
+          </button>
+        </div>
+      `;
+      
+      document.body.appendChild(powerMenu);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        if (powerMenu.parentElement) {
+          powerMenu.remove();
+        }
+      }, 5000);
+    }
+    
+    // --- Mobile-optimized remote control behavior ---
+    if (isMobile) {
+      // Auto-hide remote after inactivity on mobile
+      let remoteInactivityTimer;
+      
+      function resetRemoteTimer() {
+        clearTimeout(remoteInactivityTimer);
+        remoteInactivityTimer = setTimeout(() => {
+          if (!remoteControl.matches(':hover') && !sidebar.classList.contains('open')) {
+            remoteControl.classList.remove('visible');
+          }
+        }, 8000); // 8 seconds on mobile
+      }
+      
+      // Don't start the timer immediately - give user time to see the remote
+      setTimeout(() => {
+        // Reset timer on any interaction
+        document.addEventListener('touchstart', resetRemoteTimer);
+        document.addEventListener('click', resetRemoteTimer);
+      }, 3000); // Start timer after 3 seconds
+      
+      // Show remote on video area tap (if not in multiview)
+      videoArea.addEventListener('click', (e) => {
+        if (!multiviewMode && !standby) {
+          remoteControl.classList.add('visible');
+          resetRemoteTimer();
+        }
+      });
     }
   </script>
 </body>
