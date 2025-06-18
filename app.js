@@ -71,7 +71,7 @@ https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/ni
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cartoon.network.usa.eastern.us.m3u8
 #EXTINF:-1 tvg-id="Boomerang.us" tvg-name="BOOMERANG" tvg-logo="https://static.epg.best/us/Boomerang.us.png" tvg-chno="141" channel-id="141" group-title="TV",BOOMERANG
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/boomerang.us.m3u8
-#EXTINF:-1 tvg-id="WFOR.us" tvg-name="WFOR   CBS MIAMI" tvg-logo="https://static.epg.best/us/WFOR.us.png" tvg-chno="142" channel-id="142" group-title="TV",WFOR   CBS MIAMI
+#EXTINF:-1 tvg-id="WFOR.us" tvg-name="WFOR   CBS MIAMI" tvg-logo="https://image.roku.com/developer_channels/prod/74a606e94c1077b1b1ae6d33f8b6c9b854fce9dd54784386679e9d10cf002cdd.png" tvg-chno="142" channel-id="142" group-title="TV",WFOR   CBS MIAMI
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/cbs.wfor.miami.fl.us.m3u8
 #EXTINF:-1 tvg-id="WTVJ.us" tvg-name="WTVJ   NBC MIAMI" tvg-logo="https://static.epg.best/us/WTVJ.us.png" tvg-chno="143" channel-id="143" group-title="TV",WTVJ   NBC MIAMI
 https://starlite.best/api/stream/throwaway.mgk343@gmail.com/167848/livetv.epg/nbc.wtvj.miami.fl.us.m3u8
@@ -266,6 +266,7 @@ const toggleRemote = document.getElementById('toggle-remote');
 const powerBtn = document.getElementById('power-btn');
 const guideBtn = document.getElementById('guide-btn');
 const multiviewBtn = document.getElementById('multiview-btn');
+const headerRemoteBtn = document.getElementById('header-remote-btn');
 const numpadBtns = document.querySelectorAll('.numpad-btn');
 const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
@@ -528,6 +529,7 @@ powerBtn.onclick = () => setStandby(!standby);
 guideBtn.onclick = showGuide;
 closeGuide.onclick = hideGuide;
 toggleRemote.onclick = () => remoteControl.classList.toggle('visible');
+headerRemoteBtn.onclick = () => remoteControl.classList.toggle('visible');
 multiviewBtn.onclick = () => {
   if (multiviewMode) {
     stopMultiview();
@@ -613,5 +615,6 @@ closeHelp.onclick = () => helpOverlay.style.display = 'none';
     <div><kbd>↑</kbd>: Show Guide</div>
     <div><kbd>?</kbd>: Show Help</div>
     <div><kbd>ESC</kbd>: Hide Remote/Guide/Help</div>
+    <div><strong>Mobile:</strong> Use header remote button to show/hide remote</div>
   `;
 })(); 

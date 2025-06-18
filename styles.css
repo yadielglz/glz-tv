@@ -236,6 +236,16 @@ body {
   border-color: var(--accent-blue);
 }
 
+.header-btn.remote {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.header-btn.remote:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: var(--accent-blue);
+}
+
 .time-display {
   font-family: var(--font-mono);
   font-size: 1.125rem;
