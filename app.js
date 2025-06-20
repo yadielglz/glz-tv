@@ -243,8 +243,6 @@ let channels = [];
 let current = 0;
 let standby = true;
 let hls = null;
-let multiviewMode = false;
-let multiviewStreams = [];
 
 // --- DOM Elements ---
 const video = document.getElementById('video');
@@ -265,21 +263,66 @@ const remoteControl = document.getElementById('remote-control');
 const toggleRemote = document.getElementById('toggle-remote');
 const powerBtn = document.getElementById('power-btn');
 const guideBtn = document.getElementById('guide-btn');
-const multiviewBtn = document.getElementById('multiview-btn');
 const headerRemoteBtn = document.getElementById('header-remote-btn');
 const numpadBtns = document.querySelectorAll('.numpad-btn');
 const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
 const statusMessage = document.getElementById('status-message');
 const loadingIndicator = document.getElementById('loading-indicator');
-const multiviewGrid = document.getElementById('multiview-grid');
 const videoContainer = document.getElementById('video-container');
 const helpOverlay = document.getElementById('help-overlay');
 const closeHelp = document.getElementById('close-help');
 const helpBody = document.getElementById('help-body');
 const searchInput = document.getElementById('search-input');
+const stbContainer = document.querySelector('.stb-container');
 
 // --- Utility Functions ---
+
+/**
+ * Adjusts the main container's padding to make space for the remote on mobile.
+ */
+function adjustLayoutForRemote() {
+  if (window.innerWidth <= 768) {
+    if (remoteControl.classList.contains('visible')) {
+      const remoteHeight = remoteControl.offsetHeight;
+      stbContainer.style.paddingBottom = `${remoteHeight}px`;
+    } else {
+      stbContainer.style.paddingBottom = '0';
+    }
+  } else {
+    // Ensure padding is cleared on desktop
+    stbContainer.style.paddingBottom = '0';
+  }
+}
+
+/**
+ * Shows the remote control and adjusts the layout.
+ */
+function showRemote() {
+  remoteControl.classList.add('visible');
+  // Use a small timeout to ensure the element is visible before getting its height
+  setTimeout(adjustLayoutForRemote, 50);
+}
+
+/**
+ * Hides the remote control and adjusts the layout.
+ */
+function hideRemote() {
+  remoteControl.classList.remove('visible');
+  adjustLayoutForRemote();
+}
+
+/**
+ * Toggles the visibility of the remote control.
+ */
+function toggleRemoteVisibility() {
+  if (remoteControl.classList.contains('visible')) {
+    hideRemote();
+  } else {
+    showRemote();
+  }
+}
+
 function showStatus(msg, duration = 2000) {
   statusMessage.textContent = msg;
   statusMessage.style.display = '';
@@ -295,21 +338,50 @@ function hideLoading() {
 }
 function updateTime() {
   const now = new Date();
-  const hours = now.getHours().toString().padStart(2, '0');
+  let hours = now.getHours();
   const minutes = now.getMinutes().toString().padStart(2, '0');
-  timeDisplay.textContent = `${hours}:${minutes}`;
-  dateDisplay.textContent = now.toLocaleDateString(undefined, { month: 'short', day: '2-digit' }).toUpperCase();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  timeDisplay.textContent = `${hours}:${minutes} ${ampm}`;
 }
 setInterval(updateTime, 1000);
 
 function updateChannelDisplay(idx = current) {
   if (!channels.length || !channels[idx]) {
     channelNumber.textContent = '000';
-    channelName.textContent = 'No Channel';
+    channelName.textContent = 'STANDBY';
+    // Hide logo and show placeholder
+    document.getElementById('channel-logo-img').style.display = 'none';
+    document.getElementById('channel-logo-placeholder').style.display = 'block';
+    document.getElementById('channel-logo-placeholder').textContent = 'TV';
     return;
   }
-  channelNumber.textContent = channels[idx].chno ? channels[idx].chno : (idx + 1).toString().padStart(3, '0');
-  channelName.textContent = channels[idx].name;
+  
+  const channel = channels[idx];
+  channelNumber.textContent = channel.chno ? channel.chno : (idx + 1).toString().padStart(3, '0');
+  channelName.textContent = channel.name;
+  
+  // Update channel logo
+  const logoImg = document.getElementById('channel-logo-img');
+  const logoPlaceholder = document.getElementById('channel-logo-placeholder');
+  
+  if (channel.logo && channel.logo.trim()) {
+    logoImg.src = channel.logo;
+    logoImg.style.display = 'block';
+    logoPlaceholder.style.display = 'none';
+    
+    // Handle logo load error
+    logoImg.onerror = () => {
+      logoImg.style.display = 'none';
+      logoPlaceholder.style.display = 'block';
+      logoPlaceholder.textContent = channel.name.substring(0, 3);
+    };
+  } else {
+    logoImg.style.display = 'none';
+    logoPlaceholder.style.display = 'block';
+    logoPlaceholder.textContent = channel.name.substring(0, 3);
+  }
 }
 
 function stopPlayback() {
@@ -320,122 +392,9 @@ function stopPlayback() {
   audio.src = '';
 }
 
-function stopMultiviewStreams() {
-  multiviewStreams.forEach(stream => {
-    if (stream && stream.destroy) {
-      stream.destroy();
-    }
-  });
-  multiviewStreams = [];
-  
-  // Clear all multiview video elements
-  const multiviewVideos = multiviewGrid.querySelectorAll('video');
-  multiviewVideos.forEach(video => {
-    video.pause();
-    video.src = '';
-  });
-}
-
-function startMultiview() {
-  if (standby) {
-    showStatus('Power on first.');
-    return;
-  }
-  
-  multiviewMode = true;
-  stopPlayback(); // Stop single video
-  multiviewGrid.style.display = '';
-  video.style.display = 'none';
-  audio.style.display = 'none';
-  
-  // Start 4 streams (channels 0-3)
-  const startChannel = Math.max(0, current - 1); // Start from current channel - 1
-  const multiviewVideos = multiviewGrid.querySelectorAll('video');
-  
-  for (let i = 0; i < 4; i++) {
-    const channelIndex = (startChannel + i) % channels.length;
-    const videoElement = multiviewVideos[i];
-    const cell = multiviewGrid.children[i];
-    
-    if (channels[channelIndex] && videoElement) {
-      const ch = channels[channelIndex];
-      const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
-      
-      if (isAudio) {
-        // Skip audio channels in multiview
-        continue;
-      }
-      
-      const isHls = /\.m3u8(\?|$)/i.test(ch.url);
-      
-      if (isHls && window.Hls) {
-        const hlsInstance = new Hls();
-        hlsInstance.loadSource(ch.url);
-        hlsInstance.attachMedia(videoElement);
-        hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-          if (data.fatal) {
-            console.error(`Multiview stream error for channel ${channelIndex}:`, data);
-          }
-        });
-        multiviewStreams.push(hlsInstance);
-      } else {
-        videoElement.src = ch.url;
-      }
-      
-      // Update cell overlay
-      const overlay = cell.querySelector('.cell-overlay');
-      if (overlay) {
-        const numberEl = overlay.querySelector('.cell-channel');
-        const nameEl = overlay.querySelector('.cell-name');
-        if (numberEl) numberEl.textContent = ch.chno || (channelIndex + 1);
-        if (nameEl) nameEl.textContent = ch.name;
-      }
-      
-      // Set active state
-      cell.classList.toggle('active', channelIndex === current);
-      
-      // Add click handler to switch to this channel
-      cell.onclick = () => {
-        current = channelIndex;
-        updateChannelDisplay();
-        // Update active state
-        multiviewGrid.querySelectorAll('.multiview-cell').forEach(c => c.classList.remove('active'));
-        cell.classList.add('active');
-      };
-      
-      videoElement.play().catch(e => {
-        console.error(`Failed to play multiview stream ${channelIndex}:`, e);
-      });
-    }
-  }
-}
-
-function stopMultiview() {
-  multiviewMode = false;
-  stopMultiviewStreams();
-  multiviewGrid.style.display = 'none';
-  video.style.display = '';
-  audio.style.display = '';
-  
-  // Resume single channel playback
-  if (!standby && channels.length > 0 && current >= 0 && current < channels.length) {
-    playChannel(current);
-  }
-}
-
 function playChannel(idx) {
   if (!channels[idx]) return;
   current = idx;
-  
-  // If in multiview mode, just update the display and active cell
-  if (multiviewMode) {
-    updateChannelDisplay();
-    multiviewGrid.querySelectorAll('.multiview-cell').forEach((cell, i) => {
-      const channelIndex = (Math.max(0, current - 1) + i) % channels.length;
-      cell.classList.toggle('active', channelIndex === current);
-    });
-    return;
-  }
   
   stopPlayback();
   const ch = channels[idx];
@@ -467,11 +426,12 @@ function setStandby(on) {
   standbyScreen.style.display = standby ? '' : 'none';
   if (standby) {
     stopPlayback();
-    if (multiviewMode) {
-      stopMultiview();
-    }
     channelNumber.textContent = '-- --';
     channelName.textContent = 'STANDBY';
+    // Hide logo and show placeholder for standby
+    document.getElementById('channel-logo-img').style.display = 'none';
+    document.getElementById('channel-logo-placeholder').style.display = 'block';
+    document.getElementById('channel-logo-placeholder').textContent = 'TV';
   } else {
     if (channels.length > 0 && current >= 0 && current < channels.length) {
       playChannel(current);
@@ -528,15 +488,9 @@ function renderChannelList(filter = '') {
 powerBtn.onclick = () => setStandby(!standby);
 guideBtn.onclick = showGuide;
 closeGuide.onclick = hideGuide;
-toggleRemote.onclick = () => remoteControl.classList.toggle('visible');
-headerRemoteBtn.onclick = () => remoteControl.classList.toggle('visible');
-multiviewBtn.onclick = () => {
-  if (multiviewMode) {
-    stopMultiview();
-  } else {
-    startMultiview();
-  }
-};
+toggleRemote.onclick = toggleRemoteVisibility;
+headerRemoteBtn.onclick = toggleRemoteVisibility;
+
 prevBtn.onclick = () => {
   if (!standby && channels.length > 0) {
     playChannel((current - 1 + channels.length) % channels.length);
@@ -574,26 +528,21 @@ numpadBtns.forEach(btn => {
 
 // Keyboard navigation
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'F1') remoteControl.classList.toggle('visible');
+  if (e.key === 'F1') toggleRemoteVisibility();
   if (e.key === 'F2') showGuide();
-  if (e.key === 'F3') {
-    if (multiviewMode) {
-      stopMultiview();
-    } else {
-      startMultiview();
-    }
-  }
   if (e.key === 'F4') setStandby(!standby);
   if (e.key === 'ArrowUp') showGuide();
   if (e.key === 'ArrowLeft') prevBtn.onclick();
   if (e.key === 'ArrowRight') nextBtn.onclick();
   if (e.key === 'Escape') {
-    remoteControl.classList.remove('visible');
+    hideRemote();
     hideGuide();
     helpOverlay.style.display = 'none';
   }
   if (e.key === '?') helpOverlay.style.display = 'flex';
 });
+
+window.addEventListener('resize', adjustLayoutForRemote);
 
 closeHelp.onclick = () => helpOverlay.style.display = 'none';
 
@@ -609,7 +558,6 @@ closeHelp.onclick = () => helpOverlay.style.display = 'none';
   helpBody.innerHTML = `
     <div><kbd>F1</kbd>: Toggle Remote</div>
     <div><kbd>F2</kbd>: Show Guide</div>
-    <div><kbd>F3</kbd>: Toggle Multiview</div>
     <div><kbd>F4</kbd>: Power On/Off</div>
     <div><kbd>←/→</kbd>: Prev/Next Channel</div>
     <div><kbd>↑</kbd>: Show Guide</div>

@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GLZ TV - Modern STB Experience</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -25,23 +27,20 @@
       </div>
       
       <div class="channel-display">
+        <div class="channel-logo" id="channel-logo">
+          <img src="" alt="Channel Logo" id="channel-logo-img" style="display: none;">
+          <div class="channel-logo-placeholder" id="channel-logo-placeholder">TV</div>
+        </div>
         <div class="channel-number" id="channel-number">000</div>
         <div class="channel-name" id="channel-name">STANDBY</div>
       </div>
       
       <div class="header-right">
+        <div class="time-display" id="time-display">12:00 AM</div>
         <div class="header-controls">
           <button class="header-btn power" id="power-btn" aria-label="Power">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18.36 6.64A9 9 0 1 1 12 3v9"></path>
-            </svg>
-          </button>
-          <button class="header-btn multiview" id="multiview-btn" aria-label="Multi-view">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7"></rect>
-              <rect x="14" y="3" width="7" height="7"></rect>
-              <rect x="14" y="14" width="7" height="7"></rect>
-              <rect x="3" y="14" width="7" height="7"></rect>
             </svg>
           </button>
           <button class="header-btn guide" id="guide-btn" aria-label="Guide">
@@ -61,8 +60,6 @@
             </svg>
           </button>
         </div>
-        <div class="time-display" id="time-display">00:00</div>
-        <div class="date-display" id="date-display">JAN 01</div>
       </div>
     </header>
 
@@ -73,7 +70,7 @@
         <video id="video" controls autoplay playsinline muted></video>
         <audio id="audio" controls autoplay></audio>
         
-        <!-- Spectrum-style Channel Banner -->
+        <!-- Channel Banner -->
         <div class="channel-banner" id="channel-banner">
           <div class="banner-content">
             <div class="banner-channel">CH <span id="banner-channel">000</span></div>
@@ -81,38 +78,6 @@
           </div>
           <div class="banner-progress">
             <div class="progress-bar" id="progress-bar"></div>
-          </div>
-        </div>
-
-        <!-- Multi-View Grid -->
-        <div class="multiview-grid" id="multiview-grid" style="display: none;">
-          <div class="multiview-cell active" data-channel="0">
-            <video></video>
-            <div class="cell-overlay">
-              <div class="cell-channel">102</div>
-              <div class="cell-name">TELEMUNDO PR</div>
-            </div>
-          </div>
-          <div class="multiview-cell" data-channel="1">
-            <video></video>
-            <div class="cell-overlay">
-              <div class="cell-channel">103</div>
-              <div class="cell-name">PUNTO 2</div>
-            </div>
-          </div>
-          <div class="multiview-cell" data-channel="2">
-            <video></video>
-            <div class="cell-overlay">
-              <div class="cell-channel">104</div>
-              <div class="cell-name">UNIMAS HD</div>
-            </div>
-          </div>
-          <div class="multiview-cell" data-channel="3">
-            <video></video>
-            <div class="cell-overlay">
-              <div class="cell-channel">105</div>
-              <div class="cell-name">TELEONCE</div>
-            </div>
           </div>
         </div>
 
