@@ -243,6 +243,12 @@ let channels = [];
 let current = 0;
 let standby = true;
 let hls = null;
+let lastChannel = 0;
+let favorites = JSON.parse(localStorage.getItem('glz-favorites') || '[]');
+let isMuted = false;
+let connectionStatus = 'connected';
+let channelInput = '';
+let pwaInstallPrompt = null;
 
 // --- DOM Elements ---
 const video = document.getElementById('video');
@@ -275,6 +281,18 @@ const closeHelp = document.getElementById('close-help');
 const helpBody = document.getElementById('help-body');
 const searchInput = document.getElementById('search-input');
 const stbContainer = document.querySelector('.stb-container');
+
+// New remote control elements
+const volumeDownBtn = document.getElementById('volume-down');
+const volumeUpBtn = document.getElementById('volume-up');
+const muteBtn = document.getElementById('mute-btn');
+const channelDownBtn = document.getElementById('channel-down');
+const channelUpBtn = document.getElementById('channel-up');
+const lastChannelBtn = document.getElementById('last-channel');
+const enterBtn = document.getElementById('enter-btn');
+const favoritesBtn = document.getElementById('favorites-btn');
+const pwaInstallBtn = document.getElementById('pwa-install-btn');
+const connectionStatusBtn = document.getElementById('connection-status-btn');
 
 // --- Utility Functions ---
 
@@ -347,6 +365,8 @@ function updateTime() {
 }
 setInterval(updateTime, 1000);
 
+// --- Enhanced Utility Functions ---
+
 function updateChannelDisplay(idx = current) {
   if (!channels.length || !channels[idx]) {
     channelNumber.textContent = '000';
@@ -382,6 +402,182 @@ function updateChannelDisplay(idx = current) {
     logoPlaceholder.style.display = 'block';
     logoPlaceholder.textContent = channel.name.substring(0, 3);
   }
+  
+  // Update favorites button state
+  updateFavoritesButton();
+}
+
+// Favorites Management
+function toggleFavorite() {
+  if (!channels[current]) return;
+  
+  const channelId = channels[current].chno || current.toString();
+  const index = favorites.indexOf(channelId);
+  
+  if (index > -1) {
+    favorites.splice(index, 1);
+    showStatus('Removed from favorites');
+  } else {
+    favorites.push(channelId);
+    showStatus('Added to favorites');
+  }
+  
+  localStorage.setItem('glz-favorites', JSON.stringify(favorites));
+  updateFavoritesButton();
+}
+
+function updateFavoritesButton() {
+  if (!channels[current]) return;
+  
+  const channelId = channels[current].chno || current.toString();
+  const isFavorite = favorites.includes(channelId);
+  
+  favoritesBtn.classList.toggle('active', isFavorite);
+}
+
+function showFavorites() {
+  if (favorites.length === 0) {
+    showStatus('No favorites yet. Add channels to favorites first.');
+    return;
+  }
+  
+  const favoriteChannels = channels.filter((ch, idx) => {
+    const channelId = ch.chno || (idx + 1).toString();
+    return favorites.includes(channelId);
+  });
+  
+  if (favoriteChannels.length === 0) {
+    showStatus('No favorite channels found');
+    return;
+  }
+  
+  // Show favorites in guide
+  showGuide();
+  renderChannelList('', favoriteChannels);
+  showStatus(`Showing ${favoriteChannels.length} favorite channels`);
+}
+
+// Volume Controls
+function adjustVolume(delta) {
+  const currentVolume = video.volume || audio.volume || 0;
+  const newVolume = Math.max(0, Math.min(1, currentVolume + delta));
+  
+  video.volume = newVolume;
+  audio.volume = newVolume;
+  
+  showStatus(`Volume: ${Math.round(newVolume * 100)}%`);
+}
+
+function toggleMute() {
+  isMuted = !isMuted;
+  video.muted = isMuted;
+  audio.muted = isMuted;
+  
+  muteBtn.classList.toggle('muted', isMuted);
+  showStatus(isMuted ? 'Muted' : 'Unmuted');
+}
+
+// Channel Navigation
+function goToLastChannel() {
+  if (lastChannel !== current && channels[lastChannel]) {
+    const temp = current;
+    current = lastChannel;
+    lastChannel = temp;
+    playChannel(current);
+    showStatus('Last channel');
+  }
+}
+
+// Connection Health Monitoring
+function updateConnectionStatus() {
+  const isConnected = navigator.onLine && connectionStatus === 'connected';
+  connectionStatusBtn.classList.toggle('connected', isConnected);
+  connectionStatusBtn.classList.toggle('disconnected', !isConnected);
+  
+  if (!isConnected) {
+    showStatus('Connection issues detected');
+  }
+}
+
+// PWA Installation
+function setupPWA() {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    pwaInstallPrompt = e;
+    pwaInstallBtn.style.display = 'flex';
+  });
+  
+  window.addEventListener('appinstalled', () => {
+    pwaInstallPrompt = null;
+    pwaInstallBtn.style.display = 'none';
+    showStatus('App installed successfully!');
+  });
+}
+
+function installPWA() {
+  if (pwaInstallPrompt) {
+    pwaInstallPrompt.prompt();
+  } else {
+    showStatus('Installation not available');
+  }
+}
+
+// Touch Gestures
+function setupTouchGestures() {
+  let startX = 0;
+  let startY = 0;
+  let startTime = 0;
+  
+  videoContainer.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startTime = Date.now();
+  });
+  
+  videoContainer.addEventListener('touchend', (e) => {
+    if (standby) return;
+    
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const endTime = Date.now();
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+    const deltaTime = endTime - startTime;
+    
+    // Minimum swipe distance and time
+    if (deltaTime < 300 && Math.abs(deltaX) > 50 && Math.abs(deltaY) < 100) {
+      if (deltaX > 0) {
+        // Swipe right - previous channel
+        playChannel((current - 1 + channels.length) % channels.length);
+      } else {
+        // Swipe left - next channel
+        playChannel((current + 1) % channels.length);
+      }
+    }
+  });
+}
+
+// Enhanced Channel Input
+function handleChannelInput(num) {
+  channelInput += num;
+  channelNumber.textContent = channelInput.padStart(3, '0');
+  
+  // Auto-enter after 3 digits
+  if (channelInput.length >= 3) {
+    setTimeout(() => {
+      const channelNum = parseInt(channelInput);
+      const channelIndex = channels.findIndex(ch => ch.chno === channelInput) || 
+                          (channelNum > 0 && channelNum <= channels.length ? channelNum - 1 : -1);
+      
+      if (channelIndex >= 0) {
+        playChannel(channelIndex);
+      } else {
+        showStatus('Channel not found');
+        updateChannelDisplay();
+      }
+      channelInput = '';
+    }, 1000);
+  }
 }
 
 function stopPlayback() {
@@ -394,29 +590,76 @@ function stopPlayback() {
 
 function playChannel(idx) {
   if (!channels[idx]) return;
+  
+  // Save current channel as last channel
+  if (current !== idx) {
+    lastChannel = current;
+    localStorage.setItem('glz-last-channel', current.toString());
+  }
+  
   current = idx;
   
   stopPlayback();
   const ch = channels[idx];
   const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
   const isHls = /\.m3u8(\?|$)/i.test(ch.url);
+  
   video.style.display = isAudio ? 'none' : '';
   audio.style.display = isAudio ? '' : 'none';
+  
+  // Update connection status
+  connectionStatus = 'connecting';
+  updateConnectionStatus();
+  
   if (isAudio) {
     audio.src = ch.url;
-    audio.play().catch(e => showStatus('Failed to play audio stream'));
+    audio.play()
+      .then(() => {
+        connectionStatus = 'connected';
+        updateConnectionStatus();
+      })
+      .catch(e => {
+        connectionStatus = 'error';
+        updateConnectionStatus();
+        showStatus('Failed to play audio stream');
+      });
   } else if (isHls && window.Hls) {
     hls = new Hls();
     hls.loadSource(ch.url);
     hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_LOADED, () => {
+      connectionStatus = 'connected';
+      updateConnectionStatus();
+    });
     hls.on(Hls.Events.ERROR, function (event, data) {
+      connectionStatus = 'error';
+      updateConnectionStatus();
       if (data.fatal) showStatus('Stream error.');
     });
-    video.play().catch(e => showStatus('Failed to play video stream'));
+    video.play()
+      .then(() => {
+        connectionStatus = 'connected';
+        updateConnectionStatus();
+      })
+      .catch(e => {
+        connectionStatus = 'error';
+        updateConnectionStatus();
+        showStatus('Failed to play video stream');
+      });
   } else {
     video.src = ch.url;
-    video.play().catch(e => showStatus('Failed to play video stream'));
+    video.play()
+      .then(() => {
+        connectionStatus = 'connected';
+        updateConnectionStatus();
+      })
+      .catch(e => {
+        connectionStatus = 'error';
+        updateConnectionStatus();
+        showStatus('Failed to play video stream');
+      });
   }
+  
   updateChannelDisplay();
   showChannelBanner();
 }
@@ -484,45 +727,80 @@ function renderChannelList(filter = '') {
   });
 }
 
-// --- Event Listeners ---
+// --- Enhanced Event Listeners ---
 powerBtn.onclick = () => setStandby(!standby);
 guideBtn.onclick = showGuide;
 closeGuide.onclick = hideGuide;
 toggleRemote.onclick = toggleRemoteVisibility;
 headerRemoteBtn.onclick = toggleRemoteVisibility;
 
+// Channel navigation
 prevBtn.onclick = () => {
   if (!standby && channels.length > 0) {
+    lastChannel = current;
     playChannel((current - 1 + channels.length) % channels.length);
   }
 };
 nextBtn.onclick = () => {
   if (!standby && channels.length > 0) {
+    lastChannel = current;
     playChannel((current + 1) % channels.length);
   }
 };
+
+// Enhanced remote controls
+volumeDownBtn.onclick = () => adjustVolume(-0.1);
+volumeUpBtn.onclick = () => adjustVolume(0.1);
+muteBtn.onclick = toggleMute;
+channelDownBtn.onclick = () => {
+  if (!standby && channels.length > 0) {
+    lastChannel = current;
+    playChannel((current - 1 + channels.length) % channels.length);
+  }
+};
+channelUpBtn.onclick = () => {
+  if (!standby && channels.length > 0) {
+    lastChannel = current;
+    playChannel((current + 1) % channels.length);
+  }
+};
+lastChannelBtn.onclick = goToLastChannel;
+enterBtn.onclick = () => {
+  if (channelInput) {
+    const channelNum = parseInt(channelInput);
+    const channelIndex = channels.findIndex(ch => ch.chno === channelInput) || 
+                        (channelNum > 0 && channelNum <= channels.length ? channelNum - 1 : -1);
+    
+    if (channelIndex >= 0) {
+      playChannel(channelIndex);
+    } else {
+      showStatus('Channel not found');
+      updateChannelDisplay();
+    }
+    channelInput = '';
+  }
+};
+favoritesBtn.onclick = toggleFavorite;
+pwaInstallBtn.onclick = installPWA;
+connectionStatusBtn.onclick = () => {
+  updateConnectionStatus();
+  showStatus(`Connection: ${connectionStatus}`);
+};
+
 searchInput.oninput = (e) => renderChannelList(e.target.value);
 
+// Enhanced number pad
 numpadBtns.forEach(btn => {
   btn.onclick = () => {
     if (standby) {
       showStatus('Power on first.');
       return;
     }
-    // Simple channel number entry
-    let num = btn.dataset.num;
-    let entry = channelNumber.textContent.replace(/[^0-9]/g, '') + num;
-    if (entry.length > 3) entry = entry.slice(-3);
-    channelNumber.textContent = entry.padStart(3, '0');
-    let idx = channels.findIndex(ch => ch.chno === entry);
-    if (idx === -1 && parseInt(entry, 10) > 0 && parseInt(entry, 10) <= channels.length) {
-      idx = parseInt(entry, 10) - 1;
-    }
-    if (idx >= 0) {
-      setTimeout(() => playChannel(idx), 600);
-    } else {
-      setTimeout(() => updateChannelDisplay(), 1200);
-    }
+    
+    if (btn.classList.contains('enter')) return; // Skip enter button
+    
+    const num = btn.dataset.num;
+    handleChannelInput(num);
   };
 });
 
@@ -646,19 +924,40 @@ function showStatus(msg, duration = 2000) {
   }, duration);
 }
 
-// --- Initialization ---
+// --- Enhanced Initialization ---
 (function init() {
   channels = parseM3U(EMBEDDED_M3U);
   if (channels.length > 0) current = 0;
+  
+  // Load last channel from localStorage
+  const lastChannelIndex = localStorage.getItem('glz-last-channel');
+  if (lastChannelIndex && channels[parseInt(lastChannelIndex)]) {
+    current = parseInt(lastChannelIndex);
+  }
+  
   setStandby(true);
   updateTime();
   updateChannelDisplay();
-  remoteControl.classList.add('visible');
+  
+  // Hide remote by default
+  remoteControl.classList.remove('visible');
   
   // Add liquid glass effects
   addLiquidEffects();
   
-  // Help overlay content
+  // Setup new features
+  setupPWA();
+  setupTouchGestures();
+  
+  // Hide PWA install button initially
+  pwaInstallBtn.style.display = 'none';
+  
+  // Setup connection monitoring
+  window.addEventListener('online', updateConnectionStatus);
+  window.addEventListener('offline', updateConnectionStatus);
+  updateConnectionStatus();
+  
+  // Enhanced help overlay content
   helpBody.innerHTML = `
     <div><kbd>F1</kbd>: Toggle Remote</div>
     <div><kbd>F2</kbd>: Show Guide</div>
@@ -667,8 +966,11 @@ function showStatus(msg, duration = 2000) {
     <div><kbd>↑</kbd>: Show Guide</div>
     <div><kbd>?</kbd>: Show Help</div>
     <div><kbd>ESC</kbd>: Hide Remote/Guide/Help</div>
-    <div><strong>Mobile:</strong> Use header remote button to show/hide remote</div>
-    <div><strong>Liquid Glass:</strong> Enjoy the modern glassmorphism design</div>
+    <div><strong>Mobile:</strong> Swipe left/right to change channels</div>
+    <div><strong>Favorites:</strong> Click heart button to save channels</div>
+    <div><strong>Volume:</strong> Use +/- buttons on remote</div>
+    <div><strong>Last Channel:</strong> Quick return to previous channel</div>
+    <div><strong>Install:</strong> Add to home screen for app-like experience</div>
   `;
   
   // Add smooth entrance animation

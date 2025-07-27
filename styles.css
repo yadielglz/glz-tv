@@ -966,6 +966,16 @@ body::before {
   transform: translateY(0);
 }
 
+/* Enhanced Remote Controls */
+.volume-controls,
+.channel-nav,
+.quick-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: center;
+  align-items: center;
+}
+
 .nav-buttons {
   display: flex;
   gap: var(--spacing-md);
@@ -1016,6 +1026,40 @@ body::before {
 
 .remote-btn:active {
   transform: translateY(0);
+}
+
+/* Special button states */
+.remote-btn.mute.muted {
+  background: var(--error-color);
+  border-color: var(--error-color);
+}
+
+.remote-btn.connection-status.connected {
+  border-color: var(--success-color);
+}
+
+.remote-btn.connection-status.disconnected {
+  border-color: var(--error-color);
+}
+
+.remote-btn.favorites.active {
+  background: var(--gradient-secondary);
+  border-color: var(--secondary-color);
+}
+
+/* Number pad enhancements */
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-sm);
+}
+
+.numpad-btn.enter {
+  grid-column: span 3;
+  background: var(--gradient-accent);
+  border-color: var(--accent-color);
+  font-size: 0.875rem;
+  font-weight: 700;
 }
 
 /* Status Messages */

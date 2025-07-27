@@ -8,6 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GLZ TV">
 </head>
 <body>
   <!-- Animated Background Elements -->
@@ -74,7 +79,7 @@
     <main class="main-content">
       <!-- Video Player with Glass Container -->
       <div class="video-container" id="video-container">
-        <video id="video" controls autoplay playsinline muted></video>
+        <video id="video" controls autoplay playsinline></video>
         <audio id="audio" controls autoplay></audio>
         
         <!-- Channel Banner with Glass Effect -->
@@ -126,7 +131,7 @@
       </aside>
     </main>
 
-    <!-- Compact Remote Control with Glass Effect -->
+    <!-- Enhanced Remote Control with Glass Effect -->
     <div class="remote-control" id="remote-control">
       <div class="remote-header">
         <div class="remote-title">Remote</div>
@@ -138,6 +143,55 @@
       </div>
       
       <div class="remote-body">
+        <!-- Volume Controls -->
+        <div class="remote-section">
+          <div class="volume-controls">
+            <button class="remote-btn volume-down" id="volume-down" aria-label="Volume down">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+            </button>
+            <button class="remote-btn mute" id="mute-btn" aria-label="Mute">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <line x1="23" y1="9" x2="17" y2="15"></line>
+                <line x1="17" y1="9" x2="23" y2="15"></line>
+              </svg>
+            </button>
+            <button class="remote-btn volume-up" id="volume-up" aria-label="Volume up">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Channel Navigation -->
+        <div class="remote-section">
+          <div class="channel-nav">
+            <button class="remote-btn channel-down" id="channel-down" aria-label="Channel down">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6,9 12,15 18,9"></polyline>
+              </svg>
+            </button>
+            <button class="remote-btn last-channel" id="last-channel" aria-label="Last channel">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 17l5-5-5-5"></path>
+                <path d="M6 17l5-5-5-5"></path>
+              </svg>
+            </button>
+            <button class="remote-btn channel-up" id="channel-up" aria-label="Channel up">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6,15 12,9 18,15"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Number Pad -->
         <div class="remote-section">
           <div class="numpad" id="numpad">
             <button class="numpad-btn" data-num="1">1</button>
@@ -150,19 +204,29 @@
             <button class="numpad-btn" data-num="8">8</button>
             <button class="numpad-btn" data-num="9">9</button>
             <button class="numpad-btn" data-num="0">0</button>
+            <button class="numpad-btn enter" id="enter-btn">ENTER</button>
           </div>
         </div>
 
+        <!-- Quick Actions -->
         <div class="remote-section">
-          <div class="nav-buttons">
-            <button class="remote-btn prev" id="prev-btn" aria-label="Previous channel">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="15,18 9,12 15,6"></polyline>
+          <div class="quick-actions">
+            <button class="remote-btn favorites" id="favorites-btn" aria-label="Favorites">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
               </svg>
             </button>
-            <button class="remote-btn next" id="next-btn" aria-label="Next channel">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="9,18 15,12 9,6"></polyline>
+            <button class="remote-btn pwa-install" id="pwa-install-btn" aria-label="Install App">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7,10 12,15 17,10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+            <button class="remote-btn connection-status" id="connection-status-btn" aria-label="Connection Status">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 6v6l4 2"></path>
               </svg>
             </button>
           </div>
