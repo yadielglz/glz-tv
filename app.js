@@ -546,6 +546,106 @@ window.addEventListener('resize', adjustLayoutForRemote);
 
 closeHelp.onclick = () => helpOverlay.style.display = 'none';
 
+// --- Liquid Glass Effects ---
+function addLiquidEffects() {
+  // Add ripple effect to buttons
+  document.querySelectorAll('button').forEach(button => {
+    button.addEventListener('click', function(e) {
+      const ripple = document.createElement('span');
+      const rect = this.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      const x = e.clientX - rect.left - size / 2;
+      const y = e.clientY - rect.top - size / 2;
+      
+      ripple.style.width = ripple.style.height = size + 'px';
+      ripple.style.left = x + 'px';
+      ripple.style.top = y + 'px';
+      ripple.classList.add('ripple');
+      
+      this.appendChild(ripple);
+      
+      setTimeout(() => {
+        ripple.remove();
+      }, 600);
+    });
+  });
+}
+
+// Add CSS for ripple effect
+const rippleStyle = document.createElement('style');
+rippleStyle.textContent = `
+  button {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(0);
+    animation: ripple-animation 0.6s linear;
+    pointer-events: none;
+  }
+  
+  @keyframes ripple-animation {
+    to {
+      transform: scale(4);
+      opacity: 0;
+    }
+  }
+`;
+document.head.appendChild(rippleStyle);
+
+// --- Enhanced Channel Banner Animation ---
+function showChannelBanner() {
+  if (!channels[current]) return;
+  bannerChannel.textContent = channels[current].chno || (current + 1);
+  bannerName.textContent = channels[current].name;
+  
+  // Add liquid glass entrance animation
+  channelBanner.style.transform = 'translateY(-120%) scale(0.8)';
+  channelBanner.style.opacity = '0';
+  channelBanner.classList.add('show');
+  
+  // Animate in
+  setTimeout(() => {
+    channelBanner.style.transform = 'translateY(0) scale(1)';
+    channelBanner.style.opacity = '1';
+  }, 50);
+  
+  // Animate out
+  setTimeout(() => {
+    channelBanner.style.transform = 'translateY(-120%) scale(0.8)';
+    channelBanner.style.opacity = '0';
+    setTimeout(() => {
+      channelBanner.classList.remove('show');
+    }, 300);
+  }, 2500);
+}
+
+// --- Enhanced Status Messages ---
+function showStatus(msg, duration = 2000) {
+  statusMessage.textContent = msg;
+  statusMessage.style.display = 'block';
+  statusMessage.style.transform = 'translate(-50%, -50%) scale(0.8)';
+  statusMessage.style.opacity = '0';
+  
+  // Animate in
+  setTimeout(() => {
+    statusMessage.style.transform = 'translate(-50%, -50%) scale(1)';
+    statusMessage.style.opacity = '1';
+  }, 50);
+  
+  setTimeout(() => {
+    statusMessage.style.transform = 'translate(-50%, -50%) scale(0.8)';
+    statusMessage.style.opacity = '0';
+    setTimeout(() => {
+      statusMessage.style.display = 'none';
+    }, 300);
+  }, duration);
+}
+
 // --- Initialization ---
 (function init() {
   channels = parseM3U(EMBEDDED_M3U);
@@ -554,6 +654,10 @@ closeHelp.onclick = () => helpOverlay.style.display = 'none';
   updateTime();
   updateChannelDisplay();
   remoteControl.classList.add('visible');
+  
+  // Add liquid glass effects
+  addLiquidEffects();
+  
   // Help overlay content
   helpBody.innerHTML = `
     <div><kbd>F1</kbd>: Toggle Remote</div>
@@ -564,5 +668,13 @@ closeHelp.onclick = () => helpOverlay.style.display = 'none';
     <div><kbd>?</kbd>: Show Help</div>
     <div><kbd>ESC</kbd>: Hide Remote/Guide/Help</div>
     <div><strong>Mobile:</strong> Use header remote button to show/hide remote</div>
+    <div><strong>Liquid Glass:</strong> Enjoy the modern glassmorphism design</div>
   `;
+  
+  // Add smooth entrance animation
+  document.body.style.opacity = '0';
+  setTimeout(() => {
+    document.body.style.transition = 'opacity 1s ease-in-out';
+    document.body.style.opacity = '1';
+  }, 100);
 })(); 

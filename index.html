@@ -3,15 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GLZ TV - Modern STB Experience</title>
+  <title>GLZ TV - Liquid Glass Experience</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Animated Background Elements -->
+  <div class="background-elements">
+    <div class="floating-orb orb-1"></div>
+    <div class="floating-orb orb-2"></div>
+    <div class="floating-orb orb-3"></div>
+  </div>
+
   <div class="stb-container">
-    <!-- Spectrum-style Header -->
+    <!-- Liquid Glass Header -->
     <header class="stb-header">
       <div class="header-left">
         <div class="brand-logo">
@@ -65,12 +72,12 @@
 
     <!-- Main Content Area -->
     <main class="main-content">
-      <!-- Video Player -->
+      <!-- Video Player with Glass Container -->
       <div class="video-container" id="video-container">
         <video id="video" controls autoplay playsinline muted></video>
         <audio id="audio" controls autoplay></audio>
         
-        <!-- Channel Banner -->
+        <!-- Channel Banner with Glass Effect -->
         <div class="channel-banner" id="channel-banner">
           <div class="banner-content">
             <div class="banner-channel">CH <span id="banner-channel">000</span></div>
@@ -81,7 +88,7 @@
           </div>
         </div>
 
-        <!-- Standby Screen -->
+        <!-- Standby Screen with Liquid Glass -->
         <div class="standby-screen" id="standby-screen">
           <div class="standby-content">
             <div class="standby-logo">
@@ -95,7 +102,7 @@
         </div>
       </div>
 
-      <!-- Channel Guide Sidebar -->
+      <!-- Channel Guide Sidebar with Glass Effect -->
       <aside class="channel-guide" id="channel-guide">
         <div class="guide-header">
           <h2 class="guide-title">Channel Guide</h2>
@@ -119,7 +126,7 @@
       </aside>
     </main>
 
-    <!-- Compact Remote Control (Numpad + Navigation) -->
+    <!-- Compact Remote Control with Glass Effect -->
     <div class="remote-control" id="remote-control">
       <div class="remote-header">
         <div class="remote-title">Remote</div>
@@ -163,16 +170,16 @@
       </div>
     </div>
 
-    <!-- Status Messages -->
+    <!-- Status Messages with Glass Effect -->
     <div class="status-message" id="status-message"></div>
     
-    <!-- Loading Indicator -->
+    <!-- Loading Indicator with Glass Effect -->
     <div class="loading-indicator" id="loading-indicator">
       <div class="loading-spinner"></div>
       <div class="loading-text">Loading...</div>
     </div>
 
-    <!-- Help Overlay -->
+    <!-- Help Overlay with Glass Effect -->
     <div class="help-overlay" id="help-overlay">
       <div class="help-content">
         <div class="help-header">
