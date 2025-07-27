@@ -209,12 +209,22 @@ https://s3.free-shoutcast.com/stream/18094
 
 // --- M3U Parser ---
 function parseM3U(m3uContent) {
+  console.log('Starting M3U parsing...');
+  console.log('M3U content length:', m3uContent.length);
+  console.log('First 200 chars:', m3uContent.substring(0, 200));
+  
   const channels = [];
   const lines = m3uContent.split('\n');
+  console.log('Total lines:', lines.length);
+  
   let currentChannel = null;
+  let extinfCount = 0;
+  let urlCount = 0;
+  
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line.startsWith('#EXTINF:')) {
+      extinfCount++;
       currentChannel = {};
       const lastCommaIndex = line.lastIndexOf(',');
       if (lastCommaIndex !== -1) {
@@ -228,12 +238,18 @@ function parseM3U(m3uContent) {
       if (idMatch) currentChannel.id = idMatch[1];
       const nameMatch = line.match(/tvg-name="([^"]*)"/);
       if (nameMatch && !currentChannel.name) currentChannel.name = nameMatch[1];
+      
+      console.log(`EXTINF ${extinfCount}:`, currentChannel.name);
     } else if (line && !line.startsWith('#') && currentChannel) {
+      urlCount++;
       currentChannel.url = line.trim();
       channels.push(currentChannel);
+      console.log(`URL ${urlCount}:`, currentChannel.url.substring(0, 50) + '...');
       currentChannel = null;
     }
   }
+  
+  console.log('Parsing complete. EXTINF count:', extinfCount, 'URL count:', urlCount, 'Channels:', channels.length);
   return channels;
 }
 
@@ -925,16 +941,24 @@ function showStatus(msg, duration = 2000) {
 
 // --- Enhanced Initialization ---
 (function init() {
+  console.log('=== INITIALIZATION START ===');
   channels = parseM3U(EMBEDDED_M3U);
   console.log('Channels loaded:', channels.length);
   console.log('First channel:', channels[0]);
+  console.log('Last channel:', channels[channels.length - 1]);
   
-  if (channels.length > 0) current = 0;
+  if (channels.length > 0) {
+    current = 0;
+    console.log('Current channel set to 0');
+  } else {
+    console.error('NO CHANNELS LOADED!');
+  }
   
   // Load last channel from localStorage
   const lastChannelIndex = localStorage.getItem('glz-last-channel');
   if (lastChannelIndex && channels[parseInt(lastChannelIndex)]) {
     current = parseInt(lastChannelIndex);
+    console.log('Loaded last channel from localStorage:', current);
   }
   
   setStandby(true);
