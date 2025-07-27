@@ -205,7 +205,6 @@ https://lmmradiocast.com/Latino99fm?_=68068
 https://listen.radioking.com/radio/399811/stream/452110
 #EXTINF:-1 tvg-id="DummyChannel.us" tvg-name="[R] La Vieja Z [GLZ Radio]" tvg-logo="https://i.ibb.co/d4VZVjj2/LVZ8-removebg-preview.png" tvg-chno="229" channel-id="229" group-title="TV",[R] La Vieja Z [GLZ Radio]
 https://s3.free-shoutcast.com/stream/18094
-
 `;
 
 // --- M3U Parser ---
@@ -927,6 +926,9 @@ function showStatus(msg, duration = 2000) {
 // --- Enhanced Initialization ---
 (function init() {
   channels = parseM3U(EMBEDDED_M3U);
+  console.log('Channels loaded:', channels.length);
+  console.log('First channel:', channels[0]);
+  
   if (channels.length > 0) current = 0;
   
   // Load last channel from localStorage
