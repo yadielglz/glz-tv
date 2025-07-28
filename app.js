@@ -1017,19 +1017,39 @@ function playChannel(idx) {
     hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
-      backBufferLength: 90
+      backBufferLength: 90,
+      xhrSetup: function(xhr, url) {
+        // Add headers for Starlite streams
+        xhr.setRequestHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        xhr.setRequestHeader('Referer', 'https://starlite.best/');
+        xhr.setRequestHeader('Origin', 'https://starlite.best');
+      }
     });
     hls.loadSource(ch.url);
     hls.attachMedia(video);
 
+    hls.on(Hls.Events.MANIFEST_LOADING, () => {
+      console.log('HLS: Manifest loading...');
+    });
+
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
+      console.log('HLS: Manifest loaded successfully');
       video.classList.add('loading');
       video.play()
         .then(onPlaybackSuccess)
         .catch(e => onPlaybackError(e, 'video'));
     });
 
+    hls.on(Hls.Events.LEVEL_LOADING, () => {
+      console.log('HLS: Level loading...');
+    });
+
+    hls.on(Hls.Events.LEVEL_LOADED, () => {
+      console.log('HLS: Level loaded successfully');
+    });
+
     hls.on(Hls.Events.ERROR, function (event, data) {
+      console.error('HLS Error:', event, data);
       if (data.fatal) {
         onPlaybackError(data, 'HLS stream');
       }
