@@ -27,37 +27,46 @@
   <div class="stb-container">
     <!-- Liquid Glass Header -->
     <header class="stb-header">
-      <!-- Top Row: Brand and Controls -->
-      <div class="header-top-row">
-        <div class="header-left">
-          <div class="brand-logo">
-            <span class="logo-text">GLZ</span>
-            <span class="logo-subtitle">TV</span>
-          </div>
-          <div class="signal-indicator">
-            <div class="signal-bar active"></div>
-            <div class="signal-bar active"></div>
-            <div class="signal-bar active"></div>
-            <div class="signal-bar"></div>
-          </div>
+      <!-- Desktop Header Layout -->
+      <div class="header-left">
+        <div class="brand-logo">
+          <span class="logo-text">GLZ</span>
+          <span class="logo-subtitle">TV</span>
         </div>
-        
-        <div class="header-right">
-          <div class="time-display" id="time-display">12:00 AM</div>
-          <div class="header-controls">
-            <button class="header-btn power" id="power-btn" aria-label="Power">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18.36 6.64A9 9 0 1 1 12 3v9"></path>
-              </svg>
-            </button>
-            <button class="header-btn guide" id="guide-btn" aria-label="Guide">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-              </svg>
-            </button>
-                      <button class="header-btn remote" id="header-remote-btn" aria-label="Remote">
+        <div class="signal-indicator">
+          <div class="signal-bar active"></div>
+          <div class="signal-bar active"></div>
+          <div class="signal-bar active"></div>
+          <div class="signal-bar"></div>
+        </div>
+      </div>
+      
+      <div class="channel-display">
+        <div class="channel-logo" id="channel-logo">
+          <img src="" alt="Channel Logo" id="channel-logo-img" style="display: none;">
+          <div class="channel-logo-placeholder" id="channel-logo-placeholder">TV</div>
+        </div>
+        <div class="channel-number" id="channel-number">000</div>
+        <div class="channel-name" id="channel-name">STANDBY</div>
+        <div class="current-program" id="current-program"></div>
+      </div>
+      
+      <div class="header-right">
+        <div class="time-display" id="time-display">12:00 AM</div>
+        <div class="header-controls">
+          <button class="header-btn power" id="power-btn" aria-label="Power">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18.36 6.64A9 9 0 1 1 12 3v9"></path>
+            </svg>
+          </button>
+          <button class="header-btn guide" id="guide-btn" aria-label="Guide">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <button class="header-btn remote" id="header-remote-btn" aria-label="Remote">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="2" y="6" width="20" height="12" rx="2" ry="2"></rect>
               <line x1="6" y1="12" x2="18" y2="12"></line>
@@ -75,7 +84,55 @@
               <circle cx="16" cy="10" r="1"></circle>
             </svg>
           </button>
-            <button class="header-btn options" id="header-options-btn" aria-label="Options">
+          <button class="header-btn options" id="header-options-btn" aria-label="Options">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Mobile Header Layout (Hidden on Desktop) -->
+      <div class="header-top-row">
+        <div class="header-left">
+          <div class="brand-logo">
+            <span class="logo-text">GLZ</span>
+            <span class="logo-subtitle">TV</span>
+          </div>
+          <div class="signal-indicator">
+            <div class="signal-bar active"></div>
+            <div class="signal-bar active"></div>
+            <div class="signal-bar active"></div>
+            <div class="signal-bar"></div>
+          </div>
+        </div>
+        
+        <div class="header-right">
+          <div class="time-display" id="time-display-mobile">12:00 AM</div>
+          <div class="header-controls">
+            <button class="header-btn power" id="power-btn-mobile" aria-label="Power">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18.36 6.64A9 9 0 1 1 12 3v9"></path>
+              </svg>
+            </button>
+            <button class="header-btn guide" id="guide-btn-mobile" aria-label="Guide">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+            <button class="header-btn mobile-remote" id="mobile-remote-btn" aria-label="Mobile Remote">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="6" width="20" height="12" rx="2" ry="2"></rect>
+                <line x1="6" y1="12" x2="18" y2="12"></line>
+                <line x1="6" y1="16" x2="18" y2="16"></line>
+                <circle cx="8" cy="10" r="1"></circle>
+                <circle cx="16" cy="10" r="1"></circle>
+              </svg>
+            </button>
+            <button class="header-btn options" id="header-options-btn-mobile" aria-label="Options">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -88,13 +145,13 @@
       <!-- Bottom Row: Channel Display -->
       <div class="header-bottom-row">
         <div class="channel-display">
-          <div class="channel-logo" id="channel-logo">
-            <img src="" alt="Channel Logo" id="channel-logo-img" style="display: none;">
-            <div class="channel-logo-placeholder" id="channel-logo-placeholder">TV</div>
+          <div class="channel-logo" id="channel-logo-mobile">
+            <img src="" alt="Channel Logo" id="channel-logo-img-mobile" style="display: none;">
+            <div class="channel-logo-placeholder" id="channel-logo-placeholder-mobile">TV</div>
           </div>
-          <div class="channel-number" id="channel-number">000</div>
-          <div class="channel-name" id="channel-name">STANDBY</div>
-          <div class="current-program" id="current-program"></div>
+          <div class="channel-number" id="channel-number-mobile">000</div>
+          <div class="channel-name" id="channel-name-mobile">STANDBY</div>
+          <div class="current-program" id="current-program-mobile"></div>
         </div>
       </div>
     </header>

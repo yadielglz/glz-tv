@@ -2089,15 +2089,17 @@ body::before {
     height: 80px;
   }
   
-  .header-top-row,
-  .header-bottom-row {
-    display: none;
-  }
-  
+  /* Show desktop header elements */
   .header-left,
   .channel-display,
   .header-right {
     display: flex;
+  }
+  
+  /* Hide mobile header elements */
+  .header-top-row,
+  .header-bottom-row {
+    display: none !important;
   }
   
   /* Ensure desktop layout is not affected by mobile changes */

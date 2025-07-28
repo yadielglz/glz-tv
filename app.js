@@ -892,7 +892,16 @@ function updateTime() {
   const ampm = hours >= 12 ? 'PM' : 'AM';
   hours = hours % 12;
   hours = hours ? hours : 12; // the hour '0' should be '12'
-  timeDisplay.textContent = `${hours}:${minutes} ${ampm}`;
+  const timeString = `${hours}:${minutes} ${ampm}`;
+  
+  // Update desktop time display
+  timeDisplay.textContent = timeString;
+  
+  // Update mobile time display
+  const mobileTimeDisplay = document.getElementById('time-display-mobile');
+  if (mobileTimeDisplay) {
+    mobileTimeDisplay.textContent = timeString;
+  }
 }
 setInterval(updateTime, 1000);
 
@@ -900,12 +909,27 @@ setInterval(updateTime, 1000);
 
 function updateChannelDisplay(idx = current) {
   if (!channels.length || !channels[idx]) {
+    // Update desktop elements
     channelNumber.textContent = '000';
     channelName.textContent = 'STANDBY';
     // Hide logo and show placeholder
     document.getElementById('channel-logo-img').style.display = 'none';
     document.getElementById('channel-logo-placeholder').style.display = 'block';
     document.getElementById('channel-logo-placeholder').textContent = 'TV';
+    
+    // Update mobile elements
+    const mobileChannelNumber = document.getElementById('channel-number-mobile');
+    const mobileChannelName = document.getElementById('channel-name-mobile');
+    const mobileLogoImg = document.getElementById('channel-logo-img-mobile');
+    const mobileLogoPlaceholder = document.getElementById('channel-logo-placeholder-mobile');
+    
+    if (mobileChannelNumber) mobileChannelNumber.textContent = '000';
+    if (mobileChannelName) mobileChannelName.textContent = 'STANDBY';
+    if (mobileLogoImg) mobileLogoImg.style.display = 'none';
+    if (mobileLogoPlaceholder) {
+      mobileLogoPlaceholder.style.display = 'block';
+      mobileLogoPlaceholder.textContent = 'TV';
+    }
     return;
   }
   
@@ -918,7 +942,13 @@ function updateChannelDisplay(idx = current) {
   channelNumber.textContent = channel.chno ? channel.chno : (idx + 1).toString().padStart(3, '0');
   channelName.textContent = channel.name;
   
-  // Update channel logo with animation
+  // Update mobile elements
+  const mobileChannelNumber = document.getElementById('channel-number-mobile');
+  const mobileChannelName = document.getElementById('channel-name-mobile');
+  if (mobileChannelNumber) mobileChannelNumber.textContent = channel.chno ? channel.chno : (idx + 1).toString().padStart(3, '0');
+  if (mobileChannelName) mobileChannelName.textContent = channel.name;
+  
+  // Update channel logo with animation (desktop)
   const logoImg = document.getElementById('channel-logo-img');
   const logoPlaceholder = document.getElementById('channel-logo-placeholder');
   
@@ -941,6 +971,29 @@ function updateChannelDisplay(idx = current) {
     logoPlaceholder.textContent = channel.name.substring(0, 3);
     logoPlaceholder.classList.add('fade-in');
     setTimeout(() => logoPlaceholder.classList.remove('fade-in'), 300);
+  }
+  
+  // Update mobile logo
+  const mobileLogoImg = document.getElementById('channel-logo-img-mobile');
+  const mobileLogoPlaceholder = document.getElementById('channel-logo-placeholder-mobile');
+  
+  if (mobileLogoImg && mobileLogoPlaceholder) {
+    if (channel.logo && channel.logo.trim()) {
+      mobileLogoImg.src = channel.logo;
+      mobileLogoImg.style.display = 'block';
+      mobileLogoPlaceholder.style.display = 'none';
+      
+      // Handle logo load error
+      mobileLogoImg.onerror = () => {
+        mobileLogoImg.style.display = 'none';
+        mobileLogoPlaceholder.style.display = 'block';
+        mobileLogoPlaceholder.textContent = channel.name.substring(0, 3);
+      };
+    } else {
+      mobileLogoImg.style.display = 'none';
+      mobileLogoPlaceholder.style.display = 'block';
+      mobileLogoPlaceholder.textContent = channel.name.substring(0, 3);
+    }
   }
   
   // Update EPG information
@@ -1858,6 +1911,15 @@ function showStatus(msg, duration = 2000) {
     document.body.classList.add('mobile-device');
     // Force mobile layout
     document.body.classList.add('mobile-layout');
+    
+    // Set up mobile-specific event listeners
+    const mobilePowerBtn = document.getElementById('power-btn-mobile');
+    const mobileGuideBtn = document.getElementById('guide-btn-mobile');
+    const mobileOptionsBtn = document.getElementById('header-options-btn-mobile');
+    
+    if (mobilePowerBtn) mobilePowerBtn.onclick = togglePower;
+    if (mobileGuideBtn) mobileGuideBtn.onclick = showGuide;
+    if (mobileOptionsBtn) mobileOptionsBtn.onclick = showOptions;
   } else {
     // Desktop-specific optimizations
     console.log('Desktop device detected');
