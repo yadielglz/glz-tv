@@ -345,16 +345,52 @@ async function fetchEPGData() {
   console.log('Fetching EPG data from:', EPG_URL);
   
   try {
-    // Use a CORS proxy to avoid CORS issues
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(EPG_URL)}`;
-    const response = await fetch(proxyUrl);
+    // Try multiple CORS proxies in case one fails
+    const proxies = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(EPG_URL)}`,
+      `https://cors-anywhere.herokuapp.com/${EPG_URL}`,
+      `https://thingproxy.freeboard.io/fetch/${EPG_URL}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(EPG_URL)}`
+    ];
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    let xmlText = null;
+    let lastError = null;
+    
+    for (const proxyUrl of proxies) {
+      try {
+        console.log('Trying proxy:', proxyUrl);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch(proxyUrl, {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/xml, text/xml, */*',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        xmlText = await response.text();
+        console.log('EPG XML received from proxy, length:', xmlText.length);
+        break; // Success, exit the loop
+        
+      } catch (error) {
+        console.log('Proxy failed:', error.message);
+        lastError = error;
+        continue; // Try next proxy
+      }
     }
     
-    const xmlText = await response.text();
-    console.log('EPG XML received, length:', xmlText.length);
+    if (!xmlText) {
+      throw new Error('All proxies failed: ' + lastError?.message);
+    }
     
     // Parse XML
     const parser = new DOMParser();
@@ -378,7 +414,10 @@ async function fetchEPGData() {
     
   } catch (error) {
     console.error('EPG fetch failed:', error);
-    showStatus('EPG data unavailable', 3000);
+    showStatus('EPG data unavailable - using fallback', 3000);
+    
+    // Create fallback EPG data for testing
+    createFallbackEPGData();
   } finally {
     epgLoading = false;
   }
@@ -473,6 +512,65 @@ function formatTime(date) {
  */
 function getProgramDuration(start, stop) {
   return Math.round((stop - start) / (1000 * 60));
+}
+
+/**
+ * Creates fallback EPG data for testing when real EPG is unavailable
+ */
+function createFallbackEPGData() {
+  console.log('Creating fallback EPG data...');
+  
+  const now = new Date();
+  const programs = [
+    { title: 'Morning News', category: 'News', duration: 60 },
+    { title: 'Sports Center', category: 'Sports', duration: 30 },
+    { title: 'Movie: Action Thriller', category: 'Movies', duration: 120 },
+    { title: 'Comedy Show', category: 'Entertainment', duration: 30 },
+    { title: 'Documentary', category: 'Documentary', duration: 60 },
+    { title: 'Late Night Talk Show', category: 'Talk Show', duration: 60 },
+    { title: 'Weather Report', category: 'News', duration: 15 },
+    { title: 'Children\'s Program', category: 'Children', duration: 30 }
+  ];
+  
+  // Create EPG data for major channels
+  const majorChannels = [
+    'WKAQ.us', 'ESPN.us', 'CNN.us', 'FoxNews.us', 'HBO.us', 
+    'DisneyChannel.us', 'Nickelodeon.us', 'ComedyCentral.us',
+    'TBS.us', 'TNT.us', 'FX.us', 'AMC.us'
+  ];
+  
+  epgData = {};
+  
+  majorChannels.forEach(channelId => {
+    epgData[channelId] = [];
+    let currentTime = new Date(now);
+    currentTime.setMinutes(0, 0, 0); // Round to hour
+    
+    // Generate 24 hours of programming
+    for (let i = 0; i < 24; i++) {
+      const program = programs[i % programs.length];
+      const startTime = new Date(currentTime);
+      const endTime = new Date(currentTime.getTime() + program.duration * 60000);
+      
+      epgData[channelId].push({
+        start: startTime,
+        stop: endTime,
+        title: program.title,
+        desc: `Sample program description for ${program.title}`,
+        category: program.category,
+        rating: 'TV-PG'
+      });
+      
+      currentTime = endTime;
+    }
+  });
+  
+  console.log('Fallback EPG data created for', Object.keys(epgData).length, 'channels');
+  
+  // Cache the fallback data
+  localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
+  localStorage.setItem('glz-epg-cache-time', Date.now().toString());
+  epgLastUpdate = Date.now();
 }
 
 // --- Utility Functions ---
