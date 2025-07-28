@@ -961,6 +961,28 @@ function playChannel(idx) {
   const isHls = /\.m3u8(\?|$)/i.test(ch.url);
   
   console.log('Channel:', ch.name, 'URL:', ch.url, 'isAudio:', isAudio, 'isHls:', isHls);
+  
+  // For debugging: try direct video playback for Starlite streams instead of HLS.js
+  const isStarliteStream = ch.url.includes('starlite.best');
+  if (isStarliteStream) {
+    console.log('Detected Starlite stream, trying direct playback...');
+    
+    // Test if the stream is accessible
+    fetch(ch.url, {
+      method: 'HEAD',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://starlite.best/',
+        'Origin': 'https://starlite.best'
+      }
+    })
+    .then(response => {
+      console.log('Starlite stream test response:', response.status, response.statusText);
+    })
+    .catch(error => {
+      console.error('Starlite stream test failed:', error);
+    });
+  }
 
   // Set display properties
   video.style.display = isAudio ? 'none' : '';
@@ -1012,7 +1034,7 @@ function playChannel(idx) {
     audio.play()
       .then(onPlaybackSuccess)
       .catch(e => onPlaybackError(e, 'audio'));
-  } else if (isHls && window.Hls) {
+  } else if (isHls && window.Hls && !isStarliteStream) {
     console.log('Using HLS.js for playback');
     hls = new Hls({
       enableWorker: true,
@@ -1023,6 +1045,11 @@ function playChannel(idx) {
         xhr.setRequestHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         xhr.setRequestHeader('Referer', 'https://starlite.best/');
         xhr.setRequestHeader('Origin', 'https://starlite.best');
+        // Add more headers that might be needed
+        xhr.setRequestHeader('Accept', '*/*');
+        xhr.setRequestHeader('Accept-Language', 'en-US,en;q=0.9');
+        xhr.setRequestHeader('Cache-Control', 'no-cache');
+        xhr.setRequestHeader('Pragma', 'no-cache');
       }
     });
     hls.loadSource(ch.url);
