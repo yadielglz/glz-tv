@@ -1347,12 +1347,12 @@ function setupPWA() {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     pwaInstallPrompt = e;
-    pwaInstallBtn.style.display = 'flex';
+    // pwaInstallBtn.style.display = 'flex'; // PWA button removed from new layout
   });
   
   window.addEventListener('appinstalled', () => {
     pwaInstallPrompt = null;
-    pwaInstallBtn.style.display = 'none';
+    // pwaInstallBtn.style.display = 'none'; // PWA button removed from new layout
     showStatus('App installed successfully!');
   });
 }
@@ -1812,11 +1812,7 @@ if (enterBtn) enterBtn.onclick = () => {
   }
 };
 if (favoritesBtn) favoritesBtn.onclick = toggleFavorite;
-if (pwaInstallBtn) pwaInstallBtn.onclick = installPWA;
-if (connectionStatusBtn) connectionStatusBtn.onclick = () => {
-  updateConnectionStatus();
-  showStatus(`Connection: ${connectionStatus}`);
-};
+// PWA and connection status buttons removed from new layout
 
 if (searchInput) searchInput.oninput = (e) => renderChannelList(e.target.value);
 
@@ -1991,8 +1987,8 @@ function showStatus(msg, duration = 2000) {
     'lastChannelBtn': lastChannelBtn,
     'enterBtn': enterBtn,
     'favoritesBtn': favoritesBtn,
-    'pwaInstallBtn': pwaInstallBtn,
-    'connectionStatusBtn': connectionStatusBtn
+    // 'pwaInstallBtn': pwaInstallBtn, // Removed from new layout
+    // 'connectionStatusBtn': connectionStatusBtn // Removed from new layout
   };
   
   Object.entries(requiredElements).forEach(([name, element]) => {
