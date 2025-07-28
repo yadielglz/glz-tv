@@ -417,6 +417,8 @@ async function fetchEPGData() {
     }
     
     console.log('XML parsed successfully, checking for channels...');
+    console.log('XML document root:', xmlDoc.documentElement?.tagName);
+    console.log('Number of programme elements:', xmlDoc.querySelectorAll('programme').length);
     
     // Parse programs
     epgData = parseEPGXML(xmlDoc);

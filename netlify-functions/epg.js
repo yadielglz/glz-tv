@@ -1,4 +1,8 @@
 const fetch = require('node-fetch');
+const zlib = require('zlib');
+const { promisify } = require('util');
+
+const gunzip = promisify(zlib.gunzip);
 
 exports.handler = async (event) => {
   try {
@@ -18,7 +22,13 @@ exports.handler = async (event) => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    const xmlData = await response.text();
+    // Get the compressed data as buffer
+    const compressedData = await response.buffer();
+    console.log('Received compressed data, size:', compressedData.length);
+    
+    // Decompress the gzipped data
+    const xmlData = await gunzip(compressedData);
+    console.log('Decompressed XML data, size:', xmlData.length);
     
     return {
       statusCode: 200,
@@ -29,7 +39,7 @@ exports.handler = async (event) => {
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'GET, OPTIONS'
       },
-      body: xmlData
+      body: xmlData.toString('utf8')
     };
     
   } catch (error) {
