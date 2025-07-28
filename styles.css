@@ -2498,7 +2498,8 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
 
   /* Main Content Area */
   .main-content {
-    display: flex;
+    display: flex !important;
+    flex-direction: row !important;
     height: calc(100vh - 60px);
     margin-top: 60px; /* Account for fixed header */
     background: white;

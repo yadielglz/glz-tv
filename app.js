@@ -2056,7 +2056,56 @@ function showStatus(msg, duration = 2000) {
   // Check if power button is available
   if (!powerBtn) {
     console.error('Power button not found!');
+  } else {
+    // Power button functionality
+    powerBtn.addEventListener('click', () => {
+      if (isStandby) {
+        setStandby(false);
+        playChannel(currentChannelIndex);
+      } else {
+        setStandby(true);
+        stopPlayback();
+      }
+    });
   }
+
+  // Options button functionality
+  if (headerOptionsBtn) {
+    headerOptionsBtn.addEventListener('click', () => {
+      showStatus('Options menu - Coming soon');
+    });
+  }
+
+  // Remote button event listeners
+  const remoteButtons = {
+    'channel-up-btn': () => {
+      if (currentChannelIndex < channels.length - 1) {
+        playChannel(currentChannelIndex + 1);
+      }
+    },
+    'channel-down-btn': () => {
+      if (currentChannelIndex > 0) {
+        playChannel(currentChannelIndex - 1);
+      }
+    },
+    'volume-up-btn': () => adjustVolume(0.1),
+    'volume-down-btn': () => adjustVolume(-0.1),
+    'mute-btn': () => toggleMute(),
+    'favorites-btn': () => toggleFavorite(),
+    'last-channel-btn': () => goToLastChannel(),
+    'guide-btn': () => showGuide(),
+    'enter-btn': () => showStatus('Enter pressed')
+  };
+
+  // Add event listeners to remote buttons
+  Object.entries(remoteButtons).forEach(([id, handler]) => {
+    const button = document.getElementById(id);
+    if (button) {
+      button.addEventListener('click', handler);
+    } else {
+      console.warn(`Remote button not found: ${id}`);
+    }
+  });
   
   // EPG functionality removed
   
