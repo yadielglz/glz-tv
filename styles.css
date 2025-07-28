@@ -2123,15 +2123,10 @@ body::before {
 @media (max-width: 768px) {
   .stb-header {
     padding: var(--spacing-sm) var(--spacing-md);
-    height: auto;
-    min-height: 80px;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-  }
-  
-  .header-top-row,
-  .header-bottom-row {
-    display: flex;
+    height: 60px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
   }
   
   .header-left,
@@ -2139,14 +2134,14 @@ body::before {
     display: flex;
   }
   
-  /* Mobile remote button */
-  .mobile-remote {
-    display: block;
+  /* Hide channel display on mobile header */
+  .channel-display {
+    display: none !important;
   }
   
-  /* Hide desktop remote button on mobile */
-  .remote {
-    display: none;
+  /* Hide mobile remote button on mobile */
+  .mobile-remote {
+    display: none !important;
   }
   
   /* Show mobile channel list on mobile */
@@ -2154,9 +2149,18 @@ body::before {
     display: block !important;
   }
   
+  /* Show mobile channel info bar on mobile */
+  .mobile-channel-info-bar {
+    display: flex !important;
+  }
+  
   /* Force mobile layout */
   .mobile-layout .mobile-channel-list {
     display: block !important;
+  }
+  
+  .mobile-layout .mobile-channel-info-bar {
+    display: flex !important;
   }
   
   .mobile-layout .main-content {
@@ -2180,42 +2184,8 @@ body::before {
     display: none !important;
   }
   
-  .header-top-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-  }
-  
-  .header-bottom-row {
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    width: 100%;
-    gap: var(--spacing-md);
-    padding-left: var(--spacing-md);
-  }
-  
-  .channel-display {
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: var(--spacing-md);
-    width: 100%;
-    flex-wrap: nowrap;
-    overflow: hidden;
-  }
-  
-  .channel-name {
-    max-width: none;
-    font-size: 1.125rem;
-    flex: 1;
-    min-width: 0;
-  }
-  
-  .current-program {
-    max-width: 200px;
-    font-size: 0.875rem;
-    margin-top: var(--spacing-xs);
+  .desktop-layout .mobile-channel-info-bar {
+    display: none !important;
   }
   
   .mini-guide {
@@ -2240,6 +2210,80 @@ body::before {
     border-radius: var(--radius-md);
     position: relative;
     z-index: 10;
+  }
+  
+  /* Mobile Channel Info Bar */
+  .mobile-channel-info-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    margin: 0 var(--spacing-sm);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    margin-top: var(--spacing-sm);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .mobile-channel-info-bar .mobile-channel-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  
+  .mobile-channel-info-bar .mobile-channel-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+  }
+  
+  .mobile-channel-info-bar .mobile-channel-logo-placeholder {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+  
+  .mobile-channel-info-bar .mobile-channel-details {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .mobile-channel-info-bar .mobile-channel-number {
+    font-family: var(--font-mono);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .mobile-channel-info-bar .mobile-channel-name {
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .mobile-channel-info-bar .mobile-current-program {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   
   /* Mobile Channel List */

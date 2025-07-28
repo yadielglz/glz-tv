@@ -897,11 +897,7 @@ function updateTime() {
   // Update desktop time display
   timeDisplay.textContent = timeString;
   
-  // Update mobile time display
-  const mobileTimeDisplay = document.getElementById('time-display-mobile');
-  if (mobileTimeDisplay) {
-    mobileTimeDisplay.textContent = timeString;
-  }
+
 }
 setInterval(updateTime, 1000);
 
@@ -918,10 +914,10 @@ function updateChannelDisplay(idx = current) {
     document.getElementById('channel-logo-placeholder').textContent = 'TV';
     
     // Update mobile elements
-    const mobileChannelNumber = document.getElementById('channel-number-mobile');
-    const mobileChannelName = document.getElementById('channel-name-mobile');
-    const mobileLogoImg = document.getElementById('channel-logo-img-mobile');
-    const mobileLogoPlaceholder = document.getElementById('channel-logo-placeholder-mobile');
+    const mobileChannelNumber = document.getElementById('mobile-channel-number');
+    const mobileChannelName = document.getElementById('mobile-channel-name');
+    const mobileLogoImg = document.getElementById('mobile-channel-logo-img');
+    const mobileLogoPlaceholder = document.getElementById('mobile-channel-logo-placeholder');
     
     if (mobileChannelNumber) mobileChannelNumber.textContent = '000';
     if (mobileChannelName) mobileChannelName.textContent = 'STANDBY';
@@ -943,8 +939,8 @@ function updateChannelDisplay(idx = current) {
   channelName.textContent = channel.name;
   
   // Update mobile elements
-  const mobileChannelNumber = document.getElementById('channel-number-mobile');
-  const mobileChannelName = document.getElementById('channel-name-mobile');
+  const mobileChannelNumber = document.getElementById('mobile-channel-number');
+  const mobileChannelName = document.getElementById('mobile-channel-name');
   if (mobileChannelNumber) mobileChannelNumber.textContent = channel.chno ? channel.chno : (idx + 1).toString().padStart(3, '0');
   if (mobileChannelName) mobileChannelName.textContent = channel.name;
   
@@ -974,8 +970,8 @@ function updateChannelDisplay(idx = current) {
   }
   
   // Update mobile logo
-  const mobileLogoImg = document.getElementById('channel-logo-img-mobile');
-  const mobileLogoPlaceholder = document.getElementById('channel-logo-placeholder-mobile');
+  const mobileLogoImg = document.getElementById('mobile-channel-logo-img');
+  const mobileLogoPlaceholder = document.getElementById('mobile-channel-logo-placeholder');
   
   if (mobileLogoImg && mobileLogoPlaceholder) {
     if (channel.logo && channel.logo.trim()) {
@@ -1082,9 +1078,21 @@ function updateHeaderProgram(channelId) {
       <span class="program-time">${formatTime(current.start)} - ${formatTime(current.stop)}</span>
     `;
     currentProgram.classList.add('show');
+    
+    // Update mobile program display
+    const mobileCurrentProgram = document.getElementById('mobile-current-program');
+    if (mobileCurrentProgram) {
+      mobileCurrentProgram.textContent = current.title;
+    }
   } else {
     currentProgram.innerHTML = '';
     currentProgram.classList.remove('show');
+    
+    // Clear mobile program display
+    const mobileCurrentProgram = document.getElementById('mobile-current-program');
+    if (mobileCurrentProgram) {
+      mobileCurrentProgram.textContent = '';
+    }
   }
 }
 
@@ -1911,15 +1919,6 @@ function showStatus(msg, duration = 2000) {
     document.body.classList.add('mobile-device');
     // Force mobile layout
     document.body.classList.add('mobile-layout');
-    
-    // Set up mobile-specific event listeners
-    const mobilePowerBtn = document.getElementById('power-btn-mobile');
-    const mobileGuideBtn = document.getElementById('guide-btn-mobile');
-    const mobileOptionsBtn = document.getElementById('header-options-btn-mobile');
-    
-    if (mobilePowerBtn) mobilePowerBtn.onclick = togglePower;
-    if (mobileGuideBtn) mobileGuideBtn.onclick = showGuide;
-    if (mobileOptionsBtn) mobileOptionsBtn.onclick = showOptions;
   } else {
     // Desktop-specific optimizations
     console.log('Desktop device detected');
