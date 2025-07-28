@@ -333,6 +333,9 @@ const epgAutoRefresh = document.getElementById('epg-auto-refresh');
 const cacheDurationSelect = document.getElementById('cache-duration-select');
 const themeToggleBtn = document.getElementById('theme-toggle-btn');
 const themeToggleText = document.getElementById('theme-toggle-text');
+const miniGuide = document.getElementById('mini-guide');
+const miniGuideClose = document.getElementById('mini-guide-close');
+const miniGuideContent = document.getElementById('mini-guide-content');
 
 // New remote control elements
 const volumeDownBtn = document.getElementById('volume-down');
@@ -905,17 +908,24 @@ function updateChannelDisplay(idx = current) {
   }
   
   const channel = channels[idx];
+  
+  // Add animation to channel number
+  channelNumber.classList.add('scale-in');
+  setTimeout(() => channelNumber.classList.remove('scale-in'), 300);
+  
   channelNumber.textContent = channel.chno ? channel.chno : (idx + 1).toString().padStart(3, '0');
   channelName.textContent = channel.name;
   
-  // Update channel logo
+  // Update channel logo with animation
   const logoImg = document.getElementById('channel-logo-img');
   const logoPlaceholder = document.getElementById('channel-logo-placeholder');
   
   if (channel.logo && channel.logo.trim()) {
+    logoImg.classList.add('fade-in');
     logoImg.src = channel.logo;
     logoImg.style.display = 'block';
     logoPlaceholder.style.display = 'none';
+    setTimeout(() => logoImg.classList.remove('fade-in'), 300);
     
     // Handle logo load error
     logoImg.onerror = () => {
@@ -927,6 +937,8 @@ function updateChannelDisplay(idx = current) {
     logoImg.style.display = 'none';
     logoPlaceholder.style.display = 'block';
     logoPlaceholder.textContent = channel.name.substring(0, 3);
+    logoPlaceholder.classList.add('fade-in');
+    setTimeout(() => logoPlaceholder.classList.remove('fade-in'), 300);
   }
   
   // Update EPG information
@@ -1027,6 +1039,64 @@ function updateHeaderProgram(channelId) {
 function initTheme() {
   const savedTheme = localStorage.getItem('glz-theme') || 'light-glass';
   setTheme(savedTheme);
+}
+
+/**
+ * Mini Guide Management
+ */
+function showMiniGuide() {
+  if (!miniGuide) return;
+  
+  // Get current channel and nearby channels
+  const currentChannel = channels[current];
+  const nearbyChannels = getNearbyChannels(current, 5); // Get 5 channels before and after
+  
+  // Populate mini guide content
+  miniGuideContent.innerHTML = nearbyChannels.map((channel, index) => {
+    const isActive = channel === currentChannel;
+    const programInfo = getCurrentProgram(channel.id);
+    const programTitle = programInfo?.current?.title || 'No program info';
+    
+    return `
+      <div class="mini-guide-item ${isActive ? 'active' : ''}" data-channel-index="${channels.indexOf(channel)}">
+        <div class="mini-guide-channel-logo">
+          ${channel.logo ? `<img src="${channel.logo}" alt="${channel.name}">` : '<div class="channel-logo-placeholder">TV</div>'}
+        </div>
+        <div class="mini-guide-channel-info">
+          <div class="mini-guide-channel-number">${channel.chno || (channels.indexOf(channel) + 1)}</div>
+          <div class="mini-guide-channel-name">${channel.name}</div>
+          <div class="mini-guide-program">${programTitle}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  // Add click handlers
+  miniGuideContent.querySelectorAll('.mini-guide-item').forEach((item, index) => {
+    item.style.animationDelay = `${index * 0.1}s`;
+    item.classList.add('slide-in-right');
+    
+    item.addEventListener('click', () => {
+      const channelIndex = parseInt(item.dataset.channelIndex);
+      if (channelIndex !== current) {
+        playChannel(channelIndex);
+      }
+      hideMiniGuide();
+    });
+  });
+  
+  miniGuide.classList.add('show', 'scale-in');
+}
+
+function hideMiniGuide() {
+  if (!miniGuide) return;
+  miniGuide.classList.remove('show');
+}
+
+function getNearbyChannels(centerIndex, range) {
+  const start = Math.max(0, centerIndex - range);
+  const end = Math.min(channels.length, centerIndex + range + 1);
+  return channels.slice(start, end);
 }
 
 /**
@@ -1432,6 +1502,7 @@ if (closeOptions) closeOptions.onclick = hideOptions;
 if (reloadEpgBtn) reloadEpgBtn.onclick = reloadEPGData;
 if (clearCacheBtn) clearCacheBtn.onclick = clearAllCache;
 if (themeToggleBtn) themeToggleBtn.onclick = toggleTheme;
+if (miniGuideClose) miniGuideClose.onclick = hideMiniGuide;
 
 // EPG Settings controls
 if (epgSourceSelect) {
@@ -1543,6 +1614,13 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'F3') showOptions();
 if (e.key === 'F4') toggleTheme();
 if (e.key === 'F5') setStandby(!standby);
+if (e.key === 'G') showMiniGuide();
+if (e.key === 'Escape') {
+  hideMiniGuide();
+  hideGuide();
+  hideOptions();
+  helpOverlay.style.display = 'none';
+}
 });
 
 window.addEventListener('resize', adjustLayoutForRemote);
@@ -1758,6 +1836,8 @@ function showStatus(msg, duration = 2000) {
     <div><kbd>F3</kbd>: Show Options</div>
 <div><kbd>F4</kbd>: Toggle Theme</div>
 <div><kbd>F5</kbd>: Power On/Off</div>
+<div><kbd>G</kbd>: Mini Guide</div>
+<div><kbd>ESC</kbd>: Close All</div>
     <div><kbd>←/→</kbd>: Prev/Next Channel</div>
     <div><kbd>↑</kbd>: Show Guide</div>
     <div><kbd>?</kbd>: Show Help</div>

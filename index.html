@@ -6,7 +6,7 @@
   <title>GLZ TV - Liquid Glass Experience</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#667eea">
@@ -20,6 +20,8 @@
     <div class="floating-orb orb-1"></div>
     <div class="floating-orb orb-2"></div>
     <div class="floating-orb orb-3"></div>
+    <div class="floating-orb orb-4"></div>
+    <div class="floating-orb orb-5"></div>
   </div>
 
   <div class="stb-container">
@@ -103,6 +105,22 @@
         <!-- EPG Information Display -->
         <div class="epg-info" id="epg-info" style="display: none;">
           <!-- EPG content will be populated here -->
+        </div>
+        
+        <!-- Mini Guide Overlay -->
+        <div class="mini-guide" id="mini-guide">
+          <div class="mini-guide-header">
+            <h3>Now Playing</h3>
+            <button class="mini-guide-close" id="mini-guide-close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="mini-guide-content" id="mini-guide-content">
+            <!-- Mini guide content will be populated here -->
+          </div>
         </div>
 
         <!-- Standby Screen with Liquid Glass -->
