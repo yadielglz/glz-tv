@@ -365,6 +365,35 @@ body::before {
   white-space: nowrap;
 }
 
+.current-program {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  max-width: 280px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: var(--spacing-xs);
+  opacity: 0;
+  transition: var(--transition-normal);
+}
+
+.current-program.show {
+  opacity: 1;
+}
+
+.current-program .program-title {
+  font-weight: 500;
+  color: var(--accent-color);
+}
+
+.current-program .program-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: var(--spacing-sm);
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -1703,6 +1732,15 @@ body::before {
   .channel-name {
     max-width: 120px;
     font-size: 1rem;
+  }
+  
+  .current-program {
+    max-width: 120px;
+    font-size: 0.75rem;
+  }
+  
+  .current-program .program-time {
+    display: none;
   }
   
   .time-display {

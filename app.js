@@ -286,6 +286,7 @@ const video = document.getElementById('video');
 const audio = document.getElementById('audio');
 const channelNumber = document.getElementById('channel-number');
 const channelName = document.getElementById('channel-name');
+const currentProgram = document.getElementById('current-program');
 const timeDisplay = document.getElementById('time-display');
 const dateDisplay = document.getElementById('date-display');
 const standbyScreen = document.getElementById('standby-screen');
@@ -457,7 +458,13 @@ async function fetchEPGData() {
     // Update options display if it's open
     updateOptionsDisplay();
     
+    // Update header program display
+    if (channels[current] && channels[current].id) {
+      updateHeaderProgram(channels[current].id);
+    }
+    
     console.log('EPG data parsed successfully:', Object.keys(epgData).length, 'channels');
+    console.log('Available EPG channel IDs (first 20):', Object.keys(epgData).slice(0, 20));
     
   } catch (error) {
     console.error('EPG fetch failed:', error);
@@ -513,14 +520,30 @@ function getCurrentProgram(channelId) {
   console.log('getCurrentProgram called with channelId:', channelId);
   console.log('Available EPG channels:', Object.keys(epgData));
   
-  // Try multiple channel ID formats
+  if (!channelId || !epgData || Object.keys(epgData).length === 0) {
+    console.log('No EPG data available');
+    return null;
+  }
+  
+  // Try multiple channel ID formats for better matching
   const possibleIds = [
     channelId,
     channelId?.toLowerCase(),
     channelId?.toUpperCase(),
     channelId?.replace(/\.us$/, ''),
     channelId?.replace(/\.us$/, '.us'),
-    channelId?.toString()
+    channelId?.replace(/\.es$/, ''),
+    channelId?.replace(/\.ec$/, ''),
+    channelId?.toString(),
+    // Try without country codes
+    channelId?.replace(/\.(us|es|ec)$/, ''),
+    // Try with different separators
+    channelId?.replace(/\./g, '_'),
+    channelId?.replace(/_/g, '.'),
+    // Try common variations
+    channelId?.replace(/\.us$/, '.US'),
+    channelId?.replace(/\.es$/, '.ES'),
+    channelId?.replace(/\.ec$/, '.EC')
   ].filter(Boolean);
   
   console.log('Trying channel IDs:', possibleIds);
@@ -531,6 +554,20 @@ function getCurrentProgram(channelId) {
       foundChannelId = id;
       console.log('Found EPG data for channel ID:', id);
       break;
+    }
+  }
+  
+  // If still not found, try partial matching
+  if (!foundChannelId) {
+    const baseId = channelId.replace(/\.(us|es|ec)$/, '').toLowerCase();
+    for (const epgId of Object.keys(epgData)) {
+      if (epgId.toLowerCase().includes(baseId) || baseId.includes(epgId.toLowerCase())) {
+        if (epgData[epgId] && epgData[epgId].length > 0) {
+          foundChannelId = epgId;
+          console.log('Found EPG data via partial match:', epgId);
+          break;
+        }
+      }
     }
   }
   
@@ -894,6 +931,9 @@ function updateChannelDisplay(idx = current) {
   console.log('Channel ID being used for EPG:', channel.id);
   updateEPGDisplay(channel.id);
   
+  // Update header with current program
+  updateHeaderProgram(channel.id);
+  
   // Update favorites button state
   updateFavoritesButton();
 }
@@ -951,6 +991,30 @@ function updateEPGDisplay(channelId) {
         epgElement.style.display = 'none';
       }
     }, 300);
+  }
+}
+
+/**
+ * Updates the header with current program information
+ */
+function updateHeaderProgram(channelId) {
+  if (!currentProgram) return;
+  
+  const programInfo = getCurrentProgram(channelId);
+  
+  if (programInfo && programInfo.current) {
+    const current = programInfo.current;
+    const now = new Date();
+    const progress = ((now - current.start) / (current.stop - current.start)) * 100;
+    
+    currentProgram.innerHTML = `
+      <span class="program-title">${current.title}</span>
+      <span class="program-time">${formatTime(current.start)} - ${formatTime(current.stop)}</span>
+    `;
+    currentProgram.classList.add('show');
+  } else {
+    currentProgram.innerHTML = '';
+    currentProgram.classList.remove('show');
   }
 }
 
