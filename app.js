@@ -666,12 +666,16 @@ function toggleRemoteVisibility() {
   }
 }
 
-function showStatus(msg, duration = 2000) {
-  statusMessage.textContent = msg;
-  statusMessage.style.display = '';
-  setTimeout(() => {
-    statusMessage.style.display = 'none';
-  }, duration);
+function showStatus(msg, duration = 3000) {
+  const statusElement = document.getElementById('status-message');
+  if (statusElement) {
+    statusElement.textContent = msg;
+    statusElement.classList.add('show');
+    
+    setTimeout(() => {
+      statusElement.classList.remove('show');
+    }, duration);
+  }
 }
 
 // Options Panel Functions
@@ -1337,8 +1341,9 @@ function updateConnectionStatus() {
   // connectionStatusBtn.classList.toggle('connected', isConnected); // Removed from new layout
   // connectionStatusBtn.classList.toggle('disconnected', !isConnected); // Removed from new layout
   
-  if (!isConnected) {
-    showStatus('Connection issues detected');
+  // Only show connection issues if we're not already showing a status
+  if (!isConnected && !document.getElementById('status-message').classList.contains('show')) {
+    showStatus('Connection issues detected', 2000);
   }
 }
 
@@ -1938,26 +1943,7 @@ function showChannelBanner() {
 }
 
 // --- Enhanced Status Messages ---
-function showStatus(msg, duration = 2000) {
-  statusMessage.textContent = msg;
-  statusMessage.style.display = 'block';
-  statusMessage.style.transform = 'translate(-50%, -50%) scale(0.8)';
-  statusMessage.style.opacity = '0';
-  
-  // Animate in
-  setTimeout(() => {
-    statusMessage.style.transform = 'translate(-50%, -50%) scale(1)';
-    statusMessage.style.opacity = '1';
-  }, 50);
-  
-  setTimeout(() => {
-    statusMessage.style.transform = 'translate(-50%, -50%) scale(0.8)';
-    statusMessage.style.opacity = '0';
-    setTimeout(() => {
-      statusMessage.style.display = 'none';
-    }, 300);
-  }, duration);
-}
+// showStatus function is defined above
 
 // --- Enhanced Initialization ---
 (function init() {
