@@ -3,7 +3,7 @@
 // Version: 2024-01-27-v3 - Reverted stream testing and CORS code, restored original playback
 
 // --- Embedded M3U Content (move this to a separate file or fetch from server for production) ---
-const EMBEDDED_M3U = `#EXTM3U
+const EMBEDDED_M3U = `#EXTM3U url-tvg="https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz"
 #EXTINF:-1 tvg-id="WKAQ.us" tvg-name="WKAQ   TELEMUNDO PR" tvg-logo="https://i.ibb.co/gLVK5Swz/TEL.png" tvg-chno="102" channel-id="102" group-title="TV",WKAQ   TELEMUNDO PR
 https://nbculocallive.akamaized.net/hls/live/2037499/puertorico/stream1/master_1080.m3u8
 #EXTINF:-1 tvg-id="WKAQDT2.us" tvg-name="WKAQ2   PUNTO 2" tvg-logo="https://static.epg.best/us/WKAQDT2.us.png" tvg-chno="103" channel-id="103" group-title="TV",WKAQ2   PUNTO 2
@@ -266,7 +266,22 @@ let connectionStatus = 'connected';
 let channelInput = '';
 let pwaInstallPrompt = null;
 
+// EPG State
+let epgData = {};
+let epgLoading = false;
+let epgLastUpdate = null;
+const EPG_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+// EPG Sources
+const EPG_SOURCES = {
+  epgshare01: 'https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz',
+  epgshare02: 'https://epgshare02.online/epgshare02/epg_ripper_ALL_SOURCES2.xml.gz',
+  epgshare03: 'https://epgshare03.online/epgshare03/epg_ripper_ALL_SOURCES3.xml.gz',
+  uslocals: 'https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz'
+};
 
+let EPG_URL = EPG_SOURCES.uslocals; // Default to US Locals for better local channel coverage
+const LOCAL_EPG_PROXY = 'http://localhost:3000/api/epg';
+const CLOUD_EPG_PROXY = '/api/epg'; // Netlify function
 
 // --- DOM Elements ---
 const video = document.getElementById('video');
@@ -308,8 +323,18 @@ const stbContainer = document.querySelector('.stb-container');
 const optionsOverlay = document.getElementById('options-overlay');
 const closeOptions = document.getElementById('close-options');
 const headerOptionsBtn = document.getElementById('header-options-btn');
+const reloadEpgBtn = document.getElementById('reload-epg-btn');
 const clearCacheBtn = document.getElementById('clear-cache-btn');
+const epgStatus = document.getElementById('epg-status');
+const epgLastUpdateDisplay = document.getElementById('epg-last-update');
 const connectionStatusDisplay = document.getElementById('connection-status-display');
+
+// EPG Settings elements
+const epgSourceSelect = document.getElementById('epg-source-select');
+const customEpgUrlItem = document.getElementById('custom-epg-url-item');
+const epgUrlInput = document.getElementById('epg-url-input');
+const epgAutoRefresh = document.getElementById('epg-auto-refresh');
+const cacheDurationSelect = document.getElementById('cache-duration-select');
 const themeToggleBtn = document.getElementById('theme-toggle-btn');
 const themeToggleText = document.getElementById('theme-toggle-text');
 const miniGuide = document.getElementById('mini-guide');
@@ -333,7 +358,274 @@ const connectionStatusBtn = document.getElementById('connection-status-btn');
 /**
  * Fetches and parses EPG data from the XML URL
  */
+async function fetchEPGData() {
+  if (epgLoading) {
+    console.log('EPG already loading...');
+    return;
+  }
+  
+  // Check cache
+  const cached = localStorage.getItem('glz-epg-cache');
+  const cacheTime = localStorage.getItem('glz-epg-cache-time');
+  
+  if (cached && cacheTime) {
+    const age = Date.now() - parseInt(cacheTime);
+    const cacheDuration = parseInt(localStorage.getItem('glz-epg-cache-duration') || '30') * 60 * 1000;
+    
+    if (age < cacheDuration) {
+      console.log('Using cached EPG data');
+      epgData = JSON.parse(cached);
+      epgLastUpdate = parseInt(cacheTime);
+      
+      console.log('✅ Using cached EPG data');
+      return;
+    }
+  }
+  
+  epgLoading = true;
+  console.log('Fetching EPG data from:', EPG_URL);
+  console.log('💡 Note: This is a large EPG file (~150MB compressed). Loading may take a moment...');
+  
+  try {
+    // For very large EPG files, try direct access first, then fallback to proxies
+    const proxies = [
+      EPG_URL, // Try direct access first for large files
+      CLOUD_EPG_PROXY, // Cloud proxy (works on mobile)
+      LOCAL_EPG_PROXY, // Local proxy (development only)
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(EPG_URL)}`,
+      `https://cors-anywhere.herokuapp.com/${EPG_URL}`,
+      `https://thingproxy.freeboard.io/fetch/${EPG_URL}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(EPG_URL)}`
+    ];
+    
+    let xmlText = null;
+    let lastError = null;
+    
+    for (const proxyUrl of proxies) {
+      try {
+        console.log('Trying proxy:', proxyUrl);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for large files
+        
+        const response = await fetch(proxyUrl, {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/xml, text/xml, */*',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        xmlText = await response.text();
+        console.log('EPG XML received from proxy, length:', xmlText.length);
+        console.log('First 500 chars of XML:', xmlText.substring(0, 500));
+        break; // Success, exit the loop
+        
+      } catch (error) {
+        console.log('Proxy failed:', error.message);
+        lastError = error;
+        continue; // Try next proxy
+      }
+    }
+    
+    if (!xmlText) {
+      throw new Error('All proxies failed: ' + lastError?.message);
+    }
+    
+    // Parse XML
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+    
+    // Check for parsing errors
+    const parseError = xmlDoc.querySelector('parsererror');
+    if (parseError) {
+      throw new Error('XML parsing failed: ' + parseError.textContent);
+    }
+    
+    console.log('XML parsed successfully, checking for channels...');
+    console.log('XML document root:', xmlDoc.documentElement?.tagName);
+    console.log('Number of programme elements:', xmlDoc.querySelectorAll('programme').length);
+    
+    // Parse programs
+    epgData = parseEPGXML(xmlDoc);
+    
+    // Debug: Check if we got any data
+    console.log('EPG channels found:', Object.keys(epgData).length);
+    console.log('Sample EPG channel IDs:', Object.keys(epgData).slice(0, 5));
+    console.log('Sample channel data:', Object.values(epgData).slice(0, 1));
+    
+    // Cache the data
+    localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
+    localStorage.setItem('glz-epg-cache-time', Date.now().toString());
+    epgLastUpdate = Date.now();
+    
+    // Update options display if it's open
+    updateOptionsDisplay();
+    
+    // Update header program display
+    if (channels[current] && channels[current].id) {
+      updateHeaderProgram(channels[current].id);
+    }
+    
+    console.log('EPG data parsed successfully:', Object.keys(epgData).length, 'channels');
+    console.log('Available EPG channel IDs (first 20):', Object.keys(epgData).slice(0, 20));
+    
+  } catch (error) {
+    console.error('EPG fetch failed:', error);
+    showStatus('EPG data unavailable', 3000);
+    console.log('❌ EPG data not available - no fallback will be shown');
+  } finally {
+    epgLoading = false;
+  }
+}
 
+/**
+ * Parses XML EPG data into a structured format
+ */
+function parseEPGXML(xmlDoc) {
+  const epg = {};
+  const programmes = xmlDoc.querySelectorAll('programme');
+  
+  programmes.forEach(programme => {
+    const channel = programme.getAttribute('channel');
+    const start = programme.getAttribute('start');
+    const stop = programme.getAttribute('stop');
+    const title = programme.querySelector('title')?.textContent || 'Unknown';
+    const desc = programme.querySelector('desc')?.textContent || '';
+    const category = programme.querySelector('category')?.textContent || '';
+    const rating = programme.querySelector('rating')?.querySelector('value')?.textContent || '';
+    
+    if (!epg[channel]) {
+      epg[channel] = [];
+    }
+    
+    epg[channel].push({
+      start: new Date(start),
+      stop: new Date(stop),
+      title,
+      desc,
+      category,
+      rating
+    });
+  });
+  
+  // Sort programs by start time for each channel
+  Object.keys(epg).forEach(channel => {
+    epg[channel].sort((a, b) => a.start - b.start);
+  });
+  
+  return epg;
+}
+
+/**
+ * Gets current and next program for a channel
+ */
+function getCurrentProgram(channelId) {
+  console.log('getCurrentProgram called with channelId:', channelId);
+  console.log('Available EPG channels:', Object.keys(epgData));
+  
+  if (!channelId || !epgData || Object.keys(epgData).length === 0) {
+    console.log('No EPG data available');
+    return null;
+  }
+  
+  // Try multiple channel ID formats for better matching
+  const possibleIds = [
+    channelId,
+    channelId?.toLowerCase(),
+    channelId?.toUpperCase(),
+    channelId?.replace(/\.us$/, ''),
+    channelId?.replace(/\.us$/, '.us'),
+    channelId?.replace(/\.es$/, ''),
+    channelId?.replace(/\.ec$/, ''),
+    channelId?.toString(),
+    // Try without country codes
+    channelId?.replace(/\.(us|es|ec)$/, ''),
+    // Try with different separators
+    channelId?.replace(/\./g, '_'),
+    channelId?.replace(/_/g, '.'),
+    // Try common variations
+    channelId?.replace(/\.us$/, '.US'),
+    channelId?.replace(/\.es$/, '.ES'),
+    channelId?.replace(/\.ec$/, '.EC')
+  ].filter(Boolean);
+  
+  console.log('Trying channel IDs:', possibleIds);
+  
+  let foundChannelId = null;
+  for (const id of possibleIds) {
+    if (epgData[id] && epgData[id].length > 0) {
+      foundChannelId = id;
+      console.log('Found EPG data for channel ID:', id);
+      break;
+    }
+  }
+  
+  // If still not found, try partial matching
+  if (!foundChannelId) {
+    const baseId = channelId.replace(/\.(us|es|ec)$/, '').toLowerCase();
+    for (const epgId of Object.keys(epgData)) {
+      if (epgId.toLowerCase().includes(baseId) || baseId.includes(epgId.toLowerCase())) {
+        if (epgData[epgId] && epgData[epgId].length > 0) {
+          foundChannelId = epgId;
+          console.log('Found EPG data via partial match:', epgId);
+          break;
+        }
+      }
+    }
+  }
+  
+  if (!foundChannelId) {
+    console.log('No EPG data found for any channel ID variation');
+    return null;
+  }
+  
+  const now = new Date();
+  const programs = epgData[foundChannelId];
+  
+  // Find current program
+  const currentProgram = programs.find(prog => 
+    prog.start <= now && prog.stop > now
+  );
+  
+  if (currentProgram) {
+    // Find next program
+    const nextProgram = programs.find(prog => 
+      prog.start >= currentProgram.stop
+    );
+    
+    return {
+      current: currentProgram,
+      next: nextProgram || null
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Formats time for display
+ */
+function formatTime(date) {
+  return date.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit',
+    hour12: true 
+  });
+}
+
+/**
+ * Gets program duration in minutes
+ */
+function getProgramDuration(start, stop) {
+  return Math.round((stop - start) / (1000 * 60));
+}
 
 
 
@@ -396,7 +688,7 @@ function showStatus(msg, duration = 2000) {
 function showOptions() {
   if (optionsOverlay) {
     optionsOverlay.style.display = 'flex';
-
+    loadEPGSettings();
     updateOptionsDisplay();
   }
 }
@@ -408,6 +700,30 @@ function hideOptions() {
 }
 
 function updateOptionsDisplay() {
+  // Update EPG status
+  if (epgStatus) {
+    if (epgLoading) {
+      epgStatus.textContent = 'Loading...';
+      epgStatus.className = 'epg-status loading';
+    } else if (epgData && Object.keys(epgData).length > 0) {
+      epgStatus.textContent = 'Available';
+      epgStatus.className = 'epg-status available';
+    } else {
+      epgStatus.textContent = 'Unavailable';
+      epgStatus.className = 'epg-status unavailable';
+    }
+  }
+  
+  // Update EPG last update time
+  if (epgLastUpdateDisplay) {
+    if (epgLastUpdate) {
+      const date = new Date(epgLastUpdate);
+      epgLastUpdateDisplay.textContent = date.toLocaleString();
+    } else {
+      epgLastUpdateDisplay.textContent = 'Never';
+    }
+  }
+  
   // Update connection status
   if (connectionStatusDisplay) {
     connectionStatusDisplay.textContent = navigator.onLine ? 'Online' : 'Offline';
@@ -416,7 +732,32 @@ function updateOptionsDisplay() {
   }
 }
 
-
+async function reloadEPGData() {
+  if (epgLoading) {
+    showStatus('EPG already loading...', 2000);
+    return;
+  }
+  
+  showStatus('Reloading EPG data...', 2000);
+  console.log('Manual EPG reload requested');
+  
+  // Clear cache to force fresh fetch
+  localStorage.removeItem('glz-epg-cache');
+  localStorage.removeItem('glz-epg-cache-time');
+  
+  // Update display to show loading
+  updateOptionsDisplay();
+  
+  try {
+    await fetchEPGData();
+    showStatus('EPG data reloaded successfully!', 3000);
+    updateOptionsDisplay();
+  } catch (error) {
+    console.error('Manual EPG reload failed:', error);
+    showStatus('EPG reload failed', 3000);
+    updateOptionsDisplay();
+  }
+}
 
 function clearAllCache() {
   showStatus('Clearing cache...', 2000);
@@ -438,7 +779,108 @@ function clearAllCache() {
   updateOptionsDisplay();
 }
 
+// EPG Settings Management
+function loadEPGSettings() {
+  // Load EPG source
+  const savedSource = localStorage.getItem('glz-epg-source') || 'epgshare01';
+  if (epgSourceSelect) {
+    epgSourceSelect.value = savedSource;
+  }
+  
+  // Load custom URL
+  const customUrl = localStorage.getItem('glz-epg-custom-url');
+  if (epgUrlInput && customUrl) {
+    epgUrlInput.value = customUrl;
+  }
+  
+  // Load auto refresh setting
+  const autoRefresh = localStorage.getItem('glz-epg-auto-refresh') !== 'false';
+  if (epgAutoRefresh) {
+    epgAutoRefresh.checked = autoRefresh;
+  }
+  
+  // Load cache duration
+  const cacheDuration = localStorage.getItem('glz-epg-cache-duration') || '30';
+  if (cacheDurationSelect) {
+    cacheDurationSelect.value = cacheDuration;
+  }
+  
+  // Update EPG URL based on settings
+  updateEPGURL();
+  
+  // Show/hide custom URL input
+  updateCustomUrlVisibility();
+}
 
+function saveEPGSettings() {
+  // Save EPG source
+  if (epgSourceSelect) {
+    localStorage.setItem('glz-epg-source', epgSourceSelect.value);
+  }
+  
+  // Save custom URL
+  if (epgUrlInput) {
+    localStorage.setItem('glz-epg-custom-url', epgUrlInput.value);
+  }
+  
+  // Save auto refresh setting
+  if (epgAutoRefresh) {
+    localStorage.setItem('glz-epg-auto-refresh', epgAutoRefresh.checked.toString());
+  }
+  
+  // Save cache duration
+  if (cacheDurationSelect) {
+    localStorage.setItem('glz-epg-cache-duration', cacheDurationSelect.value);
+  }
+  
+  // Update EPG URL
+  updateEPGURL();
+  
+  showStatus('EPG settings saved', 2000);
+}
+
+function updateEPGURL() {
+  if (!epgSourceSelect) return;
+  
+  const selectedSource = epgSourceSelect.value;
+  
+  if (selectedSource === 'custom' && epgUrlInput) {
+    EPG_URL = epgUrlInput.value.trim();
+  } else if (EPG_SOURCES[selectedSource]) {
+    EPG_URL = EPG_SOURCES[selectedSource];
+  }
+  
+  console.log('EPG URL updated to:', EPG_URL);
+}
+
+function updateCustomUrlVisibility() {
+  if (!epgSourceSelect || !customEpgUrlItem) return;
+  
+  if (epgSourceSelect.value === 'custom') {
+    customEpgUrlItem.style.display = 'flex';
+  } else {
+    customEpgUrlItem.style.display = 'none';
+  }
+}
+
+async function changeEPGSource() {
+  saveEPGSettings();
+  
+  // Clear current EPG cache
+  localStorage.removeItem('glz-epg-cache');
+  localStorage.removeItem('glz-epg-cache-time');
+  
+  showStatus('EPG source changed, reloading data...', 2000);
+  
+  // Reload EPG data with new source
+  try {
+    await fetchEPGData();
+    showStatus('EPG data loaded from new source!', 3000);
+  } catch (error) {
+    console.error('Failed to load EPG from new source:', error);
+    showStatus('Failed to load EPG from new source', 3000);
+  }
+}
 function showLoading() {
   if (loadingIndicator) {
     loadingIndicator.style.display = 'flex';
@@ -559,10 +1001,7 @@ function updateChannelDisplay(idx = current) {
     }
   }
   
-
-  
-  // Update mobile current program (removed EPG functionality)
-  // No longer needed since we removed EPG
+  // EPG functionality removed
   
   // Update favorites button state
   updateFavoritesButton();
@@ -576,9 +1015,107 @@ function updateChannelDisplay(idx = current) {
 /**
  * Updates mobile current program display
  */
+function updateMobileCurrentProgram(channelId) {
+  const mobileCurrentProgram = document.getElementById('mobile-current-program');
+  if (!mobileCurrentProgram) return;
+  
+  const programInfo = getCurrentProgram(channelId);
+  
+  if (programInfo && programInfo.current) {
+    mobileCurrentProgram.textContent = programInfo.current.title;
+    mobileCurrentProgram.style.display = 'block';
+  } else {
+    mobileCurrentProgram.textContent = '';
+    mobileCurrentProgram.style.display = 'none';
+  }
+}
 
+/**
+ * Updates EPG display for a channel
+ */
+function updateEPGDisplay(channelId) {
+  if (!channelId) {
+    return;
+  }
+  
+  const programInfo = getCurrentProgram(channelId);
+  
+  const epgElement = document.getElementById('epg-info');
+  
+  if (!epgElement) {
+    return;
+  }
+  
+  if (programInfo && programInfo.current) {
+    const current = programInfo.current;
+    const next = programInfo.next;
+    
+    const now = new Date();
+    const progress = ((now - current.start) / (current.stop - current.start)) * 100;
+    
+    epgElement.innerHTML = `
+      <div class="epg-current">
+        <div class="epg-title">${current.title}</div>
+        <div class="epg-time">${formatTime(current.start)} - ${formatTime(current.stop)} (${getProgramDuration(current.start, current.stop)}min)</div>
+        <div class="epg-progress">
+          <div class="epg-progress-bar" style="width: ${progress}%"></div>
+        </div>
+      </div>
+      ${next ? `
+        <div class="epg-next">
+          <div class="epg-next-label">Next:</div>
+          <div class="epg-next-title">${next.title}</div>
+          <div class="epg-next-time">${formatTime(next.start)} - ${formatTime(next.stop)}</div>
+        </div>
+      ` : ''}
+    `;
+    epgElement.style.display = 'block';
+    epgElement.classList.add('show');
+  } else {
+    epgElement.classList.remove('show');
+    setTimeout(() => {
+      if (!epgElement.classList.contains('show')) {
+        epgElement.style.display = 'none';
+      }
+    }, 300);
+  }
+}
 
-
+/**
+ * Updates the header with current program information
+ */
+function updateHeaderProgram(channelId) {
+  if (!currentProgram) return;
+  
+  const programInfo = getCurrentProgram(channelId);
+  
+  if (programInfo && programInfo.current) {
+    const current = programInfo.current;
+    const now = new Date();
+    const progress = ((now - current.start) / (current.stop - current.start)) * 100;
+    
+    currentProgram.innerHTML = `
+      <span class="program-title">${current.title}</span>
+      <span class="program-time">${formatTime(current.start)} - ${formatTime(current.stop)}</span>
+    `;
+    currentProgram.classList.add('show');
+    
+    // Update mobile program display
+    const mobileCurrentProgram = document.getElementById('mobile-current-program');
+    if (mobileCurrentProgram) {
+      mobileCurrentProgram.textContent = current.title;
+    }
+  } else {
+    currentProgram.innerHTML = '';
+    currentProgram.classList.remove('show');
+    
+    // Clear mobile program display
+    const mobileCurrentProgram = document.getElementById('mobile-current-program');
+    if (mobileCurrentProgram) {
+      mobileCurrentProgram.textContent = '';
+    }
+  }
+}
 
 /**
  * Theme Management
@@ -601,7 +1138,8 @@ function showMiniGuide() {
   // Populate mini guide content
   miniGuideContent.innerHTML = nearbyChannels.map((channel, index) => {
     const isActive = channel === currentChannel;
-    const programTitle = 'No program info';
+    const programInfo = getCurrentProgram(channel.id);
+    const programTitle = programInfo?.current?.title || 'No program info';
     
     return `
       <div class="mini-guide-item ${isActive ? 'active' : ''}" data-channel-index="${channels.indexOf(channel)}">
@@ -918,10 +1456,10 @@ function stopPlayback() {
   
   // Clear sources after a brief delay to allow smooth transitions
   setTimeout(() => {
-    if (video.src && video.paused) {
+    if (video.src && !video.playing) {
       video.src = '';
     }
-    if (audio.src && audio.paused) {
+    if (audio.src && !audio.playing) {
       audio.src = '';
     }
   }, 100);
@@ -1063,10 +1601,21 @@ function showChannelBanner() {
   if (!channels[current]) return;
   
   const channel = channels[current];
+  const programInfo = getCurrentProgram(channel.id);
   
   // Update banner content
   bannerChannel.textContent = channel.chno || (current + 1);
   bannerName.textContent = channel.name;
+  
+  // Add program information if available
+  if (programInfo && programInfo.current) {
+    const progressBar = document.getElementById('progress-bar');
+    if (progressBar) {
+      const now = new Date();
+      const progress = Math.max(0, Math.min(100, ((now - programInfo.current.start) / (programInfo.current.stop - programInfo.current.start)) * 100));
+      progressBar.style.width = `${progress}%`;
+    }
+  }
   
   // Show banner with smooth animation
   channelBanner.classList.add('show');
@@ -1092,11 +1641,20 @@ function renderChannelList(filter = '') {
     ? channels.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
     : channels;
   channelList.innerHTML = filtered.map((ch, i) => {
+    const programInfo = getCurrentProgram(ch.id);
+    const epgHtml = programInfo && programInfo.current ? `
+      <div class="channel-epg">
+        <div class="epg-current-program">${programInfo.current.title}</div>
+        <div class="epg-time">${formatTime(programInfo.current.start)} - ${formatTime(programInfo.current.stop)}</div>
+      </div>
+    ` : '';
+    
     return `<div class="channel-item${i === current ? ' active' : ''}" data-idx="${i}" tabindex="0">
       <img class="channel-logo" src="${ch.logo || ''}" onerror="this.style.display='none'" />
       <div class="channel-details">
         <div class="channel-number-small">${ch.chno || (i + 1)}</div>
         <div class="channel-name-small">${ch.name}</div>
+        ${epgHtml}
       </div>
     </div>`;
   }).join('');
@@ -1123,14 +1681,15 @@ function renderMobileChannelList(filter = '') {
     return;
   }
   
-
+  console.log('Rendering mobile channel list with', channels.length, 'channels');
   
   const filtered = filter
     ? channels.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
     : channels;
   
   mobileChannelList.innerHTML = filtered.map((ch, i) => {
-    const programTitle = 'No program info';
+    const programInfo = getCurrentProgram(ch.id);
+    const programTitle = programInfo?.current?.title || 'No program info';
     
     return `<div class="mobile-channel-item${i === current ? ' active' : ''}" data-idx="${i}">
       <div class="mobile-channel-logo">
@@ -1151,7 +1710,7 @@ function renderMobileChannelList(filter = '') {
     };
   });
   
-
+  console.log('Mobile channel list rendered with', mobileChannelList.children.length, 'items');
 }
 
 // --- Enhanced Event Listeners ---
@@ -1166,12 +1725,28 @@ if (mobileChannelToggle) mobileChannelToggle.onclick = toggleMobileChannelList;
 // Options panel controls
 if (headerOptionsBtn) headerOptionsBtn.onclick = showOptions;
 if (closeOptions) closeOptions.onclick = hideOptions;
-
+if (reloadEpgBtn) reloadEpgBtn.onclick = reloadEPGData;
 if (clearCacheBtn) clearCacheBtn.onclick = clearAllCache;
 if (themeToggleBtn) themeToggleBtn.onclick = toggleTheme;
 if (miniGuideClose) miniGuideClose.onclick = hideMiniGuide;
 
-
+// EPG Settings controls
+if (epgSourceSelect) {
+  epgSourceSelect.onchange = () => {
+    updateCustomUrlVisibility();
+    changeEPGSource();
+  };
+}
+if (epgUrlInput) {
+  epgUrlInput.onchange = saveEPGSettings;
+  epgUrlInput.onblur = saveEPGSettings;
+}
+if (epgAutoRefresh) {
+  epgAutoRefresh.onchange = saveEPGSettings;
+}
+if (cacheDurationSelect) {
+  cacheDurationSelect.onchange = saveEPGSettings;
+}
 
 // Channel navigation
 if (prevBtn) prevBtn.onclick = () => {
@@ -1428,6 +2003,11 @@ function showStatus(msg, duration = 2000) {
   updateTime();
   updateChannelDisplay();
   
+  // Actually start playing the current channel
+  if (channels.length > 0 && current >= 0 && current < channels.length) {
+    playChannel(current);
+  }
+  
   // Initialize mobile channel list
   renderMobileChannelList();
   
@@ -1480,7 +2060,14 @@ function showStatus(msg, duration = 2000) {
     console.error('Power button not found!');
   }
   
-
+  // Fetch EPG data
+  // Clear EPG cache to force fresh fetch
+  localStorage.removeItem('glz-epg-cache');
+  localStorage.removeItem('glz-epg-cache-time');
+  
+  fetchEPGData().catch(error => {
+    console.error('EPG initialization failed:', error);
+  });
   
   // Enhanced help overlay content
   helpBody.innerHTML = `
