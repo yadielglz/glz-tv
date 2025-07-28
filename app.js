@@ -265,6 +265,13 @@ let connectionStatus = 'connected';
 let channelInput = '';
 let pwaInstallPrompt = null;
 
+// EPG State
+let epgData = {};
+let epgLoading = false;
+let epgLastUpdate = null;
+const EPG_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+const EPG_URL = 'https://epg.best/1eef8-shw7fc.xml.gz';
+
 // --- DOM Elements ---
 const video = document.getElementById('video');
 const audio = document.getElementById('audio');
@@ -308,6 +315,161 @@ const enterBtn = document.getElementById('enter-btn');
 const favoritesBtn = document.getElementById('favorites-btn');
 const pwaInstallBtn = document.getElementById('pwa-install-btn');
 const connectionStatusBtn = document.getElementById('connection-status-btn');
+
+// --- EPG Functions ---
+
+/**
+ * Fetches and parses EPG data from the XML URL
+ */
+async function fetchEPGData() {
+  if (epgLoading) {
+    console.log('EPG already loading...');
+    return;
+  }
+  
+  // Check cache
+  const cached = localStorage.getItem('glz-epg-cache');
+  const cacheTime = localStorage.getItem('glz-epg-cache-time');
+  
+  if (cached && cacheTime) {
+    const age = Date.now() - parseInt(cacheTime);
+    if (age < EPG_CACHE_DURATION) {
+      console.log('Using cached EPG data');
+      epgData = JSON.parse(cached);
+      epgLastUpdate = parseInt(cacheTime);
+      return;
+    }
+  }
+  
+  epgLoading = true;
+  console.log('Fetching EPG data from:', EPG_URL);
+  
+  try {
+    // Use a CORS proxy to avoid CORS issues
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(EPG_URL)}`;
+    const response = await fetch(proxyUrl);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const xmlText = await response.text();
+    console.log('EPG XML received, length:', xmlText.length);
+    
+    // Parse XML
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+    
+    // Check for parsing errors
+    const parseError = xmlDoc.querySelector('parsererror');
+    if (parseError) {
+      throw new Error('XML parsing failed: ' + parseError.textContent);
+    }
+    
+    // Parse programs
+    epgData = parseEPGXML(xmlDoc);
+    
+    // Cache the data
+    localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
+    localStorage.setItem('glz-epg-cache-time', Date.now().toString());
+    epgLastUpdate = Date.now();
+    
+    console.log('EPG data parsed successfully:', Object.keys(epgData).length, 'channels');
+    
+  } catch (error) {
+    console.error('EPG fetch failed:', error);
+    showStatus('EPG data unavailable', 3000);
+  } finally {
+    epgLoading = false;
+  }
+}
+
+/**
+ * Parses XML EPG data into a structured format
+ */
+function parseEPGXML(xmlDoc) {
+  const epg = {};
+  const programmes = xmlDoc.querySelectorAll('programme');
+  
+  programmes.forEach(programme => {
+    const channel = programme.getAttribute('channel');
+    const start = programme.getAttribute('start');
+    const stop = programme.getAttribute('stop');
+    const title = programme.querySelector('title')?.textContent || 'Unknown';
+    const desc = programme.querySelector('desc')?.textContent || '';
+    const category = programme.querySelector('category')?.textContent || '';
+    const rating = programme.querySelector('rating')?.querySelector('value')?.textContent || '';
+    
+    if (!epg[channel]) {
+      epg[channel] = [];
+    }
+    
+    epg[channel].push({
+      start: new Date(start),
+      stop: new Date(stop),
+      title,
+      desc,
+      category,
+      rating
+    });
+  });
+  
+  // Sort programs by start time for each channel
+  Object.keys(epg).forEach(channel => {
+    epg[channel].sort((a, b) => a.start - b.start);
+  });
+  
+  return epg;
+}
+
+/**
+ * Gets current and next program for a channel
+ */
+function getCurrentProgram(channelId) {
+  if (!epgData[channelId] || epgData[channelId].length === 0) {
+    return null;
+  }
+  
+  const now = new Date();
+  const programs = epgData[channelId];
+  
+  // Find current program
+  const currentProgram = programs.find(prog => 
+    prog.start <= now && prog.stop > now
+  );
+  
+  if (currentProgram) {
+    // Find next program
+    const nextProgram = programs.find(prog => 
+      prog.start >= currentProgram.stop
+    );
+    
+    return {
+      current: currentProgram,
+      next: nextProgram || null
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Formats time for display
+ */
+function formatTime(date) {
+  return date.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit',
+    hour12: true 
+  });
+}
+
+/**
+ * Gets program duration in minutes
+ */
+function getProgramDuration(start, stop) {
+  return Math.round((stop - start) / (1000 * 60));
+}
 
 // --- Utility Functions ---
 
@@ -418,8 +580,57 @@ function updateChannelDisplay(idx = current) {
     logoPlaceholder.textContent = channel.name.substring(0, 3);
   }
   
+  // Update EPG information
+  updateEPGDisplay(channel.id);
+  
   // Update favorites button state
   updateFavoritesButton();
+}
+
+/**
+ * Updates EPG display for a channel
+ */
+function updateEPGDisplay(channelId) {
+  if (!channelId) return;
+  
+  const programInfo = getCurrentProgram(channelId);
+  const epgElement = document.getElementById('epg-info');
+  
+  if (!epgElement) return;
+  
+  if (programInfo && programInfo.current) {
+    const current = programInfo.current;
+    const next = programInfo.next;
+    
+    const now = new Date();
+    const progress = ((now - current.start) / (current.stop - current.start)) * 100;
+    
+    epgElement.innerHTML = `
+      <div class="epg-current">
+        <div class="epg-title">${current.title}</div>
+        <div class="epg-time">${formatTime(current.start)} - ${formatTime(current.stop)} (${getProgramDuration(current.start, current.stop)}min)</div>
+        <div class="epg-progress">
+          <div class="epg-progress-bar" style="width: ${progress}%"></div>
+        </div>
+      </div>
+      ${next ? `
+        <div class="epg-next">
+          <div class="epg-next-label">Next:</div>
+          <div class="epg-next-title">${next.title}</div>
+          <div class="epg-next-time">${formatTime(next.start)} - ${formatTime(next.stop)}</div>
+        </div>
+      ` : ''}
+    `;
+    epgElement.style.display = 'block';
+    epgElement.classList.add('show');
+  } else {
+    epgElement.classList.remove('show');
+    setTimeout(() => {
+      if (!epgElement.classList.contains('show')) {
+        epgElement.style.display = 'none';
+      }
+    }, 300);
+  }
 }
 
 // Favorites Management
@@ -719,15 +930,24 @@ function renderChannelList(filter = '') {
   const filtered = filter
     ? channels.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
     : channels;
-  channelList.innerHTML = filtered.map((ch, i) =>
-    `<div class="channel-item${i === current ? ' active' : ''}" data-idx="${i}" tabindex="0">
+  channelList.innerHTML = filtered.map((ch, i) => {
+    const programInfo = getCurrentProgram(ch.id);
+    const epgHtml = programInfo && programInfo.current ? `
+      <div class="channel-epg">
+        <div class="epg-current-program">${programInfo.current.title}</div>
+        <div class="epg-time">${formatTime(programInfo.current.start)} - ${formatTime(programInfo.current.stop)}</div>
+      </div>
+    ` : '';
+    
+    return `<div class="channel-item${i === current ? ' active' : ''}" data-idx="${i}" tabindex="0">
       <img class="channel-logo" src="${ch.logo || ''}" onerror="this.style.display='none'" />
       <div class="channel-details">
         <div class="channel-number-small">${ch.chno || (i + 1)}</div>
         <div class="channel-name-small">${ch.name}</div>
+        ${epgHtml}
       </div>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
   channelList.querySelectorAll('.channel-item').forEach(item => {
     item.onclick = () => {
       playChannel(Number(item.dataset.idx));
@@ -1018,6 +1238,9 @@ function showStatus(msg, duration = 2000) {
   window.addEventListener('online', updateConnectionStatus);
   window.addEventListener('offline', updateConnectionStatus);
   updateConnectionStatus();
+  
+  // Fetch EPG data
+  fetchEPGData();
   
   // Enhanced help overlay content
   helpBody.innerHTML = `
