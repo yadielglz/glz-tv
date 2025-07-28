@@ -1489,48 +1489,43 @@ function stopPlayback() {
 }
 
 function playChannel(idx) {
-  if (!channels[idx]) {
-    console.error('No channel found for index:', idx);
-    return;
-  }
-  
+  if (!channels[idx]) return;
+
   // Save current channel as last channel
   if (current !== idx) {
     lastChannel = current;
     localStorage.setItem('glz-last-channel', current.toString());
   }
-  
+
   current = idx;
   const ch = channels[idx];
-  
+
   // Update channel display immediately to show new channel info
   updateChannelDisplay();
-  
+
   // Show loading state
   showLoading();
-  
+
   // Stop current playback
   stopPlayback();
-  
+
   const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
   const isHls = /\.m3u8(\?|$)/i.test(ch.url);
-  
-  console.log('Stream detection - Channel:', ch.name, 'URL:', ch.url, 'isAudio:', isAudio, 'isHls:', isHls);
-  
+
   // Set display properties
   video.style.display = isAudio ? 'none' : '';
   audio.style.display = isAudio ? '' : 'none';
-  
+
   // Update connection status
   connectionStatus = 'connecting';
   updateConnectionStatus();
-  
+
   // Function to handle successful playback
   const onPlaybackSuccess = () => {
     connectionStatus = 'connected';
     updateConnectionStatus();
     hideLoading();
-    
+
     // Add playing class to video/audio
     if (isAudio) {
       audio.classList.remove('loading');
@@ -1539,51 +1534,35 @@ function playChannel(idx) {
       video.classList.remove('loading');
       video.classList.add('playing');
     }
-    
+
     // Show channel banner after successful playback
     setTimeout(() => showChannelBanner(), 500);
   };
-  
+
   // Function to handle playback errors
   const onPlaybackError = (error, streamType) => {
-    console.error('Playback error for channel:', ch.name, 'URL:', ch.url, 'Error:', error, 'Type:', streamType);
     connectionStatus = 'error';
     updateConnectionStatus();
     hideLoading();
-    
+
     // Remove loading class from video/audio
     if (isAudio) {
       audio.classList.remove('loading');
     } else {
       video.classList.remove('loading');
     }
-    
+
     showStatus(`Failed to play ${streamType} stream`);
     console.error(`Playback error:`, error);
   };
-  
+
   if (isAudio) {
     audio.classList.add('loading');
     audio.src = ch.url;
     audio.play()
       .then(onPlaybackSuccess)
       .catch(e => onPlaybackError(e, 'audio'));
-  } else if (isHls) {
-    console.log('HLS.js available:', !!window.Hls);
-    if (!window.Hls) {
-      console.error('HLS.js not available, falling back to direct video playback');
-      // Fallback to direct video playback
-      console.log('Attempting direct video playback for:', ch.url);
-      video.classList.add('loading');
-      video.src = ch.url;
-      video.play()
-        .then(onPlaybackSuccess)
-        .catch(e => {
-          console.error('Direct video playback failed:', e);
-          onPlaybackError(e, 'video');
-        });
-      return;
-    }
+  } else if (isHls && window.Hls) {
     hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
@@ -1591,36 +1570,27 @@ function playChannel(idx) {
     });
     hls.loadSource(ch.url);
     hls.attachMedia(video);
-    
+
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
       video.classList.add('loading');
       video.play()
         .then(onPlaybackSuccess)
         .catch(e => onPlaybackError(e, 'video'));
     });
-    
+
     hls.on(Hls.Events.ERROR, function (event, data) {
-      console.error('HLS Error:', event, data);
       if (data.fatal) {
         onPlaybackError(data, 'HLS stream');
       }
-    });
-    
-    hls.on(Hls.Events.MANIFEST_LOAD_ERROR, function (event, data) {
-      console.error('HLS Manifest Load Error:', data);
-      onPlaybackError(data, 'HLS manifest');
     });
   } else {
     video.classList.add('loading');
     video.src = ch.url;
     video.play()
       .then(onPlaybackSuccess)
-      .catch(e => {
-        console.error('Direct video playback failed:', e);
-        onPlaybackError(e, 'video');
-      });
+      .catch(e => onPlaybackError(e, 'video'));
   }
-  
+
   // Update mobile channel list
   renderMobileChannelList();
 }
