@@ -340,15 +340,8 @@ async function fetchEPGData() {
       epgData = JSON.parse(cached);
       epgLastUpdate = parseInt(cacheTime);
       
-      // Check if this is fallback data
-      const isFallback = localStorage.getItem('glz-epg-fallback');
-      if (isFallback) {
-        console.log('⚠️ Using fallback EPG data - attempting to fetch real data...');
-        // Continue to fetch real data even if we have cached fallback
-      } else {
-        console.log('✅ Using cached real EPG data');
-        return;
-      }
+      console.log('✅ Using cached EPG data');
+      return;
     }
   }
   
@@ -433,18 +426,14 @@ async function fetchEPGData() {
     // Cache the data
     localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
     localStorage.setItem('glz-epg-cache-time', Date.now().toString());
-    localStorage.removeItem('glz-epg-fallback'); // Mark as real data
     epgLastUpdate = Date.now();
     
     console.log('EPG data parsed successfully:', Object.keys(epgData).length, 'channels');
     
   } catch (error) {
     console.error('EPG fetch failed:', error);
-    showStatus('EPG data unavailable - using fallback', 3000);
-    
-             // Create fallback EPG data for testing
-         console.log('⚠️ EPG URL not accessible - creating realistic fallback data');
-         createFallbackEPGData();
+    showStatus('EPG data unavailable', 3000);
+    console.log('❌ EPG data not available - no fallback will be shown');
   } finally {
     epgLoading = false;
   }
@@ -562,107 +551,7 @@ function getProgramDuration(start, stop) {
   return Math.round((stop - start) / (1000 * 60));
 }
 
-/**
- * Creates fallback EPG data for testing when real EPG is unavailable
- */
-function createFallbackEPGData() {
-  console.log('Creating fallback EPG data...');
-  
-  const now = new Date();
-           const programs = [
-           // News & Information
-           { title: 'Noticias Telemundo', category: 'News', duration: 60 },
-           { title: 'Noticiero Univision', category: 'News', duration: 60 },
-           { title: 'CNN Newsroom', category: 'News', duration: 60 },
-           { title: 'Fox News Live', category: 'News', duration: 60 },
-           { title: 'Weather Update', category: 'Weather', duration: 15 },
-           
-           // Sports
-           { title: 'SportsCenter', category: 'Sports', duration: 30 },
-           { title: 'ESPN Deportes', category: 'Sports', duration: 60 },
-           { title: 'MLB Tonight', category: 'Sports', duration: 120 },
-           { title: 'NBA Countdown', category: 'Sports', duration: 30 },
-           { title: 'NFL Live', category: 'Sports', duration: 60 },
-           
-           // Entertainment
-           { title: 'Modern Family', category: 'Comedy', duration: 30 },
-           { title: 'The Big Bang Theory', category: 'Comedy', duration: 30 },
-           { title: 'Friends', category: 'Comedy', duration: 30 },
-           { title: 'The Office', category: 'Comedy', duration: 30 },
-           { title: 'Parks and Recreation', category: 'Comedy', duration: 30 },
-           
-           // Movies
-           { title: 'Movie: The Avengers', category: 'Action', duration: 150 },
-           { title: 'Movie: Jurassic Park', category: 'Adventure', duration: 130 },
-           { title: 'Movie: The Matrix', category: 'Sci-Fi', duration: 140 },
-           { title: 'Movie: Titanic', category: 'Drama', duration: 195 },
-           { title: 'Movie: The Lion King', category: 'Animation', duration: 88 },
-           
-           // Children
-           { title: 'Mickey Mouse Clubhouse', category: 'Children', duration: 30 },
-           { title: 'SpongeBob SquarePants', category: 'Children', duration: 30 },
-           { title: 'PAW Patrol', category: 'Children', duration: 30 },
-           { title: 'Peppa Pig', category: 'Children', duration: 30 },
-           { title: 'Bluey', category: 'Children', duration: 30 },
-           
-           // Drama
-           { title: 'Grey\'s Anatomy', category: 'Drama', duration: 60 },
-           { title: 'The Walking Dead', category: 'Drama', duration: 60 },
-           { title: 'Breaking Bad', category: 'Drama', duration: 60 },
-           { title: 'Game of Thrones', category: 'Drama', duration: 60 },
-           { title: 'Stranger Things', category: 'Drama', duration: 60 }
-         ];
-  
-           // Create EPG data for major channels - match actual M3U channel IDs
-         const majorChannels = [
-           'WKAQ.us', 'WKAQDT2.us', 'UniMas.us', 'WLII.us', 'WIPRTV.us',
-           'ESPN.us', 'ESPN2.us', 'ESPNNews.us', 'ESPNU.us', 'FoxSports1.us', 'FoxSports2.us',
-           'MLBNetwork.us', 'NFLNetwork.us', 'NBATV.us', 'YESNetwork.us', 'SportsNetNewYork.us',
-           'WESH.us', 'WKMG.us', 'WFTV.us', 'WOFL.us', 'WKCF.us',
-           'ComedyCentral.us', 'USANetwork.us', 'TBS.us', 'ParamountNetwork.us', 'TNT.us',
-           'FX.us', 'FXX.us', 'FXMovieChannel.us', 'DisneyChannel.us', 'DisneyJunior.us',
-           'Nickelodeon.us', 'CartoonNetwork.us', 'Boomerang.us', 'WFOR.us', 'WTVJ.us',
-           'WSVN.us', 'WBFS.us', 'WLTV.us', 'CourtTV.us', 'AMC.us',
-           'PopTV.us', 'truTV.us', 'CNNEspanol.us', 'CNNInt.es', 'CNNInternational.us',
-           'CNN.us', 'CSPAN.us', 'CSPAN2.us', 'FoxNews.us', 'WeatherChannel.us',
-           'WeatherNation.us', 'TheWeatherNetwork.ca', 'Accuweather.us', 'HBO.us', 'HBO2.us',
-           'HBOComedy.us', 'WFLA.us', 'WTSP.us', 'WTVT.us', 'WFTS.us'
-         ];
-  
-  epgData = {};
-  
-  majorChannels.forEach(channelId => {
-    epgData[channelId] = [];
-    let currentTime = new Date(now);
-    currentTime.setMinutes(0, 0, 0); // Round to hour
-    
-    // Generate 24 hours of programming
-    for (let i = 0; i < 24; i++) {
-      const program = programs[i % programs.length];
-      const startTime = new Date(currentTime);
-      const endTime = new Date(currentTime.getTime() + program.duration * 60000);
-      
-      epgData[channelId].push({
-        start: startTime,
-        stop: endTime,
-        title: program.title,
-        desc: `Sample program description for ${program.title}`,
-        category: program.category,
-        rating: 'TV-PG'
-      });
-      
-      currentTime = endTime;
-    }
-  });
-  
-  console.log('Fallback EPG data created for', Object.keys(epgData).length, 'channels');
-  
-           // Cache the fallback data
-         localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
-         localStorage.setItem('glz-epg-cache-time', Date.now().toString());
-         localStorage.setItem('glz-epg-fallback', 'true'); // Mark as fallback data
-         epgLastUpdate = Date.now();
-}
+
 
 // --- Utility Functions ---
 
@@ -1458,10 +1347,9 @@ function showStatus(msg, duration = 2000) {
   // Fetch EPG data
   console.log('Starting EPG initialization...');
   
-  // Clear fallback cache to force real EPG fetch
+  // Clear EPG cache to force fresh fetch
   localStorage.removeItem('glz-epg-cache');
   localStorage.removeItem('glz-epg-cache-time');
-  localStorage.removeItem('glz-epg-fallback');
   
   fetchEPGData().then(() => {
     console.log('EPG initialization complete');
