@@ -1930,25 +1930,8 @@ function showChannelBanner() {
   // bannerChannel.textContent = channels[current].chno || (current + 1); // Removed from new layout
   // bannerName.textContent = channels[current].name; // Removed from new layout
   
-  // Add liquid glass entrance animation
-  channelBanner.style.transform = 'translateY(-120%) scale(0.8)';
-  channelBanner.style.opacity = '0';
-  channelBanner.classList.add('show');
-  
-  // Animate in
-  setTimeout(() => {
-    channelBanner.style.transform = 'translateY(0) scale(1)';
-    channelBanner.style.opacity = '1';
-  }, 50);
-  
-  // Animate out
-  setTimeout(() => {
-    channelBanner.style.transform = 'translateY(-120%) scale(0.8)';
-    channelBanner.style.opacity = '0';
-    setTimeout(() => {
-      channelBanner.classList.remove('show');
-    }, 300);
-  }, 2500);
+  // Channel banner functionality removed from new layout
+  console.log('Channel banner would show for:', channels[current].name);
 }
 
 // --- Enhanced Status Messages ---
@@ -2074,26 +2057,7 @@ function showStatus(msg, duration = 2000) {
   
   // EPG functionality removed
   
-  // Enhanced help overlay content
-  helpBody.innerHTML = `
-    <div><kbd>F1</kbd>: Toggle Remote</div>
-    <div><kbd>F2</kbd>: Show Guide</div>
-    <div><kbd>F3</kbd>: Show Options</div>
-<div><kbd>F4</kbd>: Toggle Theme</div>
-<div><kbd>F5</kbd>: Power On/Off</div>
-<div><kbd>G</kbd>: Mini Guide</div>
-<div><kbd>ESC</kbd>: Close All</div>
-    <div><kbd>←/→</kbd>: Prev/Next Channel</div>
-    <div><kbd>↑</kbd>: Show Guide</div>
-    <div><kbd>?</kbd>: Show Help</div>
-    <div><kbd>ESC</kbd>: Hide Remote/Guide/Options/Help</div>
-    <div><strong>Mobile:</strong> Swipe left/right to change channels</div>
-    <div><strong>Favorites:</strong> Click heart button to save channels</div>
-    <div><strong>Volume:</strong> Use +/- buttons on remote</div>
-    <div><strong>Last Channel:</strong> Quick return to previous channel</div>
-    <div><strong>Install:</strong> Add to home screen for app-like experience</div>
-    <div><strong>Options:</strong> Manual EPG reload and cache management</div>
-  `;
+  // Enhanced help overlay content - removed from new layout
   
   // Add smooth entrance animation
   document.body.style.opacity = '0';
