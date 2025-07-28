@@ -1737,105 +1737,237 @@ body {
   }
 }
 
-/* Responsive Design */
+/* Mobile Design - Similar to Desktop but Optimized for Mobile */
 @media (max-width: 768px) {
-  .stb-header {
-    padding: var(--spacing-sm) var(--spacing-md);
-    height: 60px;
-    flex-direction: row;
-    justify-content: space-between;
+  /* Mobile Header - Compact version of desktop header */
+  .header {
+    height: 50px;
+    padding: 0 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .brand-logo {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .channel-info {
+    display: flex;
     align-items: center;
+    gap: 6px;
   }
-  
-  .header-left,
-  .header-right {
-    display: flex;
+
+  .channel-number {
+    font-size: 12px;
+    padding: 3px 6px;
+    min-width: 32px;
   }
-  
-  /* Hide channel display on mobile header */
-  .channel-display {
-    display: none;
+
+  .channel-logo {
+    width: 20px;
+    height: 20px;
   }
-  
-  /* Hide mobile remote button on mobile */
-  .mobile-remote {
-    display: none;
-  }
-  
-  /* Mobile layout by default */
-  .main-content {
-    height: calc(100vh - 120px);
-    display: flex;
-    flex-direction: column;
+
+  .channel-name {
+    font-size: 11px;
+    max-width: 60px;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .time-display {
+    font-size: 11px;
+    padding: 3px 6px;
+    min-width: 40px;
+  }
+
+  .weather-widget {
+    padding: 3px 6px;
+    min-width: 60px;
+  }
+
+  .weather-icon {
+    font-size: 16px;
+  }
+
+  .weather-temp {
+    font-size: 11px;
+  }
+
+  .weather-location {
+    font-size: 8px;
+    max-width: 40px;
+  }
+
+  .power-btn, .header-options-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 9px;
+  }
+
+  /* Mobile Main Content - Vertical layout like desktop */
+  .main-content {
+    height: calc(100vh - 50px);
+    margin-top: 50px;
+    display: flex !important;
+    flex-direction: column !important;
+    background: var(--bg-primary);
   }
   
-  /* Mobile channel info bar - hidden by default, shown when needed */
-  .mobile-channel-info-bar {
-    display: none;
-    align-items: center;
-    gap: var(--spacing-md);
-    padding: var(--spacing-md);
-    margin: 0 var(--spacing-sm);
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-blur);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-md);
-    margin-top: var(--spacing-sm);
-    box-shadow: var(--shadow-sm);
-  }
-  
-  /* Mobile channel list - hidden by default, shown when needed */
-  .mobile-channel-list {
-    display: none;
+  /* Mobile Video Section - Takes most of the screen */
+  .video-section {
     flex: 1;
-    overflow-y: auto;
-    padding: var(--spacing-sm);
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-blur);
-    border-top: 1px solid var(--glass-border);
-    margin: 0 var(--spacing-sm);
-    border-radius: var(--radius-md);
-    margin-top: var(--spacing-sm);
-  }
-  
-  /* Show mobile elements when mobile layout is active */
-  .mobile-layout .mobile-channel-info-bar {
+    position: relative;
+    background: var(--bg-primary);
     display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
   }
-  
-  .mobile-layout .mobile-channel-list {
-    display: block;
+
+  .video-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
   }
-  
-  /* Hide mobile elements when desktop layout is active */
-  .desktop-layout .mobile-channel-info-bar {
-    display: none;
+
+  #video, #audio {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
   }
-  
-  .desktop-layout .mobile-channel-list {
-    display: none;
-  }
-  
-  .desktop-layout .main-content {
-    display: block;
-    flex-direction: unset;
-    height: auto;
-  }
-  
-  .mini-guide {
-    width: calc(100vw - 2 * var(--spacing-md));
-    right: var(--spacing-md);
-    left: var(--spacing-md);
-    max-height: 50vh;
-    top: var(--spacing-md);
-  }
-  
-  .main-content {
-    height: calc(100vh - 120px); /* Account for two-line header */
+
+  /* Mobile Sidebar - Compact version below video */
+  .sidebar {
     display: flex;
     flex-direction: column;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    max-height: 40vh;
+  }
+  
+  /* Mobile Channel List Section */
+  .channel-list-section {
+    flex: 1;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    max-height: 25vh;
     overflow: hidden;
+  }
+
+  .channel-list-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+
+  .channel-list {
+    max-height: calc(25vh - 40px);
+    overflow-y: auto;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    padding: 8px;
+  }
+
+  .channel-item {
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    gap: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+  }
+
+  .channel-item img {
+    width: 20px;
+    height: 20px;
+  }
+
+  .channel-number-small {
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .channel-name-small {
+    font-size: 10px;
+  }
+  
+  /* Mobile Remote Section */
+  .remote-section {
+    padding: 12px;
+    background: var(--bg-tertiary);
+    max-height: 15vh;
+  }
+
+  .remote-title {
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+
+  .remote-controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .remote-btn {
+    padding: 8px 4px;
+    border: none;
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .remote-btn:hover {
+    background: var(--bg-hover);
+  }
+
+  .remote-btn.primary {
+    background: var(--accent-color);
+    color: white;
+  }
+
+  .remote-btn.primary:hover {
+    background: var(--accent-hover);
+  }
+  
+  /* Mobile-specific optimizations */
+  .mobile-only {
+    display: block !important;
+  }
+
+  /* Hide desktop elements on mobile */
+  .sidebar {
+    min-width: auto;
+    max-width: none;
+  }
+
+  /* Mobile settings overlay */
+  .settings-content {
+    width: 95%;
+    max-width: none;
+    max-height: 90vh;
+  }
+
+  /* Mobile status messages */
+  .status-message {
+    top: 60px;
+    right: 10px;
+    max-width: 250px;
+    font-size: 11px;
+    padding: 6px 12px;
   }
   
   .video-container {
