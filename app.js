@@ -271,6 +271,7 @@ let epgLoading = false;
 let epgLastUpdate = null;
 const EPG_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 const EPG_URL = 'https://epg.best/1eef8-shw7fc.xml.gz';
+const LOCAL_EPG_PROXY = 'http://localhost:3000/api/epg';
 
 // --- DOM Elements ---
 const video = document.getElementById('video');
@@ -345,8 +346,9 @@ async function fetchEPGData() {
   console.log('Fetching EPG data from:', EPG_URL);
   
   try {
-    // Try multiple CORS proxies in case one fails
+    // Try local proxy first, then fallback to CORS proxies
     const proxies = [
+      LOCAL_EPG_PROXY, // Local proxy (fastest, most reliable)
       `https://api.allorigins.win/raw?url=${encodeURIComponent(EPG_URL)}`,
       `https://cors-anywhere.herokuapp.com/${EPG_URL}`,
       `https://thingproxy.freeboard.io/fetch/${EPG_URL}`,
