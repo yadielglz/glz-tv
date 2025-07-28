@@ -1570,9 +1570,13 @@ function setStandby(on) {
     channelNumber.textContent = '-- --';
     channelName.textContent = 'STANDBY';
     // Hide logo and show placeholder for standby
-    document.getElementById('channel-logo-img').style.display = 'none';
-    document.getElementById('channel-logo-placeholder').style.display = 'block';
-    document.getElementById('channel-logo-placeholder').textContent = 'TV';
+    const channelLogoImg = document.getElementById('channel-logo-img');
+    const channelLogoPlaceholder = document.getElementById('channel-logo-placeholder');
+    if (channelLogoImg) channelLogoImg.style.display = 'none';
+    if (channelLogoPlaceholder) {
+      channelLogoPlaceholder.style.display = 'block';
+      channelLogoPlaceholder.textContent = 'TV';
+    }
   } else {
     standbyScreen.classList.remove('show');
     if (channels.length > 0 && current >= 0 && current < channels.length) {
@@ -1997,6 +2001,19 @@ function showStatus(msg, duration = 2000) {
   updateTime();
   updateChannelDisplay();
   
+  // Actually start playing the current channel
+  if (channels.length > 0 && current >= 0 && current < channels.length) {
+    playChannel(current);
+    
+    // Fallback: if video doesn't start within 3 seconds, try again
+    setTimeout(() => {
+      if (video.paused && !standby) {
+        console.log('Video not playing, attempting restart...');
+        playChannel(current);
+      }
+    }, 3000);
+  }
+  
   // Initialize mobile channel list
   renderMobileChannelList();
   
@@ -2036,6 +2053,15 @@ function showStatus(msg, duration = 2000) {
   window.addEventListener('online', updateConnectionStatus);
   window.addEventListener('offline', updateConnectionStatus);
   updateConnectionStatus();
+  
+  // Add click handler to standby screen to exit standby
+  if (standbyScreen) {
+    standbyScreen.addEventListener('click', () => {
+      if (standby) {
+        setStandby(false);
+      }
+    });
+  }
   
   // Fetch EPG data
   console.log('Starting EPG initialization...');
@@ -2077,4 +2103,12 @@ function showStatus(msg, duration = 2000) {
     document.body.style.transition = 'opacity 1s ease-in-out';
     document.body.style.opacity = '1';
   }, 100);
+  
+  // Add keyboard handler to exit standby
+  document.addEventListener('keydown', (e) => {
+    if (standby && (e.key === ' ' || e.key === 'Enter')) {
+      e.preventDefault();
+      setStandby(false);
+    }
+  });
 })(); 
