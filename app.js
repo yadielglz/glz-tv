@@ -1,6 +1,6 @@
 // GLZ TV - Modern STB App Logic
 // Spectrum/AT&T inspired, modular, and maintainable
-// Version: 2024-01-27-v2 - Fixed mobile program display and standby issues
+// Version: 2024-01-27-v3 - Reverted stream testing and CORS code, restored original playback
 
 // --- Embedded M3U Content (move this to a separate file or fetch from server for production) ---
 const EMBEDDED_M3U = `#EXTM3U url-tvg="https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz"
@@ -1002,8 +1002,6 @@ function updateChannelDisplay(idx = current) {
   }
   
   // Update EPG information
-  console.log('Channel object:', channel);
-  console.log('Channel ID being used for EPG:', channel.id);
   updateEPGDisplay(channel.id);
   
   // Update header with current program
@@ -1035,34 +1033,7 @@ function updateChannelDisplay(idx = current) {
 /**
  * Test if a stream URL is accessible
  */
-function testStreamAccessibility(url) {
-  return new Promise((resolve) => {
-    const testVideo = document.createElement('video');
-    testVideo.style.display = 'none';
-    testVideo.muted = true;
-    testVideo.volume = 0;
-    
-    const timeout = setTimeout(() => {
-      document.body.removeChild(testVideo);
-      resolve(false);
-    }, 5000); // 5 second timeout
-    
-    testVideo.addEventListener('loadedmetadata', () => {
-      clearTimeout(timeout);
-      document.body.removeChild(testVideo);
-      resolve(true);
-    });
-    
-    testVideo.addEventListener('error', () => {
-      clearTimeout(timeout);
-      document.body.removeChild(testVideo);
-      resolve(false);
-    });
-    
-    document.body.appendChild(testVideo);
-    testVideo.src = url;
-  });
-}
+
 
 /**
  * Updates mobile current program display
@@ -1086,20 +1057,15 @@ function updateMobileCurrentProgram(channelId) {
  * Updates EPG display for a channel
  */
 function updateEPGDisplay(channelId) {
-  console.log('updateEPGDisplay called with channelId:', channelId);
   if (!channelId) {
-    console.log('No channelId provided, skipping EPG update');
     return;
   }
   
   const programInfo = getCurrentProgram(channelId);
-  console.log('Program info for channel', channelId, ':', programInfo);
   
   const epgElement = document.getElementById('epg-info');
-  console.log('EPG element found:', !!epgElement);
   
   if (!epgElement) {
-    console.log('EPG element not found in DOM');
     return;
   }
   
@@ -1523,7 +1489,6 @@ function stopPlayback() {
 }
 
 function playChannel(idx) {
-  console.log('playChannel called with idx:', idx);
   if (!channels[idx]) {
     console.error('No channel found for index:', idx);
     return;
@@ -1560,7 +1525,6 @@ function playChannel(idx) {
   
   // Function to handle successful playback
   const onPlaybackSuccess = () => {
-    console.log('Playback success for channel:', ch.name);
     connectionStatus = 'connected';
     updateConnectionStatus();
     hideLoading();
@@ -1617,21 +1581,15 @@ function playChannel(idx) {
         });
       return;
     }
-    console.log('Attempting HLS playback for:', ch.url);
     hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
-      backBufferLength: 90,
-      xhrSetup: function(xhr, url) {
-        // Add CORS headers if needed
-        xhr.withCredentials = false;
-      }
+      backBufferLength: 90
     });
     hls.loadSource(ch.url);
     hls.attachMedia(video);
     
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
-      console.log('HLS manifest loaded successfully');
       video.classList.add('loading');
       video.play()
         .then(onPlaybackSuccess)
@@ -1650,7 +1608,6 @@ function playChannel(idx) {
       onPlaybackError(data, 'HLS manifest');
     });
   } else {
-    console.log('Attempting direct video playback for:', ch.url);
     video.classList.add('loading');
     video.src = ch.url;
     video.play()
@@ -2074,19 +2031,14 @@ function showStatus(msg, duration = 2000) {
   Object.entries(requiredElements).forEach(([name, element]) => {
     if (!element) {
       console.warn(`Missing DOM element: ${name}`);
-    } else {
-      console.log(`✓ Found: ${name}`);
     }
   });
   
   channels = parseM3U(EMBEDDED_M3U);
   console.log('Channels loaded:', channels.length);
-  console.log('First channel:', channels[0]);
-  console.log('Last channel:', channels[channels.length - 1]);
   
   if (channels.length > 0) {
     current = 0;
-    console.log('Current channel set to 0');
   } else {
     console.error('NO CHANNELS LOADED!');
   }
@@ -2095,7 +2047,6 @@ function showStatus(msg, duration = 2000) {
   const lastChannelIndex = localStorage.getItem('glz-last-channel');
   if (lastChannelIndex && channels[parseInt(lastChannelIndex)]) {
     current = parseInt(lastChannelIndex);
-    console.log('Loaded last channel from localStorage:', current);
   }
   
   setStandby(false); // Start with a channel instead of standby
@@ -2104,34 +2055,7 @@ function showStatus(msg, duration = 2000) {
   
   // Actually start playing the current channel
   if (channels.length > 0 && current >= 0 && current < channels.length) {
-    console.log('Starting playback for channel:', current, channels[current]);
-    
-    // Test stream accessibility first
-    testStreamAccessibility(channels[current].url).then(isAccessible => {
-      if (isAccessible) {
-        playChannel(current);
-      } else {
-        console.error('Stream not accessible:', channels[current].url);
-        showStatus('Stream not accessible - trying next channel');
-        // Try next channel
-        const nextChannel = (current + 1) % channels.length;
-        if (nextChannel !== current) {
-          current = nextChannel;
-          playChannel(current);
-        }
-      }
-    }).catch(() => {
-      // If test fails, try playing anyway
-      playChannel(current);
-    });
-    
-    // Fallback: if video doesn't start within 3 seconds, try again
-    setTimeout(() => {
-      if (video.paused && !standby) {
-        console.log('Video not playing, attempting restart...');
-        playChannel(current);
-      }
-    }, 3000);
+    playChannel(current);
   }
   
   // Initialize mobile channel list
@@ -2151,7 +2075,6 @@ function showStatus(msg, duration = 2000) {
   
   // Mobile-specific optimizations
   if ('ontouchstart' in window || window.innerWidth <= 768) {
-    console.log('Mobile device detected - optimizing for touch');
     // Hide remote by default on mobile
     if (remoteControl) {
       remoteControl.style.display = 'none';
@@ -2162,7 +2085,6 @@ function showStatus(msg, duration = 2000) {
     document.body.classList.add('mobile-layout');
   } else {
     // Desktop-specific optimizations
-    console.log('Desktop device detected');
     document.body.classList.add('desktop-layout');
   }
   
@@ -2177,32 +2099,23 @@ function showStatus(msg, duration = 2000) {
   // Add click handler to standby screen to exit standby
   if (standbyScreen) {
     standbyScreen.addEventListener('click', () => {
-      console.log('Standby screen clicked, current standby state:', standby);
       if (standby) {
         setStandby(false);
       }
     });
   }
   
-  // Debug: Check if power button is visible
-  if (powerBtn) {
-    console.log('Power button found:', powerBtn);
-    console.log('Power button display:', window.getComputedStyle(powerBtn).display);
-    console.log('Power button visibility:', window.getComputedStyle(powerBtn).visibility);
-  } else {
+  // Check if power button is available
+  if (!powerBtn) {
     console.error('Power button not found!');
   }
   
   // Fetch EPG data
-  console.log('Starting EPG initialization...');
-  
   // Clear EPG cache to force fresh fetch
   localStorage.removeItem('glz-epg-cache');
   localStorage.removeItem('glz-epg-cache-time');
   
-  fetchEPGData().then(() => {
-    console.log('EPG initialization complete');
-  }).catch(error => {
+  fetchEPGData().catch(error => {
     console.error('EPG initialization failed:', error);
   });
   
@@ -2242,7 +2155,6 @@ function showStatus(msg, duration = 2000) {
     }
     // Also allow any key to exit standby for easier testing
     if (standby && e.key !== 'F1' && e.key !== 'F2' && e.key !== 'F3' && e.key !== 'F4' && e.key !== 'F5') {
-      console.log('Key pressed to exit standby:', e.key);
       setStandby(false);
     }
   });
