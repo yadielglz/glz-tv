@@ -1816,9 +1816,9 @@ body {
     background: var(--bg-primary);
   }
   
-  /* Mobile Video Section - Fixed height to fit screen */
+  /* Mobile Video Section - Balanced height */
   .video-section {
-    height: 60vh;
+    height: 45vh;
     position: relative;
     background: var(--bg-primary);
     display: flex;
@@ -1850,7 +1850,7 @@ body {
     flex-direction: column;
     background: var(--bg-secondary);
     border-top: 1px solid var(--border-color);
-    height: calc(40vh - 50px); /* Remaining space after header and video */
+    height: calc(55vh - 50px); /* Remaining space after header and video */
     overflow: hidden;
   }
   
@@ -1900,49 +1900,12 @@ body {
     font-size: 9px;
   }
   
-  /* Mobile Remote Section */
+  /* Mobile Remote Section - Hidden on mobile */
   .remote-section {
-    padding: 8px;
-    background: var(--bg-tertiary);
-    flex-shrink: 0;
+    display: none;
   }
 
-  .remote-title {
-    font-size: 11px;
-    font-weight: 500;
-    margin-bottom: 6px;
-  }
-
-  .remote-controls {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
-  }
-
-  .remote-btn {
-    padding: 6px 2px;
-    border: none;
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 9px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-
-  .remote-btn:hover {
-    background: var(--bg-hover);
-  }
-
-  .remote-btn.primary {
-    background: var(--accent-color);
-    color: white;
-  }
-
-  .remote-btn.primary:hover {
-    background: var(--accent-hover);
-  }
+  /* Remote controls hidden on mobile - not needed */
   
   /* Mobile-specific optimizations */
   .mobile-only {
