@@ -2260,20 +2260,16 @@ function initWeather() {
 async function fetchWeather(location) {
   try {
     const units = localStorage.getItem('glz-weather-units') || 'imperial';
-    const apiKey = 'YOUR_OPENWEATHER_API_KEY'; // You'll need to get a free API key from openweathermap.org
+    const apiKey = 'c464a91ff8b9454fe6721e52a798faae';
     
-    // For demo purposes, we'll use mock data
-    // In production, replace this with actual API call:
-    // const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&units=${units}&appid=${apiKey}`);
+    const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&units=${units}&appid=${apiKey}`);
     
-    // Mock weather data
-    const mockWeather = {
-      main: { temp: units === 'imperial' ? 82 : 28 },
-      weather: [{ main: 'Clear', icon: '01d' }],
-      name: location.split(',')[0]
-    };
+    if (!response.ok) {
+      throw new Error(`Weather API error: ${response.status}`);
+    }
     
-    updateWeatherDisplay(mockWeather, units);
+    const weather = await response.json();
+    updateWeatherDisplay(weather, units);
   } catch (error) {
     console.error('Weather fetch error:', error);
     updateWeatherDisplay(null, 'imperial');
