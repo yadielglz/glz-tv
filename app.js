@@ -406,8 +406,15 @@ async function fetchEPGData() {
       throw new Error('XML parsing failed: ' + parseError.textContent);
     }
     
+    console.log('XML parsed successfully, checking for channels...');
+    
     // Parse programs
     epgData = parseEPGXML(xmlDoc);
+    
+    // Debug: Check if we got any data
+    console.log('EPG channels found:', Object.keys(epgData).length);
+    console.log('Sample EPG channel IDs:', Object.keys(epgData).slice(0, 5));
+    console.log('Sample channel data:', Object.values(epgData).slice(0, 1));
     
     // Cache the data
     localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
@@ -472,13 +479,34 @@ function getCurrentProgram(channelId) {
   console.log('getCurrentProgram called with channelId:', channelId);
   console.log('Available EPG channels:', Object.keys(epgData));
   
-  if (!epgData[channelId] || epgData[channelId].length === 0) {
-    console.log('No EPG data for channel:', channelId);
+  // Try multiple channel ID formats
+  const possibleIds = [
+    channelId,
+    channelId?.toLowerCase(),
+    channelId?.toUpperCase(),
+    channelId?.replace(/\.us$/, ''),
+    channelId?.replace(/\.us$/, '.us'),
+    channelId?.toString()
+  ].filter(Boolean);
+  
+  console.log('Trying channel IDs:', possibleIds);
+  
+  let foundChannelId = null;
+  for (const id of possibleIds) {
+    if (epgData[id] && epgData[id].length > 0) {
+      foundChannelId = id;
+      console.log('Found EPG data for channel ID:', id);
+      break;
+    }
+  }
+  
+  if (!foundChannelId) {
+    console.log('No EPG data found for any channel ID variation');
     return null;
   }
   
   const now = new Date();
-  const programs = epgData[channelId];
+  const programs = epgData[foundChannelId];
   
   // Find current program
   const currentProgram = programs.find(prog => 
@@ -536,12 +564,16 @@ function createFallbackEPGData() {
     { title: 'Children\'s Program', category: 'Children', duration: 30 }
   ];
   
-  // Create EPG data for major channels
-  const majorChannels = [
-    'WKAQ.us', 'ESPN.us', 'CNN.us', 'FoxNews.us', 'HBO.us', 
-    'DisneyChannel.us', 'Nickelodeon.us', 'ComedyCentral.us',
-    'TBS.us', 'TNT.us', 'FX.us', 'AMC.us'
-  ];
+           // Create EPG data for major channels - try to match common M3U channel IDs
+         const majorChannels = [
+           'WKAQ.us', 'ESPN.us', 'CNN.us', 'FoxNews.us', 'HBO.us', 
+           'DisneyChannel.us', 'Nickelodeon.us', 'ComedyCentral.us',
+           'TBS.us', 'TNT.us', 'FX.us', 'AMC.us',
+           // Add some generic channel IDs that might match
+           '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+           'ABC', 'CBS', 'NBC', 'FOX', 'PBS', 'CW', 'ION',
+           'USA', 'SYFY', 'BRAVO', 'E', 'MTV', 'VH1', 'BET'
+         ];
   
   epgData = {};
   
@@ -687,6 +719,8 @@ function updateChannelDisplay(idx = current) {
   }
   
   // Update EPG information
+  console.log('Channel object:', channel);
+  console.log('Channel ID being used for EPG:', channel.id);
   updateEPGDisplay(channel.id);
   
   // Update favorites button state
