@@ -29,6 +29,15 @@
         <!-- Time Display - Center-Right -->
         <div class="time-display" id="time-display">--:--</div>
         
+        <!-- Weather Widget - Center-Right -->
+        <div class="weather-widget" id="weather-widget">
+            <div class="weather-icon" id="weather-icon">🌤️</div>
+            <div class="weather-info">
+                <div class="weather-temp" id="weather-temp">--°</div>
+                <div class="weather-location" id="weather-location">Loading...</div>
+            </div>
+        </div>
+        
         <!-- Control Buttons - Right -->
         <div class="header-controls">
             <button class="power-btn" id="power-btn" title="Power">PWR</button>
@@ -91,6 +100,73 @@
 
     <!-- Status Message -->
     <div class="status-message" id="status-message"></div>
+
+    <!-- Settings Overlay -->
+    <div class="settings-overlay" id="settings-overlay">
+        <div class="settings-content">
+            <div class="settings-header">
+                <h2>Settings</h2>
+                <button class="close-settings" id="close-settings">×</button>
+            </div>
+            <div class="settings-body">
+                <!-- Theme Settings -->
+                <div class="settings-section">
+                    <h3>Theme</h3>
+                    <div class="setting-item">
+                        <label>Theme Mode:</label>
+                        <select id="theme-select">
+                            <option value="auto">Auto (System)</option>
+                            <option value="light">Light</option>
+                            <option value="dark">Dark</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Cache Settings -->
+                <div class="settings-section">
+                    <h3>Cache & Storage</h3>
+                    <div class="setting-item">
+                        <label>Clear Cache:</label>
+                        <button class="setting-btn" id="clear-cache-btn">Clear All Cache</button>
+                    </div>
+                    <div class="setting-item">
+                        <label>Last Channel:</label>
+                        <span id="last-channel-display">None</span>
+                    </div>
+                </div>
+
+                <!-- Weather Settings -->
+                <div class="settings-section">
+                    <h3>Weather</h3>
+                    <div class="setting-item">
+                        <label>Location:</label>
+                        <input type="text" id="weather-location-input" placeholder="Enter city name">
+                        <button class="setting-btn" id="update-weather-btn">Update</button>
+                    </div>
+                    <div class="setting-item">
+                        <label>Units:</label>
+                        <select id="weather-units-select">
+                            <option value="metric">Celsius (°C)</option>
+                            <option value="imperial">Fahrenheit (°F)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- About -->
+                <div class="settings-section">
+                    <h3>About</h3>
+                    <div class="setting-item">
+                        <label>Version:</label>
+                        <span>GLZ TV v1.0</span>
+                    </div>
+                    <div class="setting-item">
+                        <label>Channels:</label>
+                        <span id="channel-count-display">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- HLS.js for HLS stream support -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>

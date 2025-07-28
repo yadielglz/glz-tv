@@ -2072,7 +2072,7 @@ function showStatus(msg, duration = 2000) {
   // Options button functionality
   if (headerOptionsBtn) {
     headerOptionsBtn.addEventListener('click', () => {
-      showStatus('Options menu - Coming soon');
+      showSettings();
     });
   }
 
@@ -2129,4 +2129,194 @@ function showStatus(msg, duration = 2000) {
       setStandby(false);
     }
   });
-})(); 
+
+  // Initialize settings and weather
+  initSettings();
+  initWeather();
+})();
+
+// Settings functionality
+function showSettings() {
+  const settingsOverlay = document.getElementById('settings-overlay');
+  if (settingsOverlay) {
+    settingsOverlay.classList.add('show');
+    updateSettingsDisplay();
+  }
+}
+
+function hideSettings() {
+  const settingsOverlay = document.getElementById('settings-overlay');
+  if (settingsOverlay) {
+    settingsOverlay.classList.remove('show');
+  }
+}
+
+function initSettings() {
+  const closeSettingsBtn = document.getElementById('close-settings');
+  const clearCacheBtn = document.getElementById('clear-cache-btn');
+  const themeSelect = document.getElementById('theme-select');
+  const weatherLocationInput = document.getElementById('weather-location-input');
+  const updateWeatherBtn = document.getElementById('update-weather-btn');
+  const weatherUnitsSelect = document.getElementById('weather-units-select');
+
+  if (closeSettingsBtn) {
+    closeSettingsBtn.addEventListener('click', hideSettings);
+  }
+
+  if (clearCacheBtn) {
+    clearCacheBtn.addEventListener('click', () => {
+      clearAllCache();
+      showStatus('Cache cleared successfully');
+    });
+  }
+
+  if (themeSelect) {
+    themeSelect.addEventListener('change', (e) => {
+      setTheme(e.target.value);
+      showStatus('Theme updated');
+    });
+  }
+
+  if (updateWeatherBtn) {
+    updateWeatherBtn.addEventListener('click', () => {
+      const location = weatherLocationInput.value.trim();
+      if (location) {
+        localStorage.setItem('glz-weather-location', location);
+        fetchWeather(location);
+        showStatus('Weather location updated');
+      }
+    });
+  }
+
+  if (weatherUnitsSelect) {
+    weatherUnitsSelect.addEventListener('change', (e) => {
+      localStorage.setItem('glz-weather-units', e.target.value);
+      const location = localStorage.getItem('glz-weather-location') || 'San Juan, PR';
+      fetchWeather(location);
+      showStatus('Weather units updated');
+    });
+  }
+
+  // Close settings on overlay click
+  const settingsOverlay = document.getElementById('settings-overlay');
+  if (settingsOverlay) {
+    settingsOverlay.addEventListener('click', (e) => {
+      if (e.target === settingsOverlay) {
+        hideSettings();
+      }
+    });
+  }
+}
+
+function updateSettingsDisplay() {
+  const lastChannelDisplay = document.getElementById('last-channel-display');
+  const channelCountDisplay = document.getElementById('channel-count-display');
+  const themeSelect = document.getElementById('theme-select');
+  const weatherLocationInput = document.getElementById('weather-location-input');
+  const weatherUnitsSelect = document.getElementById('weather-units-select');
+
+  if (lastChannelDisplay) {
+    const lastChannel = localStorage.getItem('glz-last-channel');
+    if (lastChannel && channels[parseInt(lastChannel)]) {
+      const channel = channels[parseInt(lastChannel)];
+      lastChannelDisplay.textContent = `${channel.number} - ${channel.name}`;
+    } else {
+      lastChannelDisplay.textContent = 'None';
+    }
+  }
+
+  if (channelCountDisplay) {
+    channelCountDisplay.textContent = channels.length;
+  }
+
+  if (themeSelect) {
+    const currentTheme = localStorage.getItem('glz-theme') || 'auto';
+    themeSelect.value = currentTheme;
+  }
+
+  if (weatherLocationInput) {
+    const location = localStorage.getItem('glz-weather-location') || 'San Juan, PR';
+    weatherLocationInput.value = location;
+  }
+
+  if (weatherUnitsSelect) {
+    const units = localStorage.getItem('glz-weather-units') || 'imperial';
+    weatherUnitsSelect.value = units;
+  }
+}
+
+// Weather functionality
+function initWeather() {
+  const location = localStorage.getItem('glz-weather-location') || 'San Juan, PR';
+  fetchWeather(location);
+  
+  // Update weather every 30 minutes
+  setInterval(() => {
+    const currentLocation = localStorage.getItem('glz-weather-location') || 'San Juan, PR';
+    fetchWeather(currentLocation);
+  }, 30 * 60 * 1000);
+}
+
+async function fetchWeather(location) {
+  try {
+    const units = localStorage.getItem('glz-weather-units') || 'imperial';
+    const apiKey = 'YOUR_OPENWEATHER_API_KEY'; // You'll need to get a free API key from openweathermap.org
+    
+    // For demo purposes, we'll use mock data
+    // In production, replace this with actual API call:
+    // const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&units=${units}&appid=${apiKey}`);
+    
+    // Mock weather data
+    const mockWeather = {
+      main: { temp: units === 'imperial' ? 82 : 28 },
+      weather: [{ main: 'Clear', icon: '01d' }],
+      name: location.split(',')[0]
+    };
+    
+    updateWeatherDisplay(mockWeather, units);
+  } catch (error) {
+    console.error('Weather fetch error:', error);
+    updateWeatherDisplay(null, 'imperial');
+  }
+}
+
+function updateWeatherDisplay(weather, units) {
+  const weatherIcon = document.getElementById('weather-icon');
+  const weatherTemp = document.getElementById('weather-temp');
+  const weatherLocation = document.getElementById('weather-location');
+
+  if (!weather) {
+    if (weatherIcon) weatherIcon.textContent = '🌤️';
+    if (weatherTemp) weatherTemp.textContent = '--°';
+    if (weatherLocation) weatherLocation.textContent = 'Weather unavailable';
+    return;
+  }
+
+  // Update icon
+  if (weatherIcon) {
+    const iconMap = {
+      'Clear': '☀️',
+      'Clouds': '☁️',
+      'Rain': '🌧️',
+      'Snow': '❄️',
+      'Thunderstorm': '⛈️',
+      'Drizzle': '🌦️',
+      'Mist': '🌫️',
+      'Fog': '🌫️',
+      'Haze': '🌫️'
+    };
+    weatherIcon.textContent = iconMap[weather.weather[0].main] || '🌤️';
+  }
+
+  // Update temperature
+  if (weatherTemp) {
+    const temp = Math.round(weather.main.temp);
+    const unit = units === 'imperial' ? '°F' : '°C';
+    weatherTemp.textContent = `${temp}${unit}`;
+  }
+
+  // Update location
+  if (weatherLocation) {
+    weatherLocation.textContent = weather.name;
+  }
+} 
