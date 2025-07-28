@@ -1442,130 +1442,161 @@ function handleChannelInput(num) {
 }
 
 function stopPlayback() {
-  // Don't immediately clear sources to prevent flickering
-  if (hls) { 
-    hls.destroy(); 
-    hls = null; 
+  console.log('Stopping playback');
+  
+  if (hls) {
+    hls.destroy();
+    hls = null;
   }
+  
   video.pause();
   audio.pause();
   
-  // Remove loading/playing classes
   video.classList.remove('loading', 'playing');
   audio.classList.remove('loading', 'playing');
   
-  // Clear sources after a brief delay to allow smooth transitions
-  setTimeout(() => {
-    if (video.src && !video.playing) {
-      video.src = '';
-    }
-    if (audio.src && !audio.playing) {
-      audio.src = '';
-    }
-  }, 100);
+  // Clear sources immediately
+  video.src = '';
+  audio.src = '';
 }
 
 function playChannel(idx) {
-  if (!channels[idx]) return;
+  console.log('playChannel called with index:', idx);
+  
+  // Check if video and audio elements exist
+  if (!video || !audio) {
+    console.error('Video or audio elements not found');
+    return;
+  }
+  
+  if (!channels[idx]) {
+    console.error('No channel found for index:', idx);
+    return;
+  }
 
-  // Save current channel as last channel
+  const channel = channels[idx];
+  console.log('Playing channel:', channel.name, 'URL:', channel.url);
+
+  // Save current channel
   if (current !== idx) {
     lastChannel = current;
     localStorage.setItem('glz-last-channel', current.toString());
   }
-
   current = idx;
-  const ch = channels[idx];
 
-  // Update channel display immediately to show new channel info
+  // Update UI
   updateChannelDisplay();
-
-  // Show loading state
   showLoading();
 
-  // Stop current playback
-  stopPlayback();
+  // Stop any current playback
+  if (hls) {
+    hls.destroy();
+    hls = null;
+  }
+  video.pause();
+  audio.pause();
+  video.src = '';
+  audio.src = '';
 
-  const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
-  const isHls = /\.m3u8(\?|$)/i.test(ch.url);
+  // Determine stream type
+  const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(channel.url) || 
+                  channel.url.includes('icy') || 
+                  channel.url.includes('audio');
+  const isHls = /\.m3u8(\?|$)/i.test(channel.url);
 
-  // Set display properties
-  video.style.display = isAudio ? 'none' : '';
-  audio.style.display = isAudio ? '' : 'none';
+  console.log('Stream type - isAudio:', isAudio, 'isHls:', isHls);
 
-  // Update connection status
+  // Set display
+  video.style.display = isAudio ? 'none' : 'block';
+  audio.style.display = isAudio ? 'block' : 'none';
+
+  // Update status
   connectionStatus = 'connecting';
   updateConnectionStatus();
 
-  // Function to handle successful playback
-  const onPlaybackSuccess = () => {
-    connectionStatus = 'connected';
-    updateConnectionStatus();
-    hideLoading();
-
-    // Add playing class to video/audio
-    if (isAudio) {
-      audio.classList.remove('loading');
-      audio.classList.add('playing');
-    } else {
-      video.classList.remove('loading');
-      video.classList.add('playing');
-    }
-
-    // Show channel banner after successful playback
-    setTimeout(() => showChannelBanner(), 500);
-  };
-
-  // Function to handle playback errors
-  const onPlaybackError = (error, streamType) => {
-    connectionStatus = 'error';
-    updateConnectionStatus();
-    hideLoading();
-
-    // Remove loading class from video/audio
-    if (isAudio) {
-      audio.classList.remove('loading');
-    } else {
-      video.classList.remove('loading');
-    }
-
-    showStatus(`Failed to play ${streamType} stream`);
-    console.error(`Playback error:`, error);
-  };
-
   if (isAudio) {
-    audio.classList.add('loading');
-    audio.src = ch.url;
+    // Audio stream
+    console.log('Playing audio stream');
+    audio.src = channel.url;
+    audio.load();
     audio.play()
-      .then(onPlaybackSuccess)
-      .catch(e => onPlaybackError(e, 'audio'));
-  } else if (isHls && window.Hls) {
+      .then(() => {
+        console.log('Audio playback started successfully');
+        connectionStatus = 'connected';
+        updateConnectionStatus();
+        hideLoading();
+        audio.classList.add('playing');
+        setTimeout(() => showChannelBanner(), 500);
+      })
+      .catch(error => {
+        console.error('Audio playback failed:', error);
+        connectionStatus = 'error';
+        updateConnectionStatus();
+        hideLoading();
+        showStatus('Failed to play audio stream');
+      });
+  } else if (isHls && window.Hls && Hls.isSupported()) {
+    // HLS stream
+    console.log('Playing HLS stream with HLS.js');
     hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
       backBufferLength: 90
     });
-    hls.loadSource(ch.url);
+
+    hls.loadSource(channel.url);
     hls.attachMedia(video);
 
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
-      video.classList.add('loading');
+      console.log('HLS manifest loaded');
       video.play()
-        .then(onPlaybackSuccess)
-        .catch(e => onPlaybackError(e, 'video'));
+        .then(() => {
+          console.log('HLS video playback started successfully');
+          connectionStatus = 'connected';
+          updateConnectionStatus();
+          hideLoading();
+          video.classList.add('playing');
+          setTimeout(() => showChannelBanner(), 500);
+        })
+        .catch(error => {
+          console.error('HLS video play failed:', error);
+          connectionStatus = 'error';
+          updateConnectionStatus();
+          hideLoading();
+          showStatus('Failed to play HLS stream');
+        });
     });
 
-    hls.on(Hls.Events.ERROR, function (event, data) {
+    hls.on(Hls.Events.ERROR, (event, data) => {
+      console.error('HLS error:', event, data);
       if (data.fatal) {
-        onPlaybackError(data, 'HLS stream');
+        connectionStatus = 'error';
+        updateConnectionStatus();
+        hideLoading();
+        showStatus('HLS stream error');
       }
     });
   } else {
-    video.classList.add('loading');
-    video.src = ch.url;
+    // Direct video stream
+    console.log('Playing direct video stream');
+    video.src = channel.url;
+    video.load();
     video.play()
-      .then(onPlaybackSuccess)
-      .catch(e => onPlaybackError(e, 'video'));
+      .then(() => {
+        console.log('Direct video playback started successfully');
+        connectionStatus = 'connected';
+        updateConnectionStatus();
+        hideLoading();
+        video.classList.add('playing');
+        setTimeout(() => showChannelBanner(), 500);
+      })
+      .catch(error => {
+        console.error('Direct video playback failed:', error);
+        connectionStatus = 'error';
+        updateConnectionStatus();
+        hideLoading();
+        showStatus('Failed to play video stream');
+      });
   }
 
   // Update mobile channel list
