@@ -1668,39 +1668,39 @@ function hideGuide() {
   channelGuide.classList.remove('open');
 }
 function renderChannelList(filter = '') {
+  console.log('Rendering channel list with', channels.length, 'channels');
+  
+  if (!channelList) {
+    console.error('Channel list element not found');
+    return;
+  }
+  
   const filtered = filter
     ? channels.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
     : channels;
-  channelList.innerHTML = filtered.map((ch, i) => {
-    const programInfo = getCurrentProgram(ch.id);
-    const epgHtml = programInfo && programInfo.current ? `
-      <div class="channel-epg">
-        <div class="epg-current-program">${programInfo.current.title}</div>
-        <div class="epg-time">${formatTime(programInfo.current.start)} - ${formatTime(programInfo.current.stop)}</div>
-      </div>
-    ` : '';
     
+  channelList.innerHTML = filtered.map((ch, i) => {
     return `<div class="channel-item${i === current ? ' active' : ''}" data-idx="${i}" tabindex="0">
       <img class="channel-logo" src="${ch.logo || ''}" onerror="this.style.display='none'" />
       <div class="channel-details">
         <div class="channel-number-small">${ch.chno || (i + 1)}</div>
         <div class="channel-name-small">${ch.name}</div>
-        ${epgHtml}
       </div>
     </div>`;
   }).join('');
+  
   channelList.querySelectorAll('.channel-item').forEach(item => {
     item.onclick = () => {
       playChannel(Number(item.dataset.idx));
-      hideGuide();
     };
     item.onkeydown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         playChannel(Number(item.dataset.idx));
-        hideGuide();
       }
     };
   });
+  
+  console.log('Channel list rendered with', channelList.children.length, 'items');
   
   // Also render mobile channel list
   renderMobileChannelList(filter);
@@ -1719,9 +1719,6 @@ function renderMobileChannelList(filter = '') {
     : channels;
   
   mobileChannelList.innerHTML = filtered.map((ch, i) => {
-    const programInfo = getCurrentProgram(ch.id);
-    const programTitle = programInfo?.current?.title || 'No program info';
-    
     return `<div class="mobile-channel-item${i === current ? ' active' : ''}" data-idx="${i}">
       <div class="mobile-channel-logo">
         ${ch.logo ? `<img src="${ch.logo}" alt="${ch.name}" onerror="this.parentElement.innerHTML='<div class=\\'channel-logo-placeholder\\'>TV</div>'">` : '<div class="channel-logo-placeholder">TV</div>'}
@@ -1729,7 +1726,6 @@ function renderMobileChannelList(filter = '') {
       <div class="mobile-channel-info">
         <div class="mobile-channel-number">${ch.chno || (i + 1)}</div>
         <div class="mobile-channel-name">${ch.name}</div>
-        <div class="mobile-channel-program">${programTitle}</div>
       </div>
     </div>`;
   }).join('');
@@ -2039,7 +2035,8 @@ function showStatus(msg, duration = 2000) {
     playChannel(current);
   }
   
-  // Initialize mobile channel list
+  // Initialize channel lists
+  renderChannelList();
   renderMobileChannelList();
   
   // Hide remote by default
