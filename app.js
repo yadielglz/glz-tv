@@ -1515,6 +1515,8 @@ function playChannel(idx) {
   const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
   const isHls = /\.m3u8(\?|$)/i.test(ch.url);
   
+  console.log('Stream detection - Channel:', ch.name, 'URL:', ch.url, 'isAudio:', isAudio, 'isHls:', isHls);
+  
   // Set display properties
   video.style.display = isAudio ? 'none' : '';
   audio.style.display = isAudio ? '' : 'none';
@@ -1544,7 +1546,7 @@ function playChannel(idx) {
   
   // Function to handle playback errors
   const onPlaybackError = (error, streamType) => {
-    console.error('Playback error for channel:', ch.name, 'Error:', error, 'Type:', streamType);
+    console.error('Playback error for channel:', ch.name, 'URL:', ch.url, 'Error:', error, 'Type:', streamType);
     connectionStatus = 'error';
     updateConnectionStatus();
     hideLoading();
@@ -1567,6 +1569,7 @@ function playChannel(idx) {
       .then(onPlaybackSuccess)
       .catch(e => onPlaybackError(e, 'audio'));
   } else if (isHls) {
+    console.log('HLS.js available:', !!window.Hls);
     if (!window.Hls) {
       console.error('HLS.js not available, falling back to direct video playback');
       // Fallback to direct video playback
