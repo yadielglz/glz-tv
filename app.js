@@ -1016,6 +1016,24 @@ function updateChannelDisplay(idx = current) {
 }
 
 /**
+ * Updates mobile current program display
+ */
+function updateMobileCurrentProgram(channelId) {
+  const mobileCurrentProgram = document.getElementById('mobile-current-program');
+  if (!mobileCurrentProgram) return;
+  
+  const programInfo = getCurrentProgram(channelId);
+  
+  if (programInfo && programInfo.current) {
+    mobileCurrentProgram.textContent = programInfo.current.title;
+    mobileCurrentProgram.style.display = 'block';
+  } else {
+    mobileCurrentProgram.textContent = '';
+    mobileCurrentProgram.style.display = 'none';
+  }
+}
+
+/**
  * Updates EPG display for a channel
  */
 function updateEPGDisplay(channelId) {
@@ -1956,8 +1974,6 @@ function showStatus(msg, duration = 2000) {
     'channelName': channelName,
     'powerBtn': powerBtn,
     'guideBtn': guideBtn,
-    'prevBtn': prevBtn,
-    'nextBtn': nextBtn,
     'volumeDownBtn': volumeDownBtn,
     'volumeUpBtn': volumeUpBtn,
     'muteBtn': muteBtn,
@@ -2057,10 +2073,20 @@ function showStatus(msg, duration = 2000) {
   // Add click handler to standby screen to exit standby
   if (standbyScreen) {
     standbyScreen.addEventListener('click', () => {
+      console.log('Standby screen clicked, current standby state:', standby);
       if (standby) {
         setStandby(false);
       }
     });
+  }
+  
+  // Debug: Check if power button is visible
+  if (powerBtn) {
+    console.log('Power button found:', powerBtn);
+    console.log('Power button display:', window.getComputedStyle(powerBtn).display);
+    console.log('Power button visibility:', window.getComputedStyle(powerBtn).visibility);
+  } else {
+    console.error('Power button not found!');
   }
   
   // Fetch EPG data
@@ -2108,6 +2134,11 @@ function showStatus(msg, duration = 2000) {
   document.addEventListener('keydown', (e) => {
     if (standby && (e.key === ' ' || e.key === 'Enter')) {
       e.preventDefault();
+      setStandby(false);
+    }
+    // Also allow any key to exit standby for easier testing
+    if (standby && e.key !== 'F1' && e.key !== 'F2' && e.key !== 'F3' && e.key !== 'F4' && e.key !== 'F5') {
+      console.log('Key pressed to exit standby:', e.key);
       setStandby(false);
     }
   });
