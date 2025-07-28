@@ -304,6 +304,7 @@ const powerBtn = document.getElementById('power-btn');
 const guideBtn = document.getElementById('guide-btn');
 const headerRemoteBtn = document.getElementById('header-remote-btn');
 const mobileRemoteBtn = document.getElementById('mobile-remote-btn');
+const mobileChannelList = document.getElementById('mobile-channel-list');
 const numpadBtns = document.querySelectorAll('.numpad-btn');
 const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
@@ -1416,6 +1417,9 @@ function playChannel(idx) {
   
   updateChannelDisplay();
   showChannelBanner();
+  
+  // Update mobile channel list
+  renderMobileChannelList();
 }
 
 function setStandby(on) {
@@ -1486,6 +1490,40 @@ function renderChannelList(filter = '') {
         playChannel(Number(item.dataset.idx));
         hideGuide();
       }
+    };
+  });
+  
+  // Also render mobile channel list
+  renderMobileChannelList(filter);
+}
+
+function renderMobileChannelList(filter = '') {
+  if (!mobileChannelList) return;
+  
+  const filtered = filter
+    ? channels.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
+    : channels;
+  
+  mobileChannelList.innerHTML = filtered.map((ch, i) => {
+    const programInfo = getCurrentProgram(ch.id);
+    const programTitle = programInfo?.current?.title || 'No program info';
+    
+    return `<div class="mobile-channel-item${i === current ? ' active' : ''}" data-idx="${i}">
+      <div class="mobile-channel-logo">
+        ${ch.logo ? `<img src="${ch.logo}" alt="${ch.name}" onerror="this.parentElement.innerHTML='<div class=\\'channel-logo-placeholder\\'>TV</div>'">` : '<div class="channel-logo-placeholder">TV</div>'}
+      </div>
+      <div class="mobile-channel-info">
+        <div class="mobile-channel-number">${ch.chno || (i + 1)}</div>
+        <div class="mobile-channel-name">${ch.name}</div>
+        <div class="mobile-channel-program">${programTitle}</div>
+      </div>
+    </div>`;
+  }).join('');
+  
+  // Add click handlers for mobile channel list
+  mobileChannelList.querySelectorAll('.mobile-channel-item').forEach(item => {
+    item.onclick = () => {
+      playChannel(Number(item.dataset.idx));
     };
   });
 }
@@ -1786,6 +1824,9 @@ function showStatus(msg, duration = 2000) {
   setStandby(true);
   updateTime();
   updateChannelDisplay();
+  
+  // Initialize mobile channel list
+  renderMobileChannelList();
   
   // Hide remote by default
   remoteControl.classList.remove('visible');
