@@ -928,11 +928,7 @@ function stopPlayback() {
 }
 
 function playChannel(idx) {
-  console.log('playChannel called with index:', idx);
-  if (!channels[idx]) {
-    console.error('No channel found for index:', idx);
-    return;
-  }
+  if (!channels[idx]) return;
 
   // Save current channel as last channel
   if (current !== idx) {
@@ -954,14 +950,6 @@ function playChannel(idx) {
 
   const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
   const isHls = /\.m3u8(\?|$)/i.test(ch.url);
-  
-  console.log('Channel:', ch.name, 'URL:', ch.url, 'isAudio:', isAudio, 'isHls:', isHls);
-  
-  // For debugging: try direct video playback for Starlite streams instead of HLS.js
-  const isStarliteStream = ch.url.includes('starlite.best');
-  if (isStarliteStream) {
-    console.log('Detected Starlite stream, will try direct playback...');
-  }
 
   // Set display properties
   video.style.display = isAudio ? 'none' : '';
@@ -1014,77 +1002,27 @@ function playChannel(idx) {
       .then(onPlaybackSuccess)
       .catch(e => onPlaybackError(e, 'audio'));
   } else if (isHls && window.Hls) {
-    if (isStarliteStream) {
-      console.log('Starlite stream detected, using direct video playback');
-      // For Starlite streams, try direct video playback instead of HLS.js
+    hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: true,
+      backBufferLength: 90
+    });
+    hls.loadSource(ch.url);
+    hls.attachMedia(video);
+
+    hls.on(Hls.Events.MANIFEST_LOADED, () => {
       video.classList.add('loading');
-      video.src = ch.url;
       video.play()
         .then(onPlaybackSuccess)
-        .catch(e => {
-          console.log('Direct playback failed for Starlite, trying HLS.js as fallback');
-          // Fallback to HLS.js if direct playback fails
-          hls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-            backBufferLength: 90
-          });
-          hls.loadSource(ch.url);
-          hls.attachMedia(video);
+        .catch(e => onPlaybackError(e, 'video'));
+    });
 
-          hls.on(Hls.Events.MANIFEST_LOADED, () => {
-            console.log('HLS: Manifest loaded successfully (fallback)');
-            video.play()
-              .then(onPlaybackSuccess)
-              .catch(e => onPlaybackError(e, 'video'));
-          });
-
-          hls.on(Hls.Events.ERROR, function (event, data) {
-            console.error('HLS Error (fallback):', event, data);
-            if (data.fatal) {
-              onPlaybackError(data, 'HLS stream');
-            }
-          });
-        });
-    } else {
-      console.log('Using HLS.js for playback');
-      hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 90
-      });
-      hls.loadSource(ch.url);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_LOADING, () => {
-        console.log('HLS: Manifest loading...');
-      });
-
-      hls.on(Hls.Events.MANIFEST_LOADED, () => {
-        console.log('HLS: Manifest loaded successfully');
-        video.classList.add('loading');
-        video.play()
-          .then(onPlaybackSuccess)
-          .catch(e => onPlaybackError(e, 'video'));
-      });
-
-      hls.on(Hls.Events.LEVEL_LOADING, () => {
-        console.log('HLS: Level loading...');
-      });
-
-      hls.on(Hls.Events.LEVEL_LOADED, () => {
-        console.log('HLS: Level loaded successfully');
-      });
-
-      hls.on(Hls.Events.ERROR, function (event, data) {
-        console.error('HLS Error:', event, data);
-        if (data.fatal) {
-          onPlaybackError(data, 'HLS stream');
-        }
-      });
-    }
+    hls.on(Hls.Events.ERROR, function (event, data) {
+      if (data.fatal) {
+        onPlaybackError(data, 'HLS stream');
+      }
+    });
   } else {
-    console.log('Using direct video playback');
     video.classList.add('loading');
     video.src = ch.url;
     video.play()
@@ -1097,7 +1035,6 @@ function playChannel(idx) {
 }
 
 function setStandby(on) {
-  console.log('setStandby called with:', on);
   standby = on;
   if (standby) {
     standbyScreen.classList.add('show');
@@ -1113,7 +1050,6 @@ function setStandby(on) {
       channelLogoPlaceholder.textContent = 'TV';
     }
   } else {
-    console.log('Exiting standby, playing channel:', current);
     standbyScreen.classList.remove('show');
     if (channels.length > 0 && current >= 0 && current < channels.length) {
       playChannel(current);
