@@ -1698,6 +1698,9 @@ function renderChannelList(filter = '') {
   console.log('Channel list rendered with', channelList.children.length, 'items');
   console.log('Channel list element styles:', window.getComputedStyle(channelList));
   console.log('Channel list parent sidebar:', channelList.parentElement);
+  console.log('Sidebar element:', channelList.parentElement.parentElement);
+  console.log('Sidebar styles:', window.getComputedStyle(channelList.parentElement.parentElement));
+  console.log('Main content styles:', window.getComputedStyle(document.querySelector('.main-content')));
   
   // Also render mobile channel list
   renderMobileChannelList(filter);

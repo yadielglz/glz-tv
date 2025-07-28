@@ -20,6 +20,7 @@
   --bg-secondary: #f9fafb;
   --bg-tertiary: #f3f4f6;
   --bg-dark: #1f2937;
+  --bg-hover: #e5e7eb;
   
   /* Border Colors */
   --border-light: #e5e7eb;
@@ -79,6 +80,7 @@
   --bg-secondary: #1f2937;
   --bg-tertiary: #374151;
   --bg-dark: #0f172a;
+  --bg-hover: #4b5563;
   
   /* Dark Border Colors */
   --border-light: #374151;
