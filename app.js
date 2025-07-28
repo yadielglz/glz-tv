@@ -743,20 +743,20 @@ function renderChannelList(filter = '') {
 }
 
 // --- Enhanced Event Listeners ---
-powerBtn.onclick = () => setStandby(!standby);
-guideBtn.onclick = showGuide;
-closeGuide.onclick = hideGuide;
-toggleRemote.onclick = toggleRemoteVisibility;
-headerRemoteBtn.onclick = toggleRemoteVisibility;
+if (powerBtn) powerBtn.onclick = () => setStandby(!standby);
+if (guideBtn) guideBtn.onclick = showGuide;
+if (closeGuide) closeGuide.onclick = hideGuide;
+if (toggleRemote) toggleRemote.onclick = toggleRemoteVisibility;
+if (headerRemoteBtn) headerRemoteBtn.onclick = toggleRemoteVisibility;
 
 // Channel navigation
-prevBtn.onclick = () => {
+if (prevBtn) prevBtn.onclick = () => {
   if (!standby && channels.length > 0) {
     lastChannel = current;
     playChannel((current - 1 + channels.length) % channels.length);
   }
 };
-nextBtn.onclick = () => {
+if (nextBtn) nextBtn.onclick = () => {
   if (!standby && channels.length > 0) {
     lastChannel = current;
     playChannel((current + 1) % channels.length);
@@ -764,23 +764,23 @@ nextBtn.onclick = () => {
 };
 
 // Enhanced remote controls
-volumeDownBtn.onclick = () => adjustVolume(-0.1);
-volumeUpBtn.onclick = () => adjustVolume(0.1);
-muteBtn.onclick = toggleMute;
-channelDownBtn.onclick = () => {
+if (volumeDownBtn) volumeDownBtn.onclick = () => adjustVolume(-0.1);
+if (volumeUpBtn) volumeUpBtn.onclick = () => adjustVolume(0.1);
+if (muteBtn) muteBtn.onclick = toggleMute;
+if (channelDownBtn) channelDownBtn.onclick = () => {
   if (!standby && channels.length > 0) {
     lastChannel = current;
     playChannel((current - 1 + channels.length) % channels.length);
   }
 };
-channelUpBtn.onclick = () => {
+if (channelUpBtn) channelUpBtn.onclick = () => {
   if (!standby && channels.length > 0) {
     lastChannel = current;
     playChannel((current + 1) % channels.length);
   }
 };
-lastChannelBtn.onclick = goToLastChannel;
-enterBtn.onclick = () => {
+if (lastChannelBtn) lastChannelBtn.onclick = goToLastChannel;
+if (enterBtn) enterBtn.onclick = () => {
   if (channelInput) {
     const channelNum = parseInt(channelInput);
     const channelIndex = channels.findIndex(ch => ch.chno === channelInput) || 
@@ -795,29 +795,33 @@ enterBtn.onclick = () => {
     channelInput = '';
   }
 };
-favoritesBtn.onclick = toggleFavorite;
-pwaInstallBtn.onclick = installPWA;
-connectionStatusBtn.onclick = () => {
+if (favoritesBtn) favoritesBtn.onclick = toggleFavorite;
+if (pwaInstallBtn) pwaInstallBtn.onclick = installPWA;
+if (connectionStatusBtn) connectionStatusBtn.onclick = () => {
   updateConnectionStatus();
   showStatus(`Connection: ${connectionStatus}`);
 };
 
-searchInput.oninput = (e) => renderChannelList(e.target.value);
+if (searchInput) searchInput.oninput = (e) => renderChannelList(e.target.value);
 
 // Enhanced number pad
-numpadBtns.forEach(btn => {
-  btn.onclick = () => {
-    if (standby) {
-      showStatus('Power on first.');
-      return;
+if (numpadBtns && numpadBtns.length > 0) {
+  numpadBtns.forEach(btn => {
+    if (btn) {
+      btn.onclick = () => {
+        if (standby) {
+          showStatus('Power on first.');
+          return;
+        }
+        
+        if (btn.classList.contains('enter')) return; // Skip enter button
+        
+        const num = btn.dataset.num;
+        handleChannelInput(num);
+      };
     }
-    
-    if (btn.classList.contains('enter')) return; // Skip enter button
-    
-    const num = btn.dataset.num;
-    handleChannelInput(num);
-  };
-});
+  });
+}
 
 // Keyboard navigation
 window.addEventListener('keydown', (e) => {
@@ -825,8 +829,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'F2') showGuide();
   if (e.key === 'F4') setStandby(!standby);
   if (e.key === 'ArrowUp') showGuide();
-  if (e.key === 'ArrowLeft') prevBtn.onclick();
-  if (e.key === 'ArrowRight') nextBtn.onclick();
+  if (e.key === 'ArrowLeft' && prevBtn) prevBtn.onclick();
+  if (e.key === 'ArrowRight' && nextBtn) nextBtn.onclick();
   if (e.key === 'Escape') {
     hideRemote();
     hideGuide();
@@ -942,6 +946,38 @@ function showStatus(msg, duration = 2000) {
 // --- Enhanced Initialization ---
 (function init() {
   console.log('=== INITIALIZATION START ===');
+  
+  // Check for missing DOM elements
+  console.log('Checking DOM elements...');
+  const requiredElements = {
+    'video': video,
+    'audio': audio,
+    'channelNumber': channelNumber,
+    'channelName': channelName,
+    'powerBtn': powerBtn,
+    'guideBtn': guideBtn,
+    'prevBtn': prevBtn,
+    'nextBtn': nextBtn,
+    'volumeDownBtn': volumeDownBtn,
+    'volumeUpBtn': volumeUpBtn,
+    'muteBtn': muteBtn,
+    'channelDownBtn': channelDownBtn,
+    'channelUpBtn': channelUpBtn,
+    'lastChannelBtn': lastChannelBtn,
+    'enterBtn': enterBtn,
+    'favoritesBtn': favoritesBtn,
+    'pwaInstallBtn': pwaInstallBtn,
+    'connectionStatusBtn': connectionStatusBtn
+  };
+  
+  Object.entries(requiredElements).forEach(([name, element]) => {
+    if (!element) {
+      console.warn(`Missing DOM element: ${name}`);
+    } else {
+      console.log(`✓ Found: ${name}`);
+    }
+  });
+  
   channels = parseM3U(EMBEDDED_M3U);
   console.log('Channels loaded:', channels.length);
   console.log('First channel:', channels[0]);
