@@ -6,7 +6,7 @@ const gunzip = promisify(zlib.gunzip);
 
 exports.handler = async (event) => {
   try {
-    const epgUrl = 'https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz';
+    const epgUrl = 'https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz';
     
     console.log('Fetching EPG from:', epgUrl);
     

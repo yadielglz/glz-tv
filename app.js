@@ -2,7 +2,7 @@
 // Spectrum/AT&T inspired, modular, and maintainable
 
 // --- Embedded M3U Content (move this to a separate file or fetch from server for production) ---
-const EMBEDDED_M3U = `#EXTM3U url-tvg="https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz"
+const EMBEDDED_M3U = `#EXTM3U url-tvg="https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz"
 #EXTINF:-1 tvg-id="WKAQ.us" tvg-name="WKAQ   TELEMUNDO PR" tvg-logo="https://i.ibb.co/gLVK5Swz/TEL.png" tvg-chno="102" channel-id="102" group-title="TV",WKAQ   TELEMUNDO PR
 https://nbculocallive.akamaized.net/hls/live/2037499/puertorico/stream1/master_1080.m3u8
 #EXTINF:-1 tvg-id="WKAQDT2.us" tvg-name="WKAQ2   PUNTO 2" tvg-logo="https://static.epg.best/us/WKAQDT2.us.png" tvg-chno="103" channel-id="103" group-title="TV",WKAQ2   PUNTO 2
@@ -274,10 +274,11 @@ const EPG_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 const EPG_SOURCES = {
   epgshare01: 'https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz',
   epgshare02: 'https://epgshare02.online/epgshare02/epg_ripper_ALL_SOURCES2.xml.gz',
-  epgshare03: 'https://epgshare03.online/epgshare03/epg_ripper_ALL_SOURCES3.xml.gz'
+  epgshare03: 'https://epgshare03.online/epgshare03/epg_ripper_ALL_SOURCES3.xml.gz',
+  uslocals: 'https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz'
 };
 
-let EPG_URL = EPG_SOURCES.epgshare01; // Default source
+let EPG_URL = EPG_SOURCES.uslocals; // Default to US Locals for better local channel coverage
 const LOCAL_EPG_PROXY = 'http://localhost:3000/api/epg';
 const CLOUD_EPG_PROXY = '/api/epg'; // Netlify function
 
