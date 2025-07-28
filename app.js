@@ -561,13 +561,8 @@ function updateChannelDisplay(idx = current) {
   
 
   
-  // Update mobile current program
-  try {
-    updateMobileCurrentProgram(channel.id);
-  } catch (error) {
-    console.error('Error calling updateMobileCurrentProgram:', error);
-
-  }
+  // Update mobile current program (removed EPG functionality)
+  // No longer needed since we removed EPG
   
   // Update favorites button state
   updateFavoritesButton();
@@ -965,23 +960,7 @@ function playChannel(idx) {
   // For debugging: try direct video playback for Starlite streams instead of HLS.js
   const isStarliteStream = ch.url.includes('starlite.best');
   if (isStarliteStream) {
-    console.log('Detected Starlite stream, trying direct playback...');
-    
-    // Test if the stream is accessible
-    fetch(ch.url, {
-      method: 'HEAD',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://starlite.best/',
-        'Origin': 'https://starlite.best'
-      }
-    })
-    .then(response => {
-      console.log('Starlite stream test response:', response.status, response.statusText);
-    })
-    .catch(error => {
-      console.error('Starlite stream test failed:', error);
-    });
+    console.log('Detected Starlite stream, will try direct playback...');
   }
 
   // Set display properties
@@ -1034,53 +1013,76 @@ function playChannel(idx) {
     audio.play()
       .then(onPlaybackSuccess)
       .catch(e => onPlaybackError(e, 'audio'));
-  } else if (isHls && window.Hls && !isStarliteStream) {
-    console.log('Using HLS.js for playback');
-    hls = new Hls({
-      enableWorker: true,
-      lowLatencyMode: true,
-      backBufferLength: 90,
-      xhrSetup: function(xhr, url) {
-        // Add headers for Starlite streams
-        xhr.setRequestHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        xhr.setRequestHeader('Referer', 'https://starlite.best/');
-        xhr.setRequestHeader('Origin', 'https://starlite.best');
-        // Add more headers that might be needed
-        xhr.setRequestHeader('Accept', '*/*');
-        xhr.setRequestHeader('Accept-Language', 'en-US,en;q=0.9');
-        xhr.setRequestHeader('Cache-Control', 'no-cache');
-        xhr.setRequestHeader('Pragma', 'no-cache');
-      }
-    });
-    hls.loadSource(ch.url);
-    hls.attachMedia(video);
-
-    hls.on(Hls.Events.MANIFEST_LOADING, () => {
-      console.log('HLS: Manifest loading...');
-    });
-
-    hls.on(Hls.Events.MANIFEST_LOADED, () => {
-      console.log('HLS: Manifest loaded successfully');
+  } else if (isHls && window.Hls) {
+    if (isStarliteStream) {
+      console.log('Starlite stream detected, using direct video playback');
+      // For Starlite streams, try direct video playback instead of HLS.js
       video.classList.add('loading');
+      video.src = ch.url;
       video.play()
         .then(onPlaybackSuccess)
-        .catch(e => onPlaybackError(e, 'video'));
-    });
+        .catch(e => {
+          console.log('Direct playback failed for Starlite, trying HLS.js as fallback');
+          // Fallback to HLS.js if direct playback fails
+          hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            backBufferLength: 90
+          });
+          hls.loadSource(ch.url);
+          hls.attachMedia(video);
 
-    hls.on(Hls.Events.LEVEL_LOADING, () => {
-      console.log('HLS: Level loading...');
-    });
+          hls.on(Hls.Events.MANIFEST_LOADED, () => {
+            console.log('HLS: Manifest loaded successfully (fallback)');
+            video.play()
+              .then(onPlaybackSuccess)
+              .catch(e => onPlaybackError(e, 'video'));
+          });
 
-    hls.on(Hls.Events.LEVEL_LOADED, () => {
-      console.log('HLS: Level loaded successfully');
-    });
+          hls.on(Hls.Events.ERROR, function (event, data) {
+            console.error('HLS Error (fallback):', event, data);
+            if (data.fatal) {
+              onPlaybackError(data, 'HLS stream');
+            }
+          });
+        });
+    } else {
+      console.log('Using HLS.js for playback');
+      hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 90
+      });
+      hls.loadSource(ch.url);
+      hls.attachMedia(video);
 
-    hls.on(Hls.Events.ERROR, function (event, data) {
-      console.error('HLS Error:', event, data);
-      if (data.fatal) {
-        onPlaybackError(data, 'HLS stream');
-      }
-    });
+      hls.on(Hls.Events.MANIFEST_LOADING, () => {
+        console.log('HLS: Manifest loading...');
+      });
+
+      hls.on(Hls.Events.MANIFEST_LOADED, () => {
+        console.log('HLS: Manifest loaded successfully');
+        video.classList.add('loading');
+        video.play()
+          .then(onPlaybackSuccess)
+          .catch(e => onPlaybackError(e, 'video'));
+      });
+
+      hls.on(Hls.Events.LEVEL_LOADING, () => {
+        console.log('HLS: Level loading...');
+      });
+
+      hls.on(Hls.Events.LEVEL_LOADED, () => {
+        console.log('HLS: Level loaded successfully');
+      });
+
+      hls.on(Hls.Events.ERROR, function (event, data) {
+        console.error('HLS Error:', event, data);
+        if (data.fatal) {
+          onPlaybackError(data, 'HLS stream');
+        }
+      });
+    }
   } else {
     console.log('Using direct video playback');
     video.classList.add('loading');
