@@ -2,7 +2,7 @@
 // Spectrum/AT&T inspired, modular, and maintainable
 
 // --- Embedded M3U Content (move this to a separate file or fetch from server for production) ---
-const EMBEDDED_M3U = `#EXTM3U url-tvg="https://epg.best/1eef8-shw7fc.xml.gz" x-tvg-url="https://epg.best/1eef8-shw7fc.xml.gz"
+const EMBEDDED_M3U = `#EXTM3U url-tvg="https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz"
 #EXTINF:-1 tvg-id="WKAQ.us" tvg-name="WKAQ   TELEMUNDO PR" tvg-logo="https://i.ibb.co/gLVK5Swz/TEL.png" tvg-chno="102" channel-id="102" group-title="TV",WKAQ   TELEMUNDO PR
 https://nbculocallive.akamaized.net/hls/live/2037499/puertorico/stream1/master_1080.m3u8
 #EXTINF:-1 tvg-id="WKAQDT2.us" tvg-name="WKAQ2   PUNTO 2" tvg-logo="https://static.epg.best/us/WKAQDT2.us.png" tvg-chno="103" channel-id="103" group-title="TV",WKAQ2   PUNTO 2
@@ -270,7 +270,7 @@ let epgData = {};
 let epgLoading = false;
 let epgLastUpdate = null;
 const EPG_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-const EPG_URL = 'https://epg.best/1eef8-shw7fc.xml.gz';
+const EPG_URL = 'https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz';
 const LOCAL_EPG_PROXY = 'http://localhost:3000/api/epg';
 const CLOUD_EPG_PROXY = '/api/epg'; // Netlify function
 
@@ -354,10 +354,12 @@ async function fetchEPGData() {
   
   epgLoading = true;
   console.log('Fetching EPG data from:', EPG_URL);
+  console.log('💡 Note: This is a large EPG file (~150MB compressed). Loading may take a moment...');
   
   try {
-    // Try cloud proxy first (works on mobile), then local proxy, then fallback to CORS proxies
+    // For very large EPG files, try direct access first, then fallback to proxies
     const proxies = [
+      EPG_URL, // Try direct access first for large files
       CLOUD_EPG_PROXY, // Cloud proxy (works on mobile)
       LOCAL_EPG_PROXY, // Local proxy (development only)
       `https://api.allorigins.win/raw?url=${encodeURIComponent(EPG_URL)}`,
@@ -374,7 +376,7 @@ async function fetchEPGData() {
         console.log('Trying proxy:', proxyUrl);
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for large files
         
         const response = await fetch(proxyUrl, {
           signal: controller.signal,

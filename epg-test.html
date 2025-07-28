@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPG Test - GLZ TV</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .success { background: rgba(0, 212, 170, 0.2); border: 1px solid #00d4aa; }
+        .error { background: rgba(255, 107, 107, 0.2); border: 1px solid #ff6b6b; }
+        .info { background: rgba(79, 172, 254, 0.2); border: 1px solid #4facfe; }
+        .loading { background: rgba(255, 167, 38, 0.2); border: 1px solid #ffa726; }
+        button {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(79, 172, 254, 0.3);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .log {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>EPG Integration Test</h1>
+        
+        <div class="status info">
+            <strong>New EPG URL:</strong> https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz
+        </div>
+        
+        <div class="status info">
+            <strong>File Size:</strong> ~150MB compressed, ~1.2GB decompressed
+        </div>
+        
+        <div>
+            <button onclick="testDirectAccess()">Test Direct Access</button>
+            <button onclick="testNetlifyProxy()">Test Netlify Proxy</button>
+            <button onclick="testCORSProxy()">Test CORS Proxy</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <div id="status" class="status loading">
+            Ready to test EPG integration...
+        </div>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        const EPG_URL = 'https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz';
+        const NETLIFY_PROXY = '/api/epg';
+        
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+        
+        async function testDirectAccess() {
+            updateStatus('Testing direct EPG access...', 'loading');
+            log('Starting direct access test...');
+            
+            try {
+                const startTime = Date.now();
+                const response = await fetch(EPG_URL, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'application/xml, text/xml, */*'
+                    }
+                });
+                
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const contentLength = response.headers.get('content-length');
+                const sizeMB = contentLength ? Math.round(parseInt(contentLength) / 1024 / 1024) : 'unknown';
+                
+                log(`✅ Direct access successful!`);
+                log(`   Status: ${response.status}`);
+                log(`   Content-Type: ${response.headers.get('content-type')}`);
+                log(`   Size: ${sizeMB} MB`);
+                log(`   Duration: ${duration}ms`);
+                
+                updateStatus(`Direct access successful! (${sizeMB} MB in ${duration}ms)`, 'success');
+                
+            } catch (error) {
+                log(`❌ Direct access failed: ${error.message}`);
+                updateStatus(`Direct access failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testNetlifyProxy() {
+            updateStatus('Testing Netlify proxy...', 'loading');
+            log('Starting Netlify proxy test...');
+            
+            try {
+                const startTime = Date.now();
+                const response = await fetch(NETLIFY_PROXY);
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const text = await response.text();
+                log(`✅ Netlify proxy successful!`);
+                log(`   Status: ${response.status}`);
+                log(`   Content-Type: ${response.headers.get('content-type')}`);
+                log(`   Response size: ${text.length} characters`);
+                log(`   Duration: ${duration}ms`);
+                
+                if (text.includes('<tv>')) {
+                    log(`   ✅ Response contains valid XML TV data`);
+                } else {
+                    log(`   ⚠️ Response may not contain valid TV data`);
+                }
+                
+                updateStatus(`Netlify proxy successful! (${duration}ms)`, 'success');
+                
+            } catch (error) {
+                log(`❌ Netlify proxy failed: ${error.message}`);
+                updateStatus(`Netlify proxy failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testCORSProxy() {
+            updateStatus('Testing CORS proxy...', 'loading');
+            log('Starting CORS proxy test...');
+            
+            try {
+                const corsUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(EPG_URL)}`;
+                const startTime = Date.now();
+                const response = await fetch(corsUrl);
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const text = await response.text();
+                log(`✅ CORS proxy successful!`);
+                log(`   Status: ${response.status}`);
+                log(`   Response size: ${text.length} characters`);
+                log(`   Duration: ${duration}ms`);
+                
+                if (text.includes('<tv>')) {
+                    log(`   ✅ Response contains valid XML TV data`);
+                } else {
+                    log(`   ⚠️ Response may not contain valid TV data`);
+                }
+                
+                updateStatus(`CORS proxy successful! (${duration}ms)`, 'success');
+                
+            } catch (error) {
+                log(`❌ CORS proxy failed: ${error.message}`);
+                updateStatus(`CORS proxy failed: ${error.message}`, 'error');
+            }
+        }
+        
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+            updateStatus('Log cleared', 'info');
+        }
+        
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            log('EPG Test Page Loaded');
+            log(`Testing EPG URL: ${EPG_URL}`);
+            log('Click buttons above to test different access methods...');
+        });
+    </script>
+</body>
+</html> 
