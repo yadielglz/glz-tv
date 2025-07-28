@@ -239,7 +239,7 @@ function parseM3U(m3uContent) {
       const nameMatch = line.match(/tvg-name="([^"]*)"/);
       if (nameMatch && !currentChannel.name) currentChannel.name = nameMatch[1];
       
-      console.log(`EXTINF ${extinfCount}:`, currentChannel.name);
+      console.log(`EXTINF ${extinfCount}:`, currentChannel.name, 'ID:', currentChannel.id);
     } else if (line && !line.startsWith('#') && currentChannel) {
       urlCount++;
       currentChannel.url = line.trim();
@@ -426,7 +426,11 @@ function parseEPGXML(xmlDoc) {
  * Gets current and next program for a channel
  */
 function getCurrentProgram(channelId) {
+  console.log('getCurrentProgram called with channelId:', channelId);
+  console.log('Available EPG channels:', Object.keys(epgData));
+  
   if (!epgData[channelId] || epgData[channelId].length === 0) {
+    console.log('No EPG data for channel:', channelId);
     return null;
   }
   
@@ -591,12 +595,22 @@ function updateChannelDisplay(idx = current) {
  * Updates EPG display for a channel
  */
 function updateEPGDisplay(channelId) {
-  if (!channelId) return;
+  console.log('updateEPGDisplay called with channelId:', channelId);
+  if (!channelId) {
+    console.log('No channelId provided, skipping EPG update');
+    return;
+  }
   
   const programInfo = getCurrentProgram(channelId);
-  const epgElement = document.getElementById('epg-info');
+  console.log('Program info for channel', channelId, ':', programInfo);
   
-  if (!epgElement) return;
+  const epgElement = document.getElementById('epg-info');
+  console.log('EPG element found:', !!epgElement);
+  
+  if (!epgElement) {
+    console.log('EPG element not found in DOM');
+    return;
+  }
   
   if (programInfo && programInfo.current) {
     const current = programInfo.current;
@@ -1240,7 +1254,12 @@ function showStatus(msg, duration = 2000) {
   updateConnectionStatus();
   
   // Fetch EPG data
-  fetchEPGData();
+  console.log('Starting EPG initialization...');
+  fetchEPGData().then(() => {
+    console.log('EPG initialization complete');
+  }).catch(error => {
+    console.error('EPG initialization failed:', error);
+  });
   
   // Enhanced help overlay content
   helpBody.innerHTML = `
