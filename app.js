@@ -527,11 +527,7 @@ function parseEPGXML(xmlDoc) {
  * Gets current and next program for a channel
  */
 function getCurrentProgram(channelId) {
-  console.log('getCurrentProgram called with channelId:', channelId);
-  console.log('Available EPG channels:', Object.keys(epgData));
-  
   if (!channelId || !epgData || Object.keys(epgData).length === 0) {
-    console.log('No EPG data available');
     return null;
   }
   
@@ -556,13 +552,10 @@ function getCurrentProgram(channelId) {
     channelId?.replace(/\.ec$/, '.EC')
   ].filter(Boolean);
   
-  console.log('Trying channel IDs:', possibleIds);
-  
   let foundChannelId = null;
   for (const id of possibleIds) {
     if (epgData[id] && epgData[id].length > 0) {
       foundChannelId = id;
-      console.log('Found EPG data for channel ID:', id);
       break;
     }
   }
@@ -574,7 +567,6 @@ function getCurrentProgram(channelId) {
       if (epgId.toLowerCase().includes(baseId) || baseId.includes(epgId.toLowerCase())) {
         if (epgData[epgId] && epgData[epgId].length > 0) {
           foundChannelId = epgId;
-          console.log('Found EPG data via partial match:', epgId);
           break;
         }
       }
@@ -582,7 +574,6 @@ function getCurrentProgram(channelId) {
   }
   
   if (!foundChannelId) {
-    console.log('No EPG data found for any channel ID variation');
     return null;
   }
   
@@ -1704,7 +1695,7 @@ function renderMobileChannelList(filter = '') {
     return;
   }
   
-  console.log('Rendering mobile channel list with', channels.length, 'channels');
+
   
   const filtered = filter
     ? channels.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
@@ -1733,7 +1724,7 @@ function renderMobileChannelList(filter = '') {
     };
   });
   
-  console.log('Mobile channel list rendered with', mobileChannelList.children.length, 'items');
+
 }
 
 // --- Enhanced Event Listeners ---
