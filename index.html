@@ -71,6 +71,12 @@
               <circle cx="16" cy="10" r="1"></circle>
             </svg>
           </button>
+          <button class="header-btn options" id="header-options-btn" aria-label="Options">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
         </div>
       </div>
     </header>
@@ -257,6 +263,60 @@
         </div>
         <div class="help-body" id="help-body">
           <!-- Help content will be populated based on device type -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Options Panel with Glass Effect -->
+    <div class="options-overlay" id="options-overlay">
+      <div class="options-content">
+        <div class="options-header">
+          <h2>Options</h2>
+          <button class="close-options" id="close-options" aria-label="Close options">×</button>
+        </div>
+        <div class="options-body">
+          <div class="options-section">
+            <h3>EPG Settings</h3>
+            <div class="option-item">
+              <label>Manual EPG Reload</label>
+              <button class="option-btn reload-epg" id="reload-epg-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 2v6h-6"></path>
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                  <path d="M3 22v-6h6"></path>
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                </svg>
+                Reload EPG Data
+              </button>
+            </div>
+            <div class="option-item">
+              <label>EPG Status</label>
+              <div class="epg-status" id="epg-status">Unknown</div>
+            </div>
+            <div class="option-item">
+              <label>Last Update</label>
+              <div class="epg-last-update" id="epg-last-update">Never</div>
+            </div>
+          </div>
+          
+          <div class="options-section">
+            <h3>System</h3>
+            <div class="option-item">
+              <label>Clear Cache</label>
+              <button class="option-btn clear-cache" id="clear-cache-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6h18"></path>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                  <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                Clear All Cache
+              </button>
+            </div>
+            <div class="option-item">
+              <label>Connection</label>
+              <div class="connection-status-display" id="connection-status-display">Online</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

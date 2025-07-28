@@ -306,6 +306,16 @@ const helpBody = document.getElementById('help-body');
 const searchInput = document.getElementById('search-input');
 const stbContainer = document.querySelector('.stb-container');
 
+// Options panel elements
+const optionsOverlay = document.getElementById('options-overlay');
+const closeOptions = document.getElementById('close-options');
+const headerOptionsBtn = document.getElementById('header-options-btn');
+const reloadEpgBtn = document.getElementById('reload-epg-btn');
+const clearCacheBtn = document.getElementById('clear-cache-btn');
+const epgStatus = document.getElementById('epg-status');
+const epgLastUpdateDisplay = document.getElementById('epg-last-update');
+const connectionStatusDisplay = document.getElementById('connection-status-display');
+
 // New remote control elements
 const volumeDownBtn = document.getElementById('volume-down');
 const volumeUpBtn = document.getElementById('volume-up');
@@ -427,6 +437,9 @@ async function fetchEPGData() {
     localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
     localStorage.setItem('glz-epg-cache-time', Date.now().toString());
     epgLastUpdate = Date.now();
+    
+    // Update options display if it's open
+    updateOptionsDisplay();
     
     console.log('EPG data parsed successfully:', Object.keys(epgData).length, 'channels');
     
@@ -606,6 +619,100 @@ function showStatus(msg, duration = 2000) {
   setTimeout(() => {
     statusMessage.style.display = 'none';
   }, duration);
+}
+
+// Options Panel Functions
+function showOptions() {
+  if (optionsOverlay) {
+    optionsOverlay.style.display = 'flex';
+    updateOptionsDisplay();
+  }
+}
+
+function hideOptions() {
+  if (optionsOverlay) {
+    optionsOverlay.style.display = 'none';
+  }
+}
+
+function updateOptionsDisplay() {
+  // Update EPG status
+  if (epgStatus) {
+    if (epgLoading) {
+      epgStatus.textContent = 'Loading...';
+      epgStatus.className = 'epg-status loading';
+    } else if (epgData && Object.keys(epgData).length > 0) {
+      epgStatus.textContent = 'Available';
+      epgStatus.className = 'epg-status available';
+    } else {
+      epgStatus.textContent = 'Unavailable';
+      epgStatus.className = 'epg-status unavailable';
+    }
+  }
+  
+  // Update EPG last update time
+  if (epgLastUpdateDisplay) {
+    if (epgLastUpdate) {
+      const date = new Date(epgLastUpdate);
+      epgLastUpdateDisplay.textContent = date.toLocaleString();
+    } else {
+      epgLastUpdateDisplay.textContent = 'Never';
+    }
+  }
+  
+  // Update connection status
+  if (connectionStatusDisplay) {
+    connectionStatusDisplay.textContent = navigator.onLine ? 'Online' : 'Offline';
+    connectionStatusDisplay.style.borderColor = navigator.onLine ? 'var(--success-color)' : 'var(--error-color)';
+    connectionStatusDisplay.style.color = navigator.onLine ? 'var(--success-color)' : 'var(--error-color)';
+  }
+}
+
+async function reloadEPGData() {
+  if (epgLoading) {
+    showStatus('EPG already loading...', 2000);
+    return;
+  }
+  
+  showStatus('Reloading EPG data...', 2000);
+  console.log('Manual EPG reload requested');
+  
+  // Clear cache to force fresh fetch
+  localStorage.removeItem('glz-epg-cache');
+  localStorage.removeItem('glz-epg-cache-time');
+  
+  // Update display to show loading
+  updateOptionsDisplay();
+  
+  try {
+    await fetchEPGData();
+    showStatus('EPG data reloaded successfully!', 3000);
+    updateOptionsDisplay();
+  } catch (error) {
+    console.error('Manual EPG reload failed:', error);
+    showStatus('EPG reload failed', 3000);
+    updateOptionsDisplay();
+  }
+}
+
+function clearAllCache() {
+  showStatus('Clearing cache...', 2000);
+  
+  // Clear all localStorage items
+  const keysToKeep = ['glz-favorites', 'glz-last-channel'];
+  const keysToRemove = [];
+  
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && !keysToKeep.includes(key)) {
+      keysToRemove.push(key);
+    }
+  }
+  
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+  
+  showStatus('Cache cleared successfully!', 3000);
+  updateOptionsDisplay();
 }
 function showLoading() {
   loadingIndicator.style.display = 'flex';
@@ -1063,6 +1170,12 @@ if (closeGuide) closeGuide.onclick = hideGuide;
 if (toggleRemote) toggleRemote.onclick = toggleRemoteVisibility;
 if (headerRemoteBtn) headerRemoteBtn.onclick = toggleRemoteVisibility;
 
+// Options panel controls
+if (headerOptionsBtn) headerOptionsBtn.onclick = showOptions;
+if (closeOptions) closeOptions.onclick = hideOptions;
+if (reloadEpgBtn) reloadEpgBtn.onclick = reloadEPGData;
+if (clearCacheBtn) clearCacheBtn.onclick = clearAllCache;
+
 // Channel navigation
 if (prevBtn) prevBtn.onclick = () => {
   if (!standby && channels.length > 0) {
@@ -1148,9 +1261,11 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     hideRemote();
     hideGuide();
+    hideOptions();
     helpOverlay.style.display = 'none';
   }
   if (e.key === '?') helpOverlay.style.display = 'flex';
+  if (e.key === 'F3') showOptions();
 });
 
 window.addEventListener('resize', adjustLayoutForRemote);
@@ -1361,16 +1476,18 @@ function showStatus(msg, duration = 2000) {
   helpBody.innerHTML = `
     <div><kbd>F1</kbd>: Toggle Remote</div>
     <div><kbd>F2</kbd>: Show Guide</div>
+    <div><kbd>F3</kbd>: Show Options</div>
     <div><kbd>F4</kbd>: Power On/Off</div>
     <div><kbd>←/→</kbd>: Prev/Next Channel</div>
     <div><kbd>↑</kbd>: Show Guide</div>
     <div><kbd>?</kbd>: Show Help</div>
-    <div><kbd>ESC</kbd>: Hide Remote/Guide/Help</div>
+    <div><kbd>ESC</kbd>: Hide Remote/Guide/Options/Help</div>
     <div><strong>Mobile:</strong> Swipe left/right to change channels</div>
     <div><strong>Favorites:</strong> Click heart button to save channels</div>
     <div><strong>Volume:</strong> Use +/- buttons on remote</div>
     <div><strong>Last Channel:</strong> Quick return to previous channel</div>
     <div><strong>Install:</strong> Add to home screen for app-like experience</div>
+    <div><strong>Options:</strong> Manual EPG reload and cache management</div>
   `;
   
   // Add smooth entrance animation
