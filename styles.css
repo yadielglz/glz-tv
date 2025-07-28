@@ -1448,6 +1448,74 @@ body::before {
   background-clip: text;
 }
 
+/* Collapsible Sections */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: var(--spacing-md);
+  margin: calc(-1 * var(--spacing-md));
+  margin-bottom: var(--spacing-md);
+  border-radius: var(--radius-md);
+  transition: var(--transition-normal);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+}
+
+.section-header:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--accent-color);
+}
+
+.section-header h3 {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.collapse-toggle {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-normal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.collapse-toggle:hover {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.collapse-toggle svg {
+  transition: var(--transition-normal);
+}
+
+.collapsible.collapsed .collapse-toggle svg {
+  transform: rotate(-90deg);
+}
+
+.section-content {
+  overflow: hidden;
+  transition: var(--transition-normal);
+  max-height: 1000px;
+  opacity: 1;
+}
+
+.collapsible.collapsed .section-content {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+
 .option-item {
   display: flex;
   justify-content: space-between;
@@ -1589,10 +1657,30 @@ body::before {
 }
 
 .epg-source-select:focus,
-.cache-duration-select:focus {
+.cache-duration-select:focus,
+.volume-select:focus {
   outline: none;
   border-color: var(--accent-color);
   box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+}
+
+.volume-select {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-family: var(--font-primary);
+  font-size: 0.875rem;
+  min-width: 100px;
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.volume-select:hover {
+  border-color: var(--accent-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .epg-url-input {

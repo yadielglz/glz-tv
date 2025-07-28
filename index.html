@@ -276,85 +276,140 @@
           <button class="close-options" id="close-options" aria-label="Close options">×</button>
         </div>
         <div class="options-body">
-          <div class="options-section">
-            <h3>EPG Settings</h3>
-            <div class="option-item">
-              <label>Manual EPG Reload</label>
-              <button class="option-btn reload-epg" id="reload-epg-btn">
+          <div class="options-section collapsible">
+            <div class="section-header" data-target="epg-settings-content">
+              <h3>EPG Settings</h3>
+              <button class="collapse-toggle" aria-label="Toggle EPG settings">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 2v6h-6"></path>
-                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
-                  <path d="M3 22v-6h6"></path>
-                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                  <polyline points="6,9 12,15 18,9"></polyline>
                 </svg>
-                Reload EPG Data
               </button>
             </div>
-            <div class="option-item">
-              <label>EPG Status</label>
-              <div class="epg-status" id="epg-status">Unknown</div>
-            </div>
-            <div class="option-item">
-              <label>Last Update</label>
-              <div class="epg-last-update" id="epg-last-update">Never</div>
-            </div>
-            <div class="option-item">
-              <label>EPG Source</label>
-              <select class="epg-source-select" id="epg-source-select">
-                <option value="epgshare01">EPG Share 01 (Current)</option>
-                <option value="epgshare02">EPG Share 02 (Alternative)</option>
-                <option value="epgshare03">EPG Share 03 (Backup)</option>
-                <option value="custom">Custom URL</option>
-              </select>
-            </div>
-            <div class="option-item" id="custom-epg-url-item" style="display: none;">
-              <label>Custom EPG URL</label>
-              <input type="text" class="epg-url-input" id="epg-url-input" placeholder="https://example.com/epg.xml.gz">
-            </div>
-            <div class="option-item">
-              <label>Auto Refresh EPG</label>
-              <div class="toggle-switch">
-                <input type="checkbox" id="epg-auto-refresh" checked>
-                <label for="epg-auto-refresh"></label>
+            <div class="section-content" id="epg-settings-content">
+              <div class="option-item">
+                <label>Manual EPG Reload</label>
+                <button class="option-btn reload-epg" id="reload-epg-btn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 2v6h-6"></path>
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                    <path d="M3 22v-6h6"></path>
+                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                  </svg>
+                  Reload EPG Data
+                </button>
               </div>
-            </div>
-            <div class="option-item">
-              <label>Cache Duration</label>
-              <select class="cache-duration-select" id="cache-duration-select">
-                <option value="15">15 minutes</option>
-                <option value="30" selected>30 minutes</option>
-                <option value="60">1 hour</option>
-                <option value="120">2 hours</option>
-                <option value="0">No cache</option>
-              </select>
+              <div class="option-item">
+                <label>EPG Status</label>
+                <div class="epg-status" id="epg-status">Unknown</div>
+              </div>
+              <div class="option-item">
+                <label>Last Update</label>
+                <div class="epg-last-update" id="epg-last-update">Never</div>
+              </div>
+              <div class="option-item">
+                <label>EPG Source</label>
+                <select class="epg-source-select" id="epg-source-select">
+                  <option value="uslocals">US Locals (Current)</option>
+                  <option value="epgshare01">EPG Share 01</option>
+                  <option value="epgshare02">EPG Share 02</option>
+                  <option value="epgshare03">EPG Share 03</option>
+                  <option value="custom">Custom URL</option>
+                </select>
+              </div>
+              <div class="option-item" id="custom-epg-url-item" style="display: none;">
+                <label>Custom EPG URL</label>
+                <input type="text" class="epg-url-input" id="epg-url-input" placeholder="https://example.com/epg.xml.gz">
+              </div>
+              <div class="option-item">
+                <label>Auto Refresh EPG</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="epg-auto-refresh" checked>
+                  <label for="epg-auto-refresh"></label>
+                </div>
+              </div>
+              <div class="option-item">
+                <label>Cache Duration</label>
+                <select class="cache-duration-select" id="cache-duration-select">
+                  <option value="15">15 minutes</option>
+                  <option value="30" selected>30 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="120">2 hours</option>
+                  <option value="0">No cache</option>
+                </select>
+              </div>
             </div>
           </div>
           
-          <div class="options-section">
-            <h3>System</h3>
-            <div class="option-item">
-              <label>Theme</label>
-              <button class="option-btn theme-toggle" id="theme-toggle-btn">
+          <div class="options-section collapsible">
+            <div class="section-header" data-target="system-settings-content">
+              <h3>System</h3>
+              <button class="collapse-toggle" aria-label="Toggle system settings">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                  <polyline points="6,9 12,15 18,9"></polyline>
                 </svg>
-                <span id="theme-toggle-text">Dark Mode</span>
               </button>
             </div>
-            <div class="option-item">
-              <label>Clear Cache</label>
-              <button class="option-btn clear-cache" id="clear-cache-btn">
+            <div class="section-content" id="system-settings-content">
+              <div class="option-item">
+                <label>Theme</label>
+                <button class="option-btn theme-toggle" id="theme-toggle-btn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                  </svg>
+                  <span id="theme-toggle-text">Dark Mode</span>
+                </button>
+              </div>
+              <div class="option-item">
+                <label>Clear Cache</label>
+                <button class="option-btn clear-cache" id="clear-cache-btn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18"></path>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                  Clear All Cache
+                </button>
+              </div>
+              <div class="option-item">
+                <label>Connection</label>
+                <div class="connection-status-display" id="connection-status-display">Online</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="options-section collapsible">
+            <div class="section-header" data-target="player-settings-content">
+              <h3>Player Settings</h3>
+              <button class="collapse-toggle" aria-label="Toggle player settings">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 6h18"></path>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-                  <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <polyline points="6,9 12,15 18,9"></polyline>
                 </svg>
-                Clear All Cache
               </button>
             </div>
-            <div class="option-item">
-              <label>Connection</label>
-              <div class="connection-status-display" id="connection-status-display">Online</div>
+            <div class="section-content" id="player-settings-content">
+              <div class="option-item">
+                <label>Auto Play</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="auto-play-toggle" checked>
+                  <label for="auto-play-toggle"></label>
+                </div>
+              </div>
+              <div class="option-item">
+                <label>Show Channel Banner</label>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="show-banner-toggle" checked>
+                  <label for="show-banner-toggle"></label>
+                </div>
+              </div>
+              <div class="option-item">
+                <label>Default Volume</label>
+                <select class="volume-select" id="default-volume-select">
+                  <option value="0.3">30%</option>
+                  <option value="0.5" selected>50%</option>
+                  <option value="0.7">70%</option>
+                  <option value="1.0">100%</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>

@@ -1029,6 +1029,43 @@ function initTheme() {
   setTheme(savedTheme);
 }
 
+/**
+ * Collapsible Sections Management
+ */
+function initCollapsibleSections() {
+  const sectionHeaders = document.querySelectorAll('.section-header');
+  
+  sectionHeaders.forEach(header => {
+    header.addEventListener('click', () => {
+      const targetId = header.getAttribute('data-target');
+      const content = document.getElementById(targetId);
+      const section = header.closest('.collapsible');
+      
+      if (content && section) {
+        section.classList.toggle('collapsed');
+        
+        // Save state to localStorage
+        const sectionName = targetId.replace('-content', '');
+        const isCollapsed = section.classList.contains('collapsed');
+        localStorage.setItem(`glz-collapsed-${sectionName}`, isCollapsed);
+      }
+    });
+  });
+  
+  // Restore collapsed state from localStorage
+  const collapsibleSections = document.querySelectorAll('.collapsible');
+  collapsibleSections.forEach(section => {
+    const content = section.querySelector('.section-content');
+    if (content) {
+      const sectionName = content.id.replace('-content', '');
+      const isCollapsed = localStorage.getItem(`glz-collapsed-${sectionName}`) === 'true';
+      if (isCollapsed) {
+        section.classList.add('collapsed');
+      }
+    }
+  });
+}
+
 function setTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('glz-theme', theme);
@@ -1680,6 +1717,7 @@ function showStatus(msg, duration = 2000) {
   setupPWA();
   setupTouchGestures();
   initTheme();
+  initCollapsibleSections();
   
   // Mobile-specific optimizations
   if ('ontouchstart' in window) {
