@@ -1334,8 +1334,8 @@ function goToLastChannel() {
 // Connection Health Monitoring
 function updateConnectionStatus() {
   const isConnected = navigator.onLine && connectionStatus === 'connected';
-  connectionStatusBtn.classList.toggle('connected', isConnected);
-  connectionStatusBtn.classList.toggle('disconnected', !isConnected);
+  // connectionStatusBtn.classList.toggle('connected', isConnected); // Removed from new layout
+  // connectionStatusBtn.classList.toggle('disconnected', !isConnected); // Removed from new layout
   
   if (!isConnected) {
     showStatus('Connection issues detected');
@@ -2022,6 +2022,7 @@ function showStatus(msg, duration = 2000) {
   }
   
   // Initialize channel lists
+  console.log('About to render channel list, channelList element:', channelList);
   renderChannelList();
   renderMobileChannelList();
   
