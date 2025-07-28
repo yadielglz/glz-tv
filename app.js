@@ -1498,7 +1498,12 @@ function renderChannelList(filter = '') {
 }
 
 function renderMobileChannelList(filter = '') {
-  if (!mobileChannelList) return;
+  if (!mobileChannelList) {
+    console.warn('Mobile channel list element not found');
+    return;
+  }
+  
+  console.log('Rendering mobile channel list with', channels.length, 'channels');
   
   const filtered = filter
     ? channels.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
@@ -1526,6 +1531,8 @@ function renderMobileChannelList(filter = '') {
       playChannel(Number(item.dataset.idx));
     };
   });
+  
+  console.log('Mobile channel list rendered with', mobileChannelList.children.length, 'items');
 }
 
 // --- Enhanced Event Listeners ---
@@ -1841,7 +1848,7 @@ function showStatus(msg, duration = 2000) {
   initCollapsibleSections();
   
   // Mobile-specific optimizations
-  if ('ontouchstart' in window) {
+  if ('ontouchstart' in window || window.innerWidth <= 768) {
     console.log('Mobile device detected - optimizing for touch');
     // Hide remote by default on mobile
     if (remoteControl) {
@@ -1849,6 +1856,8 @@ function showStatus(msg, duration = 2000) {
     }
     // Optimize touch targets
     document.body.classList.add('mobile-device');
+    // Force mobile layout
+    document.body.classList.add('mobile-layout');
   }
   
   // Hide PWA install button initially

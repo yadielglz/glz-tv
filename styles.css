@@ -2079,7 +2079,7 @@ body::before {
 
 /* Hide mobile channel list on desktop */
 .mobile-channel-list {
-  display: none;
+  display: none !important;
 }
 
 /* Show original header layout on desktop */
@@ -2133,7 +2133,17 @@ body::before {
   
   /* Show mobile channel list on mobile */
   .mobile-channel-list {
-    display: block;
+    display: block !important;
+  }
+  
+  /* Force mobile layout */
+  .mobile-layout .mobile-channel-list {
+    display: block !important;
+  }
+  
+  .mobile-layout .main-content {
+    display: flex !important;
+    flex-direction: column !important;
   }
   
   .header-top-row {
@@ -2186,6 +2196,7 @@ body::before {
     height: calc(100vh - 120px); /* Account for two-line header */
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
   
   .video-container {
@@ -2193,6 +2204,8 @@ body::before {
     height: 200px; /* Fixed height for video */
     flex-shrink: 0;
     border-radius: var(--radius-md);
+    position: relative;
+    z-index: 10;
   }
   
   /* Mobile Channel List */
@@ -2203,6 +2216,10 @@ body::before {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     border-top: 1px solid var(--glass-border);
+    margin: 0 var(--spacing-sm);
+    border-radius: var(--radius-md);
+    margin-top: var(--spacing-sm);
+    display: block !important;
   }
   
   .mobile-channel-item {
@@ -2217,6 +2234,7 @@ body::before {
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: var(--transition-normal);
+    min-height: 60px;
   }
   
   .mobile-channel-item:hover {
