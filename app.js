@@ -1372,6 +1372,11 @@ function setupTouchGestures() {
   let startTime = 0;
   let isVideoControl = false;
   
+  if (!videoContainer) {
+    console.warn('videoContainer not found, skipping touch gestures');
+    return;
+  }
+  
   videoContainer.addEventListener('touchstart', (e) => {
     // Don't interfere with video controls
     if (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO') {
@@ -1691,6 +1696,8 @@ function renderChannelList(filter = '') {
   });
   
   console.log('Channel list rendered with', channelList.children.length, 'items');
+  console.log('Channel list element styles:', window.getComputedStyle(channelList));
+  console.log('Channel list parent sidebar:', channelList.parentElement);
   
   // Also render mobile channel list
   renderMobileChannelList(filter);
@@ -1920,8 +1927,8 @@ document.head.appendChild(rippleStyle);
 // --- Enhanced Channel Banner Animation ---
 function showChannelBanner() {
   if (!channels[current]) return;
-  bannerChannel.textContent = channels[current].chno || (current + 1);
-  bannerName.textContent = channels[current].name;
+  // bannerChannel.textContent = channels[current].chno || (current + 1); // Removed from new layout
+  // bannerName.textContent = channels[current].name; // Removed from new layout
   
   // Add liquid glass entrance animation
   channelBanner.style.transform = 'translateY(-120%) scale(0.8)';
