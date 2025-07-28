@@ -1033,6 +1033,38 @@ function updateChannelDisplay(idx = current) {
 }
 
 /**
+ * Test if a stream URL is accessible
+ */
+function testStreamAccessibility(url) {
+  return new Promise((resolve) => {
+    const testVideo = document.createElement('video');
+    testVideo.style.display = 'none';
+    testVideo.muted = true;
+    testVideo.volume = 0;
+    
+    const timeout = setTimeout(() => {
+      document.body.removeChild(testVideo);
+      resolve(false);
+    }, 5000); // 5 second timeout
+    
+    testVideo.addEventListener('loadedmetadata', () => {
+      clearTimeout(timeout);
+      document.body.removeChild(testVideo);
+      resolve(true);
+    });
+    
+    testVideo.addEventListener('error', () => {
+      clearTimeout(timeout);
+      document.body.removeChild(testVideo);
+      resolve(false);
+    });
+    
+    document.body.appendChild(testVideo);
+    testVideo.src = url;
+  });
+}
+
+/**
  * Updates mobile current program display
  */
 function updateMobileCurrentProgram(channelId) {
@@ -1570,16 +1602,36 @@ function playChannel(idx) {
     audio.play()
       .then(onPlaybackSuccess)
       .catch(e => onPlaybackError(e, 'audio'));
-  } else if (isHls && window.Hls) {
+  } else if (isHls) {
+    if (!window.Hls) {
+      console.error('HLS.js not available, falling back to direct video playback');
+      // Fallback to direct video playback
+      console.log('Attempting direct video playback for:', ch.url);
+      video.classList.add('loading');
+      video.src = ch.url;
+      video.play()
+        .then(onPlaybackSuccess)
+        .catch(e => {
+          console.error('Direct video playback failed:', e);
+          onPlaybackError(e, 'video');
+        });
+      return;
+    }
+    console.log('Attempting HLS playback for:', ch.url);
     hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
-      backBufferLength: 90
+      backBufferLength: 90,
+      xhrSetup: function(xhr, url) {
+        // Add CORS headers if needed
+        xhr.withCredentials = false;
+      }
     });
     hls.loadSource(ch.url);
     hls.attachMedia(video);
     
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
+      console.log('HLS manifest loaded successfully');
       video.classList.add('loading');
       video.play()
         .then(onPlaybackSuccess)
@@ -1587,16 +1639,26 @@ function playChannel(idx) {
     });
     
     hls.on(Hls.Events.ERROR, function (event, data) {
+      console.error('HLS Error:', event, data);
       if (data.fatal) {
         onPlaybackError(data, 'HLS stream');
       }
     });
+    
+    hls.on(Hls.Events.MANIFEST_LOAD_ERROR, function (event, data) {
+      console.error('HLS Manifest Load Error:', data);
+      onPlaybackError(data, 'HLS manifest');
+    });
   } else {
+    console.log('Attempting direct video playback for:', ch.url);
     video.classList.add('loading');
     video.src = ch.url;
     video.play()
       .then(onPlaybackSuccess)
-      .catch(e => onPlaybackError(e, 'video'));
+      .catch(e => {
+        console.error('Direct video playback failed:', e);
+        onPlaybackError(e, 'video');
+      });
   }
   
   // Update mobile channel list
@@ -2043,7 +2105,25 @@ function showStatus(msg, duration = 2000) {
   // Actually start playing the current channel
   if (channels.length > 0 && current >= 0 && current < channels.length) {
     console.log('Starting playback for channel:', current, channels[current]);
-    playChannel(current);
+    
+    // Test stream accessibility first
+    testStreamAccessibility(channels[current].url).then(isAccessible => {
+      if (isAccessible) {
+        playChannel(current);
+      } else {
+        console.error('Stream not accessible:', channels[current].url);
+        showStatus('Stream not accessible - trying next channel');
+        // Try next channel
+        const nextChannel = (current + 1) % channels.length;
+        if (nextChannel !== current) {
+          current = nextChannel;
+          playChannel(current);
+        }
+      }
+    }).catch(() => {
+      // If test fails, try playing anyway
+      playChannel(current);
+    });
     
     // Fallback: if video doesn't start within 3 seconds, try again
     setTimeout(() => {
