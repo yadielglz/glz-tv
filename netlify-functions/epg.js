@@ -23,11 +23,11 @@ exports.handler = async (event) => {
     }
     
     // Get the compressed data as buffer
-    const compressedData = await response.buffer();
-    console.log('Received compressed data, size:', compressedData.length);
+    const compressedData = await response.arrayBuffer();
+    console.log('Received compressed data, size:', compressedData.byteLength);
     
     // Decompress the gzipped data
-    const xmlData = await gunzip(compressedData);
+    const xmlData = await gunzip(Buffer.from(compressedData));
     console.log('Decompressed XML data, size:', xmlData.length);
     
     return {
