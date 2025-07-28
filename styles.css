@@ -1816,15 +1816,15 @@ body {
     background: var(--bg-primary);
   }
   
-  /* Mobile Video Section - Takes most of the screen */
+  /* Mobile Video Section - Fixed height to fit screen */
   .video-section {
-    flex: 1;
+    height: 60vh;
     position: relative;
     background: var(--bg-primary);
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 200px;
+    overflow: hidden;
   }
 
   .video-container {
@@ -1841,90 +1841,91 @@ body {
     height: 100%;
     object-fit: contain;
     background: #000;
+    max-height: 100%;
   }
 
-  /* Mobile Sidebar - Compact version below video */
+  /* Mobile Sidebar - Takes remaining space below video */
   .sidebar {
     display: flex;
     flex-direction: column;
     background: var(--bg-secondary);
     border-top: 1px solid var(--border-color);
-    max-height: 40vh;
+    height: calc(40vh - 50px); /* Remaining space after header and video */
+    overflow: hidden;
   }
   
   /* Mobile Channel List Section */
   .channel-list-section {
     flex: 1;
-    padding: 12px;
+    padding: 8px;
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-secondary);
-    max-height: 25vh;
     overflow: hidden;
   }
 
   .channel-list-title {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 500;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
 
   .channel-list {
-    max-height: calc(25vh - 40px);
+    height: calc(100% - 30px);
     overflow-y: auto;
     background: var(--bg-primary);
     border-radius: 4px;
-    padding: 8px;
+    padding: 6px;
   }
 
   .channel-item {
-    padding: 6px 8px;
-    margin-bottom: 4px;
+    padding: 4px 6px;
+    margin-bottom: 2px;
     border-radius: 4px;
-    gap: 8px;
+    gap: 6px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
   }
 
   .channel-item img {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
   }
 
   .channel-number-small {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
   }
 
   .channel-name-small {
-    font-size: 10px;
+    font-size: 9px;
   }
   
   /* Mobile Remote Section */
   .remote-section {
-    padding: 12px;
+    padding: 8px;
     background: var(--bg-tertiary);
-    max-height: 15vh;
+    flex-shrink: 0;
   }
 
   .remote-title {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
 
   .remote-controls {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
+    gap: 4px;
   }
 
   .remote-btn {
-    padding: 8px 4px;
+    padding: 6px 2px;
     border: none;
     border-radius: 4px;
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s;
