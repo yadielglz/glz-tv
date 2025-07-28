@@ -303,6 +303,7 @@ const toggleRemote = document.getElementById('toggle-remote');
 const powerBtn = document.getElementById('power-btn');
 const guideBtn = document.getElementById('guide-btn');
 const headerRemoteBtn = document.getElementById('header-remote-btn');
+const mobileRemoteBtn = document.getElementById('mobile-remote-btn');
 const numpadBtns = document.querySelectorAll('.numpad-btn');
 const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
@@ -1495,6 +1496,7 @@ if (guideBtn) guideBtn.onclick = showGuide;
 if (closeGuide) closeGuide.onclick = hideGuide;
 if (toggleRemote) toggleRemote.onclick = toggleRemoteVisibility;
 if (headerRemoteBtn) headerRemoteBtn.onclick = toggleRemoteVisibility;
+if (mobileRemoteBtn) mobileRemoteBtn.onclick = toggleRemoteVisibility;
 
 // Options panel controls
 if (headerOptionsBtn) headerOptionsBtn.onclick = showOptions;

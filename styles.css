@@ -962,7 +962,7 @@ body::before {
 
 /* Mobile-specific optimizations */
 .mobile-device .remote-control {
-  display: none !important;
+  display: block !important;
 }
 
 .mobile-device .remote-btn,
@@ -1301,6 +1301,7 @@ body::before {
   min-width: 320px;
   max-width: 380px;
   transition: var(--transition-normal);
+  display: block;
 }
 
 .remote-control.visible {
@@ -2071,6 +2072,11 @@ body::before {
   display: none;
 }
 
+/* Hide mobile remote button on desktop */
+.mobile-remote {
+  display: none;
+}
+
 /* Show original header layout on desktop */
 @media (min-width: 769px) {
   .stb-header {
@@ -2110,6 +2116,16 @@ body::before {
     display: flex;
   }
   
+  /* Mobile remote button */
+  .mobile-remote {
+    display: block;
+  }
+  
+  /* Hide desktop remote button on mobile */
+  .remote {
+    display: none;
+  }
+  
   .header-top-row {
     display: flex;
     justify-content: space-between;
@@ -2119,23 +2135,27 @@ body::before {
   
   .header-bottom-row {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     width: 100%;
     gap: var(--spacing-md);
+    padding-left: var(--spacing-md);
   }
   
   .channel-display {
     flex-direction: row;
-    justify-content: center;
+    justify-content: flex-start;
     gap: var(--spacing-md);
     width: 100%;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow: hidden;
   }
   
   .channel-name {
-    max-width: 200px;
+    max-width: none;
     font-size: 1.125rem;
+    flex: 1;
+    min-width: 0;
   }
   
   .current-program {
@@ -2263,8 +2283,9 @@ body::before {
     max-width: none;
     width: calc(100vw - (2 * var(--spacing-sm)));
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-    max-height: 60vh;
+    max-height: 70vh;
     overflow-y: auto;
+    z-index: 200;
   }
   
   .remote-control.visible {
@@ -2320,6 +2341,18 @@ body::before {
   .header-btn:active,
   .mini-guide-item:active {
     transform: scale(0.95);
+  }
+  
+  /* Mobile remote control improvements */
+  .remote-control .remote-btn,
+  .remote-control .numpad-btn {
+    min-height: 56px;
+    min-width: 56px;
+    font-size: 1.1rem;
+  }
+  
+  .remote-control .remote-section {
+    margin-bottom: var(--spacing-xl);
   }
   
   /* Touch-friendly spacing */
