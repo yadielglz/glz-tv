@@ -270,7 +270,14 @@ let epgData = {};
 let epgLoading = false;
 let epgLastUpdate = null;
 const EPG_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-const EPG_URL = 'https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz';
+// EPG Sources
+const EPG_SOURCES = {
+  epgshare01: 'https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz',
+  epgshare02: 'https://epgshare02.online/epgshare02/epg_ripper_ALL_SOURCES2.xml.gz',
+  epgshare03: 'https://epgshare03.online/epgshare03/epg_ripper_ALL_SOURCES3.xml.gz'
+};
+
+let EPG_URL = EPG_SOURCES.epgshare01; // Default source
 const LOCAL_EPG_PROXY = 'http://localhost:3000/api/epg';
 const CLOUD_EPG_PROXY = '/api/epg'; // Netlify function
 
@@ -316,6 +323,13 @@ const epgStatus = document.getElementById('epg-status');
 const epgLastUpdateDisplay = document.getElementById('epg-last-update');
 const connectionStatusDisplay = document.getElementById('connection-status-display');
 
+// EPG Settings elements
+const epgSourceSelect = document.getElementById('epg-source-select');
+const customEpgUrlItem = document.getElementById('custom-epg-url-item');
+const epgUrlInput = document.getElementById('epg-url-input');
+const epgAutoRefresh = document.getElementById('epg-auto-refresh');
+const cacheDurationSelect = document.getElementById('cache-duration-select');
+
 // New remote control elements
 const volumeDownBtn = document.getElementById('volume-down');
 const volumeUpBtn = document.getElementById('volume-up');
@@ -345,7 +359,9 @@ async function fetchEPGData() {
   
   if (cached && cacheTime) {
     const age = Date.now() - parseInt(cacheTime);
-    if (age < EPG_CACHE_DURATION) {
+    const cacheDuration = parseInt(localStorage.getItem('glz-epg-cache-duration') || '30') * 60 * 1000;
+    
+    if (age < cacheDuration) {
       console.log('Using cached EPG data');
       epgData = JSON.parse(cached);
       epgLastUpdate = parseInt(cacheTime);
@@ -625,6 +641,7 @@ function showStatus(msg, duration = 2000) {
 function showOptions() {
   if (optionsOverlay) {
     optionsOverlay.style.display = 'flex';
+    loadEPGSettings();
     updateOptionsDisplay();
   }
 }
@@ -713,6 +730,109 @@ function clearAllCache() {
   
   showStatus('Cache cleared successfully!', 3000);
   updateOptionsDisplay();
+}
+
+// EPG Settings Management
+function loadEPGSettings() {
+  // Load EPG source
+  const savedSource = localStorage.getItem('glz-epg-source') || 'epgshare01';
+  if (epgSourceSelect) {
+    epgSourceSelect.value = savedSource;
+  }
+  
+  // Load custom URL
+  const customUrl = localStorage.getItem('glz-epg-custom-url');
+  if (epgUrlInput && customUrl) {
+    epgUrlInput.value = customUrl;
+  }
+  
+  // Load auto refresh setting
+  const autoRefresh = localStorage.getItem('glz-epg-auto-refresh') !== 'false';
+  if (epgAutoRefresh) {
+    epgAutoRefresh.checked = autoRefresh;
+  }
+  
+  // Load cache duration
+  const cacheDuration = localStorage.getItem('glz-epg-cache-duration') || '30';
+  if (cacheDurationSelect) {
+    cacheDurationSelect.value = cacheDuration;
+  }
+  
+  // Update EPG URL based on settings
+  updateEPGURL();
+  
+  // Show/hide custom URL input
+  updateCustomUrlVisibility();
+}
+
+function saveEPGSettings() {
+  // Save EPG source
+  if (epgSourceSelect) {
+    localStorage.setItem('glz-epg-source', epgSourceSelect.value);
+  }
+  
+  // Save custom URL
+  if (epgUrlInput) {
+    localStorage.setItem('glz-epg-custom-url', epgUrlInput.value);
+  }
+  
+  // Save auto refresh setting
+  if (epgAutoRefresh) {
+    localStorage.setItem('glz-epg-auto-refresh', epgAutoRefresh.checked.toString());
+  }
+  
+  // Save cache duration
+  if (cacheDurationSelect) {
+    localStorage.setItem('glz-epg-cache-duration', cacheDurationSelect.value);
+  }
+  
+  // Update EPG URL
+  updateEPGURL();
+  
+  showStatus('EPG settings saved', 2000);
+}
+
+function updateEPGURL() {
+  if (!epgSourceSelect) return;
+  
+  const selectedSource = epgSourceSelect.value;
+  
+  if (selectedSource === 'custom' && epgUrlInput) {
+    EPG_URL = epgUrlInput.value.trim();
+  } else if (EPG_SOURCES[selectedSource]) {
+    EPG_URL = EPG_SOURCES[selectedSource];
+  }
+  
+  console.log('EPG URL updated to:', EPG_URL);
+}
+
+function updateCustomUrlVisibility() {
+  if (!epgSourceSelect || !customEpgUrlItem) return;
+  
+  if (epgSourceSelect.value === 'custom') {
+    customEpgUrlItem.style.display = 'flex';
+  } else {
+    customEpgUrlItem.style.display = 'none';
+  }
+}
+
+async function changeEPGSource() {
+  saveEPGSettings();
+  
+  // Clear current EPG cache
+  localStorage.removeItem('glz-epg-cache');
+  localStorage.removeItem('glz-epg-cache-time');
+  
+  showStatus('EPG source changed, reloading data...', 2000);
+  
+  // Reload EPG data with new source
+  try {
+    await fetchEPGData();
+    showStatus('EPG data loaded from new source!', 3000);
+  } catch (error) {
+    console.error('Failed to load EPG from new source:', error);
+    showStatus('Failed to load EPG from new source', 3000);
+  }
 }
 function showLoading() {
   loadingIndicator.style.display = 'flex';
@@ -1175,6 +1295,24 @@ if (headerOptionsBtn) headerOptionsBtn.onclick = showOptions;
 if (closeOptions) closeOptions.onclick = hideOptions;
 if (reloadEpgBtn) reloadEpgBtn.onclick = reloadEPGData;
 if (clearCacheBtn) clearCacheBtn.onclick = clearAllCache;
+
+// EPG Settings controls
+if (epgSourceSelect) {
+  epgSourceSelect.onchange = () => {
+    updateCustomUrlVisibility();
+    changeEPGSource();
+  };
+}
+if (epgUrlInput) {
+  epgUrlInput.onchange = saveEPGSettings;
+  epgUrlInput.onblur = saveEPGSettings;
+}
+if (epgAutoRefresh) {
+  epgAutoRefresh.onchange = saveEPGSettings;
+}
+if (cacheDurationSelect) {
+  cacheDurationSelect.onchange = saveEPGSettings;
+}
 
 // Channel navigation
 if (prevBtn) prevBtn.onclick = () => {

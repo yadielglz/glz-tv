@@ -297,6 +297,36 @@
               <label>Last Update</label>
               <div class="epg-last-update" id="epg-last-update">Never</div>
             </div>
+            <div class="option-item">
+              <label>EPG Source</label>
+              <select class="epg-source-select" id="epg-source-select">
+                <option value="epgshare01">EPG Share 01 (Current)</option>
+                <option value="epgshare02">EPG Share 02 (Alternative)</option>
+                <option value="epgshare03">EPG Share 03 (Backup)</option>
+                <option value="custom">Custom URL</option>
+              </select>
+            </div>
+            <div class="option-item" id="custom-epg-url-item" style="display: none;">
+              <label>Custom EPG URL</label>
+              <input type="text" class="epg-url-input" id="epg-url-input" placeholder="https://example.com/epg.xml.gz">
+            </div>
+            <div class="option-item">
+              <label>Auto Refresh EPG</label>
+              <div class="toggle-switch">
+                <input type="checkbox" id="epg-auto-refresh" checked>
+                <label for="epg-auto-refresh"></label>
+              </div>
+            </div>
+            <div class="option-item">
+              <label>Cache Duration</label>
+              <select class="cache-duration-select" id="cache-duration-select">
+                <option value="15">15 minutes</option>
+                <option value="30" selected>30 minutes</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="0">No cache</option>
+              </select>
+            </div>
           </div>
           
           <div class="options-section">
