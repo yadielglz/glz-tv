@@ -341,17 +341,15 @@ const miniGuide = document.getElementById('mini-guide');
 const miniGuideClose = document.getElementById('mini-guide-close');
 const miniGuideContent = document.getElementById('mini-guide-content');
 
-// New remote control elements
-const volumeDownBtn = document.getElementById('volume-down');
-const volumeUpBtn = document.getElementById('volume-up');
+// Remote control elements (updated IDs to match new HTML)
+const volumeDownBtn = document.getElementById('volume-down-btn');
+const volumeUpBtn = document.getElementById('volume-up-btn');
 const muteBtn = document.getElementById('mute-btn');
-const channelDownBtn = document.getElementById('channel-down');
-const channelUpBtn = document.getElementById('channel-up');
-const lastChannelBtn = document.getElementById('last-channel');
+const channelDownBtn = document.getElementById('channel-down-btn');
+const channelUpBtn = document.getElementById('channel-up-btn');
+const lastChannelBtn = document.getElementById('last-channel-btn');
 const enterBtn = document.getElementById('enter-btn');
 const favoritesBtn = document.getElementById('favorites-btn');
-const pwaInstallBtn = document.getElementById('pwa-install-btn');
-const connectionStatusBtn = document.getElementById('connection-status-btn');
 
 // --- EPG Functions ---
 
@@ -635,17 +633,9 @@ function getProgramDuration(start, stop) {
  * Adjusts the main container's padding to make space for the remote on mobile.
  */
 function adjustLayoutForRemote() {
-  if (window.innerWidth <= 768) {
-    if (remoteControl.classList.contains('visible')) {
-      const remoteHeight = remoteControl.offsetHeight;
-      stbContainer.style.paddingBottom = `${remoteHeight}px`;
-    } else {
-      stbContainer.style.paddingBottom = '0';
-    }
-  } else {
-    // Ensure padding is cleared on desktop
-    stbContainer.style.paddingBottom = '0';
-  }
+  // This function is no longer needed with the new layout
+  // The remote is now part of the sidebar on desktop
+  console.log('adjustLayoutForRemote called - no longer needed');
 }
 
 /**
@@ -1878,7 +1868,7 @@ if (e.key === 'Escape') {
 
 window.addEventListener('resize', adjustLayoutForRemote);
 
-closeHelp.onclick = () => helpOverlay.style.display = 'none';
+// closeHelp.onclick = () => helpOverlay.style.display = 'none';
 
 // --- Liquid Glass Effects ---
 function addLiquidEffects() {
@@ -2039,9 +2029,6 @@ function showStatus(msg, duration = 2000) {
   renderChannelList();
   renderMobileChannelList();
   
-  // Hide remote by default
-  remoteControl.classList.remove('visible');
-  
   // Add liquid glass effects
   addLiquidEffects();
   
@@ -2053,10 +2040,6 @@ function showStatus(msg, duration = 2000) {
   
   // Mobile-specific optimizations
   if ('ontouchstart' in window || window.innerWidth <= 768) {
-    // Hide remote by default on mobile
-    if (remoteControl) {
-      remoteControl.style.display = 'none';
-    }
     // Optimize touch targets
     document.body.classList.add('mobile-device');
     // Force mobile layout
@@ -2065,9 +2048,6 @@ function showStatus(msg, duration = 2000) {
     // Desktop-specific optimizations
     document.body.classList.add('desktop-layout');
   }
-  
-  // Hide PWA install button initially
-  pwaInstallBtn.style.display = 'none';
   
   // Setup connection monitoring
   window.addEventListener('online', updateConnectionStatus);
@@ -2088,14 +2068,7 @@ function showStatus(msg, duration = 2000) {
     console.error('Power button not found!');
   }
   
-  // Fetch EPG data
-  // Clear EPG cache to force fresh fetch
-  localStorage.removeItem('glz-epg-cache');
-  localStorage.removeItem('glz-epg-cache-time');
-  
-  fetchEPGData().catch(error => {
-    console.error('EPG initialization failed:', error);
-  });
+  // EPG functionality removed
   
   // Enhanced help overlay content
   helpBody.innerHTML = `
