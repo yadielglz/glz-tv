@@ -339,7 +339,16 @@ async function fetchEPGData() {
       console.log('Using cached EPG data');
       epgData = JSON.parse(cached);
       epgLastUpdate = parseInt(cacheTime);
-      return;
+      
+      // Check if this is fallback data
+      const isFallback = localStorage.getItem('glz-epg-fallback');
+      if (isFallback) {
+        console.log('⚠️ Using fallback EPG data - attempting to fetch real data...');
+        // Continue to fetch real data even if we have cached fallback
+      } else {
+        console.log('✅ Using cached real EPG data');
+        return;
+      }
     }
   }
   
@@ -383,6 +392,7 @@ async function fetchEPGData() {
         
         xmlText = await response.text();
         console.log('EPG XML received from proxy, length:', xmlText.length);
+        console.log('First 500 chars of XML:', xmlText.substring(0, 500));
         break; // Success, exit the loop
         
       } catch (error) {
@@ -419,6 +429,7 @@ async function fetchEPGData() {
     // Cache the data
     localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
     localStorage.setItem('glz-epg-cache-time', Date.now().toString());
+    localStorage.removeItem('glz-epg-fallback'); // Mark as real data
     epgLastUpdate = Date.now();
     
     console.log('EPG data parsed successfully:', Object.keys(epgData).length, 'channels');
@@ -603,10 +614,11 @@ function createFallbackEPGData() {
   
   console.log('Fallback EPG data created for', Object.keys(epgData).length, 'channels');
   
-  // Cache the fallback data
-  localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
-  localStorage.setItem('glz-epg-cache-time', Date.now().toString());
-  epgLastUpdate = Date.now();
+           // Cache the fallback data
+         localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
+         localStorage.setItem('glz-epg-cache-time', Date.now().toString());
+         localStorage.setItem('glz-epg-fallback', 'true'); // Mark as fallback data
+         epgLastUpdate = Date.now();
 }
 
 // --- Utility Functions ---
@@ -1402,6 +1414,12 @@ function showStatus(msg, duration = 2000) {
   
   // Fetch EPG data
   console.log('Starting EPG initialization...');
+  
+  // Clear fallback cache to force real EPG fetch
+  localStorage.removeItem('glz-epg-cache');
+  localStorage.removeItem('glz-epg-cache-time');
+  localStorage.removeItem('glz-epg-fallback');
+  
   fetchEPGData().then(() => {
     console.log('EPG initialization complete');
   }).catch(error => {
