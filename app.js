@@ -440,8 +440,9 @@ async function fetchEPGData() {
     console.error('EPG fetch failed:', error);
     showStatus('EPG data unavailable - using fallback', 3000);
     
-    // Create fallback EPG data for testing
-    createFallbackEPGData();
+             // Create fallback EPG data for testing
+         console.log('⚠️ EPG URL not accessible - creating realistic fallback data');
+         createFallbackEPGData();
   } finally {
     epgLoading = false;
   }
@@ -566,26 +567,64 @@ function createFallbackEPGData() {
   console.log('Creating fallback EPG data...');
   
   const now = new Date();
-  const programs = [
-    { title: 'Morning News', category: 'News', duration: 60 },
-    { title: 'Sports Center', category: 'Sports', duration: 30 },
-    { title: 'Movie: Action Thriller', category: 'Movies', duration: 120 },
-    { title: 'Comedy Show', category: 'Entertainment', duration: 30 },
-    { title: 'Documentary', category: 'Documentary', duration: 60 },
-    { title: 'Late Night Talk Show', category: 'Talk Show', duration: 60 },
-    { title: 'Weather Report', category: 'News', duration: 15 },
-    { title: 'Children\'s Program', category: 'Children', duration: 30 }
-  ];
+           const programs = [
+           // News & Information
+           { title: 'Noticias Telemundo', category: 'News', duration: 60 },
+           { title: 'Noticiero Univision', category: 'News', duration: 60 },
+           { title: 'CNN Newsroom', category: 'News', duration: 60 },
+           { title: 'Fox News Live', category: 'News', duration: 60 },
+           { title: 'Weather Update', category: 'Weather', duration: 15 },
+           
+           // Sports
+           { title: 'SportsCenter', category: 'Sports', duration: 30 },
+           { title: 'ESPN Deportes', category: 'Sports', duration: 60 },
+           { title: 'MLB Tonight', category: 'Sports', duration: 120 },
+           { title: 'NBA Countdown', category: 'Sports', duration: 30 },
+           { title: 'NFL Live', category: 'Sports', duration: 60 },
+           
+           // Entertainment
+           { title: 'Modern Family', category: 'Comedy', duration: 30 },
+           { title: 'The Big Bang Theory', category: 'Comedy', duration: 30 },
+           { title: 'Friends', category: 'Comedy', duration: 30 },
+           { title: 'The Office', category: 'Comedy', duration: 30 },
+           { title: 'Parks and Recreation', category: 'Comedy', duration: 30 },
+           
+           // Movies
+           { title: 'Movie: The Avengers', category: 'Action', duration: 150 },
+           { title: 'Movie: Jurassic Park', category: 'Adventure', duration: 130 },
+           { title: 'Movie: The Matrix', category: 'Sci-Fi', duration: 140 },
+           { title: 'Movie: Titanic', category: 'Drama', duration: 195 },
+           { title: 'Movie: The Lion King', category: 'Animation', duration: 88 },
+           
+           // Children
+           { title: 'Mickey Mouse Clubhouse', category: 'Children', duration: 30 },
+           { title: 'SpongeBob SquarePants', category: 'Children', duration: 30 },
+           { title: 'PAW Patrol', category: 'Children', duration: 30 },
+           { title: 'Peppa Pig', category: 'Children', duration: 30 },
+           { title: 'Bluey', category: 'Children', duration: 30 },
+           
+           // Drama
+           { title: 'Grey\'s Anatomy', category: 'Drama', duration: 60 },
+           { title: 'The Walking Dead', category: 'Drama', duration: 60 },
+           { title: 'Breaking Bad', category: 'Drama', duration: 60 },
+           { title: 'Game of Thrones', category: 'Drama', duration: 60 },
+           { title: 'Stranger Things', category: 'Drama', duration: 60 }
+         ];
   
-           // Create EPG data for major channels - try to match common M3U channel IDs
+           // Create EPG data for major channels - match actual M3U channel IDs
          const majorChannels = [
-           'WKAQ.us', 'ESPN.us', 'CNN.us', 'FoxNews.us', 'HBO.us', 
-           'DisneyChannel.us', 'Nickelodeon.us', 'ComedyCentral.us',
-           'TBS.us', 'TNT.us', 'FX.us', 'AMC.us',
-           // Add some generic channel IDs that might match
-           '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-           'ABC', 'CBS', 'NBC', 'FOX', 'PBS', 'CW', 'ION',
-           'USA', 'SYFY', 'BRAVO', 'E', 'MTV', 'VH1', 'BET'
+           'WKAQ.us', 'WKAQDT2.us', 'UniMas.us', 'WLII.us', 'WIPRTV.us',
+           'ESPN.us', 'ESPN2.us', 'ESPNNews.us', 'ESPNU.us', 'FoxSports1.us', 'FoxSports2.us',
+           'MLBNetwork.us', 'NFLNetwork.us', 'NBATV.us', 'YESNetwork.us', 'SportsNetNewYork.us',
+           'WESH.us', 'WKMG.us', 'WFTV.us', 'WOFL.us', 'WKCF.us',
+           'ComedyCentral.us', 'USANetwork.us', 'TBS.us', 'ParamountNetwork.us', 'TNT.us',
+           'FX.us', 'FXX.us', 'FXMovieChannel.us', 'DisneyChannel.us', 'DisneyJunior.us',
+           'Nickelodeon.us', 'CartoonNetwork.us', 'Boomerang.us', 'WFOR.us', 'WTVJ.us',
+           'WSVN.us', 'WBFS.us', 'WLTV.us', 'CourtTV.us', 'AMC.us',
+           'PopTV.us', 'truTV.us', 'CNNEspanol.us', 'CNNInt.es', 'CNNInternational.us',
+           'CNN.us', 'CSPAN.us', 'CSPAN2.us', 'FoxNews.us', 'WeatherChannel.us',
+           'WeatherNation.us', 'TheWeatherNetwork.ca', 'Accuweather.us', 'HBO.us', 'HBO2.us',
+           'HBOComedy.us', 'WFLA.us', 'WTSP.us', 'WTVT.us', 'WFTS.us'
          ];
   
   epgData = {};
