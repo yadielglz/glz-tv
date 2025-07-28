@@ -76,11 +76,11 @@
   --text-light: #111827;
   
   /* Dark Background Colors */
-  --bg-primary: #111827;
-  --bg-secondary: #1f2937;
-  --bg-tertiary: #374151;
-  --bg-dark: #0f172a;
-  --bg-hover: #4b5563;
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #1a1a1a;
+  --bg-dark: #000000;
+  --bg-hover: #2a2a2a;
   
   /* Dark Border Colors */
   --border-light: #374151;
@@ -2544,6 +2544,11 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
     background: white;
   }
 
+  /* Dark theme main content */
+  [data-theme="dark"] .main-content {
+    background: #000000;
+  }
+
   /* Video Player - Left 2/3 */
   .video-section {
     flex: 2;
@@ -2552,6 +2557,11 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  /* Dark theme video section */
+  [data-theme="dark"] .video-section {
+    background: #000000;
   }
 
   .video-container {
@@ -2568,6 +2578,12 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
     height: 100%;
     object-fit: contain;
     background: #000;
+  }
+
+  /* Dark theme video player */
+  [data-theme="dark"] #video,
+  [data-theme="dark"] #audio {
+    background: #000000;
   }
 
   /* Sidebar - Right 1/3 */
