@@ -923,17 +923,21 @@ function stopPlayback() {
   
   // Clear sources after a brief delay to allow smooth transitions
   setTimeout(() => {
-    if (video.src && !video.playing) {
+    if (video.src && video.paused) {
       video.src = '';
     }
-    if (audio.src && !audio.playing) {
+    if (audio.src && audio.paused) {
       audio.src = '';
     }
   }, 100);
 }
 
 function playChannel(idx) {
-  if (!channels[idx]) return;
+  console.log('playChannel called with index:', idx);
+  if (!channels[idx]) {
+    console.error('No channel found for index:', idx);
+    return;
+  }
 
   // Save current channel as last channel
   if (current !== idx) {
@@ -955,6 +959,8 @@ function playChannel(idx) {
 
   const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
   const isHls = /\.m3u8(\?|$)/i.test(ch.url);
+  
+  console.log('Channel:', ch.name, 'URL:', ch.url, 'isAudio:', isAudio, 'isHls:', isHls);
 
   // Set display properties
   video.style.display = isAudio ? 'none' : '';
@@ -1007,6 +1013,7 @@ function playChannel(idx) {
       .then(onPlaybackSuccess)
       .catch(e => onPlaybackError(e, 'audio'));
   } else if (isHls && window.Hls) {
+    console.log('Using HLS.js for playback');
     hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
@@ -1028,6 +1035,7 @@ function playChannel(idx) {
       }
     });
   } else {
+    console.log('Using direct video playback');
     video.classList.add('loading');
     video.src = ch.url;
     video.play()
@@ -1040,6 +1048,7 @@ function playChannel(idx) {
 }
 
 function setStandby(on) {
+  console.log('setStandby called with:', on);
   standby = on;
   if (standby) {
     standbyScreen.classList.add('show');
@@ -1055,6 +1064,7 @@ function setStandby(on) {
       channelLogoPlaceholder.textContent = 'TV';
     }
   } else {
+    console.log('Exiting standby, playing channel:', current);
     standbyScreen.classList.remove('show');
     if (channels.length > 0 && current >= 0 && current < channels.length) {
       playChannel(current);
@@ -1432,11 +1442,6 @@ function showStatus(msg, duration = 2000) {
   setStandby(false); // Start with a channel instead of standby
   updateTime();
   updateChannelDisplay();
-  
-  // Actually start playing the current channel
-  if (channels.length > 0 && current >= 0 && current < channels.length) {
-    playChannel(current);
-  }
   
   // Initialize mobile channel list
   renderMobileChannelList();
