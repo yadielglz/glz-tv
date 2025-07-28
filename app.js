@@ -1828,7 +1828,7 @@ function showStatus(msg, duration = 2000) {
     console.log('Loaded last channel from localStorage:', current);
   }
   
-  setStandby(true);
+  setStandby(false); // Start with a channel instead of standby
   updateTime();
   updateChannelDisplay();
   
@@ -1858,6 +1858,10 @@ function showStatus(msg, duration = 2000) {
     document.body.classList.add('mobile-device');
     // Force mobile layout
     document.body.classList.add('mobile-layout');
+  } else {
+    // Desktop-specific optimizations
+    console.log('Desktop device detected');
+    document.body.classList.add('desktop-layout');
   }
   
   // Hide PWA install button initially

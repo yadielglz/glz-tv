@@ -2099,6 +2099,22 @@ body::before {
   .header-right {
     display: flex;
   }
+  
+  /* Ensure desktop layout is not affected by mobile changes */
+  .main-content {
+    display: block !important;
+    flex-direction: unset !important;
+    height: auto !important;
+  }
+  
+  .video-container {
+    height: auto !important;
+    flex-shrink: unset !important;
+  }
+  
+  .mobile-channel-list {
+    display: none !important;
+  }
 }
 
 /* Responsive Design */
@@ -2144,6 +2160,22 @@ body::before {
   .mobile-layout .main-content {
     display: flex !important;
     flex-direction: column !important;
+  }
+  
+  /* Desktop layout overrides */
+  .desktop-layout .main-content {
+    display: block !important;
+    flex-direction: unset !important;
+    height: auto !important;
+  }
+  
+  .desktop-layout .video-container {
+    height: auto !important;
+    flex-shrink: unset !important;
+  }
+  
+  .desktop-layout .mobile-channel-list {
+    display: none !important;
   }
   
   .header-top-row {
