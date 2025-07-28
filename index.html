@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GLZ TV - Liquid Glass Experience</title>
+  <title>GLZ TV - Simple Clean Interface</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -15,14 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="GLZ TV">
 </head>
 <body>
-  <!-- Animated Background Elements -->
-  <div class="background-elements">
-    <div class="floating-orb orb-1"></div>
-    <div class="floating-orb orb-2"></div>
-    <div class="floating-orb orb-3"></div>
-    <div class="floating-orb orb-4"></div>
-    <div class="floating-orb orb-5"></div>
-  </div>
+
 
   <div class="stb-container">
     <!-- Liquid Glass Header -->
@@ -107,6 +100,11 @@
           <div class="mobile-channel-name" id="mobile-channel-name">STANDBY</div>
           <div class="mobile-current-program" id="mobile-current-program"></div>
         </div>
+        <button class="mobile-channel-toggle" id="mobile-channel-toggle" aria-label="Toggle channel list">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6,9 12,15 18,9"></polyline>
+          </svg>
+        </button>
       </div>
       
       <!-- Mobile Channel List -->
@@ -146,19 +144,21 @@
           </div>
         </div>
 
-        <!-- Standby Screen with Liquid Glass -->
-        <div class="standby-screen" id="standby-screen">
-          <div class="standby-content">
-            <div class="standby-logo">
-              <div class="logo-circle">
-                <span class="logo-text">GLZ</span>
-              </div>
-            </div>
-            <div class="standby-text">STANDBY</div>
-            <div class="standby-subtitle">Press POWER to start</div>
+      </div>
+    </main>
+
+    <!-- Standby Screen with Liquid Glass -->
+    <div class="standby-screen" id="standby-screen">
+      <div class="standby-content">
+        <div class="standby-logo">
+          <div class="logo-circle">
+            <span class="logo-text">GLZ</span>
           </div>
         </div>
+        <div class="standby-text">STANDBY</div>
+        <div class="standby-subtitle">Press POWER to start</div>
       </div>
+    </div>
 
       <!-- Channel Guide Sidebar with Glass Effect -->
       <aside class="channel-guide" id="channel-guide">

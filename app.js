@@ -305,6 +305,7 @@ const guideBtn = document.getElementById('guide-btn');
 const headerRemoteBtn = document.getElementById('header-remote-btn');
 const mobileRemoteBtn = document.getElementById('mobile-remote-btn');
 const mobileChannelList = document.getElementById('mobile-channel-list');
+const mobileChannelToggle = document.getElementById('mobile-channel-toggle');
 const numpadBtns = document.querySelectorAll('.numpad-btn');
 const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
@@ -880,7 +881,14 @@ async function changeEPGSource() {
   }
 }
 function showLoading() {
-  loadingIndicator.style.display = 'flex';
+  if (loadingIndicator) {
+    loadingIndicator.style.display = 'flex';
+    // Update loading text with current channel info
+    const loadingText = loadingIndicator.querySelector('.loading-text');
+    if (loadingText && channels[current]) {
+      loadingText.textContent = `Loading ${channels[current].name}...`;
+    }
+  }
 }
 function hideLoading() {
   loadingIndicator.style.display = 'none';
@@ -999,6 +1007,9 @@ function updateChannelDisplay(idx = current) {
   
   // Update header with current program
   updateHeaderProgram(channel.id);
+  
+  // Update mobile current program
+  updateMobileCurrentProgram(channel.id);
   
   // Update favorites button state
   updateFavoritesButton();
@@ -1154,6 +1165,22 @@ function showMiniGuide() {
 function hideMiniGuide() {
   if (!miniGuide) return;
   miniGuide.classList.remove('show');
+}
+
+function toggleMobileChannelList() {
+  if (!mobileChannelList || !mobileChannelToggle) return;
+  
+  const isVisible = mobileChannelList.style.display === 'block';
+  
+  if (isVisible) {
+    mobileChannelList.style.display = 'none';
+    mobileChannelToggle.classList.remove('active');
+  } else {
+    mobileChannelList.style.display = 'block';
+    mobileChannelToggle.classList.add('active');
+    // Re-render the list to ensure it's up to date
+    renderMobileChannelList();
+  }
 }
 
 function getNearbyChannels(centerIndex, range) {
@@ -1343,15 +1370,23 @@ function setupTouchGestures() {
   let startX = 0;
   let startY = 0;
   let startTime = 0;
+  let isVideoControl = false;
   
   videoContainer.addEventListener('touchstart', (e) => {
+    // Don't interfere with video controls
+    if (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO') {
+      isVideoControl = true;
+      return;
+    }
+    
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     startTime = Date.now();
+    isVideoControl = false;
   });
   
   videoContainer.addEventListener('touchend', (e) => {
-    if (standby) return;
+    if (standby || isVideoControl) return;
     
     const endX = e.changedTouches[0].clientX;
     const endY = e.changedTouches[0].clientY;
@@ -1397,11 +1432,27 @@ function handleChannelInput(num) {
 }
 
 function stopPlayback() {
-  if (hls) { hls.destroy(); hls = null; }
+  // Don't immediately clear sources to prevent flickering
+  if (hls) { 
+    hls.destroy(); 
+    hls = null; 
+  }
   video.pause();
-  video.src = '';
   audio.pause();
-  audio.src = '';
+  
+  // Remove loading/playing classes
+  video.classList.remove('loading', 'playing');
+  audio.classList.remove('loading', 'playing');
+  
+  // Clear sources after a brief delay to allow smooth transitions
+  setTimeout(() => {
+    if (video.src && !video.playing) {
+      video.src = '';
+    }
+    if (audio.src && !audio.playing) {
+      audio.src = '';
+    }
+  }, 100);
 }
 
 function playChannel(idx) {
@@ -1414,12 +1465,21 @@ function playChannel(idx) {
   }
   
   current = idx;
-  
-  stopPlayback();
   const ch = channels[idx];
+  
+  // Update channel display immediately to show new channel info
+  updateChannelDisplay();
+  
+  // Show loading state
+  showLoading();
+  
+  // Stop current playback
+  stopPlayback();
+  
   const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(ch.url) || ch.url.includes('icy') || ch.url.includes('audio');
   const isHls = /\.m3u8(\?|$)/i.test(ch.url);
   
+  // Set display properties
   video.style.display = isAudio ? 'none' : '';
   audio.style.display = isAudio ? '' : 'none';
   
@@ -1427,57 +1487,76 @@ function playChannel(idx) {
   connectionStatus = 'connecting';
   updateConnectionStatus();
   
+  // Function to handle successful playback
+  const onPlaybackSuccess = () => {
+    connectionStatus = 'connected';
+    updateConnectionStatus();
+    hideLoading();
+    
+    // Add playing class to video/audio
+    if (isAudio) {
+      audio.classList.remove('loading');
+      audio.classList.add('playing');
+    } else {
+      video.classList.remove('loading');
+      video.classList.add('playing');
+    }
+    
+    // Show channel banner after successful playback
+    setTimeout(() => showChannelBanner(), 500);
+  };
+  
+  // Function to handle playback errors
+  const onPlaybackError = (error, streamType) => {
+    connectionStatus = 'error';
+    updateConnectionStatus();
+    hideLoading();
+    
+    // Remove loading class from video/audio
+    if (isAudio) {
+      audio.classList.remove('loading');
+    } else {
+      video.classList.remove('loading');
+    }
+    
+    showStatus(`Failed to play ${streamType} stream`);
+    console.error(`Playback error:`, error);
+  };
+  
   if (isAudio) {
+    audio.classList.add('loading');
     audio.src = ch.url;
     audio.play()
-      .then(() => {
-        connectionStatus = 'connected';
-        updateConnectionStatus();
-      })
-      .catch(e => {
-        connectionStatus = 'error';
-        updateConnectionStatus();
-        showStatus('Failed to play audio stream');
-      });
+      .then(onPlaybackSuccess)
+      .catch(e => onPlaybackError(e, 'audio'));
   } else if (isHls && window.Hls) {
-    hls = new Hls();
+    hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: true,
+      backBufferLength: 90
+    });
     hls.loadSource(ch.url);
     hls.attachMedia(video);
+    
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
-      connectionStatus = 'connected';
-      updateConnectionStatus();
+      video.classList.add('loading');
+      video.play()
+        .then(onPlaybackSuccess)
+        .catch(e => onPlaybackError(e, 'video'));
     });
+    
     hls.on(Hls.Events.ERROR, function (event, data) {
-      connectionStatus = 'error';
-      updateConnectionStatus();
-      if (data.fatal) showStatus('Stream error.');
+      if (data.fatal) {
+        onPlaybackError(data, 'HLS stream');
+      }
     });
-    video.play()
-      .then(() => {
-        connectionStatus = 'connected';
-        updateConnectionStatus();
-      })
-      .catch(e => {
-        connectionStatus = 'error';
-        updateConnectionStatus();
-        showStatus('Failed to play video stream');
-      });
   } else {
+    video.classList.add('loading');
     video.src = ch.url;
     video.play()
-      .then(() => {
-        connectionStatus = 'connected';
-        updateConnectionStatus();
-      })
-      .catch(e => {
-        connectionStatus = 'error';
-        updateConnectionStatus();
-        showStatus('Failed to play video stream');
-      });
+      .then(onPlaybackSuccess)
+      .catch(e => onPlaybackError(e, 'video'));
   }
-  
-  updateChannelDisplay();
-  showChannelBanner();
   
   // Update mobile channel list
   renderMobileChannelList();
@@ -1485,8 +1564,8 @@ function playChannel(idx) {
 
 function setStandby(on) {
   standby = on;
-  standbyScreen.style.display = standby ? '' : 'none';
   if (standby) {
+    standbyScreen.classList.add('show');
     stopPlayback();
     channelNumber.textContent = '-- --';
     channelName.textContent = 'STANDBY';
@@ -1495,6 +1574,7 @@ function setStandby(on) {
     document.getElementById('channel-logo-placeholder').style.display = 'block';
     document.getElementById('channel-logo-placeholder').textContent = 'TV';
   } else {
+    standbyScreen.classList.remove('show');
     if (channels.length > 0 && current >= 0 && current < channels.length) {
       playChannel(current);
     } else {
@@ -1505,10 +1585,33 @@ function setStandby(on) {
 
 function showChannelBanner() {
   if (!channels[current]) return;
-  bannerChannel.textContent = channels[current].chno || (current + 1);
-  bannerName.textContent = channels[current].name;
+  
+  const channel = channels[current];
+  const programInfo = getCurrentProgram(channel.id);
+  
+  // Update banner content
+  bannerChannel.textContent = channel.chno || (current + 1);
+  bannerName.textContent = channel.name;
+  
+  // Add program information if available
+  if (programInfo && programInfo.current) {
+    const progressBar = document.getElementById('progress-bar');
+    if (progressBar) {
+      const now = new Date();
+      const progress = Math.max(0, Math.min(100, ((now - programInfo.current.start) / (programInfo.current.stop - programInfo.current.start)) * 100));
+      progressBar.style.width = `${progress}%`;
+    }
+  }
+  
+  // Show banner with smooth animation
   channelBanner.classList.add('show');
-  setTimeout(() => channelBanner.classList.remove('show'), 2500);
+  
+  // Hide banner after delay
+  setTimeout(() => {
+    if (channelBanner.classList.contains('show')) {
+      channelBanner.classList.remove('show');
+    }
+  }, 3000);
 }
 
 function showGuide() {
@@ -1603,6 +1706,7 @@ if (closeGuide) closeGuide.onclick = hideGuide;
 if (toggleRemote) toggleRemote.onclick = toggleRemoteVisibility;
 if (headerRemoteBtn) headerRemoteBtn.onclick = toggleRemoteVisibility;
 if (mobileRemoteBtn) mobileRemoteBtn.onclick = toggleRemoteVisibility;
+if (mobileChannelToggle) mobileChannelToggle.onclick = toggleMobileChannelList;
 
 // Options panel controls
 if (headerOptionsBtn) headerOptionsBtn.onclick = showOptions;
