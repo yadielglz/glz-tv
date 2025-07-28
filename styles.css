@@ -655,6 +655,46 @@ body::before {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Mobile-specific optimizations */
+.mobile-device .remote-control {
+  display: none !important;
+}
+
+.mobile-device .remote-btn,
+.mobile-device .numpad-btn {
+  min-height: 48px; /* Larger touch targets */
+  min-width: 48px;
+}
+
+.mobile-device .channel-item {
+  padding: var(--spacing-md);
+  min-height: 60px;
+}
+
+.mobile-device .epg-info {
+  bottom: var(--spacing-md);
+  left: var(--spacing-md);
+  right: var(--spacing-md);
+  max-width: none;
+}
+
+/* Mobile touch feedback */
+.mobile-device .remote-btn:active,
+.mobile-device .numpad-btn:active,
+.mobile-device .channel-item:active {
+  transform: scale(0.95);
+  transition: transform 0.1s ease;
+}
+
+/* Mobile video controls */
+.mobile-device .video-container {
+  touch-action: pan-x pan-y;
+}
+
+.mobile-device .video-container video {
+  pointer-events: auto;
+}
+
 .epg-current-program {
   font-size: 0.8rem;
   color: var(--text-primary);

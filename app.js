@@ -272,6 +272,7 @@ let epgLastUpdate = null;
 const EPG_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 const EPG_URL = 'https://epg.best/1eef8-shw7fc.xml.gz';
 const LOCAL_EPG_PROXY = 'http://localhost:3000/api/epg';
+const CLOUD_EPG_PROXY = '/api/epg'; // Netlify function
 
 // --- DOM Elements ---
 const video = document.getElementById('video');
@@ -346,9 +347,10 @@ async function fetchEPGData() {
   console.log('Fetching EPG data from:', EPG_URL);
   
   try {
-    // Try local proxy first, then fallback to CORS proxies
+    // Try cloud proxy first (works on mobile), then local proxy, then fallback to CORS proxies
     const proxies = [
-      LOCAL_EPG_PROXY, // Local proxy (fastest, most reliable)
+      CLOUD_EPG_PROXY, // Cloud proxy (works on mobile)
+      LOCAL_EPG_PROXY, // Local proxy (development only)
       `https://api.allorigins.win/raw?url=${encodeURIComponent(EPG_URL)}`,
       `https://cors-anywhere.herokuapp.com/${EPG_URL}`,
       `https://thingproxy.freeboard.io/fetch/${EPG_URL}`,
@@ -1344,6 +1346,17 @@ function showStatus(msg, duration = 2000) {
   // Setup new features
   setupPWA();
   setupTouchGestures();
+  
+  // Mobile-specific optimizations
+  if ('ontouchstart' in window) {
+    console.log('Mobile device detected - optimizing for touch');
+    // Hide remote by default on mobile
+    if (remoteControl) {
+      remoteControl.style.display = 'none';
+    }
+    // Optimize touch targets
+    document.body.classList.add('mobile-device');
+  }
   
   // Hide PWA install button initially
   pwaInstallBtn.style.display = 'none';
