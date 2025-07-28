@@ -1,5 +1,6 @@
 // GLZ TV - Modern STB App Logic
 // Spectrum/AT&T inspired, modular, and maintainable
+// Version: 2024-01-27-v2 - Fixed mobile program display and standby issues
 
 // --- Embedded M3U Content (move this to a separate file or fetch from server for production) ---
 const EMBEDDED_M3U = `#EXTM3U url-tvg="https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz"
@@ -1009,7 +1010,23 @@ function updateChannelDisplay(idx = current) {
   updateHeaderProgram(channel.id);
   
   // Update mobile current program
-  updateMobileCurrentProgram(channel.id);
+  try {
+    updateMobileCurrentProgram(channel.id);
+  } catch (error) {
+    console.error('Error calling updateMobileCurrentProgram:', error);
+    // Fallback: manually update mobile program display
+    const mobileCurrentProgram = document.getElementById('mobile-current-program');
+    if (mobileCurrentProgram) {
+      const programInfo = getCurrentProgram(channel.id);
+      if (programInfo && programInfo.current) {
+        mobileCurrentProgram.textContent = programInfo.current.title;
+        mobileCurrentProgram.style.display = 'block';
+      } else {
+        mobileCurrentProgram.textContent = '';
+        mobileCurrentProgram.style.display = 'none';
+      }
+    }
+  }
   
   // Update favorites button state
   updateFavoritesButton();
@@ -1474,7 +1491,11 @@ function stopPlayback() {
 }
 
 function playChannel(idx) {
-  if (!channels[idx]) return;
+  console.log('playChannel called with idx:', idx);
+  if (!channels[idx]) {
+    console.error('No channel found for index:', idx);
+    return;
+  }
   
   // Save current channel as last channel
   if (current !== idx) {
@@ -1507,6 +1528,7 @@ function playChannel(idx) {
   
   // Function to handle successful playback
   const onPlaybackSuccess = () => {
+    console.log('Playback success for channel:', ch.name);
     connectionStatus = 'connected';
     updateConnectionStatus();
     hideLoading();
@@ -1526,6 +1548,7 @@ function playChannel(idx) {
   
   // Function to handle playback errors
   const onPlaybackError = (error, streamType) => {
+    console.error('Playback error for channel:', ch.name, 'Error:', error, 'Type:', streamType);
     connectionStatus = 'error';
     updateConnectionStatus();
     hideLoading();
@@ -2019,6 +2042,7 @@ function showStatus(msg, duration = 2000) {
   
   // Actually start playing the current channel
   if (channels.length > 0 && current >= 0 && current < channels.length) {
+    console.log('Starting playback for channel:', current, channels[current]);
     playChannel(current);
     
     // Fallback: if video doesn't start within 3 seconds, try again
