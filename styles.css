@@ -32,6 +32,48 @@
   --bg-secondary: #1a1a2e;
   --bg-tertiary: #16213e;
   
+  /* Theme Mode */
+  --theme-mode: 'light-glass';
+}
+
+/* Dark Theme Variables */
+[data-theme="dark"] {
+  /* Dark Glass Color Palette */
+  --glass-bg: rgba(0, 0, 0, 0.3);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --glass-blur: blur(20px);
+  
+  /* Dark Gradient Backgrounds */
+  --gradient-primary: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  --gradient-secondary: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  --gradient-accent: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+  --gradient-dark: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.1) 100%);
+  
+  /* Dark Colors */
+  --primary-color: #3498db;
+  --secondary-color: #2c3e50;
+  --accent-color: #3498db;
+  --success-color: #27ae60;
+  --warning-color: #f39c12;
+  --error-color: #e74c3c;
+  
+  /* Dark Text Colors */
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --text-dark: #ecf0f1;
+  
+  /* Dark Background Colors */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2d2d2d;
+  
+  /* Theme Mode */
+  --theme-mode: 'dark';
+}
+  
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -1476,6 +1518,16 @@ body::before {
 
 .option-btn.clear-cache:hover {
   background: var(--warning-color);
+  color: var(--text-primary);
+}
+
+.option-btn.theme-toggle {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.option-btn.theme-toggle:hover {
+  background: var(--accent-color);
   color: var(--text-primary);
 }
 

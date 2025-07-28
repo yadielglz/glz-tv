@@ -331,6 +331,8 @@ const customEpgUrlItem = document.getElementById('custom-epg-url-item');
 const epgUrlInput = document.getElementById('epg-url-input');
 const epgAutoRefresh = document.getElementById('epg-auto-refresh');
 const cacheDurationSelect = document.getElementById('cache-duration-select');
+const themeToggleBtn = document.getElementById('theme-toggle-btn');
+const themeToggleText = document.getElementById('theme-toggle-text');
 
 // New remote control elements
 const volumeDownBtn = document.getElementById('volume-down');
@@ -1019,6 +1021,38 @@ function updateHeaderProgram(channelId) {
   }
 }
 
+/**
+ * Theme Management
+ */
+function initTheme() {
+  const savedTheme = localStorage.getItem('glz-theme') || 'light-glass';
+  setTheme(savedTheme);
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('glz-theme', theme);
+  updateThemeButton(theme);
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'light-glass';
+  const newTheme = currentTheme === 'dark' ? 'light-glass' : 'dark';
+  setTheme(newTheme);
+}
+
+function updateThemeButton(theme) {
+  if (!themeToggleBtn || !themeToggleText) return;
+  
+  if (theme === 'dark') {
+    themeToggleText.textContent = 'Light Mode';
+    themeToggleBtn.querySelector('svg').innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+  } else {
+    themeToggleText.textContent = 'Dark Mode';
+    themeToggleBtn.querySelector('svg').innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  }
+}
+
 // Favorites Management
 function toggleFavorite() {
   if (!channels[current]) return;
@@ -1360,6 +1394,7 @@ if (headerOptionsBtn) headerOptionsBtn.onclick = showOptions;
 if (closeOptions) closeOptions.onclick = hideOptions;
 if (reloadEpgBtn) reloadEpgBtn.onclick = reloadEPGData;
 if (clearCacheBtn) clearCacheBtn.onclick = clearAllCache;
+if (themeToggleBtn) themeToggleBtn.onclick = toggleTheme;
 
 // EPG Settings controls
 if (epgSourceSelect) {
@@ -1469,6 +1504,8 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key === '?') helpOverlay.style.display = 'flex';
   if (e.key === 'F3') showOptions();
+if (e.key === 'F4') toggleTheme();
+if (e.key === 'F5') setStandby(!standby);
 });
 
 window.addEventListener('resize', adjustLayoutForRemote);
@@ -1642,6 +1679,7 @@ function showStatus(msg, duration = 2000) {
   // Setup new features
   setupPWA();
   setupTouchGestures();
+  initTheme();
   
   // Mobile-specific optimizations
   if ('ontouchstart' in window) {
@@ -1680,7 +1718,8 @@ function showStatus(msg, duration = 2000) {
     <div><kbd>F1</kbd>: Toggle Remote</div>
     <div><kbd>F2</kbd>: Show Guide</div>
     <div><kbd>F3</kbd>: Show Options</div>
-    <div><kbd>F4</kbd>: Power On/Off</div>
+<div><kbd>F4</kbd>: Toggle Theme</div>
+<div><kbd>F5</kbd>: Power On/Off</div>
     <div><kbd>←/→</kbd>: Prev/Next Channel</div>
     <div><kbd>↑</kbd>: Show Guide</div>
     <div><kbd>?</kbd>: Show Help</div>
