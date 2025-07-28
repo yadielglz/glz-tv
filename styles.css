@@ -2369,3 +2369,350 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
     animation: none !important;
   }
 } 
+
+/* Desktop Layout - Based on Wireframe Design */
+@media (min-width: 769px) {
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-primary);
+    font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  /* Header Bar */
+  .header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    z-index: 1000;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Brand/Logo - Left */
+  .brand-logo {
+    font-family: 'Google Sans', sans-serif;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-right: 30px;
+    min-width: 80px;
+  }
+
+  /* Channel Information - Center-Left */
+  .channel-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    gap: 15px;
+  }
+
+  .channel-number {
+    background: var(--accent-color);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: 'Google Sans', sans-serif;
+    font-weight: 500;
+    font-size: 16px;
+    min-width: 50px;
+    text-align: center;
+  }
+
+  .channel-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .channel-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .channel-name {
+    font-family: 'Google Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Time Display - Center-Right */
+  .time-display {
+    font-family: 'Google Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-right: 20px;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  /* Control Buttons - Right */
+  .header-controls {
+    display: flex;
+    gap: 10px;
+  }
+
+  .power-btn, .header-options-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent-color);
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .power-btn:hover, .header-options-btn:hover {
+    background: var(--accent-hover);
+  }
+
+  /* Main Content Area */
+  .main-content {
+    display: flex;
+    height: 100vh;
+    padding-top: 60px; /* Account for fixed header */
+  }
+
+  /* Video Player - Left 2/3 */
+  .video-section {
+    flex: 2;
+    position: relative;
+    background: #000;
+  }
+
+  .video-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #video, #audio {
+    max-width: 100%;
+    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  /* Sidebar - Right 1/3 */
+  .sidebar {
+    flex: 1;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    max-width: 400px;
+  }
+
+  /* Channel List - Top */
+  .channel-list-section {
+    flex: 1;
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .channel-list-title {
+    font-family: 'Google Sans', sans-serif;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 15px;
+  }
+
+  .channel-list {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .channel-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    gap: 12px;
+  }
+
+  .channel-item:hover {
+    background: var(--bg-hover);
+  }
+
+  .channel-item.active {
+    background: var(--accent-color);
+    color: white;
+  }
+
+  .channel-item img {
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+
+  .channel-details {
+    flex: 1;
+  }
+
+  .channel-number-small {
+    font-family: 'Google Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .channel-name-small {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-top: 2px;
+  }
+
+  /* Remote - Bottom */
+  .remote-section {
+    padding: 20px;
+    background: var(--bg-tertiary);
+  }
+
+  .remote-title {
+    font-family: 'Google Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 15px;
+  }
+
+  .remote-controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .remote-btn {
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .remote-btn:hover {
+    background: var(--bg-hover);
+  }
+
+  .remote-btn.primary {
+    background: var(--accent-color);
+    color: white;
+  }
+
+  .remote-btn.primary:hover {
+    background: var(--accent-hover);
+  }
+
+  /* Hide mobile elements on desktop */
+  .mobile-only {
+    display: none !important;
+  }
+
+  .standby-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s;
+  }
+
+  .standby-screen.show {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .standby-content {
+    text-align: center;
+    color: white;
+  }
+
+  .standby-logo {
+    font-family: 'Google Sans', sans-serif;
+    font-size: 48px;
+    font-weight: 300;
+    margin-bottom: 20px;
+  }
+
+  .standby-text {
+    font-size: 18px;
+    opacity: 0.8;
+  }
+
+  /* Loading indicator */
+  .loading-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 16px;
+    z-index: 100;
+  }
+
+  /* Status messages */
+  .status-message {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent-color);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .status-message.show {
+    opacity: 1;
+  }
+} 
