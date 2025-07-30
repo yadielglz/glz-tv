@@ -993,9 +993,6 @@ function updateChannelDisplay(idx = current) {
   }
   
   // EPG functionality removed
-  
-  // Update favorites button state
-  updateFavoritesButton();
 }
 
 /**
@@ -1267,7 +1264,6 @@ function toggleFavorite() {
   }
   
   localStorage.setItem('glz-favorites', JSON.stringify(favorites));
-  updateFavoritesButton();
 }
 
 
