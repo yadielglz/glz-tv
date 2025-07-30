@@ -1270,14 +1270,7 @@ function toggleFavorite() {
   updateFavoritesButton();
 }
 
-function updateFavoritesButton() {
-  if (!channels[current]) return;
-  
-  const channelId = channels[current].chno || current.toString();
-  const isFavorite = favorites.includes(channelId);
-  
-  favoritesBtn.classList.toggle('active', isFavorite);
-}
+
 
 function showFavorites() {
   if (favorites.length === 0) {
@@ -1757,7 +1750,6 @@ function renderMobileChannelList(filter = '') {
 
 // --- Enhanced Event Listeners ---
 if (powerBtn) powerBtn.onclick = () => setStandby(!standby);
-if (guideBtn) guideBtn.onclick = showGuide;
 if (closeGuide) closeGuide.onclick = hideGuide;
 if (toggleRemote) toggleRemote.onclick = toggleRemoteVisibility;
 if (headerRemoteBtn) headerRemoteBtn.onclick = toggleRemoteVisibility;
@@ -1821,22 +1813,6 @@ if (channelUpBtn) channelUpBtn.onclick = () => {
   }
 };
 if (lastChannelBtn) lastChannelBtn.onclick = goToLastChannel;
-if (enterBtn) enterBtn.onclick = () => {
-  if (channelInput) {
-    const channelNum = parseInt(channelInput);
-    const channelIndex = channels.findIndex(ch => ch.chno === channelInput) || 
-                        (channelNum > 0 && channelNum <= channels.length ? channelNum - 1 : -1);
-    
-    if (channelIndex >= 0) {
-      playChannel(channelIndex);
-    } else {
-      showStatus('Channel not found');
-      updateChannelDisplay();
-    }
-    channelInput = '';
-  }
-};
-if (favoritesBtn) favoritesBtn.onclick = toggleFavorite;
 // PWA and connection status buttons removed from new layout
 
 if (searchInput) searchInput.oninput = (e) => renderChannelList(e.target.value);
@@ -1967,15 +1943,12 @@ function showChannelBanner() {
     'channelNumber': channelNumber,
     'channelName': channelName,
     'powerBtn': powerBtn,
-    'guideBtn': guideBtn,
     'volumeDownBtn': volumeDownBtn,
     'volumeUpBtn': volumeUpBtn,
     'muteBtn': muteBtn,
     'channelDownBtn': channelDownBtn,
     'channelUpBtn': channelUpBtn,
     'lastChannelBtn': lastChannelBtn,
-    'enterBtn': enterBtn,
-    'favoritesBtn': favoritesBtn,
     // 'pwaInstallBtn': pwaInstallBtn, // Removed from new layout
     // 'connectionStatusBtn': connectionStatusBtn // Removed from new layout
   };
