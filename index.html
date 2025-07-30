@@ -81,12 +81,41 @@
                     <button class="remote-btn" id="mute-btn">MUTE</button>
                     <button class="remote-btn" id="channel-down-btn">CH-</button>
                     <button class="remote-btn" id="volume-down-btn">VOL-</button>
-                    <button class="remote-btn primary" id="favorites-btn">FAV</button>
                     <button class="remote-btn" id="last-channel-btn">LAST</button>
-                    <button class="remote-btn" id="guide-btn">GUIDE</button>
-                    <button class="remote-btn" id="enter-btn">ENTER</button>
+                    <button class="remote-btn" id="cc-btn">CC</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Weather Bottom Bar -->
+    <div class="weather-bottom-bar" id="weather-bottom-bar">
+        <div class="weather-current">
+            <div class="weather-current-main">
+                <div class="weather-icon-large" id="weather-icon-large">🌤️</div>
+                <div class="weather-current-info">
+                    <div class="weather-temp-large" id="weather-temp-large">--°</div>
+                    <div class="weather-location-large" id="weather-location-large">Loading...</div>
+                    <div class="weather-description" id="weather-description">--</div>
+                </div>
+            </div>
+            <div class="weather-details">
+                <div class="weather-detail-item">
+                    <span class="detail-label">Humidity:</span>
+                    <span class="detail-value" id="weather-humidity">--%</span>
+                </div>
+                <div class="weather-detail-item">
+                    <span class="detail-label">Wind:</span>
+                    <span class="detail-value" id="weather-wind">-- mph</span>
+                </div>
+                <div class="weather-detail-item">
+                    <span class="detail-label">Feels like:</span>
+                    <span class="detail-value" id="weather-feels-like">--°</span>
+                </div>
+            </div>
+        </div>
+        <div class="weather-forecast" id="weather-forecast">
+            <!-- 5-day forecast will be populated by JavaScript -->
         </div>
     </div>
 

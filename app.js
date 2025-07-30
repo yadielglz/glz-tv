@@ -302,7 +302,6 @@ const closeGuide = document.getElementById('close-guide');
 const remoteControl = document.getElementById('remote-control');
 const toggleRemote = document.getElementById('toggle-remote');
 const powerBtn = document.getElementById('power-btn');
-const guideBtn = document.getElementById('guide-btn');
 const headerRemoteBtn = document.getElementById('header-remote-btn');
 const mobileRemoteBtn = document.getElementById('mobile-remote-btn');
 const mobileChannelList = document.getElementById('mobile-channel-list');
@@ -348,8 +347,6 @@ const muteBtn = document.getElementById('mute-btn');
 const channelDownBtn = document.getElementById('channel-down-btn');
 const channelUpBtn = document.getElementById('channel-up-btn');
 const lastChannelBtn = document.getElementById('last-channel-btn');
-const enterBtn = document.getElementById('enter-btn');
-const favoritesBtn = document.getElementById('favorites-btn');
 
 // --- EPG Functions ---
 
@@ -1335,6 +1332,19 @@ function goToLastChannel() {
   }
 }
 
+function toggleClosedCaptions() {
+  const video = document.getElementById('video');
+  if (video) {
+    if (video.textTracks.length > 0) {
+      const track = video.textTracks[0];
+      track.mode = track.mode === 'showing' ? 'hidden' : 'showing';
+      showStatus(track.mode === 'showing' ? 'Closed captions enabled' : 'Closed captions disabled');
+    } else {
+      showStatus('No closed captions available');
+    }
+  }
+}
+
 // Connection Health Monitoring
 function updateConnectionStatus() {
   const isConnected = navigator.onLine && connectionStatus === 'connected';
@@ -2077,10 +2087,8 @@ function showChannelBanner() {
     'volume-up-btn': () => adjustVolume(0.1),
     'volume-down-btn': () => adjustVolume(-0.1),
     'mute-btn': () => toggleMute(),
-    'favorites-btn': () => toggleFavorite(),
     'last-channel-btn': () => goToLastChannel(),
-    'guide-btn': () => showGuide(),
-    'enter-btn': () => showStatus('Enter pressed')
+    'cc-btn': () => toggleClosedCaptions()
   };
 
   // Add event listeners to remote buttons
@@ -2248,57 +2256,164 @@ async function fetchWeather(location) {
     const units = localStorage.getItem('glz-weather-units') || 'imperial';
     const apiKey = 'c464a91ff8b9454fe6721e52a798faae';
     
-    const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&units=${units}&appid=${apiKey}`);
+    // Fetch current weather
+    const currentResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&units=${units}&appid=${apiKey}`);
     
-    if (!response.ok) {
-      throw new Error(`Weather API error: ${response.status}`);
+    if (!currentResponse.ok) {
+      throw new Error(`Weather API error: ${currentResponse.status}`);
     }
     
-    const weather = await response.json();
-    updateWeatherDisplay(weather, units);
+    const currentWeather = await currentResponse.json();
+    
+    // Fetch 5-day forecast
+    const forecastResponse = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${location}&units=${units}&appid=${apiKey}`);
+    
+    if (!forecastResponse.ok) {
+      throw new Error(`Forecast API error: ${forecastResponse.status}`);
+    }
+    
+    const forecastData = await forecastResponse.json();
+    
+    updateWeatherDisplay(currentWeather, forecastData, units);
   } catch (error) {
     console.error('Weather fetch error:', error);
-    updateWeatherDisplay(null, 'imperial');
+    updateWeatherDisplay(null, null, 'imperial');
   }
 }
 
-function updateWeatherDisplay(weather, units) {
+function updateWeatherDisplay(currentWeather, forecastData, units) {
+  // Update header weather widget
   const weatherIcon = document.getElementById('weather-icon');
   const weatherTemp = document.getElementById('weather-temp');
   const weatherLocation = document.getElementById('weather-location');
 
-  if (!weather) {
-    if (weatherIcon) weatherIcon.textContent = '🌤️';
-    if (weatherTemp) weatherTemp.textContent = '--°';
-    if (weatherLocation) weatherLocation.textContent = 'Weather unavailable';
+  // Update bottom bar weather
+  const weatherIconLarge = document.getElementById('weather-icon-large');
+  const weatherTempLarge = document.getElementById('weather-temp-large');
+  const weatherLocationLarge = document.getElementById('weather-location-large');
+  const weatherDescription = document.getElementById('weather-description');
+  const weatherHumidity = document.getElementById('weather-humidity');
+  const weatherWind = document.getElementById('weather-wind');
+  const weatherFeelsLike = document.getElementById('weather-feels-like');
+  const weatherForecast = document.getElementById('weather-forecast');
+
+  if (!currentWeather) {
+    // Set fallback values
+    const fallbackIcon = '🌤️';
+    const fallbackTemp = '--°';
+    const fallbackLocation = 'Weather unavailable';
+    
+    [weatherIcon, weatherIconLarge].forEach(el => { if (el) el.textContent = fallbackIcon; });
+    [weatherTemp, weatherTempLarge].forEach(el => { if (el) el.textContent = fallbackTemp; });
+    [weatherLocation, weatherLocationLarge].forEach(el => { if (el) el.textContent = fallbackLocation; });
+    if (weatherDescription) weatherDescription.textContent = '--';
+    if (weatherHumidity) weatherHumidity.textContent = '--%';
+    if (weatherWind) weatherWind.textContent = '-- mph';
+    if (weatherFeelsLike) weatherFeelsLike.textContent = '--°';
+    if (weatherForecast) weatherForecast.innerHTML = '<div class="forecast-day"><div class="forecast-date">Forecast unavailable</div></div>';
     return;
   }
 
-  // Update icon
-  if (weatherIcon) {
-    const iconMap = {
-      'Clear': '☀️',
-      'Clouds': '☁️',
-      'Rain': '🌧️',
-      'Snow': '❄️',
-      'Thunderstorm': '⛈️',
-      'Drizzle': '🌦️',
-      'Mist': '🌫️',
-      'Fog': '🌫️',
-      'Haze': '🌫️'
-    };
-    weatherIcon.textContent = iconMap[weather.weather[0].main] || '🌤️';
-  }
+  // Icon mapping
+  const iconMap = {
+    'Clear': '☀️',
+    'Clouds': '☁️',
+    'Rain': '🌧️',
+    'Snow': '❄️',
+    'Thunderstorm': '⛈️',
+    'Drizzle': '🌦️',
+    'Mist': '🌫️',
+    'Fog': '🌫️',
+    'Haze': '🌫️'
+  };
 
-  // Update temperature
-  if (weatherTemp) {
-    const temp = Math.round(weather.main.temp);
-    const unit = units === 'imperial' ? '°F' : '°C';
-    weatherTemp.textContent = `${temp}${unit}`;
-  }
+  const weatherIconText = iconMap[currentWeather.weather[0].main] || '🌤️';
+  const temp = Math.round(currentWeather.main.temp);
+  const unit = units === 'imperial' ? '°F' : '°C';
+  const windUnit = units === 'imperial' ? 'mph' : 'm/s';
+  const feelsLike = Math.round(currentWeather.main.feels_like);
+  const humidity = currentWeather.main.humidity;
+  const windSpeed = Math.round(currentWeather.wind.speed);
 
-  // Update location
-  if (weatherLocation) {
-    weatherLocation.textContent = weather.name;
+  // Update header widget
+  if (weatherIcon) weatherIcon.textContent = weatherIconText;
+  if (weatherTemp) weatherTemp.textContent = `${temp}${unit}`;
+  if (weatherLocation) weatherLocation.textContent = currentWeather.name;
+
+  // Update bottom bar
+  if (weatherIconLarge) weatherIconLarge.textContent = weatherIconText;
+  if (weatherTempLarge) weatherTempLarge.textContent = `${temp}${unit}`;
+  if (weatherLocationLarge) weatherLocationLarge.textContent = currentWeather.name;
+  if (weatherDescription) weatherDescription.textContent = currentWeather.weather[0].description;
+  if (weatherHumidity) weatherHumidity.textContent = `${humidity}%`;
+  if (weatherWind) weatherWind.textContent = `${windSpeed} ${windUnit}`;
+  if (weatherFeelsLike) weatherFeelsLike.textContent = `${feelsLike}${unit}`;
+
+  // Update forecast
+  if (weatherForecast && forecastData) {
+    updateForecastDisplay(forecastData, units);
   }
+}
+
+function updateForecastDisplay(forecastData, units) {
+  const weatherForecast = document.getElementById('weather-forecast');
+  if (!weatherForecast) return;
+
+  // Group forecast by day and get daily high/low
+  const dailyForecasts = {};
+  const iconMap = {
+    'Clear': '☀️',
+    'Clouds': '☁️',
+    'Rain': '🌧️',
+    'Snow': '❄️',
+    'Thunderstorm': '⛈️',
+    'Drizzle': '🌦️',
+    'Mist': '🌫️',
+    'Fog': '🌫️',
+    'Haze': '🌫️'
+  };
+
+  forecastData.list.forEach(item => {
+    const date = new Date(item.dt * 1000);
+    const day = date.toLocaleDateString('en-US', { weekday: 'short' });
+    
+    if (!dailyForecasts[day]) {
+      dailyForecasts[day] = {
+        high: -Infinity,
+        low: Infinity,
+        icon: item.weather[0].main,
+        description: item.weather[0].description
+      };
+    }
+    
+    const temp = item.main.temp;
+    if (temp > dailyForecasts[day].high) {
+      dailyForecasts[day].high = temp;
+      dailyForecasts[day].icon = item.weather[0].main;
+    }
+    if (temp < dailyForecasts[day].low) {
+      dailyForecasts[day].low = temp;
+    }
+  });
+
+  // Generate forecast HTML
+  const unit = units === 'imperial' ? '°F' : '°C';
+  const forecastHTML = Object.entries(dailyForecasts).slice(0, 5).map(([day, forecast]) => {
+    const icon = iconMap[forecast.icon] || '🌤️';
+    const high = Math.round(forecast.high);
+    const low = Math.round(forecast.low);
+    
+    return `
+      <div class="forecast-day">
+        <div class="forecast-date">${day}</div>
+        <div class="forecast-icon">${icon}</div>
+        <div class="forecast-temp">
+          <span class="forecast-high">${high}°</span>
+          <span class="forecast-low">${low}°</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  weatherForecast.innerHTML = forecastHTML;
 } 
