@@ -2700,6 +2700,10 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-secondary);
     min-height: 300px;
+    max-height: 60vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .channel-list-title {
@@ -2711,11 +2715,12 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   }
 
   .channel-list {
-    max-height: 400px;
+    flex: 1;
     overflow-y: auto;
     background: var(--bg-primary);
     border-radius: 6px;
     padding: 10px;
+    min-height: 0;
   }
 
   .channel-item {
@@ -2769,6 +2774,8 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
     padding: 20px;
     background: var(--bg-tertiary);
     min-height: 200px;
+    max-height: 35vh;
+    flex-shrink: 0;
   }
 
   .remote-title {
@@ -2781,36 +2788,72 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
 
   .remote-controls {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
     background: var(--bg-primary);
-    padding: 15px;
-    border-radius: 6px;
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 280px;
+    margin: 0 auto;
   }
 
   .remote-btn {
-    padding: 12px;
-    border: none;
-    border-radius: 6px;
-    background: var(--bg-primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 12px;
+    border: 2px solid var(--border-light);
+    border-radius: 12px;
+    background: var(--bg-secondary);
     color: var(--text-primary);
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease;
+    min-height: 70px;
+    gap: 6px;
   }
 
   .remote-btn:hover {
-    background: var(--bg-hover);
-  }
-
-  .remote-btn.primary {
     background: var(--accent-color);
     color: white;
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
-  .remote-btn.primary:hover {
-    background: var(--accent-hover);
+  .remote-btn:active {
+    transform: translateY(0);
+  }
+
+  .remote-btn .btn-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .remote-btn .btn-text {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .remote-btn.channel-btn {
+    border-color: var(--primary-color);
+  }
+
+  .remote-btn.channel-btn:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+  }
+
+  .remote-btn.volume-btn {
+    border-color: var(--success-color);
+  }
+
+  .remote-btn.volume-btn:hover {
+    background: var(--success-color);
+    border-color: var(--success-color);
   }
 
   /* Hide mobile elements on desktop */
@@ -3186,8 +3229,7 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
 
 @media (max-width: 768px) {
   .weather-bottom-bar {
-    height: 100px;
-    padding: 0 var(--spacing-md);
+    display: none !important;
   }
   
   .weather-current {
@@ -3237,14 +3279,54 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   }
   
   .main-content {
-    height: calc(100vh - 50px - 100px) !important;
+    height: calc(100vh - 50px) !important;
   }
   
   .video-section {
-    height: calc(45vh - 50px) !important;
+    height: 50vh !important;
   }
   
   .sidebar {
-    height: calc(55vh - 100px) !important;
+    height: 50vh !important;
+  }
+}
+/* iOS-specific video behavior fixes */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari specific styles */
+  video {
+    -webkit-playsinline: true;
+    playsinline: true;
+  }
+  
+  .video-container {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  
+  /* Prevent iOS video fullscreen on tap */
+  video::-webkit-media-controls-fullscreen-button {
+    display: none !important;
+  }
+  
+  video::-webkit-media-controls {
+    -webkit-appearance: none;
+  }
+}
+
+/* Additional iOS touch improvements */
+@media (hover: none) and (pointer: coarse) {
+  .remote-btn {
+    min-height: 60px !important;
+    min-width: 60px !important;
+    font-size: 14px !important;
+  }
+  
+  .remote-btn .btn-icon {
+    font-size: 24px !important;
+  }
+  
+  .remote-btn .btn-text {
+    font-size: 12px !important;
   }
 }

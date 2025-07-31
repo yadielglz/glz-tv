@@ -1109,7 +1109,7 @@ function updateHeaderProgram(channelId) {
  * Theme Management
  */
 function initTheme() {
-  const savedTheme = localStorage.getItem('glz-theme') || 'light-glass';
+  const savedTheme = localStorage.getItem('glz-theme') || 'dark';
   setTheme(savedTheme);
 }
 

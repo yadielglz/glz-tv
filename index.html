@@ -50,7 +50,7 @@
         <!-- Video Player - Left 2/3 -->
         <div class="video-section">
             <div class="video-container">
-                <video id="video" controls autoplay muted>
+                <video id="video" controls autoplay playsinline>
                     Your browser does not support the video tag.
                 </video>
                 <audio id="audio" controls autoplay>
@@ -76,13 +76,22 @@
             <div class="remote-section">
                 <div class="remote-title">Remote</div>
                 <div class="remote-controls">
-                    <button class="remote-btn" id="channel-up-btn">CH+</button>
-                    <button class="remote-btn" id="volume-up-btn">VOL+</button>
-                    <button class="remote-btn" id="mute-btn">MUTE</button>
-                    <button class="remote-btn" id="channel-down-btn">CH-</button>
-                    <button class="remote-btn" id="volume-down-btn">VOL-</button>
-                    <button class="remote-btn" id="last-channel-btn">LAST</button>
-                    <button class="remote-btn" id="cc-btn">CC</button>
+                    <button class="remote-btn channel-btn" id="channel-up-btn" title="Channel Up">
+                        <span class="btn-icon">📺</span>
+                        <span class="btn-text">CH+</span>
+                    </button>
+                    <button class="remote-btn volume-btn" id="volume-up-btn" title="Volume Up">
+                        <span class="btn-icon">🔊</span>
+                        <span class="btn-text">VOL+</span>
+                    </button>
+                    <button class="remote-btn channel-btn" id="channel-down-btn" title="Channel Down">
+                        <span class="btn-icon">📺</span>
+                        <span class="btn-text">CH-</span>
+                    </button>
+                    <button class="remote-btn volume-btn" id="volume-down-btn" title="Volume Down">
+                        <span class="btn-icon">🔉</span>
+                        <span class="btn-text">VOL-</span>
+                    </button>
                 </div>
             </div>
         </div>
