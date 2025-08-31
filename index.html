@@ -13,58 +13,47 @@
 <body>
     <!-- Header Bar -->
     <header class="header">
-        <!-- Brand/Logo - Left -->
-        <div class="brand-logo">GLZ TV</div>
-        
-        <!-- Channel Information - Center-Left -->
-        <div class="channel-info">
-            <div class="channel-number" id="channel-number">--</div>
-            <div class="channel-logo">
-                <img id="channel-logo-img" src="" alt="" style="display: none;">
-                <div id="channel-logo-placeholder">TV</div>
-            </div>
-            <div class="channel-name" id="channel-name">Select Channel</div>
-        </div>
-        
-        <!-- Time Display - Center-Right -->
-        <div class="time-display" id="time-display">--:--</div>
-        
-        <!-- Weather Widget - Center-Right -->
-        <div class="weather-widget" id="weather-widget">
-            <div class="weather-icon" id="weather-icon">🌤️</div>
-            <div class="weather-info">
+        <!-- Row 1: GLZtv [left] Weather [center] Clock [right] -->
+        <div class="header-row-1">
+            <div class="brand-logo">GLZ TV</div>
+            <div class="weather-widget" id="weather-widget">
+                <div class="weather-icon" id="weather-icon">🌤️</div>
                 <div class="weather-temp" id="weather-temp">--°</div>
                 <div class="weather-location" id="weather-location">Loading...</div>
             </div>
+            <div class="time-display" id="time-display">--:--</div>
         </div>
-        
-        <!-- Control Buttons - Right -->
-        <div class="header-controls">
-            <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Channel List">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-            </button>
-            <button class="power-btn" id="power-btn" title="Power">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-                    <line x1="12" y1="2" x2="12" y2="12"></line>
-                </svg>
-            </button>
-            <button class="header-options-btn" id="header-options-btn" title="Options">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
-            </button>
+
+        <!-- Row 2: Channel Number [left] Channel Name [center] Controls [right] -->
+        <div class="header-row-2">
+            <div class="channel-info">
+                <div class="channel-number" id="channel-number">--</div>
+                <div class="channel-logo">
+                    <img id="channel-logo-img" src="" alt="" style="display: none;">
+                    <div id="channel-logo-placeholder">TV</div>
+                </div>
+                <div class="channel-name" id="channel-name">Select Channel</div>
+            </div>
+            <div class="header-controls">
+                <button class="power-btn" id="power-btn" title="Power">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                        <line x1="12" y1="2" x2="12" y2="12"></line>
+                    </svg>
+                </button>
+                <button class="header-options-btn" id="header-options-btn" title="Options">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+            </div>
         </div>
     </header>
 
     <!-- Main Content Area -->
     <div class="main-content">
-        <!-- Video Player - Full Width -->
+        <!-- Video Player - Top Half -->
         <div class="video-section">
             <div class="video-container">
                 <video id="video" controls autoplay playsinline>
@@ -79,9 +68,24 @@
             </div>
         </div>
 
-        <!-- Sidebar - Right Overlay -->
+        <!-- Separator Bar with Controls -->
+        <div class="mobile-separator">
+            <button class="power-btn" id="mobile-power-btn" title="Power">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                    <line x1="12" y1="2" x2="12" y2="12"></line>
+                </svg>
+            </button>
+            <button class="header-options-btn" id="mobile-options-btn" title="Options">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Channel List - Bottom Section -->
         <div class="sidebar">
-            <!-- Channel List -->
             <div class="channel-list-section">
                 <div class="channel-list-title">Channel List</div>
                 <div class="channel-list" id="channel-list">

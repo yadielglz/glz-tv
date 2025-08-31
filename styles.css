@@ -1542,15 +1542,14 @@ body {
 
 /* Mobile Design - Similar to Desktop but Optimized for Mobile */
 @media (max-width: 768px) {
-  /* Mobile Header - Compact version of desktop header */
+  /* Mobile Header - Two row layout */
   .header {
-    height: 60px;
-    padding: 0 16px;
+    height: 70px;
+    padding: 8px 12px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-light);
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     position: fixed;
     top: 0;
     left: 0;
@@ -1559,58 +1558,98 @@ body {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
-  .brand-logo {
-    font-size: 16px;
+  /* Header Row 1: GLZtv [left] Weather [center] Clock [right] */
+  .header-row-1 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .header-row-1 .brand-logo {
+    font-size: 14px;
     font-weight: 600;
   }
 
-  .channel-info {
+  .header-row-1 .weather-widget {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
+    padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
   }
 
-  .channel-number {
-    font-size: 12px;
-    padding: 3px 6px;
-    min-width: 32px;
+  .header-row-1 .weather-icon {
+    font-size: 14px;
   }
 
-  .channel-logo {
-    width: 20px;
-    height: 20px;
-  }
-
-  .channel-name {
+  .header-row-1 .weather-temp {
     font-size: 11px;
-    max-width: 60px;
+    font-weight: 600;
+  }
+
+  .header-row-1 .weather-location {
+    font-size: 8px;
+    max-width: 40px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .time-display {
+  .header-row-1 .time-display {
     font-size: 11px;
+    padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  /* Header Row 2: Channel Number [left] Channel Name [center] Controls [right] */
+  .header-row-2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .header-row-2 .channel-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+  }
+
+  .header-row-2 .channel-number {
+    font-size: 12px;
     padding: 3px 6px;
-    min-width: 40px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 4px;
+    font-weight: 600;
+    min-width: 32px;
+    text-align: center;
   }
 
-  .weather-widget {
-    padding: 3px 6px;
-    min-width: 60px;
+  .header-row-2 .channel-logo {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
   }
 
-  .weather-icon {
-    font-size: 16px;
+  .header-row-2 .channel-name {
+    font-size: 12px;
+    font-weight: 500;
+    flex: 1;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
   }
 
-  .weather-temp {
-    font-size: 11px;
-  }
-
-  .weather-location {
-    font-size: 8px;
-    max-width: 40px;
+  .header-row-2 .header-controls {
+    display: flex;
+    gap: 6px;
   }
 
   /* Hide sidebar toggle on mobile since channels are always visible */
@@ -1660,17 +1699,17 @@ body {
 
   /* Mobile Main Content - Vertical stack layout */
   .main-content {
-    height: calc(100vh - 60px);
-    margin-top: 60px;
+    height: calc(100vh - 70px);
+    margin-top: 70px;
     display: flex !important;
     flex-direction: column !important;
     background: var(--bg-primary);
     position: relative;
   }
 
-  /* Mobile Video Section - Top portion */
+  /* Mobile Video Section - Top half */
   .video-section {
-    height: 60vh; /* 60% of viewport height */
+    height: 50vh; /* Top half of remaining space */
     position: relative;
     background: var(--bg-primary);
     display: flex;
@@ -1699,6 +1738,52 @@ body {
     max-height: 100%;
   }
 
+  /* Mobile Separator Bar with Controls */
+  .mobile-separator {
+    height: 50px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+
+  .mobile-separator .power-btn,
+  .mobile-separator .header-options-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--border-light);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-separator .power-btn:hover,
+  .mobile-separator .header-options-btn:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: var(--text-light);
+    transform: scale(1.1);
+  }
+
+  .mobile-separator .power-btn {
+    border-color: var(--error-color);
+    color: var(--error-color);
+  }
+
+  .mobile-separator .power-btn:hover {
+    background: var(--error-color);
+    border-color: var(--error-color);
+  }
+
   /* Mobile Channel List - Bottom portion */
   .sidebar {
     flex: 1;
@@ -1711,10 +1796,10 @@ body {
     transform: none;
   }
   
-  /* Mobile Channel List Section - Bottom layout */
+  /* Mobile Channel List Section - Compact bottom layout */
   .channel-list-section {
     flex: 1;
-    padding: 16px;
+    padding: 8px;
     background: var(--bg-secondary);
     overflow: hidden;
     display: flex;
@@ -1723,19 +1808,20 @@ body {
   }
 
   .channel-list-title {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
     color: var(--text-primary);
     text-align: center;
+    padding: 4px 0;
   }
 
   .channel-list {
     flex: 1;
     overflow-y: auto;
     background: var(--bg-primary);
-    border-radius: 12px;
-    padding: 12px;
+    border-radius: 8px;
+    padding: 8px;
     border: 1px solid var(--border-light);
     min-height: 0; /* Allow flex shrinking */
   }
@@ -1743,15 +1829,15 @@ body {
   .channel-item {
     display: flex;
     align-items: center;
-    padding: 14px;
-    margin-bottom: 6px;
-    border-radius: 10px;
-    gap: 14px;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    gap: 10px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-light);
     cursor: pointer;
     transition: all 0.2s ease;
-    min-height: 60px;
+    min-height: 44px;
     touch-action: manipulation;
   }
 
@@ -1773,6 +1859,26 @@ body {
     border-color: var(--primary-color);
     color: var(--text-light);
     box-shadow: var(--shadow-md);
+  }
+
+  .channel-item img {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+  }
+
+  .channel-number-small {
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 24px;
+  }
+
+  .channel-name-small {
+    font-size: 11px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .channel-item img {

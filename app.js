@@ -1716,6 +1716,13 @@ if (headerRemoteBtn) headerRemoteBtn.onclick = toggleRemoteVisibility;
 if (mobileRemoteBtn) mobileRemoteBtn.onclick = toggleRemoteVisibility;
 if (mobileChannelToggle) mobileChannelToggle.onclick = toggleMobileChannelList;
 
+// Mobile separator buttons
+const mobilePowerBtn = document.getElementById('mobile-power-btn');
+const mobileOptionsBtn = document.getElementById('mobile-options-btn');
+
+if (mobilePowerBtn) mobilePowerBtn.onclick = () => setStandby(!standby);
+if (mobileOptionsBtn) mobileOptionsBtn.onclick = showOptions;
+
 // Sidebar toggle functionality
 const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
 if (sidebarToggleBtn) {
