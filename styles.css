@@ -1613,7 +1613,12 @@ body {
     max-width: 40px;
   }
 
-  .sidebar-toggle-btn, .power-btn, .header-options-btn {
+  /* Hide sidebar toggle on mobile since channels are always visible */
+  .sidebar-toggle-btn {
+    display: none;
+  }
+
+  .power-btn, .header-options-btn {
     width: 44px;
     height: 44px;
     font-size: 16px;
@@ -1628,7 +1633,6 @@ body {
     transition: all 0.2s ease;
   }
 
-  .sidebar-toggle-btn .btn-icon,
   .power-btn .btn-icon,
   .header-options-btn .btn-icon {
     width: 20px;
@@ -1636,7 +1640,6 @@ body {
     stroke-width: 2.5;
   }
 
-  .sidebar-toggle-btn:hover,
   .power-btn:hover,
   .header-options-btn:hover {
     background: var(--primary-color);
@@ -1655,24 +1658,26 @@ body {
     border-color: var(--error-color);
   }
 
-  /* Mobile Main Content - Full height layout */
+  /* Mobile Main Content - Vertical stack layout */
   .main-content {
     height: calc(100vh - 60px);
     margin-top: 60px;
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
     background: var(--bg-primary);
     position: relative;
   }
 
-  /* Mobile Video Section - Full width */
+  /* Mobile Video Section - Top portion */
   .video-section {
-    height: calc(100vh - 60px);
+    height: 60vh; /* 60% of viewport height */
     position: relative;
     background: var(--bg-primary);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    flex-shrink: 0;
     transition: all 0.3s ease;
   }
 
@@ -1694,77 +1699,80 @@ body {
     max-height: 100%;
   }
 
-  /* Mobile Sidebar - Full height overlay */
+  /* Mobile Channel List - Bottom portion */
   .sidebar {
-    position: fixed;
-    top: 60px;
-    right: 0;
-    bottom: 0;
-    width: 300px;
+    flex: 1;
+    position: static;
     background: var(--bg-secondary);
-    border-left: 1px solid var(--border-light);
+    border-top: 1px solid var(--border-light);
     display: flex;
     flex-direction: column;
-    box-shadow: var(--shadow-xl);
-    z-index: 200;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-  }
-
-  .sidebar.open {
-    transform: translateX(0);
+    min-height: 0; /* Allow flex shrinking */
+    transform: none;
   }
   
-  /* Mobile Channel List Section */
+  /* Mobile Channel List Section - Bottom layout */
   .channel-list-section {
     flex: 1;
-    padding: 12px;
+    padding: 16px;
     background: var(--bg-secondary);
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    height: 100%;
+    min-height: 0; /* Allow flex shrinking */
   }
 
   .channel-list-title {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
     color: var(--text-primary);
+    text-align: center;
   }
 
   .channel-list {
     flex: 1;
     overflow-y: auto;
     background: var(--bg-primary);
-    border-radius: 8px;
-    padding: 8px;
+    border-radius: 12px;
+    padding: 12px;
     border: 1px solid var(--border-light);
+    min-height: 0; /* Allow flex shrinking */
   }
 
   .channel-item {
     display: flex;
     align-items: center;
-    padding: 12px;
-    margin-bottom: 4px;
-    border-radius: 8px;
-    gap: 12px;
+    padding: 14px;
+    margin-bottom: 6px;
+    border-radius: 10px;
+    gap: 14px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-light);
     cursor: pointer;
     transition: all 0.2s ease;
-    min-height: 50px;
+    min-height: 60px;
+    touch-action: manipulation;
   }
 
   .channel-item:hover {
     background: var(--bg-tertiary);
-    transform: translateX(2px);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .channel-item:active {
+    transform: translateY(0);
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: var(--text-light);
   }
 
   .channel-item.active {
     background: var(--primary-color);
     border-color: var(--primary-color);
     color: var(--text-light);
+    box-shadow: var(--shadow-md);
   }
 
   .channel-item img {
