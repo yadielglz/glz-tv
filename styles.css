@@ -1542,14 +1542,14 @@ body {
 
 /* Mobile Design - Similar to Desktop but Optimized for Mobile */
 @media (max-width: 768px) {
-  /* Mobile Header - Two row layout */
+  /* Mobile Header - Single row layout */
   .header {
-    height: 70px;
+    height: 50px;
     padding: 8px 12px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-light);
     display: flex;
-    flex-direction: column;
+    align-items: center;
     position: fixed;
     top: 0;
     left: 0;
@@ -1563,21 +1563,23 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 4px;
+    width: 100%;
   }
 
   .header-row-1 .brand-logo {
     font-size: 14px;
     font-weight: 600;
+    flex-shrink: 0;
   }
 
   .header-row-1 .weather-widget {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 6px;
+    padding: 4px 8px;
     background: var(--bg-tertiary);
-    border-radius: 4px;
+    border-radius: 6px;
+    flex-shrink: 0;
   }
 
   .header-row-1 .weather-icon {
@@ -1585,72 +1587,27 @@ body {
   }
 
   .header-row-1 .weather-temp {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
   }
 
   .header-row-1 .weather-location {
-    font-size: 8px;
-    max-width: 40px;
+    font-size: 9px;
+    max-width: 50px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .header-row-1 .time-display {
-    font-size: 11px;
-    padding: 2px 6px;
+    font-size: 12px;
+    padding: 4px 8px;
     background: var(--bg-tertiary);
-    border-radius: 4px;
+    border-radius: 6px;
     font-weight: 600;
+    flex-shrink: 0;
   }
 
-  /* Header Row 2: Channel Number [left] Channel Name [center] Controls [right] */
-  .header-row-2 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .header-row-2 .channel-info {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex: 1;
-  }
-
-  .header-row-2 .channel-number {
-    font-size: 12px;
-    padding: 3px 6px;
-    background: var(--primary-color);
-    color: white;
-    border-radius: 4px;
-    font-weight: 600;
-    min-width: 32px;
-    text-align: center;
-  }
-
-  .header-row-2 .channel-logo {
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-  }
-
-  .header-row-2 .channel-name {
-    font-size: 12px;
-    font-weight: 500;
-    flex: 1;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 120px;
-  }
-
-  .header-row-2 .header-controls {
-    display: flex;
-    gap: 6px;
-  }
 
   /* Hide sidebar toggle on mobile since channels are always visible */
   .sidebar-toggle-btn {
@@ -1699,8 +1656,8 @@ body {
 
   /* Mobile Main Content - Vertical stack layout */
   .main-content {
-    height: calc(100vh - 70px);
-    margin-top: 70px;
+    height: calc(100vh - 50px);
+    margin-top: 50px;
     display: flex !important;
     flex-direction: column !important;
     background: var(--bg-primary);
@@ -1738,23 +1695,88 @@ body {
     max-height: 100%;
   }
 
-  /* Mobile Separator Bar with Controls */
+  /* Mobile Separator Bar with Channel Info and Controls */
   .mobile-separator {
-    height: 50px;
+    height: 60px;
     background: var(--bg-secondary);
     border-top: 1px solid var(--border-light);
     border-bottom: 1px solid var(--border-light);
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 20px;
+    justify-content: space-between;
+    padding: 0 16px;
     flex-shrink: 0;
   }
 
-  .mobile-separator .power-btn,
-  .mobile-separator .header-options-btn {
-    width: 40px;
-    height: 40px;
+  .separator-channel-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .separator-channel-info .channel-number {
+    font-size: 14px;
+    padding: 4px 8px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 6px;
+    font-weight: 600;
+    min-width: 36px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .separator-channel-info .channel-logo {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .separator-channel-info .channel-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 3px;
+  }
+
+  .separator-channel-info .channel-logo-placeholder {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .separator-channel-info .channel-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .separator-controls {
+    display: flex;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .separator-controls .power-btn,
+  .separator-controls .header-options-btn {
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     border: 2px solid var(--border-light);
     background: var(--bg-tertiary);
@@ -1766,20 +1788,20 @@ body {
     transition: all 0.2s ease;
   }
 
-  .mobile-separator .power-btn:hover,
-  .mobile-separator .header-options-btn:hover {
+  .separator-controls .power-btn:hover,
+  .separator-controls .header-options-btn:hover {
     background: var(--primary-color);
     border-color: var(--primary-color);
     color: var(--text-light);
-    transform: scale(1.1);
+    transform: scale(1.05);
   }
 
-  .mobile-separator .power-btn {
+  .separator-controls .power-btn {
     border-color: var(--error-color);
     color: var(--error-color);
   }
 
-  .mobile-separator .power-btn:hover {
+  .separator-controls .power-btn:hover {
     background: var(--error-color);
     border-color: var(--error-color);
   }
