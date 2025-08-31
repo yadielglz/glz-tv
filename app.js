@@ -261,7 +261,6 @@ let standby = true;
 let hls = null;
 let lastChannel = 0;
 let favorites = JSON.parse(localStorage.getItem('glz-favorites') || '[]');
-let isMuted = false;
 let connectionStatus = 'connected';
 let channelInput = '';
 let pwaInstallPrompt = null;
@@ -340,13 +339,7 @@ const miniGuide = document.getElementById('mini-guide');
 const miniGuideClose = document.getElementById('mini-guide-close');
 const miniGuideContent = document.getElementById('mini-guide-content');
 
-// Remote control elements (updated IDs to match new HTML)
-const volumeDownBtn = document.getElementById('volume-down-btn');
-const volumeUpBtn = document.getElementById('volume-up-btn');
-const muteBtn = document.getElementById('mute-btn');
-const channelDownBtn = document.getElementById('channel-down-btn');
-const channelUpBtn = document.getElementById('channel-up-btn');
-const lastChannelBtn = document.getElementById('last-channel-btn');
+// Remote control elements removed - no longer needed
 
 // --- EPG Functions ---
 
@@ -1290,36 +1283,7 @@ function showFavorites() {
   showStatus(`Showing ${favoriteChannels.length} favorite channels`);
 }
 
-// Volume Controls
-function adjustVolume(delta) {
-  const currentVolume = video.volume || audio.volume || 0;
-  const newVolume = Math.max(0, Math.min(1, currentVolume + delta));
-  
-  video.volume = newVolume;
-  audio.volume = newVolume;
-  
-  showStatus(`Volume: ${Math.round(newVolume * 100)}%`);
-}
-
-function toggleMute() {
-  isMuted = !isMuted;
-  video.muted = isMuted;
-  audio.muted = isMuted;
-  
-  muteBtn.classList.toggle('muted', isMuted);
-  showStatus(isMuted ? 'Muted' : 'Unmuted');
-}
-
-// Channel Navigation
-function goToLastChannel() {
-  if (lastChannel !== current && channels[lastChannel]) {
-    const temp = current;
-    current = lastChannel;
-    lastChannel = temp;
-    playChannel(current);
-    showStatus('Last channel');
-  }
-}
+// Volume and remote controls removed - no longer needed
 
 function toggleClosedCaptions() {
   const video = document.getElementById('video');
@@ -1752,6 +1716,20 @@ if (headerRemoteBtn) headerRemoteBtn.onclick = toggleRemoteVisibility;
 if (mobileRemoteBtn) mobileRemoteBtn.onclick = toggleRemoteVisibility;
 if (mobileChannelToggle) mobileChannelToggle.onclick = toggleMobileChannelList;
 
+// Sidebar toggle functionality
+const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+if (sidebarToggleBtn) {
+  sidebarToggleBtn.onclick = () => {
+    const sidebar = document.querySelector('.sidebar');
+    const mainContent = document.querySelector('.main-content');
+    if (sidebar && mainContent) {
+      const isOpen = sidebar.classList.toggle('open');
+      sidebarToggleBtn.classList.toggle('active', isOpen);
+      mainContent.classList.toggle('sidebar-open', isOpen);
+    }
+  };
+}
+
 // Options panel controls
 if (headerOptionsBtn) headerOptionsBtn.onclick = showOptions;
 if (closeOptions) closeOptions.onclick = hideOptions;
@@ -1792,24 +1770,7 @@ if (nextBtn) nextBtn.onclick = () => {
   }
 };
 
-// Enhanced remote controls
-if (volumeDownBtn) volumeDownBtn.onclick = () => adjustVolume(-0.1);
-if (volumeUpBtn) volumeUpBtn.onclick = () => adjustVolume(0.1);
-if (muteBtn) muteBtn.onclick = toggleMute;
-if (channelDownBtn) channelDownBtn.onclick = () => {
-  if (!standby && channels.length > 0) {
-    lastChannel = current;
-    playChannel((current - 1 + channels.length) % channels.length);
-  }
-};
-if (channelUpBtn) channelUpBtn.onclick = () => {
-  if (!standby && channels.length > 0) {
-    lastChannel = current;
-    playChannel((current + 1) % channels.length);
-  }
-};
-if (lastChannelBtn) lastChannelBtn.onclick = goToLastChannel;
-// PWA and connection status buttons removed from new layout
+// Remote controls removed - no longer needed
 
 if (searchInput) searchInput.oninput = (e) => renderChannelList(e.target.value);
 
@@ -1939,12 +1900,7 @@ function showChannelBanner() {
     'channelNumber': channelNumber,
     'channelName': channelName,
     'powerBtn': powerBtn,
-    'volumeDownBtn': volumeDownBtn,
-    'volumeUpBtn': volumeUpBtn,
-    'muteBtn': muteBtn,
-    'channelDownBtn': channelDownBtn,
-    'channelUpBtn': channelUpBtn,
-    'lastChannelBtn': lastChannelBtn,
+    // Remote control buttons removed - no longer needed
     // 'pwaInstallBtn': pwaInstallBtn, // Removed from new layout
     // 'connectionStatusBtn': connectionStatusBtn // Removed from new layout
   };
@@ -2041,34 +1997,7 @@ function showChannelBanner() {
     });
   }
 
-  // Remote button event listeners
-  const remoteButtons = {
-    'channel-up-btn': () => {
-      if (currentChannelIndex < channels.length - 1) {
-        playChannel(currentChannelIndex + 1);
-      }
-    },
-    'channel-down-btn': () => {
-      if (currentChannelIndex > 0) {
-        playChannel(currentChannelIndex - 1);
-      }
-    },
-    'volume-up-btn': () => adjustVolume(0.1),
-    'volume-down-btn': () => adjustVolume(-0.1),
-    'mute-btn': () => toggleMute(),
-    'last-channel-btn': () => goToLastChannel(),
-    'cc-btn': () => toggleClosedCaptions()
-  };
-
-  // Add event listeners to remote buttons
-  Object.entries(remoteButtons).forEach(([id, handler]) => {
-    const button = document.getElementById(id);
-    if (button) {
-      button.addEventListener('click', handler);
-    } else {
-      console.warn(`Remote button not found: ${id}`);
-    }
-  });
+  // Remote button event listeners removed - no longer needed
   
   // EPG functionality removed
   

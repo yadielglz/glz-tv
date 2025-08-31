@@ -332,11 +332,15 @@ body {
   position: relative;
   display: flex;
   overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.main-content.sidebar-open {
+  display: flex;
 }
 
 /* Video Container */
 .video-container {
-  flex: 1;
   position: relative;
   background: var(--bg-primary);
   display: flex;
@@ -347,6 +351,7 @@ body {
   margin: var(--spacing-md);
   box-shadow: var(--shadow-lg);
   height: calc(100vh - 80px - 2 * var(--spacing-md)); /* Account for header height and margins */
+  width: calc(100vw - 2 * var(--spacing-md)); /* Full width minus margins */
 }
 
 .video-container video,
@@ -660,17 +665,7 @@ body {
   white-space: nowrap;
 }
 
-/* Mobile-specific optimizations */
-.mobile-device .remote-control {
-  display: block !important;
-}
-
-.mobile-device .remote-btn,
-.mobile-device .numpad-btn {
-  min-height: 48px; /* Larger touch targets */
-  min-width: 48px;
-}
-
+/* Mobile-specific optimizations - remote controls removed */
 .mobile-device .channel-item {
   padding: var(--spacing-md);
   min-height: 60px;
@@ -681,14 +676,6 @@ body {
   left: var(--spacing-md);
   right: var(--spacing-md);
   max-width: none;
-}
-
-/* Mobile touch feedback */
-.mobile-device .remote-btn:active,
-.mobile-device .numpad-btn:active,
-.mobile-device .channel-item:active {
-  transform: scale(0.95);
-  transition: transform 0.1s ease;
 }
 
 /* Mobile video controls */
@@ -948,189 +935,7 @@ body {
   color: var(--text-primary);
 }
 
-/* Compact Remote Control */
-.remote-control {
-  position: fixed;
-  right: var(--spacing-lg);
-  bottom: calc(-100% - var(--spacing-lg));
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  z-index: 200;
-  min-width: 320px;
-  max-width: 380px;
-  transition: var(--transition-normal);
-  display: block;
-}
-
-.remote-control.visible {
-  bottom: var(--spacing-lg);
-}
-
-.remote-header {
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--border-light);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-}
-
-.remote-title {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-size: 1rem;
-  color: var(--primary-color);
-}
-
-.toggle-remote {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-light);
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: var(--spacing-sm);
-  border-radius: var(--radius-md);
-  transition: var(--transition-normal);
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.toggle-remote:hover {
-  background: var(--primary-color);
-  color: var(--text-light);
-  transform: scale(1.1);
-}
-
-.remote-body {
-  padding: var(--spacing-lg);
-}
-
-.remote-section {
-  margin-bottom: var(--spacing-lg);
-}
-
-.remote-section:last-child {
-  margin-bottom: 0;
-}
-
-.numpad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-sm);
-}
-
-.numpad-btn {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition-normal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  font-size: 1.125rem;
-}
-
-.numpad-btn:hover {
-  background: var(--primary-color);
-  color: var(--text-light);
-  border-color: var(--primary-color);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.numpad-btn:active {
-  transform: translateY(0);
-}
-
-/* Enhanced Remote Controls */
-.volume-controls,
-.channel-nav,
-.quick-actions {
-  display: flex;
-  gap: var(--spacing-sm);
-  justify-content: center;
-  align-items: center;
-}
-
-.nav-buttons {
-  display: flex;
-  gap: var(--spacing-md);
-  justify-content: center;
-}
-
-.remote-btn {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition-normal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  min-width: 48px;
-}
-
-.remote-btn:hover {
-  background: var(--primary-color);
-  color: var(--text-light);
-  border-color: var(--primary-color);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.remote-btn:active {
-  transform: translateY(0);
-}
-
-/* Special button states */
-.remote-btn.mute.muted {
-  background: var(--error-color);
-  border-color: var(--error-color);
-}
-
-.remote-btn.connection-status.connected {
-  border-color: var(--success-color);
-}
-
-.remote-btn.connection-status.disconnected {
-  border-color: var(--error-color);
-}
-
-.remote-btn.favorites.active {
-  background: var(--secondary-color);
-  border-color: var(--secondary-color);
-  color: var(--text-light);
-}
-
-/* Number pad enhancements */
-.numpad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-sm);
-}
-
-.numpad-btn.enter {
-  grid-column: span 3;
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: var(--text-light);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
+/* Remote controls removed - no longer needed */
 
 /* Status Messages */
 .status-message {
@@ -1703,11 +1508,9 @@ body {
     display: none !important;
   }
   
-  /* Ensure desktop layout is not affected by mobile changes */
+  /* Ensure desktop layout works with new structure */
   .main-content {
     display: block !important;
-    flex-direction: unset !important;
-    height: auto !important;
   }
   
   .video-container {
@@ -1802,29 +1605,36 @@ body {
   }
 
   .power-btn, .header-options-btn {
-    width: 28px;
-    height: 28px;
-    font-size: 9px;
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
   }
 
-  /* Mobile Main Content - Vertical layout like desktop */
+  .power-btn .btn-icon,
+  .header-options-btn .btn-icon {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
+  }
+
+  /* Mobile Main Content - Full height layout */
   .main-content {
     height: calc(100vh - 50px);
     margin-top: 50px;
-    display: flex !important;
-    flex-direction: column !important;
+    display: block !important;
     background: var(--bg-primary);
   }
-  
-  /* Mobile Video Section - Balanced height */
+
+  /* Mobile Video Section - Full width */
   .video-section {
-    height: 45vh;
+    height: calc(100vh - 50px);
     position: relative;
     background: var(--bg-primary);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    transition: all 0.3s ease;
   }
 
   .video-container {
@@ -1834,6 +1644,7 @@ body {
     align-items: center;
     justify-content: center;
     position: relative;
+    margin: 0;
   }
 
   #video, #audio {
@@ -1844,14 +1655,25 @@ body {
     max-height: 100%;
   }
 
-  /* Mobile Sidebar - Takes remaining space below video */
+  /* Mobile Sidebar - Full height overlay */
   .sidebar {
+    position: fixed;
+    top: 50px;
+    right: 0;
+    bottom: 0;
+    width: 280px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-light);
     display: flex;
     flex-direction: column;
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border-color);
-    height: calc(55vh - 50px); /* Remaining space after header and video */
-    overflow: hidden;
+    box-shadow: var(--shadow-xl);
+    z-index: 100;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
   }
   
   /* Mobile Channel List Section */
@@ -1900,12 +1722,7 @@ body {
     font-size: 9px;
   }
   
-  /* Mobile Remote Section - Hidden on mobile */
-  .remote-section {
-    display: none;
-  }
-
-  /* Remote controls hidden on mobile - not needed */
+  /* Remote controls removed - no longer needed */
   
   /* Mobile-specific optimizations */
   .mobile-only {
@@ -2207,21 +2024,7 @@ body {
     margin: var(--spacing-sm);
   }
 
-  .remote-control {
-    right: var(--spacing-sm);
-    left: var(--spacing-sm);
-    min-width: auto;
-    max-width: none;
-    width: calc(100vw - (2 * var(--spacing-sm)));
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-    max-height: 70vh;
-    overflow-y: auto;
-    z-index: 200;
-  }
-  
-  .remote-control.visible {
-    bottom: 0;
-  }
+  /* Remote controls removed - no longer needed */
   
   /* Ensure no scrolling on mobile */
   body {
@@ -2258,39 +2061,23 @@ body {
 
 /* Touch Device Optimizations */
 @media (hover: none) and (pointer: coarse) {
-  .remote-btn:hover,
-  .numpad-btn:hover,
   .channel-item:hover,
   .header-btn:hover,
   .mini-guide-item:hover {
     transform: none;
   }
-  
-  .remote-btn:active,
-  .numpad-btn:active,
+
   .channel-item:active,
   .header-btn:active,
   .mini-guide-item:active {
     transform: scale(0.95);
   }
-  
-  /* Mobile remote control improvements */
-  .remote-control .remote-btn,
-  .remote-control .numpad-btn {
-    min-height: 56px;
-    min-width: 56px;
-    font-size: 1.1rem;
-  }
-  
-  .remote-control .remote-section {
-    margin-bottom: var(--spacing-xl);
-  }
-  
+
   /* Touch-friendly spacing */
   .mini-guide-item {
     min-height: 60px;
   }
-  
+
   .mini-guide-close {
     min-width: 44px;
     min-height: 44px;
@@ -2318,7 +2105,8 @@ body {
 
 /* Focus Styles for Accessibility */
 button:focus,
-input:focus {
+input:focus,
+.channel-item:focus {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }
@@ -2399,8 +2187,10 @@ button:active {
   transition: transform 0.1s ease;
 }
 
+/* Remote controls removed - no longer needed */
+
 /* Simple Transitions for All Interactive Elements */
-button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
+button, input, .channel-item, .header-btn {
   transition: all 0.2s ease;
 }
 
@@ -2424,15 +2214,7 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   transition: all 0.2s ease;
 }
 
-/* Simple Remote Control */
-.remote-control {
-  transition: all 0.2s ease;
-}
-
-.remote-control.visible {
-  bottom: var(--spacing-lg);
-  transform: translateY(0);
-}
+/* Remote controls removed - no longer needed */
 
 /* Simple Guide */
 .channel-guide {
@@ -2614,21 +2396,118 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
     gap: 10px;
   }
 
-  .power-btn, .header-options-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: none;
-    background: var(--accent-color);
-    color: white;
-    font-size: 12px;
-    font-weight: 500;
+  .sidebar-toggle-btn, .power-btn, .header-options-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: 2px solid var(--border-light);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 600;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
   }
 
-  .power-btn:hover, .header-options-btn:hover {
-    background: var(--accent-hover);
+  .sidebar-toggle-btn {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+  }
+
+  .sidebar-toggle-btn:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  }
+
+  .sidebar-toggle-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: var(--text-light);
+  }
+
+  .sidebar-toggle-btn.active .btn-icon {
+    stroke: var(--text-light);
+  }
+
+  .sidebar-toggle-btn .btn-icon,
+  .power-btn .btn-icon,
+  .header-options-btn .btn-icon {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+    transition: all 0.2s ease;
+  }
+
+  .sidebar-toggle-btn:hover, .power-btn:hover, .header-options-btn:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: var(--text-light);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  }
+
+  .sidebar-toggle-btn:hover .btn-icon,
+  .power-btn:hover .btn-icon,
+  .header-options-btn:hover .btn-icon {
+    stroke: var(--text-light);
+    transform: scale(1.1);
+  }
+
+  .sidebar-toggle-btn:hover .btn-icon {
+    stroke: var(--text-light);
+  }
+
+  /* Add subtle glow effect */
+  .power-btn::before,
+  .header-options-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: inherit;
+    background: inherit;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: -1;
+  }
+
+  .power-btn:hover::before,
+  .header-options-btn:hover::before {
+    opacity: 0.1;
+    box-shadow: 0 0 20px rgba(37, 99, 235, 0.4);
+  }
+
+  .power-btn:hover::before {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+  }
+
+  .power-btn:active, .header-options-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+  }
+
+  /* Power button special styling */
+  .power-btn {
+    border-color: var(--error-color);
+    color: var(--error-color);
+  }
+
+  .power-btn:hover {
+    background: var(--error-color);
+    border-color: var(--error-color);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  }
+
+  .power-btn:hover .btn-icon {
+    stroke: var(--text-light);
   }
 
   /* Main Content Area */
@@ -2682,28 +2561,58 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
     background: #000000;
   }
 
-  /* Sidebar - Right 1/3 */
+  /* Sidebar - Right Overlay (Mobile) / Split Layout (Desktop) */
   .sidebar {
-    flex: 1;
+    position: fixed;
+    top: 60px; /* Below header */
+    right: 0;
+    bottom: 120px; /* Above weather bar */
+    width: 320px;
     background: var(--bg-secondary);
-    border-left: 1px solid var(--border-color);
+    border-left: 1px solid var(--border-light);
     display: flex;
     flex-direction: column;
-    min-width: 300px;
-    max-width: 400px;
+    box-shadow: var(--shadow-xl);
+    z-index: 100;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
   }
 
-  /* Channel List - Top */
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Desktop split layout when sidebar is open */
+  @media (min-width: 769px) {
+    .main-content.sidebar-open .video-section {
+      flex: 2;
+      width: 66.67%;
+    }
+
+    .main-content.sidebar-open .sidebar {
+      position: static;
+      flex: 1;
+      width: 33.33%;
+      transform: translateX(0);
+      box-shadow: none;
+      border-left: 1px solid var(--border-light);
+      border-radius: 0;
+    }
+
+    .main-content.sidebar-open .sidebar.open {
+      transform: translateX(0);
+    }
+  }
+
+  /* Channel List Section */
   .channel-list-section {
     flex: 1;
     padding: 20px;
-    border-bottom: 1px solid var(--border-color);
     background: var(--bg-secondary);
-    min-height: 300px;
-    max-height: 60vh;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
+    height: 100%;
+    overflow: hidden;
   }
 
   .channel-list-title {
@@ -2769,92 +2678,7 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
     margin-top: 2px;
   }
 
-  /* Remote - Bottom */
-  .remote-section {
-    padding: 20px;
-    background: var(--bg-tertiary);
-    min-height: 200px;
-    max-height: 35vh;
-    flex-shrink: 0;
-  }
-
-  .remote-title {
-    font-family: 'Google Sans', sans-serif;
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--text-primary);
-    margin-bottom: 15px;
-  }
-
-  .remote-controls {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-    background: var(--bg-primary);
-    padding: 20px;
-    border-radius: 8px;
-    max-width: 280px;
-    margin: 0 auto;
-  }
-
-  .remote-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 16px 12px;
-    border: 2px solid var(--border-light);
-    border-radius: 12px;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    min-height: 70px;
-    gap: 6px;
-  }
-
-  .remote-btn:hover {
-    background: var(--accent-color);
-    color: white;
-    border-color: var(--accent-color);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  }
-
-  .remote-btn:active {
-    transform: translateY(0);
-  }
-
-  .remote-btn .btn-icon {
-    font-size: 20px;
-    line-height: 1;
-  }
-
-  .remote-btn .btn-text {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-  }
-
-  .remote-btn.channel-btn {
-    border-color: var(--primary-color);
-  }
-
-  .remote-btn.channel-btn:hover {
-    background: var(--primary-color);
-    border-color: var(--primary-color);
-  }
-
-  .remote-btn.volume-btn {
-    border-color: var(--success-color);
-  }
-
-  .remote-btn.volume-btn:hover {
-    background: var(--success-color);
-    border-color: var(--success-color);
-  }
+  /* Remote controls removed - no longer needed */
 
   /* Hide mobile elements on desktop */
   .mobile-only {
@@ -3077,7 +2901,7 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   }
 } 
 
-/* Weather Bottom Bar */
+/* Weather Bottom Bar - Clean and Organized */
 .weather-bottom-bar {
   position: fixed;
   bottom: 0;
@@ -3094,6 +2918,7 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   transition: var(--transition-normal);
 }
 
+/* Current Weather Section */
 .weather-current {
   display: flex;
   align-items: center;
@@ -3110,6 +2935,7 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
 .weather-icon-large {
   font-size: 3rem;
   line-height: 1;
+  color: var(--text-primary);
 }
 
 .weather-current-info {
@@ -3137,8 +2963,10 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   font-size: 1rem;
   color: var(--text-secondary);
   text-transform: capitalize;
+  font-weight: 500;
 }
 
+/* Weather Details */
 .weather-details {
   display: flex;
   flex-direction: column;
@@ -3151,6 +2979,7 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   justify-content: space-between;
   align-items: center;
   gap: var(--spacing-md);
+  padding: var(--spacing-xs) 0;
 }
 
 .detail-label {
@@ -3165,6 +2994,7 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   font-weight: 600;
 }
 
+/* Weather Forecast */
 .weather-forecast {
   display: flex;
   gap: var(--spacing-lg);
@@ -3183,11 +3013,13 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   padding: var(--spacing-sm);
   border-radius: var(--radius-md);
   transition: var(--transition-normal);
+  cursor: pointer;
 }
 
 .forecast-day:hover {
   background: var(--bg-tertiary);
   transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .forecast-date {
@@ -3200,12 +3032,14 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
 .forecast-icon {
   font-size: 1.5rem;
   line-height: 1;
+  color: var(--text-primary);
 }
 
 .forecast-temp {
   font-size: 0.875rem;
-  color: var(--text-primary);
   font-weight: 600;
+  display: flex;
+  gap: var(--spacing-xs);
 }
 
 .forecast-high {
@@ -3227,53 +3061,55 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   }
 }
 
+/* Mobile Weather Bar - Hidden on mobile for cleaner interface */
 @media (max-width: 768px) {
   .weather-bottom-bar {
     display: none !important;
   }
-  
+
+  /* Compact weather styles for any mobile weather displays */
   .weather-current {
     gap: var(--spacing-md);
   }
-  
+
   .weather-current-main {
     gap: var(--spacing-md);
   }
-  
+
   .weather-icon-large {
     font-size: 2rem;
   }
-  
+
   .weather-temp-large {
     font-size: 1.75rem;
   }
-  
+
   .weather-location-large {
     font-size: 1rem;
   }
-  
+
   .weather-description {
     font-size: 0.875rem;
   }
-  
+
   .weather-details {
     min-width: 120px;
   }
-  
+
   .weather-forecast {
     gap: var(--spacing-md);
     padding-left: var(--spacing-md);
   }
-  
+
   .forecast-day {
     min-width: 60px;
     padding: var(--spacing-xs);
   }
-  
+
   .forecast-icon {
     font-size: 1.25rem;
   }
-  
+
   .forecast-temp {
     font-size: 0.75rem;
   }
@@ -3314,19 +3150,4 @@ button, input, .channel-item, .header-btn, .remote-btn, .numpad-btn {
   }
 }
 
-/* Additional iOS touch improvements */
-@media (hover: none) and (pointer: coarse) {
-  .remote-btn {
-    min-height: 60px !important;
-    min-width: 60px !important;
-    font-size: 14px !important;
-  }
-  
-  .remote-btn .btn-icon {
-    font-size: 24px !important;
-  }
-  
-  .remote-btn .btn-text {
-    font-size: 12px !important;
-  }
-}
+/* Additional iOS touch improvements removed - remote controls no longer needed */
