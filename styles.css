@@ -1544,10 +1544,19 @@ body {
 @media (max-width: 768px) {
   /* Mobile Header - Compact version of desktop header */
   .header {
-    height: 50px;
-    padding: 0 12px;
+    height: 60px;
+    padding: 0 16px;
     background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
   .brand-logo {
@@ -1604,30 +1613,60 @@ body {
     max-width: 40px;
   }
 
-  .power-btn, .header-options-btn {
-    width: 36px;
-    height: 36px;
-    font-size: 14px;
+  .sidebar-toggle-btn, .power-btn, .header-options-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+    border-radius: 12px;
+    border: 2px solid var(--border-light);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
   }
 
+  .sidebar-toggle-btn .btn-icon,
   .power-btn .btn-icon,
   .header-options-btn .btn-icon {
-    width: 16px;
-    height: 16px;
-    stroke-width: 2;
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+  }
+
+  .sidebar-toggle-btn:hover,
+  .power-btn:hover,
+  .header-options-btn:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: var(--text-light);
+    transform: translateY(-1px);
+  }
+
+  .power-btn {
+    border-color: var(--error-color);
+    color: var(--error-color);
+  }
+
+  .power-btn:hover {
+    background: var(--error-color);
+    border-color: var(--error-color);
   }
 
   /* Mobile Main Content - Full height layout */
   .main-content {
-    height: calc(100vh - 50px);
-    margin-top: 50px;
+    height: calc(100vh - 60px);
+    margin-top: 60px;
     display: block !important;
     background: var(--bg-primary);
+    position: relative;
   }
 
   /* Mobile Video Section - Full width */
   .video-section {
-    height: calc(100vh - 50px);
+    height: calc(100vh - 60px);
     position: relative;
     background: var(--bg-primary);
     display: flex;
@@ -1658,16 +1697,16 @@ body {
   /* Mobile Sidebar - Full height overlay */
   .sidebar {
     position: fixed;
-    top: 50px;
+    top: 60px;
     right: 0;
     bottom: 0;
-    width: 280px;
+    width: 300px;
     background: var(--bg-secondary);
     border-left: 1px solid var(--border-light);
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-xl);
-    z-index: 100;
+    z-index: 200;
     transform: translateX(100%);
     transition: transform 0.3s ease;
   }
@@ -1679,33 +1718,53 @@ body {
   /* Mobile Channel List Section */
   .channel-list-section {
     flex: 1;
-    padding: 8px;
-    border-bottom: 1px solid var(--border-color);
+    padding: 12px;
     background: var(--bg-secondary);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
 
   .channel-list-title {
-    font-size: 12px;
-    font-weight: 500;
-    margin-bottom: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-primary);
   }
 
   .channel-list {
-    height: calc(100% - 30px);
+    flex: 1;
     overflow-y: auto;
     background: var(--bg-primary);
-    border-radius: 4px;
-    padding: 6px;
+    border-radius: 8px;
+    padding: 8px;
+    border: 1px solid var(--border-light);
   }
 
   .channel-item {
-    padding: 4px 6px;
-    margin-bottom: 2px;
-    border-radius: 4px;
-    gap: 6px;
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 4px;
+    border-radius: 8px;
+    gap: 12px;
     background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 50px;
+  }
+
+  .channel-item:hover {
+    background: var(--bg-tertiary);
+    transform: translateX(2px);
+  }
+
+  .channel-item.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: var(--text-light);
   }
 
   .channel-item img {
