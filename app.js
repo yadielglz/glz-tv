@@ -1738,7 +1738,7 @@ if (sidebarToggleBtn) {
 }
 
 // Options panel controls
-if (headerOptionsBtn) headerOptionsBtn.onclick = showOptions;
+if (headerOptionsBtn) headerOptionsBtn.onclick = showSettings;
 if (closeOptions) closeOptions.onclick = hideOptions;
 if (reloadEpgBtn) reloadEpgBtn.onclick = reloadEPGData;
 if (clearCacheBtn) clearCacheBtn.onclick = clearAllCache;
@@ -1981,20 +1981,9 @@ function showChannelBanner() {
     });
   }
   
-  // Check if power button is available
-  if (!powerBtn) {
-    console.error('Power button not found!');
-  } else {
-    // Power button functionality
-    powerBtn.addEventListener('click', () => {
-      if (isStandby) {
-        setStandby(false);
-        playChannel(currentChannelIndex);
-      } else {
-        setStandby(true);
-        stopPlayback();
-      }
-    });
+  // Ensure power button toggles standby without duplicate handlers
+  if (powerBtn) {
+    powerBtn.onclick = () => setStandby(!standby);
   }
 
   // Options button functionality
