@@ -1630,46 +1630,43 @@ function showGuide() {
 function hideGuide() {
   channelGuide.classList.remove('open');
 }
-function renderChannelList(filter = '') {
-  console.log('Rendering channel list with', channels.length, 'channels');
-  
+function renderChannelList(filter = '', itemsToRender = channels) {
   if (!channelList) {
     console.error('Channel list element not found');
     return;
   }
-  
+
   const filtered = filter
-    ? channels.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
-    : channels;
-    
-  channelList.innerHTML = filtered.map((ch, i) => {
-    return `<div class="channel-item${i === current ? ' active' : ''}" data-idx="${i}" tabindex="0">
-      <img class="channel-logo" src="${ch.logo || ''}" onerror="this.style.display='none'" />
+    ? itemsToRender.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
+    : itemsToRender;
+
+  // Virtual Scrolling: We only render a subset of items.
+  const itemsToShow = filtered.slice(0, 100); // Render first 100 matches
+
+  const listHtml = itemsToShow.map(ch => {
+    const originalIndex = channels.indexOf(ch);
+    return `<div class="channel-item${originalIndex === current ? ' active' : ''}" data-idx="${originalIndex}" tabindex="0">
+      <img class="channel-logo" src="${ch.logo || ''}" alt="${ch.name} logo" loading="lazy" onerror="this.style.display='none'" />
       <div class="channel-details">
-        <div class="channel-number-small">${ch.chno || (i + 1)}</div>
+        <div class="channel-number-small">${ch.chno || (originalIndex + 1)}</div>
         <div class="channel-name-small">${ch.name}</div>
       </div>
     </div>`;
   }).join('');
-  
-  channelList.querySelectorAll('.channel-item').forEach(item => {
-    item.onclick = () => {
-      playChannel(Number(item.dataset.idx));
-    };
-    item.onkeydown = (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        playChannel(Number(item.dataset.idx));
-      }
-    };
-  });
-  
-  console.log('Channel list rendered with', channelList.children.length, 'items');
-  console.log('Channel list element styles:', window.getComputedStyle(channelList));
-  console.log('Channel list parent sidebar:', channelList.parentElement);
-  console.log('Sidebar element:', channelList.parentElement.parentElement);
-  console.log('Sidebar styles:', window.getComputedStyle(channelList.parentElement.parentElement));
-  console.log('Main content styles:', window.getComputedStyle(document.querySelector('.main-content')));
-  
+
+  channelList.innerHTML = listHtml;
+
+  if (filtered.length > itemsToShow.length) {
+    const loadMoreMsg = document.createElement('div');
+    loadMoreMsg.className = 'status-message';
+    loadMoreMsg.textContent = `Showing ${itemsToShow.length} of ${filtered.length} channels. Refine search to see more.`;
+    loadMoreMsg.style.position = 'static';
+    loadMoreMsg.style.transform = 'none';
+    loadMoreMsg.style.marginTop = '10px';
+    loadMoreMsg.style.textAlign = 'center';
+    channelList.appendChild(loadMoreMsg);
+  }
+
   // Also render mobile channel list
   renderMobileChannelList(filter);
 }
@@ -1685,27 +1682,19 @@ function renderMobileChannelList(filter = '') {
   const filtered = filter
     ? channels.filter(ch => ch.name.toLowerCase().includes(filter.toLowerCase()) || (ch.chno && ch.chno.includes(filter)))
     : channels;
-  
-  mobileChannelList.innerHTML = filtered.map((ch, i) => {
-    return `<div class="mobile-channel-item${i === current ? ' active' : ''}" data-idx="${i}">
+
+  mobileChannelList.innerHTML = filtered.map(ch => {
+    const originalIndex = channels.indexOf(ch);
+    return `<div class="mobile-channel-item${originalIndex === current ? ' active' : ''}" data-idx="${originalIndex}">
       <div class="mobile-channel-logo">
-        ${ch.logo ? `<img src="${ch.logo}" alt="${ch.name}" onerror="this.parentElement.innerHTML='<div class=\\'channel-logo-placeholder\\'>TV</div>'">` : '<div class="channel-logo-placeholder">TV</div>'}
+        ${ch.logo ? `<img src="${ch.logo}" alt="${ch.name}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'channel-logo-placeholder\\'>TV</div>'">` : '<div class="channel-logo-placeholder">TV</div>'}
       </div>
       <div class="mobile-channel-info">
-        <div class="mobile-channel-number">${ch.chno || (i + 1)}</div>
+        <div class="mobile-channel-number">${ch.chno || (originalIndex + 1)}</div>
         <div class="mobile-channel-name">${ch.name}</div>
       </div>
     </div>`;
   }).join('');
-  
-  // Add click handlers for mobile channel list
-  mobileChannelList.querySelectorAll('.mobile-channel-item').forEach(item => {
-    item.onclick = () => {
-      playChannel(Number(item.dataset.idx));
-    };
-  });
-  
-  console.log('Mobile channel list rendered with', mobileChannelList.children.length, 'items');
 }
 
 // --- Enhanced Event Listeners ---
@@ -1779,7 +1768,29 @@ if (nextBtn) nextBtn.onclick = () => {
 
 // Remote controls removed - no longer needed
 
-if (searchInput) searchInput.oninput = (e) => renderChannelList(e.target.value);
+if (searchInput) {
+    let searchTimeout;
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const filterValue = e.target.value;
+        // Debounce the search input to avoid re-rendering on every keystroke
+        searchTimeout = setTimeout(() => {
+            renderChannelList(filterValue);
+        }, 250); // 250ms delay
+    });
+}
+
+// Event delegation for channel lists
+function handleChannelListClick(event) {
+    const item = event.target.closest('.channel-item, .mobile-channel-item');
+    if (item && item.dataset.idx) {
+        playChannel(Number(item.dataset.idx));
+        // Optionally hide the guide after selection
+        hideGuide();
+    }
+}
+if (channelList) channelList.addEventListener('click', handleChannelListClick);
+if (mobileChannelList) mobileChannelList.addEventListener('click', handleChannelListClick);
 
 // Enhanced number pad
 if (numpadBtns && numpadBtns.length > 0) {
@@ -2021,6 +2032,25 @@ function showChannelBanner() {
   // Initialize settings and weather
   initSettings();
   initWeather();
+
+  // --- Layout Observer for Weather Bar ---
+  const weatherBar = document.getElementById('weather-bottom-bar');
+  const mainContent = document.querySelector('.main-content');
+  const videoContainer = document.getElementById('video-container');
+
+  if (weatherBar && mainContent && videoContainer) {
+    const weatherObserver = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        // Check if the weather bar is rendered and visible
+        const isVisible = entry.target.offsetHeight > 0 && getComputedStyle(entry.target).display !== 'none';
+        mainContent.classList.toggle('weather-visible', isVisible);
+        videoContainer.classList.toggle('weather-visible', isVisible);
+      }
+    });
+
+    weatherObserver.observe(weatherBar);
+  }
+
 })();
 
 // Settings functionality
@@ -2169,6 +2199,7 @@ async function fetchWeather(location) {
     const forecastData = await forecastResponse.json();
     
     updateWeatherDisplay(currentWeather, forecastData, units);
+
   } catch (error) {
     console.error('Weather fetch error:', error);
     updateWeatherDisplay(null, null, 'imperial');

@@ -349,6 +349,7 @@ body {
   display: flex;
   overflow: hidden;
   transition: all 0.3s ease;
+  z-index: 0; /* Ensure weather bar can overlay when visible */
 }
 
 .main-content.sidebar-open {
@@ -366,8 +367,16 @@ body {
   border-radius: var(--radius-lg);
   margin: var(--spacing-md);
   box-shadow: var(--shadow-lg);
-  height: calc(100vh - 80px - 2 * var(--spacing-md)); /* Account for header height and margins */
+  height: calc(100vh - 80px - 120px - 2 * var(--spacing-md)); /* Account for header, weather bar height and margins */
   width: calc(100vw - 2 * var(--spacing-md)); /* Full width minus margins */
+  z-index: 15; /* Ensure video container is above weather bar but below UI elements */
+}
+
+/* For desktop view, we need to adjust the height when weather bar is visible */
+@media (min-width: 769px) {
+  .video-container.weather-visible {
+    height: calc(100vh - 60px - 120px - 2 * var(--spacing-md)); /* Account for header and weather bar */
+  }
 }
 
 .video-container video,
@@ -1499,11 +1508,6 @@ body {
   display: none;
 }
 
-/* Hide mobile channel list on desktop */
-.mobile-channel-list {
-  display: none !important;
-}
-
 /* Show original header layout on desktop */
 @media (min-width: 769px) {
   body {
@@ -1515,7 +1519,25 @@ body {
     height: 100vh;
   }
 
-  /* Header Bar */
+  /* Header Bar - Re-using .stb-header for consistency */
+  .stb-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center; /* Vertically center items */
+    justify-content: space-between; /* Space out items */
+    padding: 0 var(--spacing-lg); /* Consistent padding */
+    z-index: 1000;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    height: 60px; /* Desktop header height */
+  }
+
+  /* Actual header element styling (index.html uses .header) */
   .header {
     position: fixed;
     top: 0;
@@ -1526,9 +1548,15 @@ body {
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
-    padding: 0 20px 0 160px; /* reserve space for floating controls */
-    z-index: 1000;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    justify-content: space-between;
+    padding: 0 var(--spacing-lg);
+    z-index: 1100;
+  }
+  .header-row-1 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
   }
 
   /* Float header controls OVER the header for desktop */
@@ -1541,15 +1569,6 @@ body {
     z-index: 1100;
   }
 
-  /* Place clock next to weather on desktop */
-  .header-row-1 {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    justify-content: flex-start; /* brand, then weather, then time adjacent */
-    width: 100%;
-  }
-
   .brand-logo {
     font-family: 'Google Sans', sans-serif;
     font-size: 18px;
@@ -1559,8 +1578,8 @@ body {
     min-width: 80px;
   }
 
-  /* Channel Information - Center-Left */
-  .channel-info {
+  /* Re-using .channel-display for consistency */
+  .channel-display {
     display: flex;
     align-items: center;
     flex: 1;
@@ -1568,15 +1587,15 @@ body {
   }
 
   .channel-number {
-    background: var(--accent-color);
-    color: white;
+    background: var(--bg-tertiary);
+    color: var(--primary-color);
     padding: 8px 12px;
-    border-radius: 4px;
+    border-radius: var(--radius-md);
     font-family: 'Google Sans', sans-serif;
     font-weight: 500;
     font-size: 16px;
     min-width: 50px;
-    text-align: center;
+    text-align: center;  
   }
 
   .channel-logo {
@@ -1610,14 +1629,14 @@ body {
   }
 
   /* Time Display - Center-Right */
-  .time-display {
+  .header-right .time-display {
     font-family: 'Google Sans', sans-serif;
     font-size: 16px;
     font-weight: 500;
     color: var(--text-primary);
     background: var(--bg-tertiary);
     padding: 8px 12px;
-    border-radius: 4px;
+    border-radius: var(--radius-md);
     margin-right: 10px;
     min-width: 60px;
     text-align: center;
@@ -1628,7 +1647,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: var(--bg-tertiary);
+    background: transparent; /* Let's make it cleaner */
     padding: 8px 12px;
     border-radius: 4px;
     margin-right: 20px;
@@ -1661,8 +1680,6 @@ body {
     text-overflow: ellipsis;
     max-width: 80px;
   }
-
-  /* Control Buttons styling kept below (unchanged), sizes already uniform */
 }
 
   .sidebar-toggle-btn, .power-btn, .header-options-btn {
@@ -1781,10 +1798,10 @@ body {
 
   /* Main Content Area */
   .main-content {
-    display: flex !important;
-    flex-direction: row !important;
-    height: calc(100vh - 60px);
-    margin-top: 60px; /* Account for fixed header */
+    display: flex;
+    flex-direction: row;
+    height: calc(100vh - 80px); /* Default mobile header height */
+    margin-top: 80px; /* Default mobile header height */
     background: white;
   }
 
@@ -1815,6 +1832,10 @@ body {
     align-items: center;
     justify-content: center;
     position: relative;
+    margin: 0;               /* Avoid extra spacing that could push into weather bar */
+    border-radius: 0;
+    box-shadow: none;
+    z-index: 0;              /* Ensure it stays below the weather bar */
   }
 
   #video, #audio {
@@ -1832,17 +1853,17 @@ body {
 
   /* Sidebar - Right Overlay (Mobile) / Split Layout (Desktop) */
   .sidebar {
-    position: fixed;
-    top: 60px; /* Below header */
+    position: fixed; /* Overlay on mobile */
+    top: 80px; /* Below mobile header */
     right: 0;
-    bottom: 120px; /* Above weather bar */
+    bottom: 0;
     width: 320px;
     background: var(--bg-secondary);
     border-left: 1px solid var(--border-light);
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-xl);
-    z-index: 100;
+    z-index: 50; /* Adjust z-index to be above weather bar but below header */
     transform: translateX(100%);
     transition: transform 0.3s ease;
   }
@@ -1853,6 +1874,11 @@ body {
 
   /* Desktop split layout when sidebar is open */
   @media (min-width: 769px) {
+    .main-content {
+      height: calc(100vh - 60px); /* Desktop header height */
+      margin-top: 60px; /* Desktop header height */
+    }
+
     .main-content.sidebar-open .video-section {
       flex: 2;
       width: 66.67%;
@@ -1860,16 +1886,13 @@ body {
 
     .main-content.sidebar-open .sidebar {
       position: static;
+      top: auto;
       flex: 1;
       width: 33.33%;
       transform: translateX(0);
       box-shadow: none;
       border-left: 1px solid var(--border-light);
       border-radius: 0;
-    }
-
-    .main-content.sidebar-open .sidebar.open {
-      transform: translateX(0);
     }
   }
 
@@ -2181,7 +2204,7 @@ body {
   display: flex;
   align-items: center;
   padding: 0 var(--spacing-lg);
-  z-index: 100;
+  z-index: 1200; /* Always above main content/player */
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
   transition: var(--transition-normal);
 }
@@ -2320,19 +2343,19 @@ body {
 
 /* Adjust main content to account for weather bar */
 @media (min-width: 769px) {
-  .main-content {
-    height: calc(100vh - 60px - 120px) !important; /* Account for header and weather bar */
+  .main-content.weather-visible { /* This class is now added by JS */
+    height: calc(100vh - 60px - 120px); /* Account for header and weather bar */
   }
   
-  .video-container {
-    height: calc(100vh - 60px - 120px - 2 * var(--spacing-md)) !important;
+  .video-container.weather-visible { /* This class is now added by JS */
+    height: 100%; /* Fill the parent's adjusted height */
   }
 }
 
 /* Mobile Weather Bar - Hidden on mobile for cleaner interface */
 @media (max-width: 768px) {
   .weather-bottom-bar {
-    display: none !important;
+    display: none;
   }
 
   /* Compact weather styles for any mobile weather displays */
@@ -2382,40 +2405,6 @@ body {
     font-size: 0.75rem;
   }
   
-  .main-content {
-    height: calc(100vh - 50px) !important;
-  }
-  
-  .video-section {
-    height: 50vh !important;
-  }
-  
-  .sidebar {
-    height: 50vh !important;
-  }
-}
-/* iOS-specific video behavior fixes */
-@supports (-webkit-touch-callout: none) {
-  /* iOS Safari specific styles */
-  video {
-    -webkit-playsinline: true;
-    playsinline: true;
-  }
-  
-  .video-container {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    touch-action: manipulation;
-  }
-  
-  /* Prevent iOS video fullscreen on tap */
-  video::-webkit-media-controls-fullscreen-button {
-    display: none !important;
-  }
-  
-  video::-webkit-media-controls {
-    -webkit-appearance: none;
-  }
 }
 
 /* Additional iOS touch improvements removed - remote controls no longer needed */
