@@ -287,9 +287,6 @@ const LOCAL_EPG_PROXY = 'http://localhost:3000/api/epg';
 const CLOUD_EPG_PROXY = '/api/epg'; // Netlify function
 
 // --- DOM Elements ---
-// Video and Audio Elements - Support both desktop and mobile
-const video = document.getElementById('desktop-video') || document.getElementById('mobile-video') || document.getElementById('video');
-const audio = document.getElementById('desktop-audio') || document.getElementById('mobile-audio') || document.getElementById('audio');
 const channelNumber = document.getElementById('desktop-weather-channel-number') || document.getElementById('mobile-channel-number') || document.getElementById('channel-number');
 const channelName = document.getElementById('desktop-weather-channel-name') || document.getElementById('mobile-channel-name') || document.getElementById('channel-name');
 const currentProgram = document.getElementById('current-program');
@@ -314,13 +311,39 @@ const numpadBtns = document.querySelectorAll('.numpad-btn');
 const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
 const statusMessage = document.getElementById('status-message');
-const loadingIndicator = document.getElementById('desktop-loading-indicator') || document.getElementById('mobile-loading-indicator');
 const videoContainer = document.getElementById('desktop-video-container') || document.getElementById('mobile-video-container') || document.getElementById('video-container');
 const helpOverlay = document.getElementById('help-overlay');
 const closeHelp = document.getElementById('close-help');
 const helpBody = document.getElementById('help-body');
 const searchInput = document.getElementById('search-input');
 const stbContainer = document.querySelector('.stb-container');
+
+// Dynamic video/audio element selection based on current screen size
+function getCurrentVideoElement() {
+  const isMobile = window.innerWidth <= 768;
+  return isMobile ? 
+    document.getElementById('mobile-video') : 
+    document.getElementById('desktop-video') || document.getElementById('video');
+}
+
+function getCurrentAudioElement() {
+  const isMobile = window.innerWidth <= 768;
+  return isMobile ? 
+    document.getElementById('mobile-audio') : 
+    document.getElementById('desktop-audio') || document.getElementById('audio');
+}
+
+function getCurrentLoadingIndicator() {
+  const isMobile = window.innerWidth <= 768;
+  return isMobile ? 
+    document.getElementById('mobile-loading-indicator') : 
+    document.getElementById('desktop-loading-indicator');
+}
+
+// Legacy video/audio variables for backward compatibility
+let video = getCurrentVideoElement();
+let audio = getCurrentAudioElement();
+let loadingIndicator = getCurrentLoadingIndicator();
 
 // Options panel elements
 const optionsOverlay = document.getElementById('options-overlay');
@@ -888,18 +911,20 @@ async function changeEPGSource() {
   }
 }
 function showLoading() {
-  if (loadingIndicator) {
-    loadingIndicator.style.display = 'flex';
+  const currentLoadingIndicator = getCurrentLoadingIndicator();
+  if (currentLoadingIndicator) {
+    currentLoadingIndicator.style.display = 'flex';
     // Update loading text with current channel info
-    const loadingText = loadingIndicator.querySelector('.loading-text');
+    const loadingText = currentLoadingIndicator.querySelector('.loading-text');
     if (loadingText && channels[current]) {
       loadingText.textContent = `Loading ${channels[current].name}...`;
     }
   }
 }
 function hideLoading() {
-  if (loadingIndicator) {
-    loadingIndicator.style.display = 'none';
+  const currentLoadingIndicator = getCurrentLoadingIndicator();
+  if (currentLoadingIndicator) {
+    currentLoadingIndicator.style.display = 'none';
   }
 }
 // Performance optimized time update
@@ -1470,22 +1495,31 @@ function stopPlayback() {
     hls = null;
   }
   
-  video.pause();
-  audio.pause();
+  const currentVideo = getCurrentVideoElement();
+  const currentAudio = getCurrentAudioElement();
   
-  video.classList.remove('loading', 'playing');
-  audio.classList.remove('loading', 'playing');
-  
-  // Clear sources immediately
-  video.src = '';
-  audio.src = '';
+  if (currentVideo) {
+    currentVideo.pause();
+    currentVideo.classList.remove('loading', 'playing');
+    currentVideo.src = '';
+  }
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.classList.remove('loading', 'playing');
+    currentAudio.src = '';
+  }
 }
 
 function playChannel(idx) {
   console.log('playChannel called with index:', idx);
   
+  // Get current video/audio elements based on screen size
+  const currentVideo = getCurrentVideoElement();
+  const currentAudio = getCurrentAudioElement();
+  const currentLoadingIndicator = getCurrentLoadingIndicator();
+  
   // Check if video and audio elements exist
-  if (!video || !audio) {
+  if (!currentVideo || !currentAudio) {
     console.error('Video or audio elements not found');
     return;
   }
@@ -1514,10 +1548,10 @@ function playChannel(idx) {
     hls.destroy();
     hls = null;
   }
-  video.pause();
-  audio.pause();
-  video.src = '';
-  audio.src = '';
+  currentVideo.pause();
+  currentAudio.pause();
+  currentVideo.src = '';
+  currentAudio.src = '';
 
   // Determine stream type
   const isAudio = /\.(mp3|aac|m4a|ogg|flac|wav)(\?|$)/i.test(channel.url) || 
@@ -1528,8 +1562,8 @@ function playChannel(idx) {
   console.log('Stream type - isAudio:', isAudio, 'isHls:', isHls);
 
   // Set display
-  video.style.display = isAudio ? 'none' : 'block';
-  audio.style.display = isAudio ? 'block' : 'none';
+  currentVideo.style.display = isAudio ? 'none' : 'block';
+  currentAudio.style.display = isAudio ? 'block' : 'none';
 
   // Update status
   connectionStatus = 'connecting';
@@ -1538,15 +1572,15 @@ function playChannel(idx) {
   if (isAudio) {
     // Audio stream
     console.log('Playing audio stream');
-    audio.src = channel.url;
-    audio.load();
-    audio.play()
+    currentAudio.src = channel.url;
+    currentAudio.load();
+    currentAudio.play()
       .then(() => {
         console.log('Audio playback started successfully');
         connectionStatus = 'connected';
         updateConnectionStatus();
         hideLoading();
-        audio.classList.add('playing');
+        currentAudio.classList.add('playing');
         setTimeout(() => showChannelBanner(), 500);
       })
       .catch(error => {
@@ -1566,17 +1600,17 @@ function playChannel(idx) {
     });
 
     hls.loadSource(channel.url);
-    hls.attachMedia(video);
+    hls.attachMedia(currentVideo);
 
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
       console.log('HLS manifest loaded');
-      video.play()
+      currentVideo.play()
         .then(() => {
           console.log('HLS video playback started successfully');
           connectionStatus = 'connected';
           updateConnectionStatus();
           hideLoading();
-          video.classList.add('playing');
+          currentVideo.classList.add('playing');
           setTimeout(() => showChannelBanner(), 500);
         })
         .catch(error => {
@@ -1600,15 +1634,15 @@ function playChannel(idx) {
   } else {
     // Direct video stream
     console.log('Playing direct video stream');
-    video.src = channel.url;
-    video.load();
-    video.play()
+    currentVideo.src = channel.url;
+    currentVideo.load();
+    currentVideo.play()
       .then(() => {
         console.log('Direct video playback started successfully');
         connectionStatus = 'connected';
         updateConnectionStatus();
         hideLoading();
-        video.classList.add('playing');
+        currentVideo.classList.add('playing');
         setTimeout(() => showChannelBanner(), 500);
       })
       .catch(error => {
@@ -1940,7 +1974,15 @@ if (e.key === 'Escape') {
 }
 });
 
-window.addEventListener('resize', adjustLayoutForRemote);
+window.addEventListener('resize', () => {
+  // Update video/audio elements when switching between mobile/desktop
+  video = getCurrentVideoElement();
+  audio = getCurrentAudioElement();
+  loadingIndicator = getCurrentLoadingIndicator();
+  
+  // Also call the existing layout adjustment
+  adjustLayoutForRemote();
+});
 
 // closeHelp.onclick = () => helpOverlay.style.display = 'none';
 
