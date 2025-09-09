@@ -685,27 +685,33 @@ function adjustLayoutForRemote() {
  * Shows the remote control and adjusts the layout.
  */
 function showRemote() {
-  remoteControl.classList.add('visible');
-  // Use a small timeout to ensure the element is visible before getting its height
-  setTimeout(adjustLayoutForRemote, 50);
+  if (remoteControl) {
+    remoteControl.classList.add('visible');
+    // Use a small timeout to ensure the element is visible before getting its height
+    setTimeout(adjustLayoutForRemote, 50);
+  }
 }
 
 /**
  * Hides the remote control and adjusts the layout.
  */
 function hideRemote() {
-  remoteControl.classList.remove('visible');
-  adjustLayoutForRemote();
+  if (remoteControl) {
+    remoteControl.classList.remove('visible');
+    adjustLayoutForRemote();
+  }
 }
 
 /**
  * Toggles the visibility of the remote control.
  */
 function toggleRemoteVisibility() {
-  if (remoteControl.classList.contains('visible')) {
-    hideRemote();
-  } else {
-    showRemote();
+  if (remoteControl) {
+    if (remoteControl.classList.contains('visible')) {
+      hideRemote();
+    } else {
+      showRemote();
+    }
   }
 }
 
@@ -1612,31 +1618,82 @@ function playChannel(idx) {
 
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
       console.log('HLS manifest loaded');
-      currentVideo.play()
-        .then(() => {
-          console.log('HLS video playback started successfully');
-          connectionStatus = 'connected';
-          updateConnectionStatus();
-          hideLoading();
-          currentVideo.classList.add('playing');
-          setTimeout(() => showChannelBanner(), 500);
-        })
-        .catch(error => {
-          console.error('HLS video play failed:', error);
-          connectionStatus = 'error';
-          updateConnectionStatus();
-          hideLoading();
-          showStatus('Failed to play HLS stream');
-        });
+      // Try to play, but handle autoplay restrictions gracefully
+      const playPromise = currentVideo.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('HLS video playback started successfully');
+            connectionStatus = 'connected';
+            updateConnectionStatus();
+            hideLoading();
+            currentVideo.classList.add('playing');
+            setTimeout(() => showChannelBanner(), 500);
+          })
+          .catch(error => {
+            console.error('HLS video play failed:', error);
+            // If autoplay failed, show a play button or message
+            if (error.name === 'NotAllowedError') {
+              console.log('Autoplay blocked by browser - user interaction required');
+              showStatus('Click to play video');
+              // Add click handler to video element for manual play
+              currentVideo.addEventListener('click', () => {
+                currentVideo.play().then(() => {
+                  console.log('Manual play successful');
+                  connectionStatus = 'connected';
+                  updateConnectionStatus();
+                  hideLoading();
+                  currentVideo.classList.add('playing');
+                  setTimeout(() => showChannelBanner(), 500);
+                }).catch(err => {
+                  console.error('Manual play failed:', err);
+                  showStatus('Failed to play video');
+                });
+              }, { once: true });
+            } else {
+              connectionStatus = 'error';
+              updateConnectionStatus();
+              hideLoading();
+              showStatus('Failed to play HLS stream');
+            }
+          });
+      }
     });
 
     hls.on(Hls.Events.ERROR, (event, data) => {
       console.error('HLS error:', event, data);
+      
       if (data.fatal) {
         connectionStatus = 'error';
         updateConnectionStatus();
         hideLoading();
         showStatus('HLS stream error');
+      } else {
+        // Handle non-fatal errors
+        switch (data.details) {
+          case 'bufferStalledError':
+            console.log('Buffer stalled - attempting recovery');
+            // Try to recover by seeking to current time
+            if (currentVideo.buffered.length > 0) {
+              const bufferedEnd = currentVideo.buffered.end(currentVideo.buffered.length - 1);
+              const currentTime = currentVideo.currentTime;
+              if (currentTime < bufferedEnd) {
+                currentVideo.currentTime = bufferedEnd;
+              }
+            }
+            break;
+          case 'networkError':
+            console.log('Network error - will retry');
+            showStatus('Network error - retrying...');
+            break;
+          case 'mediaError':
+            console.log('Media error - attempting recovery');
+            hls.recoverMediaError();
+            break;
+          default:
+            console.log('Non-fatal HLS error:', data.details);
+        }
       }
     });
   } else {
