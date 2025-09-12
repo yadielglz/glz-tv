@@ -1610,7 +1610,21 @@ function playChannel(idx) {
     hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
-      backBufferLength: 90
+      backBufferLength: 90,
+      // Reduce timeouts to prevent 60-second buffering
+      manifestLoadTimeout: 10000,    // 10 seconds instead of 60
+      fragmentLoadTimeout: 15000,    // 15 seconds instead of 60
+      levelLoadTimeout: 10000,       // 10 seconds instead of 60
+      // Add retry configuration
+      manifestLoadingTimeOut: 10000,
+      manifestLoadingMaxRetry: 3,
+      manifestLoadingRetryDelay: 1000,
+      levelLoadingTimeOut: 10000,
+      levelLoadingMaxRetry: 3,
+      levelLoadingRetryDelay: 1000,
+      fragLoadingTimeOut: 20000,
+      fragLoadingMaxRetry: 3,
+      fragLoadingRetryDelay: 1000
     });
 
     hls.loadSource(channel.url);
@@ -1668,12 +1682,27 @@ function playChannel(idx) {
         connectionStatus = 'error';
         updateConnectionStatus();
         hideLoading();
-        showStatus('HLS stream error');
+        
+        // Provide specific error messages based on error type
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          if (data.details === 'manifestLoadTimeOut' || data.details === 'manifestLoadError') {
+            showStatus('Stream timeout - manifest failed to load');
+          } else if (data.details === 'levelLoadTimeOut' || data.details === 'levelLoadError') {
+            showStatus('Stream timeout - quality level failed to load');
+          } else {
+            showStatus('Network error - stream unavailable');
+          }
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          showStatus('Media error - stream format issue');
+        } else {
+          showStatus('HLS stream error');
+        }
       } else {
         // Handle non-fatal errors
         switch (data.details) {
           case 'bufferStalledError':
             console.log('Buffer stalled - attempting recovery');
+            showStatus('Buffering...');
             // Try to recover by seeking to current time
             if (currentVideo.buffered.length > 0) {
               const bufferedEnd = currentVideo.buffered.end(currentVideo.buffered.length - 1);
@@ -1690,6 +1719,14 @@ function playChannel(idx) {
           case 'mediaError':
             console.log('Media error - attempting recovery');
             hls.recoverMediaError();
+            break;
+          case 'manifestLoadTimeOut':
+            console.log('Manifest load timeout');
+            showStatus('Stream timeout - trying alternative...');
+            break;
+          case 'levelLoadTimeOut':
+            console.log('Level load timeout');
+            showStatus('Quality level timeout - retrying...');
             break;
           default:
             console.log('Non-fatal HLS error:', data.details);
