@@ -1610,7 +1610,9 @@ function playChannel(idx) {
     hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
-      backBufferLength: 90,
+      backBufferLength: 30,          // Reduced from 90 to 30 seconds
+      maxBufferLength: 60,           // Maximum buffer length
+      maxMaxBufferLength: 120,      // Absolute maximum buffer
       // Reduce timeouts to prevent 60-second buffering
       manifestLoadTimeout: 10000,    // 10 seconds instead of 60
       fragmentLoadTimeout: 15000,    // 15 seconds instead of 60
@@ -1624,11 +1626,67 @@ function playChannel(idx) {
       levelLoadingRetryDelay: 1000,
       fragLoadingTimeOut: 20000,
       fragLoadingMaxRetry: 3,
-      fragLoadingRetryDelay: 1000
+      fragLoadingRetryDelay: 1000,
+      // Add buffer management
+      maxBufferSize: 60 * 1000 * 1000,  // 60MB max buffer size
+      maxBufferHole: 0.1,               // Max hole in buffer (100ms)
+      // Add live stream specific settings
+      liveBackBufferLength: 10,         // Keep only 10 seconds of live buffer
+      liveSyncDurationCount: 3,         // Sync every 3 segments
+      liveMaxLatencyDurationCount: 5    // Max latency of 5 segments
     });
 
     hls.loadSource(channel.url);
     hls.attachMedia(currentVideo);
+
+    // Add buffer monitoring to prevent long stalls
+    let bufferStallTimer = null;
+    let lastBufferTime = 0;
+    
+    const monitorBuffer = () => {
+      if (currentVideo.buffered.length > 0) {
+        const bufferedEnd = currentVideo.buffered.end(currentVideo.buffered.length - 1);
+        const currentTime = currentVideo.currentTime;
+        
+        // If we're close to the end of buffer and not advancing
+        if (bufferedEnd - currentTime < 2 && currentTime === lastBufferTime) {
+          console.log('Buffer approaching end, currentTime:', currentTime, 'bufferedEnd:', bufferedEnd);
+          showStatus('Buffering...');
+          
+          // Clear any existing timer
+          if (bufferStallTimer) {
+            clearTimeout(bufferStallTimer);
+          }
+          
+          // Set timer to force recovery if still stalled
+          bufferStallTimer = setTimeout(() => {
+            if (currentVideo.readyState < 3) {
+              console.log('Force recovery - seeking forward');
+              currentVideo.currentTime = bufferedEnd - 0.5;
+            }
+          }, 2000);
+        } else {
+          lastBufferTime = currentTime;
+          if (bufferStallTimer) {
+            clearTimeout(bufferStallTimer);
+            bufferStallTimer = null;
+          }
+        }
+      }
+    };
+    
+    // Monitor buffer every 500ms
+    const bufferMonitor = setInterval(monitorBuffer, 500);
+    
+    // Clean up monitor when HLS is destroyed
+    const originalDestroy = hls.destroy;
+    hls.destroy = function() {
+      clearInterval(bufferMonitor);
+      if (bufferStallTimer) {
+        clearTimeout(bufferStallTimer);
+      }
+      return originalDestroy.call(this);
+    };
 
     hls.on(Hls.Events.MANIFEST_LOADED, () => {
       console.log('HLS manifest loaded');
@@ -1701,15 +1759,40 @@ function playChannel(idx) {
         // Handle non-fatal errors
         switch (data.details) {
           case 'bufferStalledError':
-            console.log('Buffer stalled - attempting recovery');
+            console.log('Buffer stalled - attempting aggressive recovery');
             showStatus('Buffering...');
-            // Try to recover by seeking to current time
+            
+            // More aggressive recovery strategies
             if (currentVideo.buffered.length > 0) {
               const bufferedEnd = currentVideo.buffered.end(currentVideo.buffered.length - 1);
               const currentTime = currentVideo.currentTime;
-              if (currentTime < bufferedEnd) {
-                currentVideo.currentTime = bufferedEnd;
+              
+              // Strategy 1: Seek to end of buffer
+              if (currentTime < bufferedEnd - 1) {
+                console.log('Seeking to end of buffer:', bufferedEnd);
+                currentVideo.currentTime = bufferedEnd - 1;
               }
+              
+              // Strategy 2: If still stalled, try seeking forward slightly
+              setTimeout(() => {
+                if (currentVideo.readyState < 3) { // HAVE_FUTURE_DATA
+                  console.log('Still stalled, trying forward seek');
+                  currentVideo.currentTime = currentVideo.currentTime + 0.5;
+                }
+              }, 1000);
+              
+              // Strategy 3: If still stalled after 3 seconds, reload the stream
+              setTimeout(() => {
+                if (currentVideo.readyState < 3) {
+                  console.log('Buffer still stalled, reloading stream');
+                  showStatus('Reloading stream...');
+                  hls.startLoad();
+                }
+              }, 3000);
+            } else {
+              // No buffer available, restart loading
+              console.log('No buffer available, restarting load');
+              hls.startLoad();
             }
             break;
           case 'networkError':
