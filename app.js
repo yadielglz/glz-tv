@@ -1645,7 +1645,10 @@ function playChannel(idx) {
       // Add live stream specific settings
       liveBackBufferLength: 10,         // Keep only 10 seconds of live buffer
       liveSyncDurationCount: 3,         // Sync every 3 segments
-      liveMaxLatencyDurationCount: 5    // Max latency of 5 segments
+      liveMaxLatencyDurationCount: 5,   // Max latency of 5 segments
+      // Add cache busting for mobile refresh issues
+      enableSoftwareAES: false,         // Disable software AES to prevent cache issues
+      forceKeyLoadOnDiscontinuity: true // Force key reload on discontinuity
     });
 
     hls.loadSource(channel.url);
@@ -2250,6 +2253,15 @@ function showChannelBanner() {
 // --- Enhanced Initialization ---
 (function init() {
   console.log('=== INITIALIZATION START ===');
+  
+  // Clear video-related cache on refresh to prevent stale segments
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    console.log('Clearing video cache on refresh...');
+    // Send message to service worker to clear video cache
+    navigator.serviceWorker.controller.postMessage({
+      type: 'CLEAR_VIDEO_CACHE'
+    });
+  }
   
   // Check for missing DOM elements
   console.log('Checking DOM elements...');

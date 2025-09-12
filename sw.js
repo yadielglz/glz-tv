@@ -92,23 +92,34 @@ async function handleFetch(request) {
   const url = new URL(request.url);
   
   try {
-    // Strategy 1: Cache First for static assets
+    // Strategy 1: Never cache video segments - always fetch fresh
+    if (isVideoSegment(url)) {
+      console.log('Service Worker: Fetching video segment fresh (no cache):', url.pathname);
+      return await fetch(request);
+    }
+    
+    // Strategy 2: Cache First for static assets
     if (isStaticAsset(url)) {
       return await cacheFirst(request, STATIC_CACHE_NAME);
     }
     
-    // Strategy 2: Network First for API calls
+    // Strategy 3: Network First for API calls
     if (isApiCall(url)) {
       return await networkFirst(request, DYNAMIC_CACHE_NAME);
     }
     
-    // Strategy 3: Stale While Revalidate for other requests
+    // Strategy 4: Stale While Revalidate for other requests
     return await staleWhileRevalidate(request, DYNAMIC_CACHE_NAME);
     
   } catch (error) {
     console.error('Service Worker: Fetch error', error);
     
-    // Fallback: try to serve from cache
+    // For video segments, don't fallback to cache - let the error propagate
+    if (isVideoSegment(url)) {
+      throw error;
+    }
+    
+    // Fallback: try to serve from cache for non-video requests
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
@@ -184,6 +195,18 @@ function isStaticAsset(url) {
          url.pathname.endsWith('.json') ||
          url.hostname === 'fonts.googleapis.com' ||
          url.hostname === 'cdn.jsdelivr.net';
+}
+
+function isVideoSegment(url) {
+  return url.pathname.includes('.m3u8') ||
+         url.pathname.includes('.ts') ||
+         url.pathname.includes('.mp4') ||
+         url.pathname.includes('.webm') ||
+         url.pathname.includes('.mp3') ||
+         url.pathname.includes('.aac') ||
+         url.hostname.includes('starlite.best') ||
+         url.hostname.includes('stream') ||
+         url.hostname.includes('livetv');
 }
 
 function isApiCall(url) {
@@ -270,6 +293,32 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'GET_VERSION') {
     event.ports[0].postMessage({ version: CACHE_NAME });
   }
+  
+  if (event.data && event.data.type === 'CLEAR_VIDEO_CACHE') {
+    console.log('Service Worker: Clearing video cache...');
+    clearVideoCache();
+  }
 });
+
+// Function to clear video-related cache entries
+async function clearVideoCache() {
+  try {
+    const cacheNames = await caches.keys();
+    const videoCacheNames = cacheNames.filter(name => 
+      name.includes('video') || 
+      name.includes('segment') || 
+      name.includes('hls')
+    );
+    
+    await Promise.all(videoCacheNames.map(cacheName => {
+      console.log('Service Worker: Deleting video cache:', cacheName);
+      return caches.delete(cacheName);
+    }));
+    
+    console.log('Service Worker: Video cache cleared successfully');
+  } catch (error) {
+    console.error('Service Worker: Failed to clear video cache:', error);
+  }
+}
 
 console.log('Service Worker: Loaded successfully');
