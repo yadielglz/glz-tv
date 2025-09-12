@@ -957,6 +957,18 @@ function updateTime() {
     const timeString = `${hours}:${minutes} ${ampm}`;
     
     // Update desktop time display
+    const desktopTimeDisplay = document.getElementById('desktop-time-display');
+    if (desktopTimeDisplay) {
+      desktopTimeDisplay.textContent = timeString;
+    }
+    
+    // Update mobile time display
+    const mobileTimeDisplay = document.getElementById('mobile-time-display');
+    if (mobileTimeDisplay) {
+      mobileTimeDisplay.textContent = timeString;
+    }
+    
+    // Fallback for any other time display
     if (timeDisplay) {
       timeDisplay.textContent = timeString;
     }

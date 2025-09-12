@@ -440,6 +440,14 @@ p {
     transition: var(--transition-spring);
     cursor: pointer;
   }
+
+  .desktop-header-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 0;
+  }
   
   .brand-logo::after {
     content: '';
