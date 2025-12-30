@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const zlib = require('zlib');
 const path = require('path');
 
 const app = express();
@@ -16,29 +17,34 @@ app.use(express.static('.'));
 app.get('/api/epg', async (req, res) => {
   try {
     const epgUrl = 'https://epg.best/1eef8-shw7fc.xml.gz';
-    
+
     console.log('Fetching EPG from:', epgUrl);
-    
+
     const response = await fetch(epgUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/xml, text/xml, */*'
       },
-      timeout: 30000
+      timeout: 45000
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
-    const xmlData = await response.text();
-    
+
+    const compressed = await response.buffer();
+    const xmlBuffer = zlib.gunzipSync(compressed);
+    const xmlData = xmlBuffer.toString('utf8');
+
     res.setHeader('Content-Type', 'application/xml');
     res.setHeader('Cache-Control', 'public, max-age=1800'); // Cache for 30 minutes
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.send(xmlData);
-    
+
     console.log('EPG data sent successfully, length:', xmlData.length);
-    
+
   } catch (error) {
     console.error('EPG fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch EPG data', details: error.message });

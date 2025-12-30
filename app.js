@@ -276,6 +276,9 @@ let favorites = JSON.parse(localStorage.getItem('glz-favorites') || '[]');
 let connectionStatus = 'connected';
 let channelInput = '';
 let pwaInstallPrompt = null;
+let channelBannerTimer = null;
+// Forward declarations for handlers attached before definitions
+// EPG removed
 
 // EPG State
 let epgData = {};
@@ -287,10 +290,11 @@ const EPG_SOURCES = {
   epgshare01: 'https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz',
   epgshare02: 'https://epgshare02.online/epgshare02/epg_ripper_ALL_SOURCES2.xml.gz',
   epgshare03: 'https://epgshare03.online/epgshare03/epg_ripper_ALL_SOURCES3.xml.gz',
-  uslocals: 'https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz'
+  uslocals: 'https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz',
+  primary: 'https://epg.best/1eef8-shw7fc.xml.gz'
 };
 
-let EPG_URL = EPG_SOURCES.uslocals; // Default to US Locals for better local channel coverage
+let EPG_URL = EPG_SOURCES.primary; // Default to provided EPG
 const LOCAL_EPG_PROXY = 'http://localhost:3000/api/epg';
 const CLOUD_EPG_PROXY = '/api/epg'; // Netlify function
 
@@ -358,6 +362,7 @@ const optionsOverlay = document.getElementById('options-overlay');
 const closeOptions = document.getElementById('close-options');
 const headerOptionsBtn = document.getElementById('header-options-btn');
 const reloadEpgBtn = document.getElementById('reload-epg-btn');
+const forceEpgBtn = document.getElementById('force-epg-btn');
 const clearCacheBtn = document.getElementById('clear-cache-btn');
 const epgStatus = document.getElementById('epg-status');
 const epgLastUpdateDisplay = document.getElementById('epg-last-update');
@@ -386,144 +391,17 @@ const miniGuideContent = document.getElementById('mini-guide-content');
 let epgCache = {
   data: null,
   timestamp: 0,
-  expiry: 30 * 60 * 1000, // 30 minutes
+  expiry: 0,
   compressed: false
 };
 
 async function fetchEPGData() {
-  if (epgLoading) {
-    console.log('EPG already loading...');
-    return;
-  }
-  
-  // Check improved cache
-  const cached = localStorage.getItem('glz-epg-cache');
-  const cacheTime = localStorage.getItem('glz-epg-cache-time');
-  
-  if (cached && cacheTime) {
-    const age = Date.now() - parseInt(cacheTime);
-    const cacheDuration = parseInt(localStorage.getItem('glz-epg-cache-duration') || '30') * 60 * 1000;
-    
-    if (age < cacheDuration) {
-      console.log('Using cached EPG data');
-      try {
-        epgData = JSON.parse(cached);
-        epgLastUpdate = parseInt(cacheTime);
-        console.log('✅ Using cached EPG data');
-        return;
-      } catch (error) {
-        console.warn('Cached EPG data corrupted, fetching fresh data');
-        localStorage.removeItem('glz-epg-cache');
-        localStorage.removeItem('glz-epg-cache-time');
-      }
-    }
-  }
-  
-  epgLoading = true;
-  console.log('Fetching EPG data from:', EPG_URL);
-  console.log('💡 Note: This is a large EPG file (~150MB compressed). Loading may take a moment...');
-  
-  try {
-    // Optimized proxy list with better ordering
-    const proxies = [
-      CLOUD_EPG_PROXY, // Cloud proxy (most reliable)
-      LOCAL_EPG_PROXY, // Local proxy (development only)
-      EPG_URL, // Direct access
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(EPG_URL)}`,
-      `https://cors-anywhere.herokuapp.com/${EPG_URL}`,
-      `https://thingproxy.freeboard.io/fetch/${EPG_URL}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(EPG_URL)}`
-    ];
-    
-    let xmlText = null;
-    let lastError = null;
-    let usedProxy = '';
-    
-    // Use Promise.race for faster fallback
-    const proxyPromises = proxies.map(async (proxyUrl) => {
-      try {
-        console.log('Trying proxy:', proxyUrl);
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 45000); // Reduced timeout
-        
-        const response = await fetch(proxyUrl, {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/xml, text/xml, */*',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const text = await response.text();
-        return { text, proxy: proxyUrl };
-        
-      } catch (error) {
-        console.log('Proxy failed:', error.message);
-        throw error;
-      }
-    });
-    
-    try {
-      const result = await Promise.any(proxyPromises);
-      xmlText = result.text;
-      usedProxy = result.proxy;
-      console.log('EPG XML received from proxy, length:', xmlText.length);
-    } catch (error) {
-      throw new Error('All proxies failed: ' + error.message);
-    }
-    
-    // Parse XML with error handling
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-    
-    // Check for parsing errors
-    const parseError = xmlDoc.querySelector('parsererror');
-    if (parseError) {
-      throw new Error('XML parsing failed: ' + parseError.textContent);
-    }
-    
-    console.log('XML parsed successfully, checking for channels...');
-    console.log('XML document root:', xmlDoc.documentElement?.tagName);
-    console.log('Number of programme elements:', xmlDoc.querySelectorAll('programme').length);
-    
-    // Parse programs with performance optimization
-    epgData = parseEPGXML(xmlDoc);
-    
-    // Debug: Check if we got any data
-    console.log('EPG channels found:', Object.keys(epgData).length);
-    console.log('Sample EPG channel IDs:', Object.keys(epgData).slice(0, 5));
-    console.log('Sample channel data:', Object.values(epgData).slice(0, 1));
-    
-    // Cache the data
-    localStorage.setItem('glz-epg-cache', JSON.stringify(epgData));
-    localStorage.setItem('glz-epg-cache-time', Date.now().toString());
-    epgLastUpdate = Date.now();
-    
-    // Update options display if it's open
-    updateOptionsDisplay();
-    
-    // Update header program display
-    if (channels[current] && channels[current].id) {
-      updateHeaderProgram(channels[current].id);
-    }
-    
-    console.log('EPG data parsed successfully:', Object.keys(epgData).length, 'channels');
-    console.log('Available EPG channel IDs (first 20):', Object.keys(epgData).slice(0, 20));
-    
-  } catch (error) {
-    console.error('EPG fetch failed:', error);
-    showStatus('EPG data unavailable', 3000);
-    console.log('❌ EPG data not available - no fallback will be shown');
-  } finally {
-    epgLoading = false;
-  }
+  console.log('EPG disabled');
+  epgData = {};
+  epgLoading = false;
+  epgLastUpdate = null;
+  localStorage.removeItem('glz-epg-cache');
+  localStorage.removeItem('glz-epg-cache-time');
 }
 
 /**
@@ -731,7 +609,6 @@ function showStatus(msg, duration = 3000) {
 function showOptions() {
   if (optionsOverlay) {
     optionsOverlay.style.display = 'flex';
-    loadEPGSettings();
     updateOptionsDisplay();
   }
 }
@@ -743,30 +620,8 @@ function hideOptions() {
 }
 
 function updateOptionsDisplay() {
-  // Update EPG status
-  if (epgStatus) {
-    if (epgLoading) {
-      epgStatus.textContent = 'Loading...';
-      epgStatus.className = 'epg-status loading';
-    } else if (epgData && Object.keys(epgData).length > 0) {
-      epgStatus.textContent = 'Available';
-      epgStatus.className = 'epg-status available';
-    } else {
-      epgStatus.textContent = 'Unavailable';
-      epgStatus.className = 'epg-status unavailable';
-    }
-  }
-  
-  // Update EPG last update time
-  if (epgLastUpdateDisplay) {
-    if (epgLastUpdate) {
-      const date = new Date(epgLastUpdate);
-      epgLastUpdateDisplay.textContent = date.toLocaleString();
-    } else {
-      epgLastUpdateDisplay.textContent = 'Never';
-    }
-  }
-  
+  // EPG removed; leave status untouched
+
   // Update connection status
   if (connectionStatusDisplay) {
     connectionStatusDisplay.textContent = navigator.onLine ? 'Online' : 'Offline';
@@ -775,32 +630,8 @@ function updateOptionsDisplay() {
   }
 }
 
-async function reloadEPGData() {
-  if (epgLoading) {
-    showStatus('EPG already loading...', 2000);
-    return;
-  }
-  
-  showStatus('Reloading EPG data...', 2000);
-  console.log('Manual EPG reload requested');
-  
-  // Clear cache to force fresh fetch
-  localStorage.removeItem('glz-epg-cache');
-  localStorage.removeItem('glz-epg-cache-time');
-  
-  // Update display to show loading
-  updateOptionsDisplay();
-  
-  try {
-    await fetchEPGData();
-    showStatus('EPG data reloaded successfully!', 3000);
-    updateOptionsDisplay();
-  } catch (error) {
-    console.error('Manual EPG reload failed:', error);
-    showStatus('EPG reload failed', 3000);
-    updateOptionsDisplay();
-  }
-}
+async function reloadEPGData() { showStatus('EPG disabled', 2000); }
+async function forceReloadEPGData() { showStatus('EPG disabled', 2000); }
 
 function clearAllCache() {
   showStatus('Clearing cache...', 2000);
@@ -822,79 +653,7 @@ function clearAllCache() {
   updateOptionsDisplay();
 }
 
-// EPG Settings Management
-function loadEPGSettings() {
-  // Load EPG source
-  const savedSource = localStorage.getItem('glz-epg-source') || 'epgshare01';
-  if (epgSourceSelect) {
-    epgSourceSelect.value = savedSource;
-  }
-  
-  // Load custom URL
-  const customUrl = localStorage.getItem('glz-epg-custom-url');
-  if (epgUrlInput && customUrl) {
-    epgUrlInput.value = customUrl;
-  }
-  
-  // Load auto refresh setting
-  const autoRefresh = localStorage.getItem('glz-epg-auto-refresh') !== 'false';
-  if (epgAutoRefresh) {
-    epgAutoRefresh.checked = autoRefresh;
-  }
-  
-  // Load cache duration
-  const cacheDuration = localStorage.getItem('glz-epg-cache-duration') || '30';
-  if (cacheDurationSelect) {
-    cacheDurationSelect.value = cacheDuration;
-  }
-  
-  // Update EPG URL based on settings
-  updateEPGURL();
-  
-  // Show/hide custom URL input
-  updateCustomUrlVisibility();
-}
-
-function saveEPGSettings() {
-  // Save EPG source
-  if (epgSourceSelect) {
-    localStorage.setItem('glz-epg-source', epgSourceSelect.value);
-  }
-  
-  // Save custom URL
-  if (epgUrlInput) {
-    localStorage.setItem('glz-epg-custom-url', epgUrlInput.value);
-  }
-  
-  // Save auto refresh setting
-  if (epgAutoRefresh) {
-    localStorage.setItem('glz-epg-auto-refresh', epgAutoRefresh.checked.toString());
-  }
-  
-  // Save cache duration
-  if (cacheDurationSelect) {
-    localStorage.setItem('glz-epg-cache-duration', cacheDurationSelect.value);
-  }
-  
-  // Update EPG URL
-  updateEPGURL();
-  
-  showStatus('EPG settings saved', 2000);
-}
-
-function updateEPGURL() {
-  if (!epgSourceSelect) return;
-  
-  const selectedSource = epgSourceSelect.value;
-  
-  if (selectedSource === 'custom' && epgUrlInput) {
-    EPG_URL = epgUrlInput.value.trim();
-  } else if (EPG_SOURCES[selectedSource]) {
-    EPG_URL = EPG_SOURCES[selectedSource];
-  }
-  
-  console.log('EPG URL updated to:', EPG_URL);
-}
+// EPG settings removed
 
 function updateCustomUrlVisibility() {
   if (!epgSourceSelect || !customEpgUrlItem) return;
@@ -1568,6 +1327,11 @@ function playChannel(idx) {
   // Update UI
   updateChannelDisplay();
   showLoading();
+  hideGuide();
+  const mobileListSection = document.getElementById('mobile-channel-list-section');
+  if (mobileListSection) {
+    mobileListSection.style.display = 'none';
+  }
 
   // Stop any current playback
   if (hls) {
@@ -1886,6 +1650,11 @@ function setStandby(on) {
 function showChannelBanner() {
   if (!channels[current]) return;
   
+  if (channelBannerTimer) {
+    clearTimeout(channelBannerTimer);
+    channelBannerTimer = null;
+  }
+
   const channel = channels[current];
   const programInfo = getCurrentProgram(channel.id);
   
@@ -1907,10 +1676,11 @@ function showChannelBanner() {
   channelBanner.classList.add('show');
   
   // Hide banner after delay
-  setTimeout(() => {
+  channelBannerTimer = setTimeout(() => {
     if (channelBanner.classList.contains('show')) {
       channelBanner.classList.remove('show');
     }
+    channelBannerTimer = null;
   }, 3000);
 }
 
@@ -2066,6 +1836,7 @@ if (mobileOptionsBtn) mobileOptionsBtn.onclick = showOptions;
 if (headerOptionsBtn) headerOptionsBtn.onclick = showSettings;
 if (closeOptions) closeOptions.onclick = hideOptions;
 if (reloadEpgBtn) reloadEpgBtn.onclick = reloadEPGData;
+if (forceEpgBtn) forceEpgBtn.onclick = forceReloadEPGData;
 if (clearCacheBtn) clearCacheBtn.onclick = clearAllCache;
 if (themeToggleBtn) themeToggleBtn.onclick = toggleTheme;
 if (miniGuideClose) miniGuideClose.onclick = hideMiniGuide;
@@ -2118,11 +1889,14 @@ if (searchInput) {
 
 // Event delegation for channel lists
 function handleChannelListClick(event) {
-    const item = event.target.closest('.channel-item, .mobile-channel-item');
+    const item = event.target.closest('.channel-item, .mobile-channel-item, .desktop-channel-item');
     if (item && item.dataset.idx) {
         playChannel(Number(item.dataset.idx));
-        // Optionally hide the guide after selection
         hideGuide();
+        const mobileListSection = document.getElementById('mobile-channel-list-section');
+        if (mobileListSection) {
+          mobileListSection.style.display = 'none';
+        }
     }
 }
 if (channelList) channelList.addEventListener('click', handleChannelListClick);
@@ -2389,24 +2163,6 @@ function showChannelBanner() {
   initSettings();
   initWeather();
 
-  // --- Layout Observer for Weather Bar ---
-  const weatherBar = document.getElementById('weather-bottom-bar');
-  const mainContent = document.querySelector('.main-content');
-  const videoContainer = document.getElementById('desktop-video-container') || document.getElementById('mobile-video-container') || document.getElementById('video-container');
-
-  if (weatherBar && mainContent && videoContainer) {
-    const weatherObserver = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        // Check if the weather bar is rendered and visible
-        const isVisible = entry.target.offsetHeight > 0 && getComputedStyle(entry.target).display !== 'none';
-        mainContent.classList.toggle('weather-visible', isVisible);
-        videoContainer.classList.toggle('weather-visible', isVisible);
-      }
-    });
-
-    weatherObserver.observe(weatherBar);
-  }
-
 })();
 
 // Settings functionality
@@ -2509,7 +2265,7 @@ function updateSettingsDisplay() {
   }
 
   if (weatherLocationInput) {
-    const location = localStorage.getItem('glz-weather-location') || 'San Juan, PR';
+    const location = localStorage.getItem('glz-weather-location') || '33844';
     weatherLocationInput.value = location;
   }
 
@@ -2521,12 +2277,22 @@ function updateSettingsDisplay() {
 
 // Weather functionality
 function initWeather() {
-  const location = localStorage.getItem('glz-weather-location') || 'Orlando, FL';
-  fetchWeather(location);
+  const fallbackLocation = '33844';
+  const savedLocation = localStorage.getItem('glz-weather-location') || fallbackLocation;
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => fetchWeather({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => fetchWeather(savedLocation),
+      { timeout: 5000 }
+    );
+  } else {
+    fetchWeather(savedLocation);
+  }
   
   // Update weather every 30 minutes
   setInterval(() => {
-    const currentLocation = localStorage.getItem('glz-weather-location') || 'Orlando, FL';
+    const currentLocation = localStorage.getItem('glz-weather-location') || fallbackLocation;
     fetchWeather(currentLocation);
   }, 30 * 60 * 1000);
 }
@@ -2536,8 +2302,13 @@ async function fetchWeather(location) {
     const units = localStorage.getItem('glz-weather-units') || 'imperial';
     const apiKey = 'c464a91ff8b9454fe6721e52a798faae';
     
+    const isCoords = typeof location === 'object' && location.lat && location.lon;
+    const query = isCoords ? `lat=${location.lat}&lon=${location.lon}` : `q=${encodeURIComponent(location)}`;
+    const safeLocation = isCoords ? `${location.lat},${location.lon}` : location;
+    localStorage.setItem('glz-weather-location', safeLocation || '33844');
+
     // Fetch current weather
-    const currentResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&units=${units}&appid=${apiKey}`);
+    const currentResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?${query}&units=${units}&appid=${apiKey}`);
     
     if (!currentResponse.ok) {
       throw new Error(`Weather API error: ${currentResponse.status}`);
@@ -2546,7 +2317,7 @@ async function fetchWeather(location) {
     const currentWeather = await currentResponse.json();
     
     // Fetch 5-day forecast
-    const forecastResponse = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${location}&units=${units}&appid=${apiKey}`);
+    const forecastResponse = await fetch(`https://api.openweathermap.org/data/2.5/forecast?${query}&units=${units}&appid=${apiKey}`);
     
     if (!forecastResponse.ok) {
       throw new Error(`Forecast API error: ${forecastResponse.status}`);
@@ -2568,30 +2339,15 @@ function updateWeatherDisplay(currentWeather, forecastData, units) {
   const weatherTemp = document.getElementById('desktop-weather-temp') || document.getElementById('weather-temp');
   const weatherLocation = document.getElementById('desktop-weather-location') || document.getElementById('weather-location');
 
-  // Update bottom bar weather
-  const weatherIconLarge = document.getElementById('weather-icon-large');
-  const weatherTempLarge = document.getElementById('weather-temp-large');
-  const weatherLocationLarge = document.getElementById('weather-location-large');
-  const weatherDescription = document.getElementById('weather-description');
-  const weatherHumidity = document.getElementById('weather-humidity');
-  const weatherWind = document.getElementById('weather-wind');
-  const weatherFeelsLike = document.getElementById('weather-feels-like');
-  const weatherForecast = document.getElementById('weather-forecast');
-
   if (!currentWeather) {
     // Set fallback values
     const fallbackIcon = '🌤️';
     const fallbackTemp = '--°';
     const fallbackLocation = 'Weather unavailable';
     
-    [weatherIcon, weatherIconLarge].forEach(el => { if (el) el.textContent = fallbackIcon; });
-    [weatherTemp, weatherTempLarge].forEach(el => { if (el) el.textContent = fallbackTemp; });
-    [weatherLocation, weatherLocationLarge].forEach(el => { if (el) el.textContent = fallbackLocation; });
-    if (weatherDescription) weatherDescription.textContent = '--';
-    if (weatherHumidity) weatherHumidity.textContent = '--%';
-    if (weatherWind) weatherWind.textContent = '-- mph';
-    if (weatherFeelsLike) weatherFeelsLike.textContent = '--°';
-    if (weatherForecast) weatherForecast.innerHTML = '<div class="forecast-day"><div class="forecast-date">Forecast unavailable</div></div>';
+    [weatherIcon].forEach(el => { if (el) el.textContent = fallbackIcon; });
+    [weatherTemp].forEach(el => { if (el) el.textContent = fallbackTemp; });
+    [weatherLocation].forEach(el => { if (el) el.textContent = fallbackLocation; });
     return;
   }
 
@@ -2620,84 +2376,9 @@ function updateWeatherDisplay(currentWeather, forecastData, units) {
   if (weatherIcon) weatherIcon.textContent = weatherIconText;
   if (weatherTemp) weatherTemp.textContent = `${temp}${unit}`;
   if (weatherLocation) weatherLocation.textContent = currentWeather.name;
-
-  // Update bottom bar
-  if (weatherIconLarge) weatherIconLarge.textContent = weatherIconText;
-  if (weatherTempLarge) weatherTempLarge.textContent = `${temp}${unit}`;
-  if (weatherLocationLarge) weatherLocationLarge.textContent = currentWeather.name;
-  if (weatherDescription) weatherDescription.textContent = currentWeather.weather[0].description;
-  if (weatherHumidity) weatherHumidity.textContent = `${humidity}%`;
-  if (weatherWind) weatherWind.textContent = `${windSpeed} ${windUnit}`;
-  if (weatherFeelsLike) weatherFeelsLike.textContent = `${feelsLike}${unit}`;
-
-  // Update forecast
-  if (weatherForecast && forecastData) {
-    updateForecastDisplay(forecastData, units);
-  }
 }
 
-function updateForecastDisplay(forecastData, units) {
-  const weatherForecast = document.getElementById('weather-forecast');
-  if (!weatherForecast) return;
-
-  // Group forecast by day and get daily high/low
-  const dailyForecasts = {};
-  const iconMap = {
-    'Clear': '☀️',
-    'Clouds': '☁️',
-    'Rain': '🌧️',
-    'Snow': '❄️',
-    'Thunderstorm': '⛈️',
-    'Drizzle': '🌦️',
-    'Mist': '🌫️',
-    'Fog': '🌫️',
-    'Haze': '🌫️'
-  };
-
-  forecastData.list.forEach(item => {
-    const date = new Date(item.dt * 1000);
-    const day = date.toLocaleDateString('en-US', { weekday: 'short' });
-    
-    if (!dailyForecasts[day]) {
-      dailyForecasts[day] = {
-        high: -Infinity,
-        low: Infinity,
-        icon: item.weather[0].main,
-        description: item.weather[0].description
-      };
-    }
-    
-    const temp = item.main.temp;
-    if (temp > dailyForecasts[day].high) {
-      dailyForecasts[day].high = temp;
-      dailyForecasts[day].icon = item.weather[0].main;
-    }
-    if (temp < dailyForecasts[day].low) {
-      dailyForecasts[day].low = temp;
-    }
-  });
-
-  // Generate forecast HTML
-  const unit = units === 'imperial' ? '°F' : '°C';
-  const forecastHTML = Object.entries(dailyForecasts).slice(0, 5).map(([day, forecast]) => {
-    const icon = iconMap[forecast.icon] || '🌤️';
-    const high = Math.round(forecast.high);
-    const low = Math.round(forecast.low);
-    
-    return `
-      <div class="forecast-day">
-        <div class="forecast-date">${day}</div>
-        <div class="forecast-icon">${icon}</div>
-        <div class="forecast-temp">
-          <span class="forecast-high">${high}°</span>
-          <span class="forecast-low">${low}°</span>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  weatherForecast.innerHTML = forecastHTML;
-}
+// Forecast display removed with bottom bar
 
 // Performance optimizations
 function addLazyLoading() {

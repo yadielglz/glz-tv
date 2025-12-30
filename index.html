@@ -1,337 +1,349 @@
-<!-- 
-🔒 GLZ TV - DESKTOP VERSION - LOCKED FOR PRODUCTION
-✅ WORKING STATE: Standby mode, autoplay enabled, channel selection working
-📅 LOCKED DATE: 2024-12-19
-⚠️  DO NOT MODIFY - THIS IS THE STABLE DESKTOP VERSION
--->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <!-- PWA Meta Tags -->
-    <meta name="application-name" content="GLZ TV">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="GLZ TV">
-    <meta name="format-detection" content="telephone=no">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="msapplication-config" content="/browserconfig.xml">
-    <meta name="msapplication-TileColor" content="#667eea">
-    <meta name="msapplication-tap-highlight" content="no">
-    <meta name="theme-color" content="#667eea">
-    
-    <!-- Additional PWA Icons -->
-    <link rel="apple-touch-icon" sizes="180x180" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDE4MCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxODAiIGhlaWdodD0iMTgwIiByeD0iMjIiIGZpbGw9InVybCgjZ3JhZGllbnQpIi8+Cjx0ZXh0IHg9IjkwIiB5PSI5NSIgeWZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSI0NSIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+R0xaPC90ZXh0Pgo8dGV4dCB4PSI5MCIgeT0iMTIwIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5UVjwvdGV4dD4KPGRlZnM+CjxsaW5lYXJHcmFkaWVudCBpZD0iZ3JhZGllbnQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgo8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNjY3ZWVhO3N0b3Atb3BhY2l0eToxIiAvPgo8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiM3NjRiYTI7c3RvcC1vcGFjaXR5OjEiIC8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+">
-    <link rel="icon" type="image/svg+xml" sizes="32x32" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNCIgZmlsbD0idXJsKCNncmFkaWVudCkiLz4KPHRleHQgeD0iMTYiIHk9IjE3IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iOCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+R0xaPC90ZXh0Pgo8dGV4dCB4PSIxNiIgeT0iMjIiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIzIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VFY8L3RleHQ+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRpZW50IiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6IzY2N2VlYTtzdG9wLW9wYWNpdHk6MSIgLz4KPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNzY0YmEyO3N0b3Atb3BhY2l0eToxIiAvPgo8L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM+Cjwvc3ZnPg==">
-    <link rel="icon" type="image/svg+xml" sizes="16x16" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiByeD0iMiIgZmlsbD0idXJsKCNncmFkaWVudCkiLz4KPHRleHQgeD0iOCIgeT0iOSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjQiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkdMWjwvdGV4dD4KPGRlZnM+CjxsaW5lYXJHcmFkaWVudCBpZD0iZ3JhZGllbnQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgo8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNjY3ZWVhO3N0b3Atb3BhY2l0eToxIiAvPgo8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiM3NjRiYTI7c3RvcC1vcGFjaXR5OjEiIC8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GLZ TV - Simple Clean Interface</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="manifest" href="manifest.json">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="application-name" content="GLZ TV">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GLZ TV">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="msapplication-config" content="/browserconfig.xml">
+  <meta name="msapplication-TileColor" content="#1b1f2f">
+  <meta name="msapplication-tap-highlight" content="no">
+  <meta name="theme-color" content="#1b1f2f">
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <title>GLZ TV</title>
 </head>
-<body>
-    <!-- Desktop Header: GLZ TV (left) | Clock (center) | Buttons (right) -->
-    <header class="desktop-header desktop-only">
-        <div class="brand-logo">GLZ TV</div>
-        <div class="desktop-header-center">
-            <div class="time-display" id="desktop-time-display">--:--</div>
-        </div>
-        <div class="header-controls">
-            <button class="sidebar-toggle-btn" id="desktop-sidebar-toggle-btn" title="Channels">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-            </button>
-            <button class="power-btn" id="desktop-power-btn" title="Power">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-                    <line x1="12" y1="2" x2="12" y2="12"></line>
-                </svg>
-            </button>
-            <button class="header-options-btn" id="desktop-header-options-btn" title="Settings">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
-            </button>
-        </div>
-    </header>
-
-    <!-- Mobile Header: GLZ TV (left) | Clock (center) | Buttons (right) -->
-    <header class="mobile-header mobile-only">
-        <div class="mobile-header-left">
-            <div class="brand-logo">GLZ TV</div>
-        </div>
-        <div class="mobile-header-center">
-            <div class="time-display" id="mobile-time-display">--:--</div>
-        </div>
-        <div class="mobile-header-right">
-            <div class="header-controls">
-                <button class="header-btn power-btn" id="mobile-power-btn" title="Power">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-                        <line x1="12" y1="2" x2="12" y2="12"></line>
-                    </svg>
-                </button>
-                <button class="header-btn header-options-btn" id="mobile-header-options-btn" title="Settings">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                    </svg>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Desktop Main Content: Video Player (full width) -->
-    <div class="desktop-main-content desktop-only">
-        <!-- Video Player - Full width between top and bottom bars -->
-        <div class="desktop-video-section">
-            <div class="desktop-video-container" id="desktop-video-container">
-                <video id="desktop-video" controls autoplay playsinline>
-                    Your browser does not support the video tag.
-                </video>
-                <audio id="desktop-audio" controls autoplay>
-                    Your browser does not support the audio tag.
-                </audio>
-                <div class="loading-indicator" id="desktop-loading-indicator" style="display: none;">
-                    Loading...
-                </div>
-            </div>
-        </div>
-        
-        <!-- Channel Sidebar - Flyover 1/3 right of video player -->
-        <div class="desktop-sidebar" id="desktop-sidebar">
-            <div class="desktop-sidebar-header">
-                <h2 class="desktop-sidebar-title">Channel Guide</h2>
-                <button class="desktop-close-sidebar-btn" id="desktop-close-sidebar-btn">×</button>
-            </div>
-            <div class="desktop-channel-list-section">
-                <div class="desktop-channel-list-title">Channels</div>
-                <div class="desktop-channel-list" id="desktop-channel-list">
-                    <!-- Channels will be populated by JavaScript -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Mobile Main Content -->
-    <div class="mobile-main-content mobile-only">
-        <!-- Video Player - Full width between top and mid bar -->
-        <div class="mobile-video-section">
-            <div class="mobile-video-container" id="mobile-video-container">
-                <video id="mobile-video" controls autoplay playsinline>
-                    Your browser does not support the video tag.
-                </video>
-                <audio id="mobile-audio" controls autoplay>
-                    Your browser does not support the audio tag.
-                </audio>
-                <div class="loading-indicator" id="mobile-loading-indicator" style="display: none;">
-                    Loading...
-                </div>
-            </div>
-        </div>
-
-        <!-- Mid Bar - Channel Number (left) | Channel Name (center & right) -->
-        <div class="mobile-mid-bar">
-            <div class="mobile-channel-number" id="mobile-channel-number">--</div>
-            <div class="mobile-channel-name" id="mobile-channel-name">Select Channel</div>
-        </div>
-
-        <!-- Channel List - Below Mid Bar -->
-        <div class="mobile-channel-list-section">
-            <div class="mobile-channel-list" id="mobile-channel-list">
-                <!-- Channel items will be dynamically populated here -->
-            </div>
-        </div>
-    </div>
-
-
-    <!-- Desktop Weather Bottom Bar: Channel Info (left) | Current Weather (right) -->
-    <div class="desktop-weather-bar desktop-only" id="desktop-weather-bar">
-        <!-- Channel Info Section - Left -->
-        <div class="desktop-weather-channel-info">
-            <div class="desktop-weather-channel-number" id="desktop-weather-channel-number">--</div>
-            <div class="desktop-weather-channel-name" id="desktop-weather-channel-name">Select Channel</div>
-        </div>
-        
-        <!-- Current Weather Section - Right -->
-        <div class="desktop-weather-current" id="desktop-weather-current">
-            <div class="weather-icon" id="desktop-weather-icon">🌤️</div>
-            <div class="weather-temp" id="desktop-weather-temp">--°</div>
-            <div class="weather-location" id="desktop-weather-location">Loading...</div>
-        </div>
-    </div>
-
-    <!-- Standby Screen -->
-    <div class="standby-screen show" id="standby-screen">
-        <div class="standby-content">
-            <div class="standby-logo">GLZ TV</div>
-            <div class="standby-text">Click to power on</div>
-        </div>
-    </div>
-
-    <!-- Status Message -->
+<body data-theme="dark">
+  <div class="app-surface">
+    <div class="bg-grid"></div>
     <div class="status-message" id="status-message"></div>
 
-    <!-- Settings Overlay -->
-    <div class="settings-overlay" id="settings-overlay">
-        <div class="settings-content">
-            <div class="settings-header">
-                <h2>Settings</h2>
-                <button class="close-settings" id="close-settings">×</button>
-            </div>
-            <div class="settings-body">
-                <!-- Theme Settings -->
-                <div class="settings-section">
-                    <h3>Theme</h3>
-                    <div class="setting-item">
-                        <label for="theme-select">Theme Mode:</label>
-                        <select id="theme-select" title="Theme mode">
-                            <option value="auto">Auto (System)</option>
-                            <option value="light">Light</option>
-                            <option value="dark">Dark</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Cache Settings -->
-                <div class="settings-section">
-                    <h3>Cache & Storage</h3>
-                    <div class="setting-item">
-                        <label>Clear Cache:</label>
-                        <button class="setting-btn" id="clear-cache-btn">Clear All Cache</button>
-                    </div>
-                    <div class="setting-item">
-                        <label>Last Channel:</label>
-                        <span id="last-channel-display">None</span>
-                    </div>
-                </div>
-
-                <!-- Weather Settings -->
-                <div class="settings-section">
-                    <h3>Weather</h3>
-                    <div class="setting-item">
-                        <label for="weather-location-input">Location:</label>
-                        <input type="text" id="weather-location-input" placeholder="Enter city name">
-                        <button class="setting-btn" id="update-weather-btn">Update</button>
-                    </div>
-                    <div class="setting-item">
-                        <label for="weather-units-select">Units:</label>
-                        <select id="weather-units-select" title="Weather units">
-                            <option value="metric">Celsius (°C)</option>
-                            <option value="imperial">Fahrenheit (°F)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- About -->
-                <div class="settings-section">
-                    <h3>About</h3>
-                    <div class="setting-item">
-                        <label>Version:</label>
-                        <span>GLZ TV v1.0</span>
-                    </div>
-                    <div class="setting-item">
-                        <label>Channels:</label>
-                        <span id="channel-count-display">--</span>
-                    </div>
-                </div>
-            </div>
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand-logo">GLZ TV</div>
+        <span class="badge live-pill">Live</span>
+      </div>
+      <div class="topbar-center">
+        <div class="time-block">
+          <div class="time-display" id="desktop-time-display">--:--</div>
+          <div class="time-display mobile-only" id="mobile-time-display">--:--</div>
+          <div class="date-display" id="date-display">--</div>
         </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="desktop-sidebar-toggle-btn" title="Channel guide">
+          <span class="icon">☰</span>
+        </button>
+        <button class="icon-btn" id="mini-guide-toggle" title="Mini guide">
+          <span class="icon">⌗</span>
+        </button>
+        <button class="icon-btn" id="desktop-header-options-btn" title="Settings">
+          <span class="icon">⚙</span>
+        </button>
+        <button class="icon-btn danger" id="desktop-power-btn" title="Power">
+          <span class="icon">⏻</span>
+        </button>
+        <button class="icon-btn ghost mobile-only" id="mobile-sidebar-toggle-btn" title="Channels">
+          <span class="icon">☰</span>
+        </button>
+        <button class="icon-btn ghost mobile-only" id="mobile-header-options-btn" title="Settings">
+          <span class="icon">⚙</span>
+        </button>
+        <button class="icon-btn ghost mobile-only" id="mobile-power-btn" title="Power">
+          <span class="icon">⏻</span>
+        </button>
+        <button class="icon-btn ghost sr-only" id="header-options-btn" aria-label="Legacy settings"></button>
+        <button class="icon-btn ghost sr-only" id="power-btn" aria-label="Legacy power"></button>
+      </div>
+    </header>
+
+    <main class="layout-grid">
+      <section class="player-stack">
+        <div class="desktop-video-section">
+          <div class="desktop-video-container" id="desktop-video-container">
+            <video id="desktop-video" controls autoplay playsinline>
+              Your browser does not support the video tag.
+            </video>
+            <audio id="desktop-audio" controls autoplay>
+              Your browser does not support the audio tag.
+            </audio>
+            <div class="loading-indicator" id="desktop-loading-indicator">
+              <div class="loading-spinner"></div>
+              <div class="loading-text">Loading channel...</div>
+            </div>
+            <div class="channel-overlay glass" id="channel-banner">
+              <div class="overlay-top">
+                <div class="channel-logo-wrap">
+                  <img id="channel-logo-img" alt="Channel logo">
+                  <div id="channel-logo-placeholder">TV</div>
+                </div>
+                <div class="overlay-meta">
+                  <div class="channel-number" id="desktop-weather-channel-number">--</div>
+                  <div class="channel-name" id="desktop-weather-channel-name">Select Channel</div>
+                  <div class="program-line" id="current-program">Waiting for program info</div>
+                </div>
+                <span class="badge subtle" id="connection-status-display">Online</span>
+              </div>
+              <div class="overlay-progress">
+                <div class="progress-track">
+                  <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <div class="next-up" id="banner-name">Next up • --</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mobile-video-panel mobile-only">
+          <div class="mobile-video-container" id="mobile-video-container">
+            <video id="mobile-video" controls autoplay playsinline>
+              Your browser does not support the video tag.
+            </video>
+            <audio id="mobile-audio" controls autoplay>
+              Your browser does not support the audio tag.
+            </audio>
+            <div class="loading-indicator" id="mobile-loading-indicator">
+              <div class="loading-spinner"></div>
+              <div class="loading-text">Loading channel...</div>
+            </div>
+          </div>
+          <div class="mobile-now">
+            <div class="mobile-channel-number" id="mobile-channel-number">--</div>
+            <div class="mobile-channel-info">
+              <div class="mobile-channel-name" id="mobile-channel-name">Select Channel</div>
+              <div class="mobile-program" id="mobile-current-program">Waiting for program info</div>
+            </div>
+            <button class="pill-btn" id="mobile-channel-toggle">Guide</button>
+          </div>
+          <div class="mobile-channel-list-section" id="mobile-channel-list-section">
+            <div class="mobile-channel-list" id="mobile-channel-list"></div>
+          </div>
+        </div>
+
+        <div class="info-row">
+          <div class="now-card glass">
+            <div class="now-head">
+              <div class="pill">Now Playing</div>
+              <div class="epg-quick" id="epg-info">EPG loading…</div>
+            </div>
+            <div class="now-body">
+              <div class="channel-number tiny" id="channel-number">--</div>
+              <div class="now-text">
+                <div class="channel-name" id="channel-name">Select Channel</div>
+                <div class="program-line" id="banner-channel">---</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="weather-card glass desktop-only" id="desktop-weather-bar">
+            <div class="weather-left">
+              <div class="weather-icon" id="desktop-weather-icon">🌤️</div>
+              <div class="weather-temp" id="desktop-weather-temp">--°</div>
+              <div class="weather-location" id="desktop-weather-location">Loading…</div>
+            </div>
+            <div class="weather-right">
+              <div class="forecast" id="desktop-weather-forecast"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="guide-panel">
+        <div class="desktop-sidebar open" id="desktop-sidebar">
+          <div class="desktop-sidebar-header">
+            <div>
+              <p class="eyebrow">Channel guide</p>
+              <h2 class="desktop-sidebar-title">All Channels</h2>
+            </div>
+            <div class="sidebar-actions">
+              <button class="icon-btn ghost" id="desktop-close-sidebar-btn" title="Close">×</button>
+            </div>
+          </div>
+          <div class="search-row">
+            <input id="search-input" type="search" placeholder="Search channels…">
+            <button class="pill-btn" id="clear-cache-inline">Clear Cache</button>
+          </div>
+          <div class="desktop-channel-list" id="desktop-channel-list"></div>
+        </div>
+      </aside>
+    </main>
+
+    <div class="options-overlay" id="options-overlay">
+      <div class="options-panel glass">
+        <div class="options-header">
+          <h3>Quick Controls</h3>
+          <button class="icon-btn ghost" id="close-options">×</button>
+        </div>
+        <div class="options-grid">
+          <div class="option">
+            <label>Theme</label>
+            <button class="toggle-btn" id="theme-toggle-btn" type="button">
+              <svg class="toggle-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+              <span id="theme-toggle-text">Dark Mode</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- HLS.js for HLS stream support -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
-    
-    <!-- Main Application Script -->
-    <script src="app.js"></script>
-    
-    <!-- PWA Service Worker Registration -->
-    <script>
-        // Register Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', async () => {
-                try {
-                    const registration = await navigator.serviceWorker.register('/sw.js');
-                    console.log('Service Worker registered successfully:', registration);
-                    
-                    // Handle service worker updates
-                    registration.addEventListener('updatefound', () => {
-                        const newWorker = registration.installing;
-                        newWorker.addEventListener('statechange', () => {
-                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                // New content is available, show update notification
-                                if (confirm('New version available! Reload to update?')) {
-                                    window.location.reload();
-                                }
-                            }
-                        });
-                    });
-                    
-                } catch (error) {
-                    console.error('Service Worker registration failed:', error);
+    <div class="mini-guide" id="mini-guide">
+      <div class="mini-guide-header">
+        <div>
+          <p class="eyebrow">Quick browse</p>
+          <h3>Mini Guide</h3>
+        </div>
+        <button class="icon-btn ghost" id="mini-guide-close">×</button>
+      </div>
+      <div class="mini-guide-content" id="mini-guide-content"></div>
+    </div>
+
+    <div class="help-overlay" id="help-overlay">
+      <div class="help-panel glass">
+        <div class="help-header">
+          <h3>Shortcuts</h3>
+          <button class="icon-btn ghost" id="close-help">×</button>
+        </div>
+        <div class="help-body" id="help-body">
+          <p>F3 opens quick options. Arrow keys change channels. Numbers jump directly.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-overlay" id="settings-overlay">
+      <div class="settings-content glass">
+        <div class="settings-header">
+          <h2>Settings</h2>
+          <button class="icon-btn ghost" id="close-settings">×</button>
+        </div>
+        <div class="settings-body">
+          <div class="settings-section">
+            <h3>Theme</h3>
+            <div class="setting-item">
+              <label for="theme-select">Theme mode</label>
+              <select id="theme-select">
+                <option value="auto">Auto</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Cache & Storage</h3>
+            <div class="setting-item">
+              <label>Clear cache</label>
+              <button class="pill-btn" id="clear-cache-btn">Clear</button>
+            </div>
+            <div class="setting-item">
+              <label>Last channel</label>
+              <span id="last-channel-display">None</span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Weather</h3>
+            <div class="setting-item">
+              <label for="weather-location-input">Location</label>
+              <input type="text" id="weather-location-input" placeholder="City">
+              <button class="pill-btn" id="update-weather-btn">Update</button>
+            </div>
+            <div class="setting-item">
+              <label for="weather-units-select">Units</label>
+              <select id="weather-units-select">
+                <option value="metric">Celsius (°C)</option>
+                <option value="imperial">Fahrenheit (°F)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>About</h3>
+            <div class="setting-item">
+              <label>Version</label>
+              <span>GLZ TV v1.0</span>
+            </div>
+            <div class="setting-item">
+              <label>Channels</label>
+              <span id="channel-count-display">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="standby-screen show" id="standby-screen">
+      <div class="standby-content">
+        <div class="standby-logo">GLZ TV</div>
+        <div class="standby-text">Click to power on</div>
+      </div>
+    </div>
+
+    <div class="remote-control" id="remote-control"></div>
+
+    <div class="sr-only" id="mobile-options-btn"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const registration = await navigator.serviceWorker.register('/sw.js');
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                if (confirm('New version available! Reload to update?')) {
+                  window.location.reload();
                 }
+              }
             });
+          });
+        } catch (error) {
+          console.error('Service Worker registration failed:', error);
         }
-        
-        // Handle PWA install prompt
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            console.log('PWA install prompt triggered');
-            e.preventDefault();
-            deferredPrompt = e;
-            
-            // Show install button or notification
-            // You can customize this based on your UI
-            if (confirm('Install GLZ TV as an app for better experience?')) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('User accepted the install prompt');
-                    } else {
-                        console.log('User dismissed the install prompt');
-                    }
-                    deferredPrompt = null;
-                });
-            }
-        });
-        
-        // Handle app installed event
-        window.addEventListener('appinstalled', (evt) => {
-            console.log('PWA was installed');
-        });
-        
-        // Handle URL shortcuts
-        const urlParams = new URLSearchParams(window.location.search);
-        const action = urlParams.get('action');
-        
-        if (action === 'guide') {
-            // Open channel guide
-            document.addEventListener('DOMContentLoaded', () => {
-                setTimeout(() => {
-                    const sidebarToggle = document.getElementById('sidebar-toggle-btn');
-                    if (sidebarToggle) {
-                        sidebarToggle.click();
-                    }
-                }, 1000);
-            });
-        } else if (action === 'settings') {
-            // Open settings
-            document.addEventListener('DOMContentLoaded', () => {
-                setTimeout(() => {
-                    const settingsBtn = document.getElementById('header-options-btn');
-                    if (settingsBtn) {
-                        settingsBtn.click();
-                    }
-                }, 1000);
-            });
-        }
-    </script>
+      });
+    }
+
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (confirm('Install GLZ TV for a faster launch?')) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.finally(() => deferredPrompt = null);
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+    });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');
+    if (action === 'guide') {
+      window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          const btn = document.getElementById('desktop-sidebar-toggle-btn');
+          if (btn) btn.click();
+        }, 800);
+      });
+    } else if (action === 'settings') {
+      window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          const btn = document.getElementById('desktop-header-options-btn') || document.getElementById('header-options-btn');
+          if (btn) btn.click();
+        }, 800);
+      });
+    }
+  </script>
 </body>
 </html>
