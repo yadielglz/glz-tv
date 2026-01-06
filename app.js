@@ -277,26 +277,12 @@ let connectionStatus = 'connected';
 let channelInput = '';
 let pwaInstallPrompt = null;
 let channelBannerTimer = null;
-// Forward declarations for handlers attached before definitions
-// EPG removed
-
-// EPG State
 let epgData = {};
 let epgLoading = false;
 let epgLastUpdate = null;
-const EPG_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-// EPG Sources
-const EPG_SOURCES = {
-  epgshare01: 'https://epgshare01.online/epgshare01/epg_ripper_ALL_SOURCES1.xml.gz',
-  epgshare02: 'https://epgshare02.online/epgshare02/epg_ripper_ALL_SOURCES2.xml.gz',
-  epgshare03: 'https://epgshare03.online/epgshare03/epg_ripper_ALL_SOURCES3.xml.gz',
-  uslocals: 'https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS2.xml.gz',
-  primary: 'https://epg.best/1eef8-shw7fc.xml.gz'
-};
-
-let EPG_URL = EPG_SOURCES.primary; // Default to provided EPG
-const LOCAL_EPG_PROXY = 'http://localhost:3000/api/epg';
-const CLOUD_EPG_PROXY = '/api/epg'; // Netlify function
+const SUPABASE_URL = 'https://qshymxnpcxwdxqxwrvrr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_q6lLsywo8fP9pME7-gKCfQ_ukLd7FnI';
+let supabaseClient = null;
 
 // --- DOM Elements ---
 const channelNumber = document.getElementById('desktop-weather-channel-number') || document.getElementById('mobile-channel-number') || document.getElementById('channel-number');
@@ -368,164 +354,171 @@ const epgStatus = document.getElementById('epg-status');
 const epgLastUpdateDisplay = document.getElementById('epg-last-update');
 const connectionStatusDisplay = document.getElementById('connection-status-display');
 
-// EPG Settings elements
-const epgSourceSelect = document.getElementById('epg-source-select');
-const customEpgUrlItem = document.getElementById('custom-epg-url-item');
-const epgUrlInput = document.getElementById('epg-url-input');
-const epgAutoRefresh = document.getElementById('epg-auto-refresh');
-const cacheDurationSelect = document.getElementById('cache-duration-select');
+// EPG Settings elements (unused)
+const epgSourceSelect = null;
+const customEpgUrlItem = null;
+const epgUrlInput = null;
+const epgAutoRefresh = null;
+const cacheDurationSelect = null;
 const themeToggleBtn = document.getElementById('theme-toggle-btn');
 const themeToggleText = document.getElementById('theme-toggle-text');
 const miniGuide = document.getElementById('mini-guide');
 const miniGuideClose = document.getElementById('mini-guide-close');
 const miniGuideContent = document.getElementById('mini-guide-content');
 
-// Remote control elements removed - no longer needed
-
-// --- EPG Functions ---
-
-/**
- * Fetches and parses EPG data from the XML URL
- */
-// EPG data cache with improved performance
-let epgCache = {
-  data: null,
-  timestamp: 0,
-  expiry: 0,
-  compressed: false
-};
-
-async function fetchEPGData() {
-  console.log('EPG disabled');
-  epgData = {};
-  epgLoading = false;
-  epgLastUpdate = null;
-  localStorage.removeItem('glz-epg-cache');
-  localStorage.removeItem('glz-epg-cache-time');
+// Supabase helpers
+function initSupabase() {
+  if (supabaseClient) return supabaseClient;
+  if (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('Supabase client initialized');
+  } else {
+    console.warn('Supabase client not available');
+  }
+  return supabaseClient;
 }
 
-/**
- * Parses XML EPG data into a structured format
- */
-function parseEPGXML(xmlDoc) {
-  const epg = {};
-  const programmes = xmlDoc.querySelectorAll('programme');
-  
-  programmes.forEach(programme => {
-    const channel = programme.getAttribute('channel');
-    const start = programme.getAttribute('start');
-    const stop = programme.getAttribute('stop');
-    const title = programme.querySelector('title')?.textContent || 'Unknown';
-    const desc = programme.querySelector('desc')?.textContent || '';
-    const category = programme.querySelector('category')?.textContent || '';
-    const rating = programme.querySelector('rating')?.querySelector('value')?.textContent || '';
-    
-    if (!epg[channel]) {
-      epg[channel] = [];
-    }
-    
-    epg[channel].push({
-      start: new Date(start),
-      stop: new Date(stop),
-      title,
-      desc,
-      category,
-      rating
+function mapChannelRow(row) {
+  return {
+    chno: row.chno || '',
+    name: row.name || row.tvg_name || 'Channel',
+    logo: row.logo || '',
+    url: row.stream_url || '',
+    id: row.tvg_id || '',
+    group: row.group_title || ''
+  };
+}
+
+async function loadChannelsFromSupabase() {
+  const client = initSupabase();
+  if (!client) return null;
+  const { data, error } = await client
+    .from('channels')
+    .select('*')
+    .order('chno', { nulls: 'last' });
+  if (error) {
+    console.error('Supabase channels error:', error);
+    return null;
+  }
+  return (data || []).map(mapChannelRow);
+}
+
+async function loadEpgFromSupabase() {
+  const client = initSupabase();
+  if (!client) return {};
+  const now = new Date();
+  const past = new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString();
+  const future = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await client
+    .from('programmes')
+    .select('channel_tvg_id,start_time,end_time,title,description,category,rating')
+    .gte('start_time', past)
+    .lte('start_time', future)
+    .order('start_time');
+  if (error) {
+    console.error('Supabase EPG error:', error);
+    return {};
+  }
+  const map = {};
+  (data || []).forEach(p => {
+    const cid = p.channel_tvg_id;
+    if (!map[cid]) map[cid] = [];
+    map[cid].push({
+      start: new Date(p.start_time),
+      stop: new Date(p.end_time),
+      title: p.title,
+      desc: p.description || '',
+      category: p.category || '',
+      rating: p.rating || ''
     });
   });
-  
-  // Sort programs by start time for each channel
-  Object.keys(epg).forEach(channel => {
-    epg[channel].sort((a, b) => a.start - b.start);
-  });
-  
-  return epg;
+  Object.keys(map).forEach(cid => map[cid].sort((a, b) => a.start - b.start));
+  return map;
 }
 
-/**
- * Gets current and next program for a channel
- */
 function getCurrentProgram(channelId) {
-  console.log('getCurrentProgram called with channelId:', channelId);
-  console.log('Available EPG channels:', Object.keys(epgData));
-  
-  if (!channelId || !epgData || Object.keys(epgData).length === 0) {
-    console.log('No EPG data available');
-    return null;
-  }
-  
-  // Try multiple channel ID formats for better matching
-  const possibleIds = [
-    channelId,
-    channelId?.toLowerCase(),
-    channelId?.toUpperCase(),
-    channelId?.replace(/\.us$/, ''),
-    channelId?.replace(/\.us$/, '.us'),
-    channelId?.replace(/\.es$/, ''),
-    channelId?.replace(/\.ec$/, ''),
-    channelId?.toString(),
-    // Try without country codes
-    channelId?.replace(/\.(us|es|ec)$/, ''),
-    // Try with different separators
-    channelId?.replace(/\./g, '_'),
-    channelId?.replace(/_/g, '.'),
-    // Try common variations
-    channelId?.replace(/\.us$/, '.US'),
-    channelId?.replace(/\.es$/, '.ES'),
-    channelId?.replace(/\.ec$/, '.EC')
-  ].filter(Boolean);
-  
-  console.log('Trying channel IDs:', possibleIds);
-  
-  let foundChannelId = null;
-  for (const id of possibleIds) {
-    if (epgData[id] && epgData[id].length > 0) {
-      foundChannelId = id;
-      console.log('Found EPG data for channel ID:', id);
-      break;
-    }
-  }
-  
-  // If still not found, try partial matching
-  if (!foundChannelId) {
-    const baseId = channelId.replace(/\.(us|es|ec)$/, '').toLowerCase();
-    for (const epgId of Object.keys(epgData)) {
-      if (epgId.toLowerCase().includes(baseId) || baseId.includes(epgId.toLowerCase())) {
-        if (epgData[epgId] && epgData[epgId].length > 0) {
-          foundChannelId = epgId;
-          console.log('Found EPG data via partial match:', epgId);
-          break;
-        }
-      }
-    }
-  }
-  
-  if (!foundChannelId) {
-    console.log('No EPG data found for any channel ID variation');
-    return null;
-  }
-  
+  if (!channelId || !epgData || Object.keys(epgData).length === 0) return null;
+  const programs = epgData[channelId] || [];
   const now = new Date();
-  const programs = epgData[foundChannelId];
-  
-  // Find current program
-  const currentProgram = programs.find(prog => 
-    prog.start <= now && prog.stop > now
-  );
-  
-  if (currentProgram) {
-    // Find next program
-    const nextProgram = programs.find(prog => 
-      prog.start >= currentProgram.stop
-    );
-    
-    return {
-      current: currentProgram,
-      next: nextProgram || null
-    };
+  const currentProgram = programs.find(p => p.start <= now && p.stop > now);
+  if (!currentProgram) return null;
+  const nextProgram = programs.find(p => p.start >= currentProgram.stop) || null;
+  return { current: currentProgram, next: nextProgram };
+}
+
+// Remote control elements removed - no longer needed
+
+// --- Supabase ---
+const SUPABASE_URL = 'https://qshymxnpcxwdxqxwrvrr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_q6lLsywo8fP9pME7-gKCfQ_ukLd7FnI';
+let supabaseClient = null;
+
+function initSupabase() {
+  if (supabaseClient) return supabaseClient;
+  if (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('Supabase client initialized');
+  } else {
+    console.warn('Supabase client not available');
   }
-  
-  return null;
+  return supabaseClient;
+}
+
+async function loadChannelsFromSupabase() {
+  const client = initSupabase();
+  if (!client) return null;
+  const { data, error } = await client
+    .from('channels')
+    .select('*')
+    .order('chno', { nulls: 'last' });
+  if (error) {
+    console.error('Supabase channels error:', error);
+    return null;
+  }
+  return data || [];
+}
+
+async function loadEpgFromSupabase() {
+  const client = initSupabase();
+  if (!client) return {};
+  const now = new Date();
+  const past = new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString();
+  const future = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await client
+    .from('programmes')
+    .select('channel_tvg_id,start_time,end_time,title,description,category,rating')
+    .gte('start_time', past)
+    .lte('start_time', future)
+    .order('start_time');
+  if (error) {
+    console.error('Supabase EPG error:', error);
+    return {};
+  }
+  const map = {};
+  data.forEach(p => {
+    const cid = p.channel_tvg_id;
+    if (!map[cid]) map[cid] = [];
+    map[cid].push({
+      start: new Date(p.start_time),
+      stop: new Date(p.end_time),
+      title: p.title,
+      desc: p.description || '',
+      category: p.category || '',
+      rating: p.rating || ''
+    });
+  });
+  Object.keys(map).forEach(cid => map[cid].sort((a, b) => a.start - b.start));
+  return map;
+}
+
+function getCurrentProgram(channelId) {
+  if (!channelId || !epgData || Object.keys(epgData).length === 0) return null;
+  const programs = epgData[channelId] || [];
+  const now = new Date();
+  const currentProgram = programs.find(p => p.start <= now && p.stop > now);
+  if (!currentProgram) return null;
+  const nextProgram = programs.find(p => p.start >= currentProgram.stop) || null;
+  return { current: currentProgram, next: nextProgram };
 }
 
 /**
@@ -654,35 +647,9 @@ function clearAllCache() {
 }
 
 // EPG settings removed
-
-function updateCustomUrlVisibility() {
-  if (!epgSourceSelect || !customEpgUrlItem) return;
-  
-  if (epgSourceSelect.value === 'custom') {
-    customEpgUrlItem.style.display = 'flex';
-  } else {
-    customEpgUrlItem.style.display = 'none';
-  }
-}
-
-async function changeEPGSource() {
-  saveEPGSettings();
-  
-  // Clear current EPG cache
-  localStorage.removeItem('glz-epg-cache');
-  localStorage.removeItem('glz-epg-cache-time');
-  
-  showStatus('EPG source changed, reloading data...', 2000);
-  
-  // Reload EPG data with new source
-  try {
-    await fetchEPGData();
-    showStatus('EPG data loaded from new source!', 3000);
-  } catch (error) {
-    console.error('Failed to load EPG from new source:', error);
-    showStatus('Failed to load EPG from new source', 3000);
-  }
-}
+function saveEPGSettings() {}
+function updateCustomUrlVisibility() {}
+async function changeEPGSource() { return; }
 function showLoading() {
   const currentLoadingIndicator = getCurrentLoadingIndicator();
   if (currentLoadingIndicator) {
@@ -2025,7 +1992,7 @@ function showChannelBanner() {
 // showStatus function is defined above
 
 // --- Enhanced Initialization ---
-(function init() {
+(async function init() {
   console.log('=== INITIALIZATION START ===');
   
   // Clear video-related cache on refresh to prevent stale segments
@@ -2056,14 +2023,23 @@ function showChannelBanner() {
     }
   });
   
-  channels = parseM3U(EMBEDDED_M3U);
-  console.log('Channels loaded:', channels.length);
-  
-  if (channels.length > 0) {
-    current = 0;
+  // Load channels from Supabase first, fallback to embedded M3U
+  const supaChannels = await loadChannelsFromSupabase();
+  if (supaChannels && supaChannels.length > 0) {
+    channels = supaChannels;
+    console.log('Channels loaded from Supabase:', channels.length);
   } else {
-    console.error('NO CHANNELS LOADED!');
+    channels = parseM3U(EMBEDDED_M3U);
+    console.log('Channels loaded from embedded M3U:', channels.length);
+    if (channels.length === 0) {
+      console.error('NO CHANNELS LOADED!');
+    } else {
+      current = 0;
+    }
   }
+
+  // Load EPG snapshot from Supabase
+  epgData = await loadEpgFromSupabase();
   
   // Load last channel from localStorage
   const lastChannelIndex = localStorage.getItem('glz-last-channel');
