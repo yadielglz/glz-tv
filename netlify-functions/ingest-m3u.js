@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const M3U_SOURCE_URL = process.env.M3U_SOURCE_URL || '';
 
 function parseM3U(text) {
@@ -35,8 +35,8 @@ function parseM3U(text) {
 }
 
 exports.handler = async () => {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
-    return { statusCode: 500, body: 'Missing Supabase configuration' };
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { statusCode: 500, body: `Missing Supabase configuration: SUPABASE_URL=${!!SUPABASE_URL}, SUPABASE_SERVICE_ROLE_KEY=${!!SUPABASE_SERVICE_ROLE_KEY}` };
   }
   if (!M3U_SOURCE_URL) {
     return { statusCode: 500, body: 'Missing M3U_SOURCE_URL' };
@@ -48,7 +48,7 @@ exports.handler = async () => {
     const text = await resp.text();
     const parsed = parseM3U(text);
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { error } = await supabase.from('channels').upsert(parsed, {
       onConflict: 'tvg_id,stream_url'
     });
