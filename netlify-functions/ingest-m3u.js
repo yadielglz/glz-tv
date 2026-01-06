@@ -42,9 +42,38 @@ exports.handler = async () => {
     return { statusCode: 500, body: 'Missing M3U_SOURCE_URL' };
   }
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+
+  let resp;
   try {
-    const resp = await fetch(M3U_SOURCE_URL, { timeout: 30000 });
-    if (!resp.ok) throw new Error(`M3U fetch failed: ${resp.status}`);
+    resp = await fetch(M3U_SOURCE_URL, {
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Accept': '*/*'
+      }
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    return {
+      statusCode: 500,
+      body: `Fetch error: ${err?.name || 'Error'}: ${err?.message || err}`
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    return {
+      statusCode: 500,
+      body: `M3U fetch failed: ${resp.status} ${resp.statusText}\n${body.slice(0, 500)}`
+    };
+  }
+
+  try {
     const text = await resp.text();
     const parsed = parseM3U(text);
 
