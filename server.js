@@ -71,6 +71,15 @@ async function loadDotEnv() {
   }
 }
 
+let dotenvPromise;
+
+function ensureEnvLoaded() {
+  if (!dotenvPromise) {
+    dotenvPromise = loadDotEnv();
+  }
+  return dotenvPromise;
+}
+
 function getMimeType(pathname) {
   const extension = extname(pathname).toLowerCase();
   switch (extension) {
@@ -850,9 +859,9 @@ async function serveStatic(req, res, url) {
   }
 }
 
-await loadDotEnv();
+async function routeRequest(req, res) {
+  await ensureEnvLoaded();
 
-createServer(async (req, res) => {
   if (!req.url) {
     send(res, 400, "Bad request");
     return;
@@ -901,6 +910,14 @@ createServer(async (req, res) => {
   }
 
   await serveStatic(req, res, url);
-}).listen(port, () => {
-  process.stdout.write(`Channel Surfer running at http://localhost:${port}\n`);
-});
+}
+
+if (process.argv[1] && normalize(process.argv[1]) === __filename) {
+  createServer(async (req, res) => {
+    await routeRequest(req, res);
+  }).listen(port, () => {
+    process.stdout.write(`Channel Surfer running at http://localhost:${port}\n`);
+  });
+}
+
+export { routeRequest };
