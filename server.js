@@ -9,6 +9,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = normalize(join(__filename, ".."));
 const publicDir = join(__dirname, "public");
 const port = Number(process.env.PORT || 3000);
+const DEFAULT_PLAYLIST_URL = "https://epg.best/46837-shw7fc.m3u";
+const DEFAULT_EPG_URL = "https://epg.best/1eef8-shw7fc.xml.gz";
 
 const cache = new Map();
 const BINARY_EXTENSIONS = new Set([
@@ -546,7 +548,7 @@ function copyHeaderIfPresent(sourceHeaders, targetHeaders, name) {
 }
 
 async function handlePlaylist(req, res, url) {
-  const playlistUrl = resolveConfigUrl(url.searchParams.get("url"), process.env.PLAYLIST_URL);
+  const playlistUrl = resolveConfigUrl(url.searchParams.get("url"), process.env.PLAYLIST_URL || DEFAULT_PLAYLIST_URL);
   const globalStreamHeaders = mergeHeaderSets(
     parseHeaderInput(process.env.STREAM_HEADERS || ""),
     parseHeaderInput(url.searchParams.get("stream_headers") || "")
@@ -616,7 +618,7 @@ function decodeXmlPayload(buffer, sourceUrl, contentType) {
 }
 
 async function handleEpg(req, res, url) {
-  const epgUrl = resolveConfigUrl(url.searchParams.get("url"), process.env.EPG_URL);
+  const epgUrl = resolveConfigUrl(url.searchParams.get("url"), process.env.EPG_URL || DEFAULT_EPG_URL);
   if (!isHttpUrl(epgUrl)) {
     send(res, 400, { error: "Missing or invalid EPG URL. Set EPG_URL or pass ?url=" }, "application/json; charset=utf-8");
     return;
@@ -651,8 +653,8 @@ async function handleConfig(res) {
     200,
     {
       defaults: {
-        playlistUrl: process.env.PLAYLIST_URL || "",
-        epgUrl: process.env.EPG_URL || "",
+        playlistUrl: process.env.PLAYLIST_URL || DEFAULT_PLAYLIST_URL,
+        epgUrl: process.env.EPG_URL || DEFAULT_EPG_URL,
         streamHeaders: process.env.STREAM_HEADERS || ""
       }
     },

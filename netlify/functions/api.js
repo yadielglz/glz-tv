@@ -1,7 +1,5 @@
 import { Writable } from "node:stream";
 
-import { routeRequest } from "../../server.js";
-
 const TEXT_CONTENT_TYPES = [
   "text/",
   "application/json",
@@ -81,6 +79,7 @@ function isTextContentType(contentType = "") {
 
 export async function handler(event) {
   try {
+    const { routeRequest } = await import("../../server.js");
     const req = {
       url: buildFunctionPath(event),
       method: event.httpMethod || "GET",

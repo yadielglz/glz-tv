@@ -3,6 +3,8 @@ const SIDEBAR_STORAGE_KEY = "channel-surfer-sidebar";
 const WEATHER_STORAGE_KEY = "channel-surfer-weather";
 const GUIDE_SLOT_MINUTES = 30;
 const GUIDE_SLOT_COUNT = 4;
+const DEFAULT_PLAYLIST_URL = "https://epg.best/46837-shw7fc.m3u";
+const DEFAULT_EPG_URL = "https://epg.best/1eef8-shw7fc.xml.gz";
 
 const state = {
   channels: [],
@@ -976,13 +978,33 @@ function stepChannel(direction) {
 }
 
 async function loadConfigDefaults() {
-  const response = await fetch("/api/config");
-  const data = await response.json();
+  let defaults = {
+    playlistUrl: DEFAULT_PLAYLIST_URL,
+    epgUrl: DEFAULT_EPG_URL,
+    streamHeaders: ""
+  };
+
+  try {
+    const response = await fetch("/api/config");
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data?.defaults) {
+      defaults = {
+        playlistUrl: data.defaults.playlistUrl || DEFAULT_PLAYLIST_URL,
+        epgUrl: data.defaults.epgUrl || DEFAULT_EPG_URL,
+        streamHeaders: data.defaults.streamHeaders || ""
+      };
+    } else {
+      showToast("Config API unavailable, using default sources");
+    }
+  } catch {
+    showToast("Config API unavailable, using default sources");
+  }
+
   const saved = readSavedSources();
   state.sources = {
-    playlistUrl: saved.playlistUrl || data.defaults.playlistUrl || "",
-    epgUrl: saved.epgUrl || data.defaults.epgUrl || "",
-    streamHeaders: saved.streamHeaders || data.defaults.streamHeaders || ""
+    playlistUrl: saved.playlistUrl || defaults.playlistUrl || "",
+    epgUrl: saved.epgUrl || defaults.epgUrl || "",
+    streamHeaders: saved.streamHeaders || defaults.streamHeaders || ""
   };
 
   ui.playlistUrl.value = state.sources.playlistUrl;
