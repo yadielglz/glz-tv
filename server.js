@@ -913,11 +913,19 @@ async function routeRequest(req, res) {
 }
 
 if (process.argv[1] && normalize(process.argv[1]) === __filename) {
-  createServer(async (req, res) => {
-    await routeRequest(req, res);
-  }).listen(port, () => {
-    process.stdout.write(`Channel Surfer running at http://localhost:${port}\n`);
-  });
+  const isServerlessRuntime = Boolean(
+    process.env.NETLIFY ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.LAMBDA_TASK_ROOT
+  );
+
+  if (!isServerlessRuntime) {
+    createServer(async (req, res) => {
+      await routeRequest(req, res);
+    }).listen(port, () => {
+      process.stdout.write(`Channel Surfer running at http://localhost:${port}\n`);
+    });
+  }
 }
 
 export { routeRequest };

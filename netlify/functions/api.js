@@ -80,30 +80,44 @@ function isTextContentType(contentType = "") {
 }
 
 export async function handler(event) {
-  const req = {
-    url: buildFunctionPath(event),
-    method: event.httpMethod || "GET",
-    headers: {
-      host: event.headers?.host || "localhost",
-      ...(event.headers || {})
-    }
-  };
+  try {
+    const req = {
+      url: buildFunctionPath(event),
+      method: event.httpMethod || "GET",
+      headers: {
+        host: event.headers?.host || "localhost",
+        ...(event.headers || {})
+      }
+    };
 
-  const res = new BufferingResponse();
-  await routeRequest(req, res);
-  await res.finishedPromise;
+    const res = new BufferingResponse();
+    await routeRequest(req, res);
+    await res.finishedPromise;
 
-  const body = res.getBody();
-  const contentType = res.headers["Content-Type"] || res.headers["content-type"] || "";
-  const isText = isTextContentType(contentType);
-  const headers = { ...res.headers };
-  delete headers["content-length"];
-  delete headers["Content-Length"];
+    const body = res.getBody();
+    const contentType = res.headers["Content-Type"] || res.headers["content-type"] || "";
+    const isText = isTextContentType(contentType);
+    const headers = { ...res.headers };
+    delete headers["content-length"];
+    delete headers["Content-Length"];
 
-  return {
-    statusCode: res.statusCode,
-    headers,
-    body: isText ? body.toString("utf8") : body.toString("base64"),
-    isBase64Encoded: !isText
-  };
+    return {
+      statusCode: res.statusCode,
+      headers,
+      body: isText ? body.toString("utf8") : body.toString("base64"),
+      isBase64Encoded: !isText
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Access-Control-Allow-Origin": "*"
+      },
+      body: JSON.stringify({
+        error: error instanceof Error ? error.message : "Function failed"
+      })
+    };
+  }
 }
