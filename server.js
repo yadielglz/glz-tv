@@ -134,17 +134,32 @@ function isHttpUrl(value) {
   }
 }
 
-async function fetchTextWithCache(url, ttlMs = 60_000) {
-  const cached = cache.get(url);
+function createCacheKey(url, requestHeaders = {}) {
+  const headerEntries = Object.entries(requestHeaders || {})
+    .filter(([, value]) => typeof value === "string" && value)
+    .sort(([left], [right]) => left.localeCompare(right));
+  return JSON.stringify([url, headerEntries]);
+}
+
+function buildUpstreamHeaders(requestHeaders = {}) {
+  return {
+    "user-agent":
+      requestHeaders["user-agent"] ||
+      "Mozilla/5.0 (compatible; ChannelSurfer/1.0; +https://glztv.netlify.app)",
+    accept: requestHeaders.accept || "*/*",
+    ...requestHeaders
+  };
+}
+
+async function fetchTextWithCache(url, ttlMs = 60_000, requestHeaders = {}) {
+  const cacheKey = createCacheKey(url, requestHeaders);
+  const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.value;
   }
 
   const response = await fetch(url, {
-    headers: {
-      "user-agent": "ChannelSurfer/0.1",
-      accept: "*/*"
-    }
+    headers: buildUpstreamHeaders(requestHeaders)
   });
 
   if (!response.ok) {
@@ -152,7 +167,7 @@ async function fetchTextWithCache(url, ttlMs = 60_000) {
   }
 
   const value = await response.text();
-  cache.set(url, { value, expiresAt: Date.now() + ttlMs });
+  cache.set(cacheKey, { value, expiresAt: Date.now() + ttlMs });
   return value;
 }
 
@@ -467,13 +482,13 @@ function parseXmltvToGuide(xmlText, options = {}) {
   return Object.fromEntries(guide);
 }
 
-async function getPlaylistChannelKeySet(playlistUrl, streamHeaders = "") {
+async function getPlaylistChannelKeySet(playlistUrl, requestHeaders = {}) {
   if (!isHttpUrl(playlistUrl)) {
     return null;
   }
 
-  const playlist = await fetchTextWithCache(playlistUrl, 60_000);
-  const channels = parseM3uPlaylist(playlist, parseHeaderInput(streamHeaders || ""));
+  const playlist = await fetchTextWithCache(playlistUrl, 60_000, requestHeaders);
+  const channels = parseM3uPlaylist(playlist, requestHeaders);
   const keys = new Set();
   channels.forEach((channel) => {
     (channel.keys || []).forEach((key) => {
@@ -604,7 +619,7 @@ async function handlePlaylist(req, res, url) {
   }
 
   try {
-    const playlist = await fetchTextWithCache(playlistUrl, 60_000);
+    const playlist = await fetchTextWithCache(playlistUrl, 60_000, globalStreamHeaders);
     const channels = parseM3uPlaylist(playlist, globalStreamHeaders);
     send(
       res,
@@ -622,12 +637,9 @@ async function handlePlaylist(req, res, url) {
   }
 }
 
-async function fetchBuffer(url) {
+async function fetchBuffer(url, requestHeaders = {}) {
   const response = await fetch(url, {
-    headers: {
-      "user-agent": "ChannelSurfer/0.1",
-      accept: "*/*"
-    }
+    headers: buildUpstreamHeaders(requestHeaders)
   });
 
   if (!response.ok) {
@@ -665,14 +677,19 @@ function decodeXmlPayload(buffer, sourceUrl, contentType) {
 async function handleEpg(req, res, url) {
   const epgUrl = resolveConfigUrl(url.searchParams.get("url"), process.env.EPG_URL || DEFAULT_EPG_URL);
   const playlistUrl = resolveConfigUrl(url.searchParams.get("playlist_url"), process.env.PLAYLIST_URL || DEFAULT_PLAYLIST_URL);
+  const globalSourceHeaders = mergeHeaderSets(
+    parseHeaderInput(process.env.STREAM_HEADERS || ""),
+    parseHeaderInput(url.searchParams.get("stream_headers") || "")
+  );
   if (!isHttpUrl(epgUrl)) {
     send(res, 400, { error: "Missing or invalid EPG URL. Set EPG_URL or pass ?url=" }, "application/json; charset=utf-8");
     return;
   }
 
   try {
-    const includedKeys = await getPlaylistChannelKeySet(playlistUrl, process.env.STREAM_HEADERS || "");
-    const cached = cache.get(epgUrl);
+    const includedKeys = await getPlaylistChannelKeySet(playlistUrl, globalSourceHeaders);
+    const cacheKey = createCacheKey(epgUrl, globalSourceHeaders);
+    const cached = cache.get(cacheKey);
     const xml =
       cached && cached.expiresAt > Date.now()
         ? cached.value
@@ -685,12 +702,15 @@ async function handleEpg(req, res, url) {
       return;
     }
 
-    const { buffer, contentType } = await fetchBuffer(epgUrl);
+    const { buffer, contentType } = await fetchBuffer(epgUrl, globalSourceHeaders);
     const parsedXml = decodeXmlPayload(buffer, epgUrl, contentType);
-    cache.set(epgUrl, { value: parsedXml, expiresAt: Date.now() + 5 * 60_000 });
+    cache.set(cacheKey, { value: parsedXml, expiresAt: Date.now() + 5 * 60_000 });
     send(res, 200, { source: epgUrl, guide: parseXmltvToGuide(parsedXml, { includedKeys }) }, "application/json; charset=utf-8");
   } catch (error) {
-    send(res, 502, { error: error.message }, "application/json; charset=utf-8");
+    const message = error.message?.includes("404")
+      ? "EPG request failed upstream with 404. If the URL works in your browser, add the required cookies/headers in Sources."
+      : error.message;
+    send(res, 502, { error: message }, "application/json; charset=utf-8");
   }
 }
 

@@ -146,7 +146,7 @@
         </label>
 
         <label>
-          <span>Stream Headers / Cookies</span>
+          <span>Proxy Headers / Cookies</span>
           <textarea
             id="streamHeaders"
             name="streamHeaders"
@@ -157,7 +157,8 @@
 
         <p class="settings-note">
           URLs are fetched through the local server, so the browser avoids direct XMLTV CORS issues. Custom headers are applied to
-          all proxied streams and can help match VLC or browser sessions.
+          playlist, guide, and stream requests to match browser or VLC sessions when a provider requires cookies, referers, or a
+          specific user agent.
         </p>
 
         <div class="settings-actions">

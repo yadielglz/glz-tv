@@ -973,6 +973,9 @@ async function loadEpg() {
   if (state.sources.playlistUrl) {
     params.set("playlist_url", state.sources.playlistUrl);
   }
+  if (state.sources.streamHeaders.trim()) {
+    params.set("stream_headers", state.sources.streamHeaders.trim());
+  }
   const response = await fetch(`/api/epg?${params.toString()}`);
 
   if (!response.ok) {
