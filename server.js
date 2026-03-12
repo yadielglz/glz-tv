@@ -3,7 +3,6 @@ import { Readable } from "node:stream";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
-import { gunzipSync } from "node:zlib";
 
 const isServerlessRuntime = Boolean(
   process.env.NETLIFY ||
@@ -15,8 +14,6 @@ const moduleDirname = dirname(moduleFilename);
 const publicDir = join(moduleDirname, "public");
 const port = Number(process.env.PORT || 3000);
 const DEFAULT_PLAYLIST_URL = "https://epg.best/46837-shw7fc.m3u";
-const DEFAULT_EPG_URL = "https://epg.best/1eef8-shw7fc.xml.gz";
-const EPG_DESCRIPTION_LIMIT = 240;
 
 const cache = new Map();
 const BINARY_EXTENSIONS = new Set([
@@ -384,122 +381,6 @@ function mergeHeaderSets(...sets) {
   return Object.assign({}, ...sets.filter((value) => value && typeof value === "object"));
 }
 
-function decodeXmlEntities(value = "") {
-  return value
-    .replaceAll("&amp;", "&")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&apos;", "'");
-}
-
-function extractXmlAttribute(source, name) {
-  const match = source.match(new RegExp(`${name}="([^"]*)"`, "i"));
-  return decodeXmlEntities(match?.[1] || "");
-}
-
-function extractXmlNodeText(source, tagName) {
-  const match = source.match(new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)</${tagName}>`, "i"));
-  if (!match) {
-    return "";
-  }
-
-  return decodeXmlEntities(match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, "").trim());
-}
-
-function extractXmlNodeTexts(source, tagName) {
-  return Array.from(source.matchAll(new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)</${tagName}>`, "gi"))).map((match) =>
-    decodeXmlEntities(match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, "").trim())
-  );
-}
-
-function trimProgramDescription(value = "") {
-  if (!value) {
-    return "";
-  }
-
-  return value.length > EPG_DESCRIPTION_LIMIT ? `${value.slice(0, EPG_DESCRIPTION_LIMIT - 1).trimEnd()}…` : value;
-}
-
-function parseXmltvToGuide(xmlText, options = {}) {
-  const includedKeys = options.includedKeys instanceof Set ? options.includedKeys : null;
-  const guide = new Map();
-  const channelAliases = new Map();
-
-  for (const match of xmlText.matchAll(/<channel\b([^>]*)>([\s\S]*?)<\/channel>/gi)) {
-    const attributes = match[1] || "";
-    const body = match[2] || "";
-    const id = normalizeChannelKey(extractXmlAttribute(attributes, "id"));
-    if (!id) {
-      continue;
-    }
-
-    const names = extractXmlNodeTexts(body, "display-name").map((name) => normalizeChannelKey(name)).filter(Boolean);
-    channelAliases.set(id, Array.from(new Set([id, ...names])));
-  }
-
-  for (const match of xmlText.matchAll(/<programme\b([^>]*)>([\s\S]*?)<\/programme>/gi)) {
-    const attributes = match[1] || "";
-    const body = match[2] || "";
-    const channelId = normalizeChannelKey(extractXmlAttribute(attributes, "channel"));
-    if (!channelId) {
-      continue;
-    }
-
-    const entry = {
-      title: extractXmlNodeText(body, "title") || "Untitled",
-      desc: extractXmlNodeText(body, "desc"),
-      categories: extractXmlNodeTexts(body, "category").filter(Boolean),
-      start: extractXmlAttribute(attributes, "start"),
-      stop: extractXmlAttribute(attributes, "stop")
-    };
-
-    const aliases = channelAliases.get(channelId) || [channelId];
-    if (includedKeys && !aliases.some((alias) => includedKeys.has(alias))) {
-      continue;
-    }
-
-    for (const alias of aliases) {
-      if (includedKeys && !includedKeys.has(alias)) {
-        continue;
-      }
-      if (!guide.has(alias)) {
-        guide.set(alias, []);
-      }
-      guide.get(alias).push({
-        title: entry.title,
-        desc: trimProgramDescription(entry.desc),
-        start: entry.start,
-        stop: entry.stop
-      });
-    }
-  }
-
-  for (const entries of guide.values()) {
-    entries.sort((a, b) => a.start.localeCompare(b.start));
-  }
-
-  return Object.fromEntries(guide);
-}
-
-async function getPlaylistChannelKeySet(playlistUrl, requestHeaders = {}) {
-  if (!isHttpUrl(playlistUrl)) {
-    return null;
-  }
-
-  const playlist = await fetchTextWithCache(playlistUrl, 60_000, requestHeaders);
-  const channels = parseM3uPlaylist(playlist, requestHeaders);
-  const keys = new Set();
-  channels.forEach((channel) => {
-    (channel.keys || []).forEach((key) => {
-      if (key) {
-        keys.add(key);
-      }
-    });
-  });
-  return keys;
-}
-
 function parseM3uPlaylist(content, globalHeaders = {}) {
   const lines = content.split(/\r?\n/);
   const channels = [];
@@ -637,93 +518,6 @@ async function handlePlaylist(req, res, url) {
   }
 }
 
-async function fetchBuffer(url, requestHeaders = {}) {
-  const response = await fetch(url, {
-    headers: buildUpstreamHeaders(requestHeaders)
-  });
-
-  if (!response.ok) {
-    throw new Error(`Upstream request failed with ${response.status}`);
-  }
-
-  return {
-    contentType: response.headers.get("content-type") || "",
-    buffer: Buffer.from(await response.arrayBuffer())
-  };
-}
-
-function decodeXmlPayload(buffer, sourceUrl, contentType) {
-  const looksGzipped =
-    buffer.length > 2 &&
-    buffer[0] === 0x1f &&
-    buffer[1] === 0x8b;
-
-  const shouldGunzip =
-    looksGzipped ||
-    sourceUrl.toLowerCase().includes(".gz") ||
-    contentType.toLowerCase().includes("gzip");
-
-  const decoded = shouldGunzip ? gunzipSync(buffer).toString("utf8") : buffer.toString("utf8");
-  const text = decoded.replace(/^\uFEFF/, "").trim();
-  const head = text.slice(0, 500).toLowerCase();
-
-  if (!head.startsWith("<?xml") && !head.startsWith("<tv") && !head.startsWith("<!doctype tv")) {
-    throw new Error("EPG source did not return XMLTV. The URL may require cookies/auth or may be serving HTML instead.");
-  }
-
-  return text;
-}
-
-async function handleEpg(req, res, url) {
-  const epgUrl = resolveConfigUrl(url.searchParams.get("url"), process.env.EPG_URL || DEFAULT_EPG_URL);
-  const playlistUrl = resolveConfigUrl(url.searchParams.get("playlist_url"), process.env.PLAYLIST_URL || DEFAULT_PLAYLIST_URL);
-  const globalSourceHeaders = mergeHeaderSets(
-    parseHeaderInput(process.env.STREAM_HEADERS || ""),
-    parseHeaderInput(url.searchParams.get("stream_headers") || "")
-  );
-  if (!isHttpUrl(epgUrl)) {
-    send(res, 400, { error: "Missing or invalid EPG URL. Set EPG_URL or pass ?url=" }, "application/json; charset=utf-8");
-    return;
-  }
-
-  try {
-    const includedKeys = await getPlaylistChannelKeySet(playlistUrl, globalSourceHeaders);
-    const cacheKey = createCacheKey(epgUrl, globalSourceHeaders);
-    const cached = cache.get(cacheKey);
-    const xml =
-      cached && cached.expiresAt > Date.now()
-        ? cached.value
-        : (() => {
-            return null;
-          })();
-
-    if (xml) {
-      send(res, 200, { source: epgUrl, guide: parseXmltvToGuide(xml, { includedKeys }) }, "application/json; charset=utf-8");
-      return;
-    }
-
-    const { buffer, contentType } = await fetchBuffer(epgUrl, globalSourceHeaders);
-    const parsedXml = decodeXmlPayload(buffer, epgUrl, contentType);
-    cache.set(cacheKey, { value: parsedXml, expiresAt: Date.now() + 5 * 60_000 });
-    send(res, 200, { source: epgUrl, guide: parseXmltvToGuide(parsedXml, { includedKeys }) }, "application/json; charset=utf-8");
-  } catch (error) {
-    const message = error.message?.includes("404")
-      ? "EPG request failed upstream with 404. If the URL works in your browser, add the required cookies/headers in Sources."
-      : error.message;
-    send(
-      res,
-      200,
-      {
-        source: epgUrl,
-        guide: {},
-        unavailable: true,
-        warning: message || "Guide unavailable"
-      },
-      "application/json; charset=utf-8"
-    );
-  }
-}
-
 async function handleConfig(res) {
   send(
     res,
@@ -731,7 +525,6 @@ async function handleConfig(res) {
     {
       defaults: {
         playlistUrl: process.env.PLAYLIST_URL || DEFAULT_PLAYLIST_URL,
-        epgUrl: process.env.EPG_URL || DEFAULT_EPG_URL,
         streamHeaders: process.env.STREAM_HEADERS || ""
       }
     },
@@ -965,11 +758,6 @@ async function routeRequest(req, res) {
 
   if (url.pathname === "/api/playlist") {
     await handlePlaylist(req, res, url);
-    return;
-  }
-
-  if (url.pathname === "/api/epg") {
-    await handleEpg(req, res, url);
     return;
   }
 

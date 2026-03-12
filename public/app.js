@@ -2,13 +2,11 @@ const STORAGE_KEY = "channel-surfer-sources";
 const SIDEBAR_STORAGE_KEY = "channel-surfer-sidebar";
 const WEATHER_STORAGE_KEY = "channel-surfer-weather";
 const DEFAULT_PLAYLIST_URL = "https://epg.best/46837-shw7fc.m3u";
-const DEFAULT_EPG_URL = "https://epg.best/1eef8-shw7fc.xml.gz";
 
 const state = {
   channels: [],
   filteredChannels: [],
   groups: [],
-  guide: new Map(),
   selectedIndex: 0,
   activeIndex: 0,
   currentGroup: "All",
@@ -26,7 +24,6 @@ const state = {
   userActivated: false,
   sources: {
     playlistUrl: "",
-    epgUrl: "",
     streamHeaders: ""
   }
 };
@@ -44,7 +41,7 @@ const ui = {
   weatherTemp: document.getElementById("weatherTemp"),
   weatherSummary: document.getElementById("weatherSummary"),
   weatherLocation: document.getElementById("weatherLocation"),
-  nowNext: document.getElementById("nowNext"),
+  channelDetails: document.getElementById("channelDetails"),
   settingsDialog: document.getElementById("settingsDialog"),
   settingsToggle: document.getElementById("settingsToggle"),
   searchDialog: document.getElementById("searchDialog"),
@@ -59,7 +56,6 @@ const ui = {
   railToggle: document.getElementById("railToggle"),
   settingsForm: document.getElementById("settingsForm"),
   playlistUrl: document.getElementById("playlistUrl"),
-  epgUrl: document.getElementById("epgUrl"),
   streamHeaders: document.getElementById("streamHeaders"),
   saveSources: document.getElementById("saveSources"),
   playerFrame: document.getElementById("playerFrame"),
@@ -143,13 +139,6 @@ function setSearchTerm(value) {
   state.searchTerm = value;
   setSearchInputs(value);
   applyFilters();
-}
-
-function formatTime(date) {
-  return new Intl.DateTimeFormat([], {
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(date);
 }
 
 function formatDate(date) {
@@ -272,39 +261,6 @@ function initWeather() {
   );
 }
 
-function parseXmltvDate(value) {
-  const match = value?.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+\-]\d{4})?/);
-  if (!match) {
-    return null;
-  }
-
-  const [, year, month, day, hour, minute, second, offset] = match;
-  const iso = `${year}-${month}-${day}T${hour}:${minute}:${second}${offset ? `${offset.slice(0, 3)}:${offset.slice(3)}` : "Z"}`;
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function parseEpg(xmlText) {
-  const programsByKey = new Map();
-
-  Object.entries(xmlText || {}).forEach(([key, entries]) => {
-    programsByKey.set(
-      normalizeKey(key),
-      (entries || [])
-        .map((entry) => ({
-          title: entry.title || "Untitled",
-          desc: entry.desc || "",
-          categories: Array.isArray(entry.categories) ? entry.categories : [],
-          start: parseXmltvDate(entry.start),
-          stop: parseXmltvDate(entry.stop)
-        }))
-        .sort((a, b) => (a.start?.getTime() || 0) - (b.start?.getTime() || 0))
-    );
-  });
-
-  return programsByKey;
-}
-
 function createPlaceholderLogo(channel) {
   const initials = (channel.title || "?")
     .split(/\s+/)
@@ -323,29 +279,6 @@ function getLogoUrl(channel) {
   }
 
   return `/api/image?url=${encodeURIComponent(channel.logo)}`;
-}
-
-function getProgramsForChannel(channel) {
-  for (const key of channel.keys || []) {
-    if (state.guide.has(key)) {
-      return state.guide.get(key);
-    }
-  }
-  return [];
-}
-
-function getCurrentProgram(programs) {
-  const now = Date.now();
-  return programs.find((program) => {
-    const start = program.start?.getTime() || 0;
-    const stop = program.stop?.getTime() || 0;
-    return start <= now && stop >= now;
-  });
-}
-
-function getUpcomingPrograms(programs) {
-  const now = Date.now();
-  return programs.filter((program) => (program.stop?.getTime() || 0) >= now).slice(0, 3);
 }
 
 function isAudioChannel(channel) {
@@ -387,6 +320,24 @@ function getStreamType(channel) {
     return "video";
   }
   return "unknown";
+}
+
+function getStreamTypeLabel(channel) {
+  const type = getStreamType(channel);
+  switch (type) {
+    case "audio":
+      return "Audio";
+    case "hls":
+      return "HLS";
+    case "dash":
+      return "DASH";
+    case "mpegts":
+      return "MPEG-TS";
+    case "video":
+      return "Video";
+    default:
+      return "Live";
+  }
 }
 
 function streamLooksSigned(channel) {
@@ -669,63 +620,55 @@ function attachStream(channel, options = {}) {
   startPlayback(player, `Tuned to ${channel.title}`);
 }
 
-function renderNowNext(channel) {
-  ui.nowNext.innerHTML = "";
-  const programs = getProgramsForChannel(channel);
-  const upcoming = getUpcomingPrograms(programs);
-  const current = getCurrentProgram(programs);
-  const nextProgram = upcoming.find((program) => program !== current);
-  const infoStrip = document.createElement("article");
-  infoStrip.className = "now-next-shell";
-  infoStrip.innerHTML = `
-    <div class="now-next-header">
-      <p class="eyebrow">Program Info</p>
-      <span class="signal-pill">LIVE</span>
+function renderChannelDetails(channel) {
+  const usesHeaders = channelHasCustomHeaders(channel);
+  const detailCard = document.createElement("article");
+  detailCard.className = "channel-details-shell";
+  detailCard.innerHTML = `
+    <div class="channel-details-header">
+      <p class="eyebrow">Channel Status</p>
+      <span class="signal-pill">${isAudioChannel(channel) ? "AUDIO" : "LIVE"}</span>
     </div>
-    <div class="now-next-strip">
-      <div class="now-next-segment current">
-        <p class="program-time">On Now</p>
-        <h3>${current?.title || "No current listing"}</h3>
-        <p class="program-copy">${current?.desc || "Guide data unavailable for this channel."}</p>
-        <p class="program-window">${current ? `${formatTime(current.start)} - ${formatTime(current.stop)}` : "No schedule data"}</p>
+    <div class="detail-pills">
+      <span class="detail-pill">${channel.group}</span>
+      <span class="detail-pill">${getStreamTypeLabel(channel)}</span>
+      <span class="detail-pill">${usesHeaders ? "Proxy Headers" : "Direct Stream"}</span>
+      <span class="detail-pill">${streamLooksSigned(channel) ? "Token Refresh" : "Always On"}</span>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block accent">
+        <p class="program-time">Channel</p>
+        <h3>${channel.title}</h3>
+        <p class="program-copy">Use the channel tray or search to jump around the lineup fast on mobile.</p>
       </div>
-      <div class="now-next-segment">
-        <p class="program-time">Up Next</p>
-        <h3>${nextProgram?.title || "No next listing"}</h3>
-        <p class="program-copy">${nextProgram?.desc || "No future guide data was returned."}</p>
-        <p class="program-window">${nextProgram ? `${formatTime(nextProgram.start)} start` : "Guide unavailable"}</p>
+      <div class="detail-block">
+        <p class="program-time">Playback</p>
+        <h3>${usesHeaders ? "Proxy Ready" : "Direct Ready"}</h3>
+        <p class="program-copy">${usesHeaders ? "Custom request headers are attached for this source." : "This source can play without extra request headers."}</p>
       </div>
     </div>
   `;
-  ui.nowNext.appendChild(infoStrip);
+  ui.channelDetails.innerHTML = "";
+  ui.channelDetails.appendChild(detailCard);
 }
 
 function renderChannelView(channel) {
   updateHero(channel);
-  renderNowNext(channel);
+  renderChannelDetails(channel);
 }
 
-function clearGuideData(message = "Guide unavailable") {
-  state.guide.clear();
-  const activeChannel = getActiveChannel();
-
-  if (activeChannel) {
-    renderChannelView(activeChannel);
-    return;
-  }
-
-  ui.nowNext.innerHTML = `
-    <article class="now-next-shell">
-      <div class="now-next-header">
-        <p class="eyebrow">Program Info</p>
-        <span class="signal-pill offline">INFO</span>
+function clearChannelDetails(message = "Add your playlist to begin") {
+  ui.channelDetails.innerHTML = `
+    <article class="channel-details-shell">
+      <div class="channel-details-header">
+        <p class="eyebrow">Channel Status</p>
+        <span class="signal-pill offline">READY</span>
       </div>
-      <div class="now-next-strip">
-        <div class="now-next-segment current">
-          <p class="program-time">Guide Status</p>
+      <div class="detail-grid single">
+        <div class="detail-block accent">
+          <p class="program-time">Setup</p>
           <h3>${message}</h3>
-          <p class="program-copy">Tune a channel to keep surfing without the full grid guide.</p>
-          <p class="program-window">Now / Next only</p>
+          <p class="program-copy">Load a playlist, then use the touch-friendly channel tray to surf live TV on mobile.</p>
         </div>
       </div>
     </article>
@@ -767,14 +710,9 @@ function renderChannels() {
 }
 
 function updateHero(channel) {
-  const programs = getProgramsForChannel(channel);
-  const current = getCurrentProgram(programs);
-
   ui.channelBadge.textContent = getDisplayChannelNumber(channel, state.activeIndex);
   ui.channelTitle.textContent = channel.title;
-  ui.channelMeta.textContent = current
-    ? `${channel.group} • ${current.title} until ${formatTime(current.stop)}`
-    : `${channel.group} • No live guide data`;
+  ui.channelMeta.textContent = `${channel.group} • ${getStreamTypeLabel(channel)} • ${channelHasCustomHeaders(channel) ? "Proxy headers enabled" : "Tap to surf"}`;
 }
 
 function applyFilters() {
@@ -791,6 +729,8 @@ function applyFilters() {
 
   if (state.filteredChannels[state.activeIndex]) {
     renderChannelView(state.filteredChannels[state.activeIndex]);
+  } else {
+    clearChannelDetails(state.channels.length ? "No channels matched your filters" : "Load a playlist to begin");
   }
 
   if (ui.searchDialog.open) {
@@ -899,7 +839,6 @@ function stepChannel(direction) {
 async function loadConfigDefaults() {
   let defaults = {
     playlistUrl: DEFAULT_PLAYLIST_URL,
-    epgUrl: DEFAULT_EPG_URL,
     streamHeaders: ""
   };
 
@@ -909,7 +848,6 @@ async function loadConfigDefaults() {
     if (response.ok && data?.defaults) {
       defaults = {
         playlistUrl: data.defaults.playlistUrl || DEFAULT_PLAYLIST_URL,
-        epgUrl: data.defaults.epgUrl || DEFAULT_EPG_URL,
         streamHeaders: data.defaults.streamHeaders || ""
       };
     } else {
@@ -922,12 +860,10 @@ async function loadConfigDefaults() {
   const saved = readSavedSources();
   state.sources = {
     playlistUrl: saved.playlistUrl || defaults.playlistUrl || "",
-    epgUrl: saved.epgUrl || defaults.epgUrl || "",
     streamHeaders: saved.streamHeaders || defaults.streamHeaders || ""
   };
 
   ui.playlistUrl.value = state.sources.playlistUrl;
-  ui.epgUrl.value = state.sources.epgUrl;
   ui.streamHeaders.value = state.sources.streamHeaders;
 }
 
@@ -963,45 +899,13 @@ async function loadPlaylist(options = {}) {
   }
 }
 
-async function loadEpg() {
-  if (!state.sources.epgUrl) {
-    clearGuideData("No XMLTV URL configured");
-    return;
-  }
-
-  const params = new URLSearchParams({ url: state.sources.epgUrl });
-  if (state.sources.playlistUrl) {
-    params.set("playlist_url", state.sources.playlistUrl);
-  }
-  if (state.sources.streamHeaders.trim()) {
-    params.set("stream_headers", state.sources.streamHeaders.trim());
-  }
-  const response = await fetch(`/api/epg?${params.toString()}`);
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Failed to load EPG");
-  }
-  if (data?.unavailable) {
-    clearGuideData(data.warning || "Guide unavailable");
-    return;
-  }
-  state.guide = parseEpg(data.guide);
-}
-
 async function reloadSources() {
   try {
     await loadPlaylist();
-    let guideError = null;
-    try {
-      await loadEpg();
-    } catch (error) {
-      guideError = error;
-      clearGuideData(error.message || "Failed to load now/next guide");
-    }
     if (state.filteredChannels[state.activeIndex]) {
       renderChannelView(state.filteredChannels[state.activeIndex]);
     }
-    showToast(guideError ? guideError.message || "Guide unavailable, channels loaded" : "Sources refreshed");
+    showToast("Sources refreshed");
   } catch (error) {
     showToast(error.message);
   }
@@ -1056,7 +960,6 @@ function bindEvents() {
 
   ui.saveSources.addEventListener("click", async () => {
     state.sources.playlistUrl = ui.playlistUrl.value.trim();
-    state.sources.epgUrl = ui.epgUrl.value.trim();
     state.sources.streamHeaders = ui.streamHeaders.value.trim();
     writeSavedSources();
     ui.settingsDialog.close();
@@ -1148,9 +1051,9 @@ async function init() {
   initWeather();
   await loadConfigDefaults();
 
-  if (!state.sources.playlistUrl && !state.sources.epgUrl) {
+  if (!state.sources.playlistUrl) {
     ui.settingsDialog.showModal();
-    clearGuideData("Add your sources to begin");
+    clearChannelDetails("Add your playlist to begin");
     return;
   }
 

@@ -34,20 +34,22 @@
           </button>
         </div>
 
-        <button class="settings-toggle" id="settingsToggle" type="button">
-          <span class="button-icon">CFG</span>
-          <span class="button-label">Sources</span>
-        </button>
+        <div class="rail-actions">
+          <button class="settings-toggle" id="settingsToggle" type="button">
+            <span class="button-icon">CFG</span>
+            <span class="button-label">Sources</span>
+          </button>
 
-        <button class="search-toggle" id="searchToggle" type="button">
-          <span class="button-icon">FIND</span>
-          <span class="button-label">Search</span>
-        </button>
+          <button class="search-toggle" id="searchToggle" type="button">
+            <span class="button-icon">FIND</span>
+            <span class="button-label">Search</span>
+          </button>
 
-        <button class="tips-toggle" id="tipsToggle" type="button">
-          <span class="button-icon">TIPS</span>
-          <span class="button-label">Remote Tips</span>
-        </button>
+          <button class="tips-toggle" id="tipsToggle" type="button">
+            <span class="button-icon">TIPS</span>
+            <span class="button-label">Remote Tips</span>
+          </button>
+        </div>
 
         <div class="channel-panel">
           <div class="panel-header">
@@ -91,24 +93,6 @@
         </section>
 
         <section class="hero">
-          <div class="hero-copy">
-            <p class="eyebrow">Now tuned</p>
-            <div class="hero-title-row">
-              <span id="channelBadge" class="channel-badge">000</span>
-              <div>
-                <h2 id="channelTitle">Load a playlist</h2>
-                <p id="channelMeta" class="channel-meta">Paste an M3U and XMLTV source to start surfing.</p>
-              </div>
-            </div>
-            <div class="hero-actions">
-              <button id="prevChannel" type="button">Channel -</button>
-              <button id="playPause" type="button">Pause</button>
-              <button id="nextChannel" type="button">Channel +</button>
-              <button id="fullscreenToggle" type="button">Fullscreen</button>
-            </div>
-            <div id="nowNext" class="now-next hero-now-next"></div>
-          </div>
-
           <div class="player-card">
             <div id="playerFrame" class="player-frame video-mode">
               <div class="player-screen">
@@ -121,6 +105,24 @@
               <div id="statusToast" class="status-toast">Loading stream...</div>
             </div>
           </div>
+
+          <div class="hero-copy">
+            <p class="eyebrow">Now tuned</p>
+            <div class="hero-title-row">
+              <span id="channelBadge" class="channel-badge">000</span>
+              <div>
+                <h2 id="channelTitle">Load a playlist</h2>
+                <p id="channelMeta" class="channel-meta">Paste an M3U source to start surfing.</p>
+              </div>
+            </div>
+            <div class="hero-actions">
+              <button id="prevChannel" type="button">Channel -</button>
+              <button id="playPause" type="button">Pause</button>
+              <button id="nextChannel" type="button">Channel +</button>
+              <button id="fullscreenToggle" type="button">Fullscreen</button>
+            </div>
+            <div id="channelDetails" class="channel-details hero-channel-details"></div>
+          </div>
         </section>
 
       </main>
@@ -131,18 +133,13 @@
         <div class="panel-header">
           <div>
             <p class="eyebrow">Sources</p>
-            <h2>Playlist and EPG</h2>
+            <h2>Playlist Source</h2>
           </div>
         </div>
 
         <label>
           <span>M3U URL</span>
           <input id="playlistUrl" name="playlistUrl" type="url" placeholder="https://..." />
-        </label>
-
-        <label>
-          <span>XMLTV / EPG URL</span>
-          <input id="epgUrl" name="epgUrl" type="url" placeholder="https://..." />
         </label>
 
         <label>
@@ -156,9 +153,9 @@
         </label>
 
         <p class="settings-note">
-          URLs are fetched through the local server, so the browser avoids direct XMLTV CORS issues. Custom headers are applied to
-          playlist, guide, and stream requests to match browser or VLC sessions when a provider requires cookies, referers, or a
-          specific user agent.
+          The playlist is fetched through the local server so the browser avoids direct CORS issues. Custom headers are applied to
+          playlist and stream requests to match browser or VLC sessions when a provider requires cookies, referers, or a specific
+          user agent.
         </p>
 
         <div class="settings-actions">
@@ -194,7 +191,7 @@
             <p class="eyebrow">Search</p>
             <h2>Find Channels</h2>
           </div>
-          <span id="searchResultCount" class="guide-status">0 matches</span>
+          <span id="searchResultCount" class="search-count">0 matches</span>
         </div>
         <label>
           <span>Channel or group</span>
