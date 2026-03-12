@@ -1,13 +1,18 @@
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
-import { extname, join, normalize } from "node:path";
+import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = normalize(join(__filename, ".."));
-const publicDir = join(__dirname, "public");
+const isServerlessRuntime = Boolean(
+  process.env.NETLIFY ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT
+);
+const moduleFilename = isServerlessRuntime ? join(process.cwd(), "server.js") : fileURLToPath(import.meta.url);
+const moduleDirname = dirname(moduleFilename);
+const publicDir = join(moduleDirname, "public");
 const port = Number(process.env.PORT || 3000);
 const DEFAULT_PLAYLIST_URL = "https://epg.best/46837-shw7fc.m3u";
 const DEFAULT_EPG_URL = "https://epg.best/1eef8-shw7fc.xml.gz";
@@ -914,13 +919,7 @@ async function routeRequest(req, res) {
   await serveStatic(req, res, url);
 }
 
-if (process.argv[1] && normalize(process.argv[1]) === __filename) {
-  const isServerlessRuntime = Boolean(
-    process.env.NETLIFY ||
-    process.env.AWS_LAMBDA_FUNCTION_NAME ||
-    process.env.LAMBDA_TASK_ROOT
-  );
-
+if (process.argv[1] && normalize(process.argv[1]) === moduleFilename) {
   if (!isServerlessRuntime) {
     createServer(async (req, res) => {
       await routeRequest(req, res);
