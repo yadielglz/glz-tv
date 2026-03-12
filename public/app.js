@@ -1052,6 +1052,9 @@ async function loadEpg() {
   }
 
   const params = new URLSearchParams({ url: state.sources.epgUrl });
+  if (state.sources.playlistUrl) {
+    params.set("playlist_url", state.sources.playlistUrl);
+  }
   const response = await fetch(`/api/epg?${params.toString()}`);
 
   if (!response.ok) {

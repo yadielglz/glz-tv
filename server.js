@@ -16,6 +16,7 @@ const publicDir = join(moduleDirname, "public");
 const port = Number(process.env.PORT || 3000);
 const DEFAULT_PLAYLIST_URL = "https://epg.best/46837-shw7fc.m3u";
 const DEFAULT_EPG_URL = "https://epg.best/1eef8-shw7fc.xml.gz";
+const EPG_DESCRIPTION_LIMIT = 240;
 
 const cache = new Map();
 const BINARY_EXTENSIONS = new Set([
@@ -397,7 +398,16 @@ function extractXmlNodeTexts(source, tagName) {
   );
 }
 
-function parseXmltvToGuide(xmlText) {
+function trimProgramDescription(value = "") {
+  if (!value) {
+    return "";
+  }
+
+  return value.length > EPG_DESCRIPTION_LIMIT ? `${value.slice(0, EPG_DESCRIPTION_LIMIT - 1).trimEnd()}…` : value;
+}
+
+function parseXmltvToGuide(xmlText, options = {}) {
+  const includedKeys = options.includedKeys instanceof Set ? options.includedKeys : null;
   const guide = new Map();
   const channelAliases = new Map();
 
@@ -430,11 +440,23 @@ function parseXmltvToGuide(xmlText) {
     };
 
     const aliases = channelAliases.get(channelId) || [channelId];
+    if (includedKeys && !aliases.some((alias) => includedKeys.has(alias))) {
+      continue;
+    }
+
     for (const alias of aliases) {
+      if (includedKeys && !includedKeys.has(alias)) {
+        continue;
+      }
       if (!guide.has(alias)) {
         guide.set(alias, []);
       }
-      guide.get(alias).push(entry);
+      guide.get(alias).push({
+        title: entry.title,
+        desc: trimProgramDescription(entry.desc),
+        start: entry.start,
+        stop: entry.stop
+      });
     }
   }
 
@@ -443,6 +465,24 @@ function parseXmltvToGuide(xmlText) {
   }
 
   return Object.fromEntries(guide);
+}
+
+async function getPlaylistChannelKeySet(playlistUrl, streamHeaders = "") {
+  if (!isHttpUrl(playlistUrl)) {
+    return null;
+  }
+
+  const playlist = await fetchTextWithCache(playlistUrl, 60_000);
+  const channels = parseM3uPlaylist(playlist, parseHeaderInput(streamHeaders || ""));
+  const keys = new Set();
+  channels.forEach((channel) => {
+    (channel.keys || []).forEach((key) => {
+      if (key) {
+        keys.add(key);
+      }
+    });
+  });
+  return keys;
 }
 
 function parseM3uPlaylist(content, globalHeaders = {}) {
@@ -624,12 +664,14 @@ function decodeXmlPayload(buffer, sourceUrl, contentType) {
 
 async function handleEpg(req, res, url) {
   const epgUrl = resolveConfigUrl(url.searchParams.get("url"), process.env.EPG_URL || DEFAULT_EPG_URL);
+  const playlistUrl = resolveConfigUrl(url.searchParams.get("playlist_url"), process.env.PLAYLIST_URL || DEFAULT_PLAYLIST_URL);
   if (!isHttpUrl(epgUrl)) {
     send(res, 400, { error: "Missing or invalid EPG URL. Set EPG_URL or pass ?url=" }, "application/json; charset=utf-8");
     return;
   }
 
   try {
+    const includedKeys = await getPlaylistChannelKeySet(playlistUrl, process.env.STREAM_HEADERS || "");
     const cached = cache.get(epgUrl);
     const xml =
       cached && cached.expiresAt > Date.now()
@@ -639,14 +681,14 @@ async function handleEpg(req, res, url) {
           })();
 
     if (xml) {
-      send(res, 200, { source: epgUrl, guide: parseXmltvToGuide(xml) }, "application/json; charset=utf-8");
+      send(res, 200, { source: epgUrl, guide: parseXmltvToGuide(xml, { includedKeys }) }, "application/json; charset=utf-8");
       return;
     }
 
     const { buffer, contentType } = await fetchBuffer(epgUrl);
     const parsedXml = decodeXmlPayload(buffer, epgUrl, contentType);
     cache.set(epgUrl, { value: parsedXml, expiresAt: Date.now() + 5 * 60_000 });
-    send(res, 200, { source: epgUrl, guide: parseXmltvToGuide(parsedXml) }, "application/json; charset=utf-8");
+    send(res, 200, { source: epgUrl, guide: parseXmltvToGuide(parsedXml, { includedKeys }) }, "application/json; charset=utf-8");
   } catch (error) {
     send(res, 502, { error: error.message }, "application/json; charset=utf-8");
   }
