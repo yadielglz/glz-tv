@@ -1,8 +1,6 @@
 const STORAGE_KEY = "channel-surfer-sources";
 const SIDEBAR_STORAGE_KEY = "channel-surfer-sidebar";
 const WEATHER_STORAGE_KEY = "channel-surfer-weather";
-const GUIDE_SLOT_MINUTES = 30;
-const GUIDE_SLOT_COUNT = 4;
 const DEFAULT_PLAYLIST_URL = "https://epg.best/46837-shw7fc.m3u";
 const DEFAULT_EPG_URL = "https://epg.best/1eef8-shw7fc.xml.gz";
 
@@ -13,7 +11,6 @@ const state = {
   guide: new Map(),
   selectedIndex: 0,
   activeIndex: 0,
-  guideOffset: 0,
   currentGroup: "All",
   searchTerm: "",
   clockTimerId: null,
@@ -39,8 +36,6 @@ const ui = {
   channelCount: document.getElementById("channelCount"),
   channelSearch: document.getElementById("channelSearch"),
   groupFilters: document.getElementById("groupFilters"),
-  guideTimeline: document.getElementById("guideTimeline"),
-  guideStatus: document.getElementById("guideStatus"),
   channelBadge: document.getElementById("channelBadge"),
   channelTitle: document.getElementById("channelTitle"),
   channelMeta: document.getElementById("channelMeta"),
@@ -163,12 +158,6 @@ function formatDate(date) {
     month: "short",
     day: "numeric"
   }).format(date);
-}
-
-function formatTimeCompact(date) {
-  return new Intl.DateTimeFormat([], {
-    hour: "numeric"
-  }).format(date).replace(":00", "");
 }
 
 function updateClock() {
@@ -356,38 +345,7 @@ function getCurrentProgram(programs) {
 
 function getUpcomingPrograms(programs) {
   const now = Date.now();
-  return programs.filter((program) => (program.stop?.getTime() || 0) >= now).slice(state.guideOffset, state.guideOffset + 5);
-}
-
-function addMinutes(date, minutes) {
-  return new Date(date.getTime() + minutes * 60_000);
-}
-
-function startOfGuideWindow() {
-  const now = new Date();
-  now.setSeconds(0, 0);
-  now.setMinutes(now.getMinutes() < 30 ? 0 : 30);
-  return addMinutes(now, state.guideOffset * GUIDE_SLOT_MINUTES);
-}
-
-function getVisibleGuideChannels() {
-  if (!state.filteredChannels.length) {
-    return [];
-  }
-
-  return state.filteredChannels;
-}
-
-function getProgramsInWindow(programs, windowStart, windowEnd) {
-  return programs.filter((program) => {
-    if (!program.start || !program.stop) {
-      return false;
-    }
-
-    const start = program.start.getTime();
-    const stop = program.stop.getTime();
-    return stop > windowStart.getTime() && start < windowEnd.getTime();
-  });
+  return programs.filter((program) => (program.stop?.getTime() || 0) >= now).slice(0, 3);
 }
 
 function isAudioChannel(channel) {
@@ -711,104 +669,67 @@ function attachStream(channel, options = {}) {
   startPlayback(player, `Tuned to ${channel.title}`);
 }
 
-function renderGuide(channel) {
-  ui.guideTimeline.innerHTML = "";
+function renderNowNext(channel) {
   ui.nowNext.innerHTML = "";
   const programs = getProgramsForChannel(channel);
   const upcoming = getUpcomingPrograms(programs);
   const current = getCurrentProgram(programs);
-  const guideChannels = getVisibleGuideChannels();
-  const windowStart = startOfGuideWindow();
-  const windowEnd = addMinutes(windowStart, GUIDE_SLOT_MINUTES * GUIDE_SLOT_COUNT);
-
-  if (!guideChannels.length) {
-    ui.guideStatus.textContent = "No channels available";
-    return;
-  }
-
-  const header = document.createElement("div");
-  header.className = "guide-grid-header";
-  header.innerHTML = `
-    <div class="guide-channel-header">Ch</div>
-    <div class="guide-time-header">
-      ${Array.from({ length: GUIDE_SLOT_COUNT }, (_, index) => {
-        const slotStart = addMinutes(windowStart, index * GUIDE_SLOT_MINUTES);
-        return `<span>${formatTimeCompact(slotStart)}</span>`;
-      }).join("")}
-    </div>
-  `;
-  ui.guideTimeline.appendChild(header);
-
-  let matchedRows = 0;
-  guideChannels.forEach((guideChannel, index) => {
-    const row = document.createElement("div");
-    const rowPrograms = getProgramsForChannel(guideChannel);
-    const windowPrograms = getProgramsInWindow(rowPrograms, windowStart, windowEnd);
-    if (windowPrograms.length) {
-      matchedRows += 1;
-    }
-
-    row.className = `guide-grid-row${guideChannel === channel ? " active" : ""}`;
-
-    const track = document.createElement("div");
-    track.className = "guide-track";
-
-    windowPrograms.forEach((program) => {
-      const clippedStart = Math.max(program.start.getTime(), windowStart.getTime());
-      const clippedEnd = Math.min(program.stop.getTime(), windowEnd.getTime());
-      const totalMinutes = GUIDE_SLOT_MINUTES * GUIDE_SLOT_COUNT;
-      const leftPercent = ((clippedStart - windowStart.getTime()) / 60_000 / totalMinutes) * 100;
-      const widthPercent = ((clippedEnd - clippedStart) / 60_000 / totalMinutes) * 100;
-      const block = document.createElement("article");
-      const isCurrent = current === program || (program.start <= new Date() && program.stop >= new Date());
-      block.className = `guide-block${isCurrent ? " current" : ""}`;
-      block.style.left = `${leftPercent}%`;
-      block.style.width = `${Math.max(widthPercent, 10)}%`;
-      block.innerHTML = `
-        <strong>${program.title}</strong>
-        <span>${formatTime(program.start)} - ${formatTime(program.stop)}</span>
-      `;
-      track.appendChild(block);
-    });
-
-    if (!windowPrograms.length) {
-      const empty = document.createElement("div");
-      empty.className = "guide-empty";
-      empty.textContent = "No listings";
-      track.appendChild(empty);
-    }
-
-    row.innerHTML = `
-      <div class="guide-grid-channel">
-        <span class="guide-grid-number">${getDisplayChannelNumber(guideChannel, state.filteredChannels.indexOf(guideChannel))}</span>
-        <div>
-          <strong>${guideChannel.title}</strong>
-          <span>${guideChannel.group}</span>
-        </div>
-      </div>
-    `;
-    row.appendChild(track);
-    ui.guideTimeline.appendChild(row);
-  });
-
-  ui.guideStatus.textContent = `${matchedRows}/${guideChannels.length} channels • ${formatTime(windowStart)} - ${formatTime(windowEnd)}`;
-
   const nextProgram = upcoming.find((program) => program !== current);
   const infoStrip = document.createElement("article");
-  infoStrip.className = "now-next-strip";
+  infoStrip.className = "now-next-shell";
   infoStrip.innerHTML = `
-    <div class="now-next-segment current">
-      <p class="program-time">Now</p>
-      <h3>${current?.title || "No current listing"}</h3>
-      <p class="program-copy">${current?.desc || "No description"}</p>
+    <div class="now-next-header">
+      <p class="eyebrow">Program Info</p>
+      <span class="signal-pill">LIVE</span>
     </div>
-    <div class="now-next-segment">
-      <p class="program-time">Next</p>
-      <h3>${nextProgram?.title || "No next listing"}</h3>
-      <p class="program-copy">${nextProgram ? `${formatTime(nextProgram.start)} start` : "No future listing"}</p>
+    <div class="now-next-strip">
+      <div class="now-next-segment current">
+        <p class="program-time">On Now</p>
+        <h3>${current?.title || "No current listing"}</h3>
+        <p class="program-copy">${current?.desc || "Guide data unavailable for this channel."}</p>
+        <p class="program-window">${current ? `${formatTime(current.start)} - ${formatTime(current.stop)}` : "No schedule data"}</p>
+      </div>
+      <div class="now-next-segment">
+        <p class="program-time">Up Next</p>
+        <h3>${nextProgram?.title || "No next listing"}</h3>
+        <p class="program-copy">${nextProgram?.desc || "No future guide data was returned."}</p>
+        <p class="program-window">${nextProgram ? `${formatTime(nextProgram.start)} start` : "Guide unavailable"}</p>
+      </div>
     </div>
   `;
   ui.nowNext.appendChild(infoStrip);
+}
+
+function renderChannelView(channel) {
+  updateHero(channel);
+  renderNowNext(channel);
+}
+
+function clearGuideData(message = "Guide unavailable") {
+  state.guide.clear();
+  const activeChannel = getActiveChannel();
+
+  if (activeChannel) {
+    renderChannelView(activeChannel);
+    return;
+  }
+
+  ui.nowNext.innerHTML = `
+    <article class="now-next-shell">
+      <div class="now-next-header">
+        <p class="eyebrow">Program Info</p>
+        <span class="signal-pill offline">INFO</span>
+      </div>
+      <div class="now-next-strip">
+        <div class="now-next-segment current">
+          <p class="program-time">Guide Status</p>
+          <h3>${message}</h3>
+          <p class="program-copy">Tune a channel to keep surfing without the full grid guide.</p>
+          <p class="program-window">Now / Next only</p>
+        </div>
+      </div>
+    </article>
+  `;
 }
 
 function renderChannels() {
@@ -869,8 +790,7 @@ function applyFilters() {
   renderChannels();
 
   if (state.filteredChannels[state.activeIndex]) {
-    updateHero(state.filteredChannels[state.activeIndex]);
-    renderGuide(state.filteredChannels[state.activeIndex]);
+    renderChannelView(state.filteredChannels[state.activeIndex]);
   }
 
   if (ui.searchDialog.open) {
@@ -964,8 +884,7 @@ function tuneChannel(index) {
   state.activeIndex = index;
   state.selectedIndex = index;
   renderChannels();
-  updateHero(channel);
-  renderGuide(channel);
+  renderChannelView(channel);
   attachStream(channel);
 }
 
@@ -1046,8 +965,7 @@ async function loadPlaylist(options = {}) {
 
 async function loadEpg() {
   if (!state.sources.epgUrl) {
-    state.guide.clear();
-    ui.guideStatus.textContent = "No XMLTV URL configured";
+    clearGuideData("No XMLTV URL configured");
     return;
   }
 
@@ -1067,17 +985,20 @@ async function loadEpg() {
 }
 
 async function reloadSources() {
-  ui.guideStatus.textContent = "Loading sources...";
-
   try {
-    await Promise.all([loadPlaylist(), loadEpg()]);
-    if (state.filteredChannels[state.activeIndex]) {
-      renderGuide(state.filteredChannels[state.activeIndex]);
-      updateHero(state.filteredChannels[state.activeIndex]);
+    await loadPlaylist();
+    let guideError = null;
+    try {
+      await loadEpg();
+    } catch (error) {
+      guideError = error;
+      clearGuideData(error.message || "Failed to load now/next guide");
     }
-    showToast("Sources refreshed");
+    if (state.filteredChannels[state.activeIndex]) {
+      renderChannelView(state.filteredChannels[state.activeIndex]);
+    }
+    showToast(guideError ? guideError.message || "Guide unavailable, channels loaded" : "Sources refreshed");
   } catch (error) {
-    ui.guideStatus.textContent = error.message;
     showToast(error.message);
   }
 }
@@ -1206,18 +1127,6 @@ function bindEvents() {
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       stepChannel(-1);
-    } else if (event.key === "ArrowRight") {
-      state.guideOffset += 1;
-      const current = state.filteredChannels[state.activeIndex];
-      if (current) {
-        renderGuide(current);
-      }
-    } else if (event.key === "ArrowLeft") {
-      state.guideOffset = Math.max(0, state.guideOffset - 1);
-      const current = state.filteredChannels[state.activeIndex];
-      if (current) {
-        renderGuide(current);
-      }
     } else if (event.key === "Enter") {
       tuneChannel(state.selectedIndex);
     } else if (/^[1-9]$/.test(event.key)) {
@@ -1237,7 +1146,7 @@ async function init() {
 
   if (!state.sources.playlistUrl && !state.sources.epgUrl) {
     ui.settingsDialog.showModal();
-    ui.guideStatus.textContent = "Add your sources to begin";
+    clearGuideData("Add your sources to begin");
     return;
   }
 
