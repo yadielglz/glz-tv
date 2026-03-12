@@ -977,13 +977,14 @@ async function loadEpg() {
     params.set("stream_headers", state.sources.streamHeaders.trim());
   }
   const response = await fetch(`/api/epg?${params.toString()}`);
-
+  const data = await response.json();
   if (!response.ok) {
-    const data = await response.json();
     throw new Error(data.error || "Failed to load EPG");
   }
-
-  const data = await response.json();
+  if (data?.unavailable) {
+    clearGuideData(data.warning || "Guide unavailable");
+    return;
+  }
   state.guide = parseEpg(data.guide);
 }
 

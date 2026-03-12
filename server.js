@@ -710,7 +710,17 @@ async function handleEpg(req, res, url) {
     const message = error.message?.includes("404")
       ? "EPG request failed upstream with 404. If the URL works in your browser, add the required cookies/headers in Sources."
       : error.message;
-    send(res, 502, { error: message }, "application/json; charset=utf-8");
+    send(
+      res,
+      200,
+      {
+        source: epgUrl,
+        guide: {},
+        unavailable: true,
+        warning: message || "Guide unavailable"
+      },
+      "application/json; charset=utf-8"
+    );
   }
 }
 
