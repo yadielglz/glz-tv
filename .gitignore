@@ -4,3 +4,7 @@ local.properties
 **/build/
 *.iml
 captures/
+**/node_modules/
+**/.dev.vars
+**/.wrangler/
+**/supabase/.temp/

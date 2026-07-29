@@ -25,6 +25,14 @@ Android Media3.
 - Per-playlist and per-channel request headers
 - Material 3 interface that adapts to portrait, landscape, tablets, and TV
 - No local Node server or web proxy required
+- Optional GLZ Hub enrollment for centrally managed guest names, playlists,
+  EPG sources, themes, startup screens, and visible entertainment apps
+
+## GLZ Hub management
+
+The `glzhub/` directory contains the Cloudflare Worker portal and Supabase
+schema for `https://glzhub.glztech.com`. See
+[`glzhub/README.md`](glzhub/README.md) for setup and deployment.
 
 Only use playlists and streams you are authorized to access.
 
@@ -35,10 +43,11 @@ Only use playlists and streams you are authorized to access.
 3. Run the `app` configuration, or build from a terminal:
 
 ```powershell
-.\gradlew.bat assembleDebug
+.\gradlew.bat assembleFireTvDebug
 ```
 
-The debug APK is written to `app\build\outputs\apk\debug\app-debug.apk`.
+The Fire TV debug APK is written to
+`app\build\outputs\apk\fireTv\debug\app-fireTv-debug.apk`.
 
 ## Use
 
@@ -54,10 +63,16 @@ Fresh installations use these GLZ defaults:
 
 The app detects and decompresses raw gzip XMLTV responses automatically.
 
-## Android TV notes
+## Android TV and Fire TV notes
 
 The app is packaged with both standard and Leanback launcher entries. Its TV
 banner is at `app/src/main/res/drawable-xhdpi/tv_banner.png`.
+
+The manifest marks touchscreen, fake-touch, location, GPS, and Wi-Fi hardware
+as optional so the Amazon Appstore can offer the app to Fire TV devices,
+including Ethernet-connected models. Fire TV uses the same D-pad launcher
+entry and playback UI. Android TV preview channels are skipped automatically
+on Fire OS when its Android TV provider is unavailable.
 
 Automatic launch after restart is best effort on consumer Android TV devices
 because the operating system and device manufacturer can block background

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08111f">
+  <title>GLZ Hub</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <a class="brand" href="/">
+        <span class="brand-mark">G</span>
+        <span><strong>GLZ Hub</strong><small>Device management</small></span>
+      </a>
+      <nav>
+        <button class="nav active" data-view="devices">▣ <span>Devices</span></button>
+        <button class="nav" data-view="pair">＋ <span>Pair a TV</span></button>
+      </nav>
+      <div class="rail-foot">
+        <span id="accountEmail">Not signed in</span>
+        <button id="signOut" class="text-button hidden">Sign out</button>
+      </div>
+    </aside>
+
+    <main>
+      <section id="authView" class="auth-wrap">
+        <div class="auth-card">
+          <div class="eyebrow">FAMILY ENTERTAINMENT, ORGANIZED</div>
+          <h1>Every screen.<br><em>One calm place.</em></h1>
+          <p>Manage guest names, channels, guides, and entertainment apps across every GLZ TV.</p>
+          <form id="authForm">
+            <label>Email<input id="email" type="email" autocomplete="email" required></label>
+            <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+            <button class="primary" type="submit">Sign in</button>
+            <p id="authError" class="error"></p>
+          </form>
+        </div>
+      </section>
+
+      <section id="inviteView" class="auth-wrap hidden">
+        <div class="auth-card">
+          <div class="eyebrow">WELCOME TO GLZ HUB</div>
+          <h1>Choose your<br><em>admin password.</em></h1>
+          <p>Your email has been verified. Create the password you’ll use to manage your televisions.</p>
+          <form id="inviteForm">
+            <label>New password<input id="invitePassword" type="password" autocomplete="new-password" minlength="10" required></label>
+            <label>Confirm password<input id="invitePasswordConfirm" type="password" autocomplete="new-password" minlength="10" required></label>
+            <button class="primary" type="submit">Activate administrator account</button>
+            <p id="inviteError" class="error"></p>
+          </form>
+        </div>
+      </section>
+
+      <section id="appView" class="hidden">
+        <header>
+          <div>
+            <div class="eyebrow">GLZTECH CONTROL CENTER</div>
+            <h2 id="pageTitle">Your TVs</h2>
+          </div>
+          <button id="pairButton" class="primary">＋ Pair a TV</button>
+        </header>
+
+        <section id="devicesView">
+          <div class="stats">
+            <article><span>Managed screens</span><strong id="deviceCount">0</strong></article>
+            <article><span>Online now</span><strong id="onlineCount">0</strong></article>
+            <article><span>Needs attention</span><strong id="attentionCount">0</strong></article>
+          </div>
+          <div id="deviceGrid" class="device-grid"></div>
+          <div id="emptyState" class="empty hidden">
+            <div class="empty-icon">＋</div>
+            <h3>Pair your first TV</h3>
+            <p>Open GLZ TV settings on the television and enter its pairing code here.</p>
+            <button class="primary" data-open-pair>Pair a TV</button>
+          </div>
+        </section>
+
+        <section id="pairView" class="panel hidden">
+          <div class="eyebrow">ADD A SCREEN</div>
+          <h3>Pair a GLZ TV</h3>
+          <p>On the television, open Settings → GLZ Hub. Enter the code shown on screen.</p>
+          <form id="pairForm" class="form-grid">
+            <label>Pairing code<input id="pairingCode" placeholder="GLZ-ABC123" maxlength="10" required></label>
+            <label>Device name<input id="pairDeviceName" placeholder="Living Room"></label>
+            <label>Guest name<input id="pairGuestName" placeholder="Guest"></label>
+            <div class="form-actions">
+              <button type="button" class="secondary" data-view-button="devices">Cancel</button>
+              <button type="submit" class="primary">Pair television</button>
+            </div>
+            <p id="pairError" class="error"></p>
+          </form>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="deviceDialog">
+    <form id="deviceForm" method="dialog">
+      <div class="dialog-head">
+        <div><div class="eyebrow">DEVICE SETTINGS</div><h3 id="dialogTitle">Living Room</h3></div>
+        <button class="icon-button" value="cancel" aria-label="Close">×</button>
+      </div>
+      <input id="deviceId" type="hidden">
+      <input id="configVersion" type="hidden">
+      <div class="form-grid">
+        <label>Device name<input id="deviceName" required></label>
+        <label>Welcome guest name<input id="guestName" required></label>
+        <label class="wide">M3U playlist URL<input id="playlistUrl" type="url" placeholder="https://…"></label>
+        <label class="wide">XMLTV EPG URL<input id="epgUrl" type="url" placeholder="https://…"></label>
+        <label>Weather location<input id="weatherLocation"></label>
+        <label>Start screen
+          <select id="startDestination">
+            <option>Home</option><option>Live</option><option>Guide</option>
+          </select>
+        </label>
+        <label>Theme
+          <select id="themeMode">
+            <option value="adaptive">Adaptive</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <label class="wide">Visible app package names
+          <textarea id="visibleApps" rows="5" placeholder="com.netflix.ninja&#10;com.google.android.youtube.tv"></textarea>
+          <small>One Android package name per line. Apps omitted here are hidden inside GLZ TV.</small>
+        </label>
+      </div>
+      <p id="deviceError" class="error"></p>
+      <div class="form-actions">
+        <button type="button" class="secondary" data-close-dialog>Cancel</button>
+        <button type="submit" class="primary">Save &amp; sync</button>
+      </div>
+    </form>
+  </dialog>
+  <div id="toast" role="status"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -18,6 +18,12 @@ object TvHomePublisher {
     fun publish(context: Context, channels: List<Channel>, guide: EpgGuide) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
             !context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) return
+        // Fire TV advertises Leanback compatibility but does not implement the
+        // Android TV preview-channel provider used by PreviewChannelHelper.
+        if (context.packageManager.resolveContentProvider(
+                TvContractCompat.AUTHORITY,
+                0
+            ) == null) return
 
         runCatching {
             val helper = PreviewChannelHelper(context)

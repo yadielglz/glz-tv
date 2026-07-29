@@ -1,0 +1,150 @@
+package com.glztv.app
+
+import android.content.SharedPreferences
+import android.os.Build
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
+
+object GlzHubManager {
+    const val HUB_URL = "https://glzhub.glztech.com"
+    const val INSTALLATION_ID = "hub_installation_id"
+    const val DEVICE_TOKEN = "hub_device_token"
+    const val PAIRING_CODE = "hub_pairing_code"
+    const val CONFIG_VERSION = "hub_config_version"
+    const val VISIBLE_APPS = "hub_visible_apps"
+    const val VISIBLE_APPS_MANAGED = "hub_visible_apps_managed"
+
+    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
+    data class SyncResult(
+        val changed: Boolean,
+        val guestName: String?,
+        val visibleApps: Set<String>
+    )
+
+    fun installationId(prefs: SharedPreferences): String {
+        prefs.getString(INSTALLATION_ID, null)?.let { return it }
+        return UUID.randomUUID().toString().also {
+            prefs.edit().putString(INSTALLATION_ID, it).apply()
+        }
+    }
+
+    fun pairingCode(prefs: SharedPreferences): String? =
+        prefs.getString(PAIRING_CODE, null)
+
+    fun isEnrolled(prefs: SharedPreferences): Boolean =
+        !prefs.getString(DEVICE_TOKEN, null).isNullOrBlank()
+
+    fun visibleApps(prefs: SharedPreferences): Set<String> =
+        prefs.getStringSet(VISIBLE_APPS, emptySet()).orEmpty()
+
+    fun beginEnrollment(
+        prefs: SharedPreferences,
+        client: OkHttpClient
+    ): String {
+        val payload = JSONObject()
+            .put("installationId", installationId(prefs))
+            .put("platform", if (Build.MANUFACTURER.equals("Amazon", true)) "Fire TV" else "Google TV")
+            .put("model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+            .put("appVersion", BuildConfig.VERSION_NAME)
+        val response = client.newCall(
+            Request.Builder()
+                .url("$HUB_URL/api/v1/enrollment")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+        ).execute()
+        val text = response.body?.string().orEmpty()
+        check(response.isSuccessful) {
+            runCatching { JSONObject(text).optString("error") }.getOrNull()
+                ?.takeIf(String::isNotBlank) ?: "GLZ Hub returned ${response.code}"
+        }
+        val result = JSONObject(text)
+        val code = result.getString("pairingCode")
+        prefs.edit()
+            .putString(DEVICE_TOKEN, result.getString("deviceToken"))
+            .putString(PAIRING_CODE, code)
+            .apply()
+        return code
+    }
+
+    fun sync(
+        prefs: SharedPreferences,
+        client: OkHttpClient
+    ): SyncResult {
+        val token = prefs.getString(DEVICE_TOKEN, null)
+            ?: return SyncResult(false, null, visibleApps(prefs))
+        val response = client.newCall(
+            Request.Builder()
+                .url("$HUB_URL/api/v1/devices/config")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+        ).execute()
+        if (response.code == 401) {
+            return SyncResult(false, null, visibleApps(prefs))
+        }
+        val text = response.body?.string().orEmpty()
+        check(response.isSuccessful) { "GLZ Hub returned ${response.code}" }
+        val config = JSONObject(text)
+        val version = config.optLong("version", 0)
+        val previousVersion = prefs.getLong(CONFIG_VERSION, -1)
+        val appPackages = config.optJSONArray("visibleApps").toPackageSet()
+        if (version == previousVersion) return SyncResult(false, null, visibleApps(prefs))
+
+        val editor = prefs.edit().putLong(CONFIG_VERSION, version).remove(PAIRING_CODE)
+        config.stringOrNull("guestName")?.let { editor.putString("guest_name", it) }
+        if (config.has("playlistUrl")) {
+            if (config.isNull("playlistUrl")) editor.remove("playlist_url")
+            else editor.putString("playlist_url", config.optString("playlistUrl"))
+        }
+        if (config.has("epgUrl")) {
+            if (config.isNull("epgUrl")) editor.remove("epg_url")
+            else editor.putString("epg_url", config.optString("epgUrl"))
+        }
+        config.stringOrNull("themeMode")?.let { editor.putString("theme_mode", it) }
+        config.stringOrNull("weatherLocation")?.let { editor.putString("weather_location", it) }
+        config.stringOrNull("startDestination")?.let { editor.putString("start_destination", it) }
+        config.optJSONObject("requestHeaders")?.let { headers ->
+            editor.putString(
+                "request_headers",
+                headers.keys().asSequence().joinToString("\n") { "$it: ${headers.optString(it)}" }
+            )
+        }
+        editor.putStringSet(VISIBLE_APPS, appPackages)
+            .putBoolean(VISIBLE_APPS_MANAGED, true)
+            .apply()
+        return SyncResult(true, config.stringOrNull("guestName"), appPackages)
+    }
+
+    fun heartbeat(prefs: SharedPreferences, client: OkHttpClient) {
+        val token = prefs.getString(DEVICE_TOKEN, null) ?: return
+        val payload = JSONObject().put("appVersion", BuildConfig.VERSION_NAME)
+        client.newCall(
+            Request.Builder()
+                .url("$HUB_URL/api/v1/devices/heartbeat")
+                .header("Authorization", "Bearer $token")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+        ).execute().close()
+    }
+
+    private fun JSONObject.stringOrNull(key: String): String? =
+        if (isNull(key)) null else optString(key).takeIf(String::isNotBlank)
+
+    private fun JSONArray?.toPackageSet(): Set<String> {
+        if (this == null) return emptySet()
+        return buildSet {
+            for (index in 0 until length()) {
+                when (val value = opt(index)) {
+                    is String -> value.takeIf(String::isNotBlank)?.let(::add)
+                    is JSONObject -> value.optString("packageName").takeIf(String::isNotBlank)?.let(::add)
+                }
+            }
+        }
+    }
+}

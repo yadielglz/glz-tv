@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
@@ -249,6 +250,10 @@ class MainActivity : ComponentActivity() {
 
     private fun requestWifiIdentityPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        // A TV does not need an SSID badly enough to interrupt first launch with a
+        // location permission dialog (and Fire TV may not provide one at all).
+        if (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK ==
+            Configuration.UI_MODE_TYPE_TELEVISION) return
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES)
         } else {
@@ -348,6 +353,19 @@ private fun TvScreen(
     var guestName by remember {
         mutableStateOf(prefs.getString(GUEST_NAME, "Guest") ?: "Guest")
     }
+    var visibleAppPackages by remember {
+        mutableStateOf(GlzHubManager.visibleApps(prefs))
+    }
+    var appVisibilityManaged by remember {
+        mutableStateOf(prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false))
+    }
+    var hubStatus by remember {
+        mutableStateOf(
+            GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
+                ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
+                else "Not connected"
+        )
+    }
     var showSettings by remember { mutableStateOf(false) }
     var showSettingsPin by remember { mutableStateOf(false) }
     var captionsEnabled by remember {
@@ -432,7 +450,45 @@ private fun TvScreen(
         loading = false
     }
 
-    LaunchedEffect(Unit) { loadSources() }
+    LaunchedEffect(Unit) {
+        val initialSync = runCatching {
+            withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
+        }.getOrNull()
+        if (initialSync?.changed == true) {
+            guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+            weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
+                ?: DEFAULT_WEATHER_LOCATION
+            visibleAppPackages = GlzHubManager.visibleApps(prefs)
+            appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
+            onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
+            hubStatus = "Connected to GLZ Hub"
+        }
+        loadSources(forceRefresh = initialSync?.changed == true)
+        while (true) {
+            delay(2 * 60 * 1000L)
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val result = GlzHubManager.sync(prefs, client)
+                    GlzHubManager.heartbeat(prefs, client)
+                    result
+                }
+            }.onSuccess { result ->
+                if (result.changed) {
+                    guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+                    weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
+                        ?: DEFAULT_WEATHER_LOCATION
+                    visibleAppPackages = GlzHubManager.visibleApps(prefs)
+                    appVisibilityManaged =
+                        prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
+                    onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
+                    loadSources(forceRefresh = true)
+                }
+                if (GlzHubManager.isEnrolled(prefs)) hubStatus = "Connected to GLZ Hub"
+            }.onFailure {
+                hubStatus = "GLZ Hub sync unavailable · using saved settings"
+            }
+        }
+    }
     LaunchedEffect(weatherLocation) {
         while (true) {
             weather = withContext(Dispatchers.IO) {
@@ -481,6 +537,10 @@ private fun TvScreen(
         it.name.lowercase(Locale.ROOT).contains("weather")
     }
     val immersive = section == AppSection.Live && selected != null
+    val managedEntertainmentApps = remember(visibleAppPackages, appVisibilityManaged) {
+        if (!appVisibilityManaged) EntertainmentApps
+        else EntertainmentApps.filter { it.packageName in visibleAppPackages }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -511,6 +571,7 @@ private fun TvScreen(
                     guide = guide,
                     captionsEnabled = captionsEnabled,
                     captionLanguage = captionLanguage,
+                    entertainmentApps = managedEntertainmentApps,
                     onTune = tuneChannel,
                     onExit = { section = AppSection.Home }
                 )
@@ -522,6 +583,7 @@ private fun TvScreen(
                 if (section == AppSection.Home) {
                     GuestHubHome(
                         guestName = guestName,
+                        entertainmentApps = managedEntertainmentApps,
                         onLive = { section = AppSection.Live },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -596,6 +658,14 @@ private fun TvScreen(
             startDestination = prefs.getString(START_DESTINATION, AppSection.Home.name)
                 ?: AppSection.Home.name,
             sourceStatus = status,
+            hubStatus = hubStatus,
+            onBeginHubEnrollment = {
+                withContext(Dispatchers.IO) {
+                    GlzHubManager.beginEnrollment(prefs, client)
+                }.also { code ->
+                    hubStatus = "Pairing code: $code"
+                }
+            },
             onDismiss = { showSettings = false },
             onSave = { playlist, epg, headers, location, name, theme, captions, language, autoUpdate,
                        wifiOnly, autoStart, resumeLast, startDestination ->
@@ -795,6 +865,7 @@ private fun FloatingDestination(
 @Composable
 private fun GuestHubHome(
     guestName: String,
+    entertainmentApps: List<EntertainmentApp>,
     onLive: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -855,7 +926,7 @@ private fun GuestHubHome(
                 contentPadding = PaddingValues(horizontal = 3.dp, vertical = 8.dp)
             ) {
                 item { LiveTvHubCard(onLive, appWidth, appHeight) }
-                items(EntertainmentApps, key = EntertainmentApp::packageName) { app ->
+                items(entertainmentApps, key = EntertainmentApp::packageName) { app ->
                     EntertainmentAppCard(app, appWidth, appHeight)
                 }
             }
@@ -1526,6 +1597,7 @@ private fun ImmersivePlayerScreen(
     guide: EpgGuide,
     captionsEnabled: Boolean,
     captionLanguage: String,
+    entertainmentApps: List<EntertainmentApp>,
     onTune: (Channel) -> Unit,
     onExit: () -> Unit
 ) {
@@ -1793,7 +1865,7 @@ private fun ImmersivePlayerScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
-                        items(EntertainmentApps, key = { "service-${it.packageName}" }) { app ->
+                        items(entertainmentApps, key = { "service-${it.packageName}" }) { app ->
                             val launchIntent = remember(app.packageName) {
                                 findAppLaunchIntent(context, app.packageName)
                             }
@@ -1803,7 +1875,7 @@ private fun ImmersivePlayerScreen(
                                 }.getOrNull()
                             }
                             var isFocused by remember(app.packageName) { mutableStateOf(false) }
-                            val isFirst = app == EntertainmentApps.first()
+                            val isFirst = app == entertainmentApps.firstOrNull()
                             Surface(
                                 Modifier.fillMaxWidth()
                                     .then(if (isFirst) Modifier.focusRequester(firstServiceFocus)
@@ -2142,6 +2214,8 @@ private fun SettingsDialog(
     resumeLast: Boolean,
     startDestination: String,
     sourceStatus: String,
+    hubStatus: String,
+    onBeginHubEnrollment: suspend () -> String,
     onDismiss: () -> Unit,
     onSave: (
         String, String, String, String, String, String, Boolean, String, Boolean, Boolean,
@@ -2161,7 +2235,10 @@ private fun SettingsDialog(
     var autoStartValue by remember { mutableStateOf(autoStart) }
     var resumeLastValue by remember { mutableStateOf(resumeLast) }
     var startDestinationValue by remember { mutableStateOf(startDestination) }
-    var updateStatus by remember { mutableStateOf("Version 1.0.1") }
+    var updateStatus by remember { mutableStateOf("Version ${BuildConfig.VERSION_NAME}") }
+    var hubMessage by remember(hubStatus) { mutableStateOf(hubStatus) }
+    var hubLoading by remember { mutableStateOf(false) }
+    val settingsScope = rememberCoroutineScope()
     BackHandler(onBack = onDismiss)
     Surface(
         Modifier.fillMaxSize(),
@@ -2199,6 +2276,34 @@ private fun SettingsDialog(
                         Modifier.padding(16.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                SettingsLabel("GLZ HUB")
+                Surface(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(hubMessage, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Manage this television at glzhub.glztech.com/pair",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        TvSettingsButton(
+                            label = if (hubLoading) "Connecting…" else "Generate pairing code",
+                            enabled = !hubLoading,
+                            onClick = {
+                                hubLoading = true
+                                settingsScope.launch {
+                                    runCatching { onBeginHubEnrollment() }
+                                        .onSuccess { hubMessage = "Pairing code: $it · expires in 15 minutes" }
+                                        .onFailure { hubMessage = "Could not reach GLZ Hub: ${it.message}" }
+                                    hubLoading = false
+                                }
+                            }
+                        )
+                    }
                 }
                 SettingsLabel("APPEARANCE")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

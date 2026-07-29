@@ -1,0 +1,16 @@
+{
+  "name": "glzhub",
+  "private": true,
+  "version": "1.6.0",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260729.1",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.27.0"
+  }
+}
