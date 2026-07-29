@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ink">#07101D</color>
+    <color name="panel">#101E31</color>
+    <color name="orange">#FF6B2C</color>
+    <color name="lime">#C4FF4D</color>
+    <color name="foreground">#EFF5FB</color>
+    <color name="muted">#9FB6CC</color>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Glz TV</string>
+    <string name="empty_title">Your channels, one tap away</string>
+    <string name="empty_message">Add an M3U playlist to start watching live TV.</string>
+    <string name="add_source">Add playlist</string>
+    <string name="search_hint">Search channels or groups</string>
+</resources>
