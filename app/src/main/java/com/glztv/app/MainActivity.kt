@@ -6,6 +6,7 @@ import android.Manifest
 import android.content.Context
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.drawable.AdaptiveIconDrawable
@@ -470,6 +471,9 @@ private fun TvScreen(
         val initialSync = runCatching {
             withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
         }.getOrNull()
+        initialSync?.commands?.forEach { command ->
+            handleManagedAppCommand(context, prefs, client, command)
+        }
         if (initialSync?.changed == true) {
             guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
             weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
@@ -489,6 +493,9 @@ private fun TvScreen(
                     result
                 }
             }.onSuccess { result ->
+                result.commands.forEach { command ->
+                    handleManagedAppCommand(context, prefs, client, command)
+                }
                 if (result.changed) {
                     guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
                     weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
@@ -1344,6 +1351,30 @@ private fun launchEntertainmentApp(context: Context, packageName: String, launch
                 Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
+    }
+}
+
+private suspend fun handleManagedAppCommand(
+    context: Context,
+    prefs: SharedPreferences,
+    client: OkHttpClient,
+    command: GlzHubManager.AppCommand
+) {
+    val result = runCatching {
+        val uri = if (command.sourceType == "repository") {
+            Uri.parse(requireNotNull(command.sourceUrl) { "Repository URL is missing" })
+        } else {
+            Uri.parse("market://details?id=${command.packageName}")
+        }
+        context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    withContext(Dispatchers.IO) {
+        runCatching {
+            GlzHubManager.completeCommand(
+                prefs, client, command.id, result.isSuccess,
+                if (result.isSuccess) "Installer opened on TV" else (result.exceptionOrNull()?.message ?: "Could not open installer")
+            )
+        }
     }
 }
 

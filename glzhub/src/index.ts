@@ -53,6 +53,16 @@ function requiredString(value: unknown, name: string, max = 2048): string {
   return value.trim();
 }
 
+function optionalString(value: unknown, name: string, max = 2048): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  return requiredString(value, name, max);
+}
+
+function isHttpsUrl(value: string | null): boolean {
+  if (!value) return false;
+  try { return new URL(value).protocol === "https:"; } catch { return false; }
+}
+
 async function supabase(
   env: Env,
   path: string,
@@ -194,7 +204,8 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
   if (!currentRows[0]) return json({ error: "Device not found." }, 404);
   const allowed = [
     "name", "guest_name", "playlist_url", "epg_url", "request_headers",
-    "visible_apps", "theme_mode", "weather_location", "start_destination"
+    "visible_apps", "theme_mode", "weather_location", "start_destination",
+    "captions_enabled", "captions_language", "auto_start", "resume_last_channel"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
   patch.config_version = Number(currentRows[0].config_version || 0) + 1;
@@ -224,8 +235,98 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     visibleApps: device.visible_apps ?? [],
     themeMode: device.theme_mode,
     weatherLocation: device.weather_location,
-    startDestination: device.start_destination
+    startDestination: device.start_destination,
+    captionsEnabled: device.captions_enabled,
+    captionsLanguage: device.captions_language,
+    autoStart: device.auto_start,
+    resumeLastChannel: device.resume_last_channel
   });
+}
+
+async function listApps(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const apps = await supabaseJson(env,
+    `/rest/v1/app_catalog?owner_id=eq.${user.id}&select=*&order=name.asc`
+  ) as Record<string, unknown>[];
+  return json({ apps });
+}
+
+async function createApp(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const sourceType = requiredString(input.source_type, "source type", 20);
+  if (!["play_store", "repository"].includes(sourceType)) throw new Error("Invalid source type");
+  const sourceUrl = optionalString(input.source_url, "source URL");
+  if (sourceType === "repository" && !isHttpsUrl(sourceUrl)) {
+    throw new Error("Invalid source URL: repository apps require HTTPS");
+  }
+  const checksum = optionalString(input.sha256, "SHA-256", 64);
+  if (checksum && !/^[a-f0-9]{64}$/i.test(checksum)) throw new Error("Invalid SHA-256");
+  const apps = await supabaseJson(env, "/rest/v1/app_catalog?select=*", {
+    method: "POST", headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      owner_id: user.id,
+      name: requiredString(input.name, "name", 100),
+      package_name: requiredString(input.package_name, "package name", 180),
+      source_type: sourceType,
+      source_url: sourceUrl,
+      version_name: optionalString(input.version_name, "version", 40),
+      sha256: checksum?.toLowerCase() ?? null
+    })
+  }) as Record<string, unknown>[];
+  return json({ app: apps[0] }, 201);
+}
+
+async function queueInstall(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const appId = requiredString(input.appId, "appId", 64);
+  const [devices, apps] = await Promise.all([
+    supabaseJson(env, `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=id`),
+    supabaseJson(env, `/rest/v1/app_catalog?id=eq.${encodeURIComponent(appId)}&owner_id=eq.${user.id}&select=*`)
+  ]) as [Record<string, unknown>[], Record<string, unknown>[]];
+  if (!devices[0] || !apps[0]) return json({ error: "Device or app not found." }, 404);
+  const app = apps[0];
+  const commands = await supabaseJson(env, "/rest/v1/device_commands?select=*", {
+    method: "POST", headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      owner_id: user.id, device_id: deviceId, action: "install_app",
+      payload: {
+        name: app.name, packageName: app.package_name, sourceType: app.source_type,
+        sourceUrl: app.source_url, versionName: app.version_name, sha256: app.sha256
+      }
+    })
+  }) as Record<string, unknown>[];
+  return json({ command: commands[0] }, 201);
+}
+
+async function pendingCommands(request: Request, env: Env): Promise<Response> {
+  const device = await deviceForToken(request, env);
+  const commands = await supabaseJson(env,
+    `/rest/v1/device_commands?device_id=eq.${device.id}&status=eq.pending&select=*&order=created_at.asc&limit=10`
+  ) as Record<string, unknown>[];
+  if (commands.length) {
+    const ids = commands.map((command) => command.id).join(",");
+    await supabaseJson(env, `/rest/v1/device_commands?id=in.(${ids})`, {
+      method: "PATCH", headers: { prefer: "return=minimal" },
+      body: JSON.stringify({ status: "delivered", delivered_at: new Date().toISOString() })
+    });
+  }
+  return json({ commands });
+}
+
+async function commandResult(request: Request, env: Env, commandId: string): Promise<Response> {
+  const device = await deviceForToken(request, env);
+  const input = await body(request);
+  const status = input.status === "completed" ? "completed" : "failed";
+  await supabaseJson(env,
+    `/rest/v1/device_commands?id=eq.${encodeURIComponent(commandId)}&device_id=eq.${device.id}`,
+    { method: "PATCH", headers: { prefer: "return=minimal" }, body: JSON.stringify({
+      status, completed_at: new Date().toISOString(),
+      result_message: typeof input.message === "string" ? input.message.slice(0, 500) : null
+    }) }
+  );
+  return json({ ok: true });
 }
 
 async function heartbeat(request: Request, env: Env): Promise<Response> {
@@ -254,9 +355,16 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/v1/enrollment" && request.method === "POST") return enroll(request, env);
   if (path === "/api/v1/enrollment/claim" && request.method === "POST") return claimEnrollment(request, env);
   if (path === "/api/v1/admin/devices" && request.method === "GET") return listDevices(request, env);
+  if (path === "/api/v1/admin/apps" && request.method === "GET") return listApps(request, env);
+  if (path === "/api/v1/admin/apps" && request.method === "POST") return createApp(request, env);
   const adminDevice = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)$/i);
   if (adminDevice && request.method === "PATCH") return updateDevice(request, env, adminDevice[1]);
+  const install = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/commands$/i);
+  if (install && request.method === "POST") return queueInstall(request, env, install[1]);
   if (path === "/api/v1/devices/config" && request.method === "GET") return deviceConfig(request, env);
+  if (path === "/api/v1/devices/commands" && request.method === "GET") return pendingCommands(request, env);
+  const result = path.match(/^\/api\/v1\/devices\/commands\/([0-9a-f-]+)\/result$/i);
+  if (result && request.method === "POST") return commandResult(request, env, result[1]);
   if (path === "/api/v1/devices/heartbeat" && request.method === "POST") return heartbeat(request, env);
   if (path.startsWith("/api/")) return json({ error: "Not found." }, 404);
   return env.ASSETS.fetch(request);

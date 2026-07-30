@@ -94,5 +94,19 @@ Apply a Cloudflare rate-limit rule to `POST /api/v1/enrollment` and
 | `GET` | `/api/v1/devices/config` | Device token |
 | `POST` | `/api/v1/devices/heartbeat` | Device token |
 
+## Device and app management
+
+Apply both SQL migrations in order. Migration `002_app_management.sql` adds expanded
+device settings, the owner-scoped app library, and the per-device command queue.
+
+The portal can send either:
+
+- a Google Play package, which opens the package listing on the TV; or
+- an HTTPS repository APK URL, which opens the device's download/installer flow.
+
+Android requires an on-device install confirmation on ordinary consumer TVs. Silent
+installation requires GLZ TV to be provisioned as the Android device owner (managed
+or kiosk deployment); the portal intentionally does not bypass that security model.
+
 App visibility controls only the apps shown inside GLZ TV. It does not modify
 the Google TV or Fire TV system launcher.

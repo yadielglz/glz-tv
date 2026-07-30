@@ -24,7 +24,15 @@ object GlzHubManager {
     data class SyncResult(
         val changed: Boolean,
         val guestName: String?,
-        val visibleApps: Set<String>
+        val visibleApps: Set<String>,
+        val commands: List<AppCommand> = emptyList()
+    )
+
+    data class AppCommand(
+        val id: String,
+        val packageName: String,
+        val sourceType: String,
+        val sourceUrl: String?
     )
 
     fun installationId(prefs: SharedPreferences): String {
@@ -94,7 +102,9 @@ object GlzHubManager {
         val version = config.optLong("version", 0)
         val previousVersion = prefs.getLong(CONFIG_VERSION, -1)
         val appPackages = config.optJSONArray("visibleApps").toPackageSet()
-        if (version == previousVersion) return SyncResult(false, null, visibleApps(prefs))
+        if (version == previousVersion) {
+            return SyncResult(false, null, visibleApps(prefs), commands(prefs, client))
+        }
 
         val editor = prefs.edit().putLong(CONFIG_VERSION, version).remove(PAIRING_CODE)
         config.stringOrNull("guestName")?.let { editor.putString("guest_name", it) }
@@ -109,6 +119,12 @@ object GlzHubManager {
         config.stringOrNull("themeMode")?.let { editor.putString("theme_mode", it) }
         config.stringOrNull("weatherLocation")?.let { editor.putString("weather_location", it) }
         config.stringOrNull("startDestination")?.let { editor.putString("start_destination", it) }
+        if (config.has("captionsEnabled")) editor.putBoolean("captions_enabled", config.optBoolean("captionsEnabled"))
+        config.stringOrNull("captionsLanguage")?.let { editor.putString("captions_language", it) }
+        if (config.has("autoStart")) editor.putBoolean("auto_start", config.optBoolean("autoStart"))
+        if (config.has("resumeLastChannel")) {
+            editor.putBoolean("resume_last_channel", config.optBoolean("resumeLastChannel", true))
+        }
         config.optJSONObject("requestHeaders")?.let { headers ->
             editor.putString(
                 "request_headers",
@@ -118,7 +134,44 @@ object GlzHubManager {
         editor.putStringSet(VISIBLE_APPS, appPackages)
             .putBoolean(VISIBLE_APPS_MANAGED, true)
             .apply()
-        return SyncResult(true, config.stringOrNull("guestName"), appPackages)
+        return SyncResult(true, config.stringOrNull("guestName"), appPackages, commands(prefs, client))
+    }
+
+    fun commands(prefs: SharedPreferences, client: OkHttpClient): List<AppCommand> {
+        val token = prefs.getString(DEVICE_TOKEN, null) ?: return emptyList()
+        val response = client.newCall(Request.Builder()
+            .url("$HUB_URL/api/v1/devices/commands")
+            .header("Authorization", "Bearer $token").get().build()).execute()
+        val text = response.body?.string().orEmpty()
+        if (!response.isSuccessful) return emptyList()
+        val items = JSONObject(text).optJSONArray("commands") ?: return emptyList()
+        return buildList {
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index) ?: continue
+                val payload = item.optJSONObject("payload") ?: continue
+                val id = item.optString("id")
+                val packageName = payload.optString("packageName")
+                if (id.isNotBlank() && packageName.isNotBlank()) add(AppCommand(
+                    id, packageName, payload.optString("sourceType", "play_store"),
+                    payload.stringOrNull("sourceUrl")
+                ))
+            }
+        }
+    }
+
+    fun completeCommand(
+        prefs: SharedPreferences,
+        client: OkHttpClient,
+        commandId: String,
+        completed: Boolean,
+        message: String
+    ) {
+        val token = prefs.getString(DEVICE_TOKEN, null) ?: return
+        val payload = JSONObject().put("status", if (completed) "completed" else "failed").put("message", message)
+        client.newCall(Request.Builder()
+            .url("$HUB_URL/api/v1/devices/commands/$commandId/result")
+            .header("Authorization", "Bearer $token")
+            .post(payload.toString().toRequestBody(jsonMediaType)).build()).execute().close()
     }
 
     fun heartbeat(prefs: SharedPreferences, client: OkHttpClient) {
