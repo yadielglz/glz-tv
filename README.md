@@ -53,11 +53,11 @@ Only use playlists and streams you are authorized to access.
 3. Run the `app` configuration, or build from a terminal:
 
 ```powershell
-.\gradlew.bat assembleFireTvDebug
+.\gradlew.bat assembleDebug
 ```
 
-The Fire TV debug APK is written to
-`app\build\outputs\apk\fireTv\debug\app-fireTv-debug.apk`.
+The Android TV debug APK is written to
+`app\build\outputs\apk\debug\app-debug.apk`.
 
 Git tag builds are signed and published by `.github/workflows/release.yml`.
 On Android 8 or newer, allow **Install unknown apps** for GLZ TV the first time
@@ -78,16 +78,15 @@ Fresh installations use these GLZ defaults:
 
 The app detects and decompresses raw gzip XMLTV responses automatically.
 
-## Android TV and Fire TV notes
+## Android TV notes
 
 The app is packaged with both standard and Leanback launcher entries. Its TV
 banner is at `app/src/main/res/drawable-xhdpi/tv_banner.png`.
 
 The manifest marks touchscreen, fake-touch, location, GPS, and Wi-Fi hardware
-as optional so the Amazon Appstore can offer the app to Fire TV devices,
-including Ethernet-connected models. Fire TV uses the same D-pad launcher
-entry and playback UI. Android TV preview channels are skipped automatically
-on Fire OS when its Android TV provider is unavailable.
+as optional for broad Android TV compatibility, including Ethernet-connected
+models. Devices use the same D-pad launcher entry and playback UI. Android TV
+preview channels are skipped automatically when the TV provider is unavailable.
 
 Automatic launch after restart is best effort on consumer Android TV devices
 because the operating system and device manufacturer can block background

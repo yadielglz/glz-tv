@@ -37,8 +37,10 @@ create index if not exists device_commands_device_status_idx on public.device_co
 alter table public.app_catalog enable row level security;
 alter table public.device_commands enable row level security;
 
+drop policy if exists "owners manage app catalog" on public.app_catalog;
 create policy "owners manage app catalog" on public.app_catalog
   for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+drop policy if exists "owners read device commands" on public.device_commands;
 create policy "owners read device commands" on public.device_commands
   for select to authenticated using (owner_id = auth.uid());
 

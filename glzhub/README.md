@@ -117,4 +117,4 @@ per-device settings. TVs persist the latest profile locally so text remains avai
 when the Hub is temporarily unreachable; remote artwork uses the image cache.
 
 App visibility controls only the apps shown inside GLZ TV. It does not modify
-the Google TV or Fire TV system launcher.
+the Android TV system launcher.

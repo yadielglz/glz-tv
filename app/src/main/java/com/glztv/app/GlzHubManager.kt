@@ -59,7 +59,7 @@ object GlzHubManager {
     ): String {
         val payload = JSONObject()
             .put("installationId", installationId(prefs))
-            .put("platform", if (Build.MANUFACTURER.equals("Amazon", true)) "Fire TV" else "Google TV")
+            .put("platform", "Android TV")
             .put("model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
             .put("appVersion", BuildConfig.VERSION_NAME)
         val response = client.newCall(
