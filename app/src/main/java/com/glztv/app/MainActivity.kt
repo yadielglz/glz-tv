@@ -303,6 +303,32 @@ private val GlzLightColors = lightColorScheme(
     onSurfaceVariant = Color(0xFF55443C)
 )
 
+private val GlzOceanColors = darkColorScheme(
+    primary = Color(0xFF65D8FF),
+    onPrimary = Color(0xFF003545),
+    primaryContainer = Color(0xFF004D63),
+    secondary = Color(0xFF72F1C8),
+    onSecondary = Color(0xFF00382B),
+    background = Color(0xFF03151D),
+    surface = Color(0xFF09232D),
+    surfaceVariant = Color(0xFF123642),
+    onSurface = Color(0xFFE8F8FC),
+    onSurfaceVariant = Color(0xFFB7D3DC)
+)
+
+private val GlzSunsetColors = darkColorScheme(
+    primary = Color(0xFFFFB06B),
+    onPrimary = Color(0xFF4D2500),
+    primaryContainer = Color(0xFF713B12),
+    secondary = Color(0xFFFF7BA9),
+    onSecondary = Color(0xFF56102C),
+    background = Color(0xFF1A0D19),
+    surface = Color(0xFF2A1727),
+    surfaceVariant = Color(0xFF43243A),
+    onSurface = Color(0xFFFFF0F5),
+    onSurfaceVariant = Color(0xFFE3C2D1)
+)
+
 @Composable
 private fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int) {
     val context = LocalContext.current
@@ -312,11 +338,17 @@ private fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int)
     val dark = when (themeMode) {
         "dark" -> true
         "light" -> false
+        "ocean", "sunset" -> true
         else -> systemDark
     }
-    val colors = if (themeMode == "adaptive" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else if (dark) GlzColors else GlzLightColors
+    val colors = when {
+        themeMode == "ocean" -> GlzOceanColors
+        themeMode == "sunset" -> GlzSunsetColors
+        themeMode == "adaptive" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        dark -> GlzColors
+        else -> GlzLightColors
+    }
     MaterialTheme(
         colorScheme = colors,
         typography = InterTypography,
@@ -1982,9 +2014,13 @@ private fun ImmersivePlayerScreen(
     }
     LaunchedEffect(showOsd, channel.id) {
         if (showOsd) {
-            delay(6_000)
+            delay(4_000)
             showOsd = false
         }
+    }
+    LaunchedEffect(channel.id) {
+        // The ready callback below turns this on at the exact point playback starts.
+        showOsd = false
     }
 
     fun stepChannel(direction: Int) {
@@ -2064,7 +2100,15 @@ private fun ImmersivePlayerScreen(
                 }
             }
     ) {
-        VideoPlayer(channel, captionsEnabled, captionLanguage, Modifier.fillMaxSize())
+        VideoPlayer(
+            channel,
+            captionsEnabled,
+            captionLanguage,
+            Modifier.fillMaxSize(),
+            onPlaybackReady = { readyChannelId ->
+                if (readyChannelId == channel.id) showOsd = true
+            }
+        )
 
         if (drawer == PlayerDrawer.None && showOsd) {
             PlayerOsd(
@@ -2289,31 +2333,30 @@ private fun PlayerOsd(
     } ?: 0f
 
     Surface(
-        modifier = modifier.fillMaxWidth().padding(24.dp),
-        shape = RoundedCornerShape(28.dp),
-        color = Color(0xFF0B0F12),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = .18f)),
-        shadowElevation = 24.dp
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(0.dp),
+        color = Color(0xEB0B0F12),
+        shadowElevation = 16.dp
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ChannelLogo(channel, 82.dp)
-            Spacer(Modifier.width(22.dp))
+            ChannelLogo(channel, 64.dp)
+            Spacer(Modifier.width(18.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(channel.number.ifBlank { "LIVE" }, color = MaterialTheme.colorScheme.secondary,
                         fontSize = 22.sp, fontWeight = FontWeight.Black)
                     Spacer(Modifier.width(12.dp))
-                    Text(channel.name, color = Color.White, fontSize = 25.sp,
+                    Text(channel.name, color = Color.White, fontSize = 23.sp,
                         fontWeight = FontWeight.Black, maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     Text(currentProgramme?.title ?: "Live programming",
-                        Modifier.weight(1f), color = Color.White, fontSize = 22.sp,
+                        Modifier.weight(1f), color = Color.White, fontSize = 20.sp,
                         fontWeight = FontWeight.Bold, maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
                     remainingMinutes?.let {
@@ -2328,16 +2371,6 @@ private fun PlayerOsd(
                         color = MaterialTheme.colorScheme.secondary,
                         style = MaterialTheme.typography.labelLarge
                     )
-                    if (it.description.isNotBlank()) {
-                        Text(
-                            it.description,
-                            Modifier.padding(top = 5.dp),
-                            color = Color.White.copy(alpha = .78f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                 }
                 LinearProgressIndicator(
                     progress = { progress },
@@ -2461,7 +2494,8 @@ private fun VideoPlayer(
     channel: Channel,
     captionsEnabled: Boolean,
     captionLanguage: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPlaybackReady: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val httpFactory = remember {
@@ -2489,7 +2523,10 @@ private fun VideoPlayer(
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) playbackMessage = null
+                if (playbackState == Player.STATE_READY) {
+                    playbackMessage = null
+                    onPlaybackReady(channel.id)
+                }
             }
         }
         player.addListener(listener)
@@ -2530,7 +2567,16 @@ private fun VideoPlayer(
     }
     Box(modifier.background(Color.Black, RoundedCornerShape(24.dp))) {
         AndroidView(
-            factory = { PlayerView(it).apply { this.player = player; keepScreenOn = true } },
+            factory = {
+                PlayerView(it).apply {
+                    this.player = player
+                    keepScreenOn = true
+                    useController = false
+                    controllerAutoShow = false
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                }
+            },
             update = { it.player = player },
             modifier = Modifier.fillMaxSize()
         )
@@ -2689,7 +2735,7 @@ private fun SettingsDialog(
                                 hubLoading = true
                                 settingsScope.launch {
                                     runCatching { onBeginHubEnrollment() }
-                                        .onSuccess { hubMessage = "Pairing code: $it · expires in 15 minutes" }
+                                        .onSuccess { hubMessage = "Pairing code: $it · expires in 1 hour" }
                                         .onFailure { hubMessage = "Could not reach GLZ Hub: ${it.message}" }
                                     hubLoading = false
                                 }
@@ -2699,7 +2745,13 @@ private fun SettingsDialog(
                 }
                 SettingsLabel("APPEARANCE")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("adaptive" to "Adaptive", "dark" to "Dark", "light" to "Light")
+                    listOf(
+                        "adaptive" to "Adaptive",
+                        "dark" to "Dark",
+                        "light" to "Light",
+                        "ocean" to "Ocean",
+                        "sunset" to "Sunset"
+                    )
                         .forEach { (value, label) ->
                             var focused by remember(value) { mutableStateOf(false) }
                             Surface(
