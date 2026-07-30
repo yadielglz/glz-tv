@@ -15,7 +15,6 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.net.wifi.WifiManager
 import android.view.KeyEvent
 import android.os.Build
 import android.os.Bundle
@@ -180,7 +179,7 @@ private data class WeatherInfo(
     val location: String
 )
 
-private data class NetworkInfo(val wifiName: String, val isp: String)
+private data class NetworkInfo(val connection: String, val isp: String)
 
 private val InterFontFamily = FontFamily(
     Font(R.font.inter_variable, FontWeight.Normal),
@@ -840,7 +839,7 @@ private fun SlimHeader(
                         Modifier.width(190.dp).padding(horizontal = 12.dp),
                         horizontalAlignment = Alignment.End
                     ) {
-                        Text("Wi-Fi  ${it.wifiName}", fontWeight = FontWeight.Bold,
+                        Text(it.connection, fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.labelMedium, maxLines = 1,
                             overflow = TextOverflow.Ellipsis)
                         Text(it.isp, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -996,8 +995,8 @@ private fun GuestHubHome(
         ).padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
         val compactHeight = maxHeight < 420.dp
-        val guestHeight = if (compactHeight) 96.dp
-            else (maxHeight * .28f).coerceIn(108.dp, 142.dp)
+        val guestHeight = if (compactHeight) 112.dp
+            else (maxHeight * .36f).coerceIn(168.dp, 196.dp)
         val appHeight = if (compactHeight) 82.dp
             else (maxHeight * .20f).coerceIn(86.dp, 102.dp)
         val visibleCards = when {
@@ -1161,7 +1160,7 @@ private fun GuestYouSection(
                 }
             }
             if (services.isNotEmpty()) {
-                item { HubSectionTitle("HOTEL INFORMATION", "Helpful details for your stay") }
+                item { HubSectionTitle("VISIT INFORMATION", "Helpful details for your stay") }
             }
             items(services, key = { "${it.title}-${it.actionUrl}" }) { service ->
                 GuestServiceCard(service)
@@ -2980,25 +2979,26 @@ private fun parseHeaders(source: String): Map<String, String> = buildMap {
 private fun fetchNetworkInfo(context: Context, client: OkHttpClient): NetworkInfo {
     val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     val capabilities = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
-    val wifiName = when {
-        capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> runCatching {
-            val wifiManager = context.applicationContext
-                .getSystemService(Context.WIFI_SERVICE) as WifiManager
-            wifiManager.connectionInfo.ssid
-                .takeUnless { it.isNullOrBlank() || it == WifiManager.UNKNOWN_SSID }
-                ?.removeSurrounding("\"")
-                ?: "Wi-Fi connected"
-        }.getOrDefault("Wi-Fi connected")
-        capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true -> "Ethernet"
-        else -> "Network"
+    val connection = when {
+        capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "Wi-Fi: Connected"
+        capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true ->
+            "Ethernet: Connected"
+        else -> "Network: Connected"
     }
-    val isp = runCatching {
+    val rawIsp = runCatching {
         JSONObject(fetchText(client, "https://ipwho.is/", emptyMap()))
             .optJSONObject("connection")
             ?.optString("isp")
             ?.takeIf(String::isNotBlank)
     }.getOrNull() ?: "Internet connected"
-    return NetworkInfo(wifiName, isp)
+    val isp = when {
+        rawIsp.contains("charter", ignoreCase = true) ||
+            rawIsp.contains("spectrum", ignoreCase = true) -> "Charter Spectrum"
+        rawIsp.contains("t-mobile", ignoreCase = true) ||
+            rawIsp.contains("tmobile", ignoreCase = true) -> "T-Mobile 5G Home"
+        else -> rawIsp
+    }
+    return NetworkInfo(connection, isp)
 }
 
 private fun fetchWeather(client: OkHttpClient, location: String): WeatherInfo? = runCatching {
