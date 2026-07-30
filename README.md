@@ -37,6 +37,15 @@ schema for `https://glzhub.glztech.com`. See
 
 Only use playlists and streams you are authorized to access.
 
+## Reliability and performance
+
+- WorkManager refreshes Hub configuration, heartbeats, channel/EPG caches, and
+  update availability every 30 minutes when a network is available.
+- Release APKs include an app-specific Baseline Profile. The `benchmark` module
+  contains cold-start measurement and profile-generation journeys for Android TV.
+- Media3 playback uses bounded exponential retries, a readable recovery overlay,
+  and cancellation-safe media replacement during rapid channel changes.
+
 ## Build
 
 1. Install Android Studio or the Android SDK (API 36).

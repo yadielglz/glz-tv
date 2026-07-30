@@ -1,4 +1,4 @@
-const state = { config: null, session: null, devices: [], apps: [] };
+const state = { config: null, session: null, devices: [], apps: [], experience: null };
 const inviteParams = new URLSearchParams(location.hash.replace(/^#/, ""));
 const inviteToken = inviteParams.get("type") === "invite" ? inviteParams.get("access_token") : null;
 const APP_CATALOG = [
@@ -86,9 +86,11 @@ $("#inviteForm").addEventListener("submit", async (event) => {
 function showView(name) {
   $("#devicesView").classList.toggle("hidden", name !== "devices");
   $("#appsView").classList.toggle("hidden", name !== "apps");
+  $("#experienceView").classList.toggle("hidden", name !== "experience");
   $("#pairView").classList.toggle("hidden", name !== "pair");
   $("#pairButton").classList.toggle("hidden", name === "pair");
-  $("#pageTitle").textContent = name === "pair" ? "Pair a television" : name === "apps" ? "App management" : "Your TVs";
+  $("#pageTitle").textContent = name === "pair" ? "Pair a television" :
+    name === "apps" ? "App management" : name === "experience" ? "Guest experience" : "Your TVs";
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
 }
 
@@ -121,11 +123,39 @@ function renderDevices() {
 }
 
 async function loadDevices() {
-  const [deviceResult, appResult] = await Promise.all([api("/api/v1/admin/devices"), api("/api/v1/admin/apps")]);
+  const [deviceResult, appResult, experienceResult] = await Promise.all([
+    api("/api/v1/admin/devices"), api("/api/v1/admin/apps"), api("/api/v1/admin/guest-experience")
+  ]);
   state.devices = deviceResult.devices;
   state.apps = appResult.apps;
+  state.experience = experienceResult.profile;
   renderDevices();
   renderApps();
+  renderExperience();
+}
+
+function renderExperience() {
+  const profile = state.experience || {};
+  $("#propertyName").value = profile.property_name || "GLZ Hotel";
+  $("#welcomeMessage").value = profile.welcome_message || "Relax, explore, and enjoy your stay.";
+  $("#logoUrl").value = profile.logo_url || "";
+  $("#heroImageUrl").value = profile.hero_image_url || "";
+  $("#wifiName").value = profile.wifi_name || "";
+  $("#wifiInstructions").value = profile.wifi_instructions || "";
+  $("#checkoutTime").value = profile.checkout_time || "";
+  $("#frontDesk").value = profile.front_desk || "";
+  $("#noticeTitle").value = profile.notice_title || "";
+  $("#noticeBody").value = profile.notice_body || "";
+  $("#guestServices").value = (profile.services || [])
+    .map((service) => [service.title, service.subtitle || "", service.actionUrl || ""].join(" | "))
+    .join("\n");
+}
+
+function serviceRows() {
+  return $("#guestServices").value.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+    const [title, subtitle = "", actionUrl = ""] = line.split("|").map((part) => part.trim());
+    return { title, subtitle: subtitle || null, actionUrl: actionUrl || null };
+  });
 }
 
 function renderApps() {
@@ -146,6 +176,9 @@ function openDevice(id) {
   $("#dialogTitle").textContent = device.name;
   $("#deviceName").value = device.name || "";
   $("#guestName").value = device.guest_name || "";
+  $("#roomNumber").value = device.room_number || "";
+  $("#arrivalDate").value = device.arrival_date || "";
+  $("#departureDate").value = device.departure_date || "";
   $("#playlistUrl").value = device.playlist_url || "";
   $("#epgUrl").value = device.epg_url || "";
   $("#weatherLocation").value = device.weather_location || "";
@@ -219,6 +252,9 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         config_version: Number($("#configVersion").value),
         name: $("#deviceName").value,
         guest_name: $("#guestName").value,
+        room_number: $("#roomNumber").value || null,
+        arrival_date: $("#arrivalDate").value || null,
+        departure_date: $("#departureDate").value || null,
         playlist_url: $("#playlistUrl").value || null,
         epg_url: $("#epgUrl").value || null,
         weather_location: $("#weatherLocation").value,
@@ -237,6 +273,31 @@ $("#deviceForm").addEventListener("submit", async (event) => {
   } catch (error) {
     $("#deviceError").textContent = error.message;
   }
+});
+
+$("#experienceForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("#experienceError").textContent = "";
+  try {
+    const result = await api("/api/v1/admin/guest-experience", {
+      method: "PATCH",
+      body: JSON.stringify({
+        property_name: $("#propertyName").value,
+        welcome_message: $("#welcomeMessage").value,
+        logo_url: $("#logoUrl").value || null,
+        hero_image_url: $("#heroImageUrl").value || null,
+        wifi_name: $("#wifiName").value || null,
+        wifi_instructions: $("#wifiInstructions").value || null,
+        checkout_time: $("#checkoutTime").value || null,
+        front_desk: $("#frontDesk").value || null,
+        notice_title: $("#noticeTitle").value || null,
+        notice_body: $("#noticeBody").value || null,
+        services: serviceRows()
+      })
+    });
+    state.experience = result.profile;
+    toast("Guest experience published to all TVs");
+  } catch (error) { $("#experienceError").textContent = error.message; }
 });
 
 $("#addAppButton").addEventListener("click", () => {

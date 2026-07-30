@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "GLZ TV"
 include(":app")
+include(":benchmark")
