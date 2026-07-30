@@ -104,6 +104,19 @@ function isOnline(device) {
   return device.last_seen_at && Date.now() - new Date(device.last_seen_at).getTime() < 10 * 60_000;
 }
 
+function deviceActivity(device) {
+  if (device.activity_type === "channel" && device.activity_label) {
+    return isOnline(device)
+      ? { label: `Watching · ${device.activity_label}`, className: "watching" }
+      : { label: `Last watched · ${device.activity_label}`, className: "offline" };
+  }
+  if (device.activity_type === "app" && device.activity_label) {
+    return { label: `App launched · ${device.activity_label}`, className: "app-active" };
+  }
+  if (!isOnline(device)) return { label: "Offline", className: "offline" };
+  return { label: "Home screen", className: "idle" };
+}
+
 function escapeHtml(value = "") {
   const div = document.createElement("div");
   div.textContent = value;
@@ -116,18 +129,36 @@ function renderDevices() {
   $("#onlineCount").textContent = online;
   $("#attentionCount").textContent = state.devices.filter((device) => device.last_error).length;
   $("#emptyState").classList.toggle("hidden", state.devices.length > 0);
-  $("#deviceGrid").innerHTML = state.devices.length ? `<div class="list-head"><span>Device</span><span>Property</span><span>Status</span><span>Hardware</span><span>App</span><span>Last contact</span></div>` +
-    state.devices.map((device) => `
+  $("#deviceGrid").innerHTML = state.devices.length ? `<div class="list-head"><span>Device</span><span>Property</span><span>Status</span><span>Activity</span><span>App</span><span>Last contact</span></div>` +
+    state.devices.map((device) => {
+      const activity = deviceActivity(device);
+      return `
     <button class="device-row" data-device-id="${device.id}">
       <span class="device-identity"><span class="screen-icon"></span><span><strong>${escapeHtml(device.name)}</strong><small>Welcome, ${escapeHtml(device.guest_name)}</small></span></span>
       <span data-label="Property">${escapeHtml(state.sites.find((site) => site.id === device.site_id)?.name || "Unassigned")}</span>
       <span><span class="status ${isOnline(device) ? "" : "offline"}">${isOnline(device) ? "ONLINE" : "OFFLINE"}</span></span>
-      <span data-label="Hardware">${escapeHtml(device.platform)} · ${escapeHtml(device.model)}</span>
+      <span data-label="Activity"><span class="activity ${activity.className}">${escapeHtml(activity.label)}</span></span>
       <span data-label="App">v${escapeHtml(device.app_version)}</span>
       <span data-label="Last contact">${device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}${device.last_error ? `<small class="attention">${escapeHtml(device.last_error)}</small>` : ""}</span>
-    </button>`).join("") : "";
+    </button>`;
+    }).join("") : "";
   $$(".device-row").forEach((row) => row.addEventListener("click", () => openDevice(row.dataset.deviceId)));
 }
+
+let deviceActivityRefresh = false;
+async function refreshDeviceActivity() {
+  if (!state.session || $("#devicesView").classList.contains("hidden") || deviceActivityRefresh) return;
+  deviceActivityRefresh = true;
+  try {
+    const result = await api("/api/v1/admin/devices");
+    state.devices = result.devices;
+    renderDevices();
+  } finally {
+    deviceActivityRefresh = false;
+  }
+}
+
+setInterval(() => refreshDeviceActivity().catch(() => {}), 5_000);
 
 async function loadDevices() {
   const [deviceResult, appResult, siteResult] = await Promise.all([

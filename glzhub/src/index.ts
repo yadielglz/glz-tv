@@ -536,14 +536,30 @@ async function commandResult(request: Request, env: Env, commandId: string): Pro
 async function heartbeat(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
   const input = await body(request);
+  const activity = input.activity && typeof input.activity === "object" && !Array.isArray(input.activity)
+    ? input.activity as Record<string, unknown>
+    : null;
+  const activityType = activity
+    ? requiredString(activity.type, "activity type", 20)
+    : null;
+  if (activityType && !["idle", "channel", "app"].includes(activityType)) {
+    throw new Error("Invalid activity type");
+  }
+  const patch: Record<string, unknown> = {
+    last_seen_at: new Date().toISOString(),
+    app_version: typeof input.appVersion === "string" ? input.appVersion.slice(0, 40) : device.app_version,
+    last_error: typeof input.lastError === "string" ? input.lastError.slice(0, 500) : null
+  };
+  if (activityType) {
+    patch.activity_type = activityType;
+    patch.activity_label = optionalString(activity?.label, "activity label", 160);
+    patch.activity_package = optionalString(activity?.packageName, "activity package", 180);
+    patch.activity_updated_at = new Date().toISOString();
+  }
   await supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}`, {
     method: "PATCH",
     headers: { prefer: "return=minimal" },
-    body: JSON.stringify({
-      last_seen_at: new Date().toISOString(),
-      app_version: typeof input.appVersion === "string" ? input.appVersion.slice(0, 40) : device.app_version,
-      last_error: typeof input.lastError === "string" ? input.lastError.slice(0, 500) : null
-    })
+    body: JSON.stringify(patch)
   });
   return json({ ok: true, configVersion: device.config_version });
 }
