@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
@@ -29,9 +30,11 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -60,16 +63,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -109,6 +110,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -134,6 +136,8 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.session.MediaSession
 import coil3.compose.AsyncImage
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -167,7 +171,7 @@ private const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
 private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
 
-private enum class AppSection { Home, Live, Guide, Search, You }
+private enum class AppSection { Home, Live, You }
 private enum class PlayerDrawer { None, Channels, Services }
 
 private data class WeatherInfo(
@@ -348,7 +352,7 @@ private fun TvScreen(
     val channels = remember { mutableStateListOf<Channel>() }
     var guide by remember { mutableStateOf(EpgGuide.Empty) }
     var selected by remember { mutableStateOf<Channel?>(null) }
-    var query by remember { mutableStateOf("") }
+    var playerActive by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Add an M3U playlist to start watching.") }
     var loading by remember { mutableStateOf(false) }
     var weather by remember { mutableStateOf<WeatherInfo?>(null) }
@@ -489,7 +493,8 @@ private fun TvScreen(
             visibleAppPackages = GlzHubManager.visibleApps(prefs)
             appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
             onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
-            hubStatus = "Connected to GLZ Hub"
+            hubStatus = if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
+            else "Not connected"
         }
         loadSources(forceRefresh = initialSync?.changed == true)
         while (true) {
@@ -515,7 +520,8 @@ private fun TvScreen(
                     onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
                     loadSources(forceRefresh = true)
                 }
-                if (GlzHubManager.isEnrolled(prefs)) hubStatus = "Connected to GLZ Hub"
+                hubStatus = if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
+                else "Not connected"
             }.onFailure {
                 hubStatus = "GLZ Hub sync unavailable · using saved settings"
             }
@@ -549,6 +555,7 @@ private fun TvScreen(
         if (!deepLinkChannelId.isNullOrBlank() && channels.isNotEmpty()) {
             channels.firstOrNull { it.id == deepLinkChannelId }?.let {
                 selected = it
+                playerActive = true
                 section = AppSection.Live
             }
         }
@@ -561,14 +568,9 @@ private fun TvScreen(
                 .thenBy { it.name.lowercase(Locale.ROOT) }
         )
     }
-    val searchResults = remember(ordered, query) {
-        ordered.filter {
-            query.isBlank() || "${it.name} ${it.group} ${it.number}".lowercase(Locale.ROOT)
-                .contains(query.lowercase(Locale.ROOT))
-        }
-    }
     val tuneChannel: (Channel) -> Unit = {
         selected = it
+        playerActive = true
         prefs.edit().putString(LAST_CHANNEL_ID, it.id).apply()
     }
     val weatherChannel = ordered.firstOrNull {
@@ -576,7 +578,7 @@ private fun TvScreen(
     } ?: ordered.firstOrNull {
         it.name.lowercase(Locale.ROOT).contains("weather")
     }
-    val immersive = section == AppSection.Live && selected != null
+    val immersive = section == AppSection.Live && selected != null && playerActive
     val managedEntertainmentApps = remember(visibleAppPackages, appVisibilityManaged) {
         if (!appVisibilityManaged) EntertainmentApps
         else EntertainmentApps.filter { it.packageName in visibleAppPackages }
@@ -613,65 +615,50 @@ private fun TvScreen(
                     captionLanguage = captionLanguage,
                     entertainmentApps = managedEntertainmentApps,
                     onTune = tuneChannel,
-                    onExit = { section = AppSection.Home }
+                    onExit = {
+                        playerActive = false
+                        section = AppSection.Home
+                    }
                 )
             } else {
-                Box(
-                    Modifier.fillMaxSize().padding(horizontal = safeHorizontalPadding, vertical = 8.dp)
-                        .padding(bottom = 76.dp)
+                Row(
+                    Modifier.fillMaxSize()
+                        .padding(horizontal = safeHorizontalPadding, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                if (section == AppSection.Home) {
-                    GuestHubHome(
-                        guestName = guestName,
-                        experience = guestExperience,
-                        entertainmentApps = managedEntertainmentApps,
-                        onLive = { section = AppSection.Live },
-                        modifier = Modifier.fillMaxSize()
+                    ExpressiveNavigationRail(
+                        section = section,
+                        onSection = {
+                            if (it == AppSection.Live) playerActive = false
+                            section = it
+                        }
                     )
-                } else if (section == AppSection.You) {
-                    GuestYouSection(
-                        guestName = guestName,
-                        experience = guestExperience,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else if (section == AppSection.Guide) {
-                    GuideSection(
-                        channels = ordered,
-                        guide = guide,
-                        onWatch = {
-                            tuneChannel(it)
-                            section = AppSection.Live
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else if (section == AppSection.Search) {
-                    SearchSection(
-                        channels = searchResults,
-                        query = query,
-                        onQuery = { query = it },
-                        onWatch = {
-                            tuneChannel(it)
-                            section = AppSection.Live
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    ChannelPane(
-                        ordered, selected, favorites,
-                        onSelect = tuneChannel,
-                        onFavorite = { channel ->
-                            favorites = toggleFavorite(favorites, channel.id)
-                            prefs.edit().putStringSet(FAVORITES, favorites).apply()
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        when (section) {
+                            AppSection.Home -> GuestHubHome(
+                                guestName = guestName,
+                                experience = guestExperience,
+                                entertainmentApps = managedEntertainmentApps,
+                                onLive = {
+                                    playerActive = false
+                                    section = AppSection.Live
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            AppSection.Live -> GuideSection(
+                                channels = ordered,
+                                guide = guide,
+                                onWatch = tuneChannel,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            AppSection.You -> GuestYouSection(
+                                guestName = guestName,
+                                experience = guestExperience,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
                 }
-                }
-                FloatingNavigation(
-                    section = section,
-                    onSection = { section = it },
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)
-                )
             }
         }
     }
@@ -841,12 +828,12 @@ private fun SlimHeader(
                 tint = MaterialTheme.colorScheme.secondary
             )
             Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Glz TV", fontSize = 20.sp, fontWeight = FontWeight.Black)
-                Text("Guest entertainment hub", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
-            }
+            Text(
+                "Glz TV",
+                Modifier.weight(1f),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black
+            )
             if (contentLoaded) {
                 if (!compactHeader) networkInfo?.let {
                     Column(
@@ -912,79 +899,79 @@ private fun SlimHeader(
 }
 
 @Composable
-private fun FloatingNavigation(
+private fun ExpressiveNavigationRail(
     section: AppSection,
-    onSection: (AppSection) -> Unit,
-    modifier: Modifier = Modifier
+    onSection: (AppSection) -> Unit
 ) {
-    val showLabels = LocalConfiguration.current.screenWidthDp >= 600
     Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(30.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 16.dp,
-        tonalElevation = 8.dp
+        modifier = Modifier.width(116.dp).fillMaxHeight(),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .92f),
+        tonalElevation = 6.dp
     ) {
-        Row(
-            Modifier.padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            FloatingDestination("Home", section == AppSection.Home, Icons.Default.Home, showLabels) {
+            RailDestination("Home", section == AppSection.Home, Icons.Default.Home) {
                 onSection(AppSection.Home)
             }
-            FloatingDestination("Live", section == AppSection.Live, Icons.Default.LiveTv, showLabels) {
+            RailDestination("Live TV", section == AppSection.Live, Icons.Default.LiveTv) {
                 onSection(AppSection.Live)
             }
-            FloatingDestination("Guide", section == AppSection.Guide, Icons.Default.CalendarMonth, showLabels) {
-                onSection(AppSection.Guide)
-            }
-            FloatingDestination("Search", section == AppSection.Search, Icons.Default.Search, showLabels) {
-                onSection(AppSection.Search)
-            }
-            FloatingDestination("You", section == AppSection.You, Icons.Default.Person, showLabels) {
+            RailDestination("You", section == AppSection.You, Icons.Default.Person) {
                 onSection(AppSection.You)
             }
+            Spacer(Modifier.weight(1f))
+            Text(
+                "GLZ",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black
+            )
         }
     }
 }
 
 @Composable
-private fun FloatingDestination(
+private fun RailDestination(
     label: String,
     selected: Boolean,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    showLabel: Boolean,
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(22.dp)
     Surface(
         modifier = Modifier
+            .fillMaxWidth()
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick)
             .focusable(),
         shape = shape,
         border = BorderStroke(
-            if (focused) 4.dp else 1.dp,
+            if (focused) 3.dp else 0.dp,
             if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
         ),
-        color = if (focused) MaterialTheme.colorScheme.primary
-        else if (selected) MaterialTheme.colorScheme.secondary
-        else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (focused) MaterialTheme.colorScheme.onPrimary
-        else if (selected) MaterialTheme.colorScheme.onSecondary
-        else MaterialTheme.colorScheme.onSurfaceVariant
+        color = when {
+            focused -> MaterialTheme.colorScheme.primary
+            selected -> MaterialTheme.colorScheme.secondaryContainer
+            else -> Color.Transparent
+        },
+        contentColor = when {
+            focused -> MaterialTheme.colorScheme.onPrimary
+            selected -> MaterialTheme.colorScheme.onSecondaryContainer
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
     ) {
-        Row(
-            Modifier.padding(horizontal = if (showLabel) 15.dp else 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 13.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(icon, label)
-            if (showLabel) {
-                Spacer(Modifier.width(8.dp))
-                Text(label, fontWeight = FontWeight.Black)
-            }
+            Icon(icon, label, Modifier.size(25.dp))
+            Text(label, fontWeight = FontWeight.Black, fontSize = 12.sp, maxLines = 1)
         }
     }
 }
@@ -1044,18 +1031,22 @@ private fun GuestHubHome(
                             MaterialTheme.colorScheme.surfaceContainerHigh
                         )
                     )
-                ).padding(horizontal = 20.dp, vertical = if (compactHeight) 9.dp else 14.dp)
+                )
             ) {
                 experience.heroImageUrl?.let { imageUrl ->
                     AsyncImage(
                         model = imageUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(26.dp))
+                        modifier = Modifier.fillMaxSize()
                     )
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .52f)))
                 }
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.fillMaxSize()
+                        .padding(horizontal = 20.dp, vertical = if (compactHeight) 9.dp else 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         experience.logoUrl?.let { logoUrl ->
                             AsyncImage(
@@ -1093,7 +1084,7 @@ private fun GuestHubHome(
         }
             HubSectionTitle("ENTERTAINMENT", "Live TV, apps and services")
             LazyRow(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().focusGroup(),
                 horizontalArrangement = Arrangement.spacedBy(cardSpacing),
                 contentPadding = PaddingValues(horizontal = rowEdgePadding, vertical = 5.dp)
             ) {
@@ -1113,9 +1104,6 @@ private fun GuestYouSection(
     modifier: Modifier = Modifier
 ) {
     val services = buildList {
-        experience.wifiName?.let {
-            add(GuestService("Wi-Fi · $it", experience.wifiInstructions, null))
-        }
         experience.noticeTitle?.let {
             add(GuestService(it, experience.noticeBody, null))
         }
@@ -1124,7 +1112,7 @@ private fun GuestYouSection(
         }
         addAll(experience.services)
     }
-    Box(
+    BoxWithConstraints(
         modifier.background(
             Brush.radialGradient(
                 listOf(
@@ -1135,13 +1123,14 @@ private fun GuestYouSection(
             )
         ).padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
+        val compact = maxWidth < 700.dp
         LazyColumn(
             Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 18.dp)
         ) {
             item {
-                Column(Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {
+                Column(Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
                     Text(
                         "YOU",
                         color = MaterialTheme.colorScheme.secondary,
@@ -1149,43 +1138,159 @@ private fun GuestYouSection(
                         fontWeight = FontWeight.Black
                     )
                     Text(
-                        "Everything for your stay, ${guestName.ifBlank { "Guest" }}",
+                        "Your stay at a glance, ${guestName.ifBlank { "Guest" }}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 16.sp
                     )
                 }
             }
             item {
-                Card(
-                    Modifier.fillMaxWidth().heightIn(min = 86.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ),
-                    elevation = CardDefaults.cardElevation(0.dp)
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
-                        Text(experience.propertyName, fontSize = 20.sp, fontWeight = FontWeight.Black)
-                        val stayDetails = listOfNotNull(
-                            experience.roomNumber?.let { "Room $it" },
-                            experience.arrivalDate?.let { "Arrival $it" },
-                            experience.departureDate?.let { "Departure $it" },
-                            experience.checkoutTime?.let { "Checkout $it" }
-                        )
-                        Text(
-                            stayDetails.ifEmpty { listOf("Guest information") }.joinToString("  •  "),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                if (compact) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StaySummaryCard(guestName, experience, Modifier.fillMaxWidth())
+                        WifiInformationCard(experience, Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        StaySummaryCard(guestName, experience, Modifier.weight(1f))
+                        WifiInformationCard(experience, Modifier.weight(1f))
                     }
                 }
+            }
+            if (services.isNotEmpty()) {
+                item { HubSectionTitle("HOTEL INFORMATION", "Helpful details for your stay") }
             }
             items(services, key = { "${it.title}-${it.actionUrl}" }) { service ->
                 GuestServiceCard(service)
             }
         }
     }
+}
+
+@Composable
+private fun StaySummaryCard(
+    guestName: String,
+    experience: GuestExperience,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier.heightIn(min = 190.dp),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Column(
+            Modifier.fillMaxSize().padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Text("YOUR STAY", color = MaterialTheme.colorScheme.secondary,
+                fontSize = 13.sp, fontWeight = FontWeight.Black)
+            Text(experience.propertyName, fontSize = 24.sp, fontWeight = FontWeight.Black,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(guestName.ifBlank { "Guest" }, fontSize = 17.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val stayDetails = listOfNotNull(
+                experience.roomNumber?.let { "Room $it" },
+                experience.arrivalDate?.let { "Arrival $it" },
+                experience.departureDate?.let { "Departure $it" },
+                experience.checkoutTime?.let { "Checkout $it" }
+            )
+            Text(
+                stayDetails.ifEmpty { listOf("Guest information") }.joinToString("  •  "),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun WifiInformationCard(
+    experience: GuestExperience,
+    modifier: Modifier = Modifier
+) {
+    val wifiName = experience.wifiName.orEmpty()
+    Card(
+        modifier.heightIn(min = 190.dp),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Row(
+            Modifier.fillMaxSize().padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            if (wifiName.isNotBlank()) {
+                WifiQrCode(wifiName, experience.wifiInstructions, 138.dp)
+            } else {
+                Box(
+                    Modifier.size(138.dp).clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = .5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("QR", fontSize = 28.sp, fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("WI-FI ACCESS", color = MaterialTheme.colorScheme.secondary,
+                    fontSize = 13.sp, fontWeight = FontWeight.Black)
+                Text(
+                    wifiName.ifBlank { "Wi-Fi details unavailable" },
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                experience.wifiInstructions?.takeIf(String::isNotBlank)?.let {
+                    Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                if (wifiName.isNotBlank()) {
+                    Text("Scan with your phone to connect",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WifiQrCode(ssid: String, password: String?, size: androidx.compose.ui.unit.Dp) {
+    val bitmap = remember(ssid, password) {
+        val escape: (String) -> String = {
+            it.replace("\\", "\\\\")
+                .replace(";", "\\;")
+                .replace(",", "\\,")
+                .replace(":", "\\:")
+        }
+        val payload = "WIFI:T:WPA;S:${escape(ssid)};P:${escape(password.orEmpty())};;"
+        val matrix = QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, 384, 384)
+        val pixels = IntArray(matrix.width * matrix.height) { index ->
+            val x = index % matrix.width
+            val y = index / matrix.width
+            if (matrix[x, y]) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+        }
+        Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.ARGB_8888).apply {
+            setPixels(pixels, 0, matrix.width, 0, 0, matrix.width, matrix.height)
+        }
+    }
+    Image(
+        bitmap.asImageBitmap(),
+        contentDescription = "Wi-Fi QR code for $ssid",
+        modifier = Modifier.size(size).clip(RoundedCornerShape(18.dp))
+            .background(Color.White).padding(8.dp)
+    )
 }
 
 @Composable
@@ -1500,10 +1605,8 @@ private fun PremiumFocusCard(
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(22.dp)
     Card(
-        modifier
-            .onFocusChanged { focused = it.isFocused }
-            .clickable(onClick = onClick)
-            .focusable(),
+        onClick = onClick,
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
         shape = shape,
         border = BorderStroke(
             if (focused) 5.dp else 1.dp,
@@ -1574,66 +1677,6 @@ private fun findAppLaunchIntent(context: Context, packageName: String): Intent? 
             .addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
             .setPackage(packageName)
             .takeIf { it.resolveActivity(packageManager) != null }
-}
-
-@Composable
-private fun SearchSection(
-    channels: List<Channel>,
-    query: String,
-    onQuery: (String) -> Unit,
-    onWatch: (Channel) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier,
-        shape = RoundedCornerShape(30.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQuery,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search channels, groups, or numbers") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
-                keyboardActions = KeyboardActions.Default
-            )
-            Text(
-                if (query.isBlank()) "All channels" else "${channels.size} results",
-                Modifier.padding(12.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Bold
-            )
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(channels, key = { "search-${it.streamUrl}" }) { channel ->
-                    Card(
-                        Modifier.fillMaxWidth().clickable { onWatch(channel) },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ChannelLogo(channel, 50.dp)
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(channel.name, fontWeight = FontWeight.Black, fontSize = 17.sp)
-                                Text(
-                                    "${channel.number} · ${channel.group}",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -2712,7 +2755,7 @@ private fun SettingsDialog(
                 }
                 Text("Start destination", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(AppSection.Home, AppSection.Live, AppSection.Guide, AppSection.You)
+                    listOf(AppSection.Home, AppSection.Live, AppSection.You)
                         .forEach { destination ->
                         var focused by remember(destination) { mutableStateOf(false) }
                         Surface(

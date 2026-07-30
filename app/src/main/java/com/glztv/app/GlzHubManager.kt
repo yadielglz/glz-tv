@@ -96,7 +96,13 @@ object GlzHubManager {
                 .build()
         ).execute()
         if (response.code == 401) {
-            return SyncResult(false, null, visibleApps(prefs))
+            prefs.edit()
+                .remove(DEVICE_TOKEN)
+                .remove(PAIRING_CODE)
+                .remove(CONFIG_VERSION)
+                .remove(EXPERIENCE_VERSION)
+                .apply()
+            return SyncResult(true, null, visibleApps(prefs))
         }
         val text = response.body?.string().orEmpty()
         check(response.isSuccessful) { "GLZ Hub returned ${response.code}" }

@@ -1,4 +1,7 @@
-const state = { config: null, session: null, devices: [], apps: [], experience: null };
+const state = {
+  config: null, session: null, devices: [], apps: [], sites: [],
+  experience: null, selectedSiteId: null
+};
 const inviteParams = new URLSearchParams(location.hash.replace(/^#/, ""));
 const inviteToken = inviteParams.get("type") === "invite" ? inviteParams.get("access_token") : null;
 const APP_CATALOG = [
@@ -85,12 +88,14 @@ $("#inviteForm").addEventListener("submit", async (event) => {
 
 function showView(name) {
   $("#devicesView").classList.toggle("hidden", name !== "devices");
+  $("#sitesView").classList.toggle("hidden", name !== "sites");
   $("#appsView").classList.toggle("hidden", name !== "apps");
   $("#experienceView").classList.toggle("hidden", name !== "experience");
   $("#pairView").classList.toggle("hidden", name !== "pair");
   $("#pairButton").classList.toggle("hidden", name === "pair");
   $("#pageTitle").textContent = name === "pair" ? "Pair a television" :
-    name === "apps" ? "App management" : name === "experience" ? "Guest experience" : "Your TVs";
+    name === "apps" ? "App management" : name === "sites" ? "Properties" :
+    name === "experience" ? "Guest experience" : "Your TVs";
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
 }
 
@@ -110,10 +115,11 @@ function renderDevices() {
   $("#onlineCount").textContent = online;
   $("#attentionCount").textContent = state.devices.filter((device) => device.last_error).length;
   $("#emptyState").classList.toggle("hidden", state.devices.length > 0);
-  $("#deviceGrid").innerHTML = state.devices.length ? `<div class="list-head"><span>Device</span><span>Status</span><span>Hardware</span><span>App</span><span>Last contact</span></div>` +
+  $("#deviceGrid").innerHTML = state.devices.length ? `<div class="list-head"><span>Device</span><span>Property</span><span>Status</span><span>Hardware</span><span>App</span><span>Last contact</span></div>` +
     state.devices.map((device) => `
     <button class="device-row" data-device-id="${device.id}">
       <span class="device-identity"><span class="screen-icon"></span><span><strong>${escapeHtml(device.name)}</strong><small>Welcome, ${escapeHtml(device.guest_name)}</small></span></span>
+      <span data-label="Property">${escapeHtml(state.sites.find((site) => site.id === device.site_id)?.name || "Unassigned")}</span>
       <span><span class="status ${isOnline(device) ? "" : "offline"}">${isOnline(device) ? "ONLINE" : "OFFLINE"}</span></span>
       <span data-label="Hardware">${escapeHtml(device.platform)} · ${escapeHtml(device.model)}</span>
       <span data-label="App">v${escapeHtml(device.app_version)}</span>
@@ -123,15 +129,53 @@ function renderDevices() {
 }
 
 async function loadDevices() {
-  const [deviceResult, appResult, experienceResult] = await Promise.all([
-    api("/api/v1/admin/devices"), api("/api/v1/admin/apps"), api("/api/v1/admin/guest-experience")
+  const [deviceResult, appResult, siteResult] = await Promise.all([
+    api("/api/v1/admin/devices"), api("/api/v1/admin/apps"), api("/api/v1/admin/sites")
   ]);
   state.devices = deviceResult.devices;
   state.apps = appResult.apps;
-  state.experience = experienceResult.profile;
+  state.sites = siteResult.sites;
+  if (!state.sites.some((site) => site.id === state.selectedSiteId)) {
+    state.selectedSiteId = state.sites[0]?.id || null;
+  }
+  await loadExperience();
   renderDevices();
   renderApps();
+  renderSites();
+  renderSiteSelectors();
   renderExperience();
+}
+
+async function loadExperience() {
+  if (!state.selectedSiteId) {
+    state.experience = null;
+    return;
+  }
+  const result = await api(`/api/v1/admin/guest-experience?siteId=${encodeURIComponent(state.selectedSiteId)}`);
+  state.experience = result.profile;
+}
+
+function renderSiteSelectors() {
+  const options = state.sites.map((site) =>
+    `<option value="${site.id}">${escapeHtml(site.name)}</option>`
+  ).join("");
+  $("#experienceSite").innerHTML = options;
+  $("#experienceSite").value = state.selectedSiteId || "";
+  $("#pairSite").innerHTML = `<option value="">Unassigned</option>${options}`;
+}
+
+function renderSites() {
+  $("#siteEmpty").classList.toggle("hidden", state.sites.length > 0);
+  $("#siteList").innerHTML = state.sites.map((site) => {
+    const count = state.devices.filter((device) => device.site_id === site.id).length;
+    return `<button class="site-row" data-site-id="${site.id}">
+      <span class="site-glyph">⌂</span>
+      <span><strong>${escapeHtml(site.name)}</strong><small>${escapeHtml(site.address || "No location entered")}</small></span>
+      <span>${count} ${count === 1 ? "device" : "devices"}</span>
+      <span>Edit</span>
+    </button>`;
+  }).join("");
+  $$(".site-row").forEach((row) => row.addEventListener("click", () => openSite(row.dataset.siteId)));
 }
 
 function renderExperience() {
@@ -149,6 +193,16 @@ function renderExperience() {
   $("#guestServices").value = (profile.services || [])
     .map((service) => [service.title, service.subtitle || "", service.actionUrl || ""].join(" | "))
     .join("\n");
+}
+
+function openSite(id = "") {
+  const site = state.sites.find((item) => item.id === id);
+  $("#siteId").value = site?.id || "";
+  $("#siteDialogTitle").textContent = site ? "Edit property" : "Add property";
+  $("#siteName").value = site?.name || "";
+  $("#siteAddress").value = site?.address || "";
+  $("#siteError").textContent = "";
+  $("#siteDialog").showModal();
 }
 
 function serviceRows() {
@@ -176,6 +230,10 @@ function openDevice(id) {
   $("#dialogTitle").textContent = device.name;
   $("#deviceName").value = device.name || "";
   $("#guestName").value = device.guest_name || "";
+  $("#deviceSite").innerHTML = `<option value="">Unassigned</option>` + state.sites.map((site) =>
+    `<option value="${site.id}">${escapeHtml(site.name)}</option>`
+  ).join("");
+  $("#deviceSite").value = device.site_id || "";
   $("#roomNumber").value = device.room_number || "";
   $("#arrivalDate").value = device.arrival_date || "";
   $("#departureDate").value = device.departure_date || "";
@@ -229,7 +287,8 @@ $("#pairForm").addEventListener("submit", async (event) => {
       body: JSON.stringify({
         pairingCode: $("#pairingCode").value,
         name: $("#pairDeviceName").value || "New TV",
-        guestName: $("#pairGuestName").value || "Guest"
+        guestName: $("#pairGuestName").value || "Guest",
+        siteId: $("#pairSite").value || null
       })
     });
     event.target.reset();
@@ -252,6 +311,7 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         config_version: Number($("#configVersion").value),
         name: $("#deviceName").value,
         guest_name: $("#guestName").value,
+        site_id: $("#deviceSite").value || null,
         room_number: $("#roomNumber").value || null,
         arrival_date: $("#arrivalDate").value || null,
         departure_date: $("#departureDate").value || null,
@@ -282,6 +342,7 @@ $("#experienceForm").addEventListener("submit", async (event) => {
     const result = await api("/api/v1/admin/guest-experience", {
       method: "PATCH",
       body: JSON.stringify({
+        site_id: state.selectedSiteId,
         property_name: $("#propertyName").value,
         welcome_message: $("#welcomeMessage").value,
         logo_url: $("#logoUrl").value || null,
@@ -296,8 +357,60 @@ $("#experienceForm").addEventListener("submit", async (event) => {
       })
     });
     state.experience = result.profile;
-    toast("Guest experience published to all TVs");
+    toast("Guest experience published to this property");
   } catch (error) { $("#experienceError").textContent = error.message; }
+});
+
+$("#experienceSite").addEventListener("change", async (event) => {
+  state.selectedSiteId = event.target.value || null;
+  $("#experienceError").textContent = "";
+  try {
+    await loadExperience();
+    renderExperience();
+  } catch (error) {
+    $("#experienceError").textContent = error.message;
+  }
+});
+
+$("#addSiteButton").addEventListener("click", () => openSite());
+$$("[data-close-site]").forEach((button) =>
+  button.addEventListener("click", () => $("#siteDialog").close())
+);
+$("#siteForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("#siteError").textContent = "";
+  const id = $("#siteId").value;
+  try {
+    const result = await api(id ? `/api/v1/admin/sites/${id}` : "/api/v1/admin/sites", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify({
+        name: $("#siteName").value,
+        address: $("#siteAddress").value || null
+      })
+    });
+    if (!id) state.selectedSiteId = result.site.id;
+    $("#siteDialog").close();
+    await loadDevices();
+    showView("sites");
+    toast(id ? "Property updated" : "Property created");
+  } catch (error) {
+    $("#siteError").textContent = error.message;
+  }
+});
+
+$("#unpairDevice").addEventListener("click", async () => {
+  const id = $("#deviceId").value;
+  const device = state.devices.find((item) => item.id === id);
+  if (!device || !confirm(`Remove pairing for ${device.name}? The TV will need a new pairing code to reconnect.`)) return;
+  $("#deviceError").textContent = "";
+  try {
+    await api(`/api/v1/admin/devices/${id}`, { method: "DELETE" });
+    $("#deviceDialog").close();
+    await loadDevices();
+    toast("Device pairing removed");
+  } catch (error) {
+    $("#deviceError").textContent = error.message;
+  }
 });
 
 $("#addAppButton").addEventListener("click", () => {

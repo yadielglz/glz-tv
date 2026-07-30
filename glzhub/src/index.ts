@@ -167,6 +167,14 @@ async function enroll(request: Request, env: Env): Promise<Response> {
 async function claimEnrollment(request: Request, env: Env): Promise<Response> {
   const user = await adminUser(request, env);
   const input = await body(request);
+  const siteId = optionalString(input.siteId, "siteId", 64);
+  if (siteId) {
+    const sites = await supabaseJson(
+      env,
+      `/rest/v1/sites?id=eq.${encodeURIComponent(siteId)}&owner_id=eq.${user.id}&select=id`
+    ) as Record<string, unknown>[];
+    if (!sites[0]) return json({ error: "Property not found." }, 404);
+  }
   const pairingCode = requiredString(input.pairingCode, "pairingCode", 16).toUpperCase();
   const rows = await supabaseJson(
     env,
@@ -187,6 +195,7 @@ async function claimEnrollment(request: Request, env: Env): Promise<Response> {
       platform: enrollment.platform,
       model: enrollment.model,
       app_version: enrollment.app_version,
+      site_id: siteId,
       name: input.name || "New TV",
       guest_name: input.guestName || "Guest",
       visible_apps: DEFAULT_VISIBLE_APPS,
@@ -223,9 +232,20 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     "name", "guest_name", "playlist_url", "epg_url", "request_headers",
     "visible_apps", "theme_mode", "weather_location", "start_destination",
     "captions_enabled", "captions_language", "auto_start", "resume_last_channel"
-    , "room_number", "arrival_date", "departure_date"
+    , "room_number", "arrival_date", "departure_date", "site_id"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
+  if ("site_id" in input) {
+    const siteId = optionalString(input.site_id, "siteId", 64);
+    if (siteId) {
+      const sites = await supabaseJson(
+        env,
+        `/rest/v1/sites?id=eq.${encodeURIComponent(siteId)}&owner_id=eq.${user.id}&select=id`
+      ) as Record<string, unknown>[];
+      if (!sites[0]) return json({ error: "Property not found." }, 404);
+    }
+    patch.site_id = siteId;
+  }
   patch.config_version = Number(currentRows[0].config_version || 0) + 1;
   patch.updated_at = new Date().toISOString();
   const devices = await supabaseJson(
@@ -241,11 +261,31 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
   return json({ device: devices[0] });
 }
 
+async function unpairDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const devices = await supabaseJson(
+    env,
+    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=installation_id`
+  ) as Record<string, unknown>[];
+  if (!devices[0]) return json({ error: "Device not found." }, 404);
+  await supabaseJson(
+    env,
+    `/rest/v1/enrollments?installation_id=eq.${encodeURIComponent(String(devices[0].installation_id))}`,
+    { method: "DELETE" }
+  );
+  await supabaseJson(
+    env,
+    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}`,
+    { method: "DELETE" }
+  );
+  return json({ ok: true });
+}
+
 async function deviceConfig(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
-  const profiles = await supabaseJson(env,
-    `/rest/v1/guest_experience_profiles?owner_id=eq.${device.owner_id}&select=*`
-  ) as Record<string, unknown>[];
+  const profiles = device.site_id ? await supabaseJson(env,
+    `/rest/v1/guest_experience_profiles?site_id=eq.${device.site_id}&owner_id=eq.${device.owner_id}&select=*`
+  ) as Record<string, unknown>[] : [];
   const profile = profiles[0] ?? {};
   return json({
     version: device.config_version,
@@ -284,8 +324,10 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
 
 async function getGuestExperience(request: Request, env: Env): Promise<Response> {
   const user = await adminUser(request, env);
+  const siteId = optionalString(new URL(request.url).searchParams.get("siteId"), "siteId", 64);
+  if (!siteId) return json({ profile: null });
   const profiles = await supabaseJson(env,
-    `/rest/v1/guest_experience_profiles?owner_id=eq.${user.id}&select=*`
+    `/rest/v1/guest_experience_profiles?owner_id=eq.${user.id}&site_id=eq.${encodeURIComponent(siteId)}&select=*`
   ) as Record<string, unknown>[];
   return json({ profile: profiles[0] ?? null });
 }
@@ -293,8 +335,15 @@ async function getGuestExperience(request: Request, env: Env): Promise<Response>
 async function updateGuestExperience(request: Request, env: Env): Promise<Response> {
   const user = await adminUser(request, env);
   const input = await body(request);
+  const siteId = requiredString(input.site_id, "siteId", 64);
+  const sites = await supabaseJson(
+    env,
+    `/rest/v1/sites?id=eq.${encodeURIComponent(siteId)}&owner_id=eq.${user.id}&select=id`
+  ) as Record<string, unknown>[];
+  if (!sites[0]) return json({ error: "Property not found." }, 404);
   const profile = {
     owner_id: user.id,
+    site_id: siteId,
     property_name: requiredString(input.property_name, "property name", 100),
     welcome_message: requiredString(input.welcome_message, "welcome message", 180),
     logo_url: optionalString(input.logo_url, "logo URL"),
@@ -312,7 +361,7 @@ async function updateGuestExperience(request: Request, env: Env): Promise<Respon
     if (profile[key] && !isHttpsUrl(profile[key])) throw new Error(`Invalid ${key.replace("_", " ")}`);
   }
   const profiles = await supabaseJson(env,
-    "/rest/v1/guest_experience_profiles?on_conflict=owner_id&select=*",
+    "/rest/v1/guest_experience_profiles?on_conflict=site_id&select=*",
     {
       method: "POST",
       headers: { prefer: "resolution=merge-duplicates,return=representation" },
@@ -320,6 +369,61 @@ async function updateGuestExperience(request: Request, env: Env): Promise<Respon
     }
   ) as Record<string, unknown>[];
   return json({ profile: profiles[0] });
+}
+
+async function listSites(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const sites = await supabaseJson(
+    env,
+    `/rest/v1/sites?owner_id=eq.${user.id}&select=*&order=name.asc`
+  ) as Record<string, unknown>[];
+  return json({ sites });
+}
+
+async function createSite(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const sites = await supabaseJson(env, "/rest/v1/sites?select=*", {
+    method: "POST",
+    headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      owner_id: user.id,
+      name: requiredString(input.name, "property name", 100),
+      address: optionalString(input.address, "address", 240)
+    })
+  }) as Record<string, unknown>[];
+  const site = sites[0];
+  if (!site) throw new Error("Database did not return the new property.");
+  await supabaseJson(env, "/rest/v1/guest_experience_profiles?select=*", {
+    method: "POST",
+    headers: { prefer: "return=minimal" },
+    body: JSON.stringify({
+      owner_id: user.id,
+      site_id: site.id,
+      property_name: site.name,
+      welcome_message: "Relax, explore, and enjoy your stay."
+    })
+  });
+  return json({ site }, 201);
+}
+
+async function updateSite(request: Request, env: Env, siteId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if ("name" in input) patch.name = requiredString(input.name, "property name", 100);
+  if ("address" in input) patch.address = optionalString(input.address, "address", 240);
+  const sites = await supabaseJson(
+    env,
+    `/rest/v1/sites?id=eq.${encodeURIComponent(siteId)}&owner_id=eq.${user.id}&select=*`,
+    {
+      method: "PATCH",
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify(patch)
+    }
+  ) as Record<string, unknown>[];
+  if (!sites[0]) return json({ error: "Property not found." }, 404);
+  return json({ site: sites[0] });
 }
 
 async function listApps(request: Request, env: Env): Promise<Response> {
@@ -434,12 +538,17 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/v1/enrollment" && request.method === "POST") return enroll(request, env);
   if (path === "/api/v1/enrollment/claim" && request.method === "POST") return claimEnrollment(request, env);
   if (path === "/api/v1/admin/devices" && request.method === "GET") return listDevices(request, env);
+  if (path === "/api/v1/admin/sites" && request.method === "GET") return listSites(request, env);
+  if (path === "/api/v1/admin/sites" && request.method === "POST") return createSite(request, env);
   if (path === "/api/v1/admin/apps" && request.method === "GET") return listApps(request, env);
   if (path === "/api/v1/admin/apps" && request.method === "POST") return createApp(request, env);
   if (path === "/api/v1/admin/guest-experience" && request.method === "GET") return getGuestExperience(request, env);
   if (path === "/api/v1/admin/guest-experience" && request.method === "PATCH") return updateGuestExperience(request, env);
   const adminDevice = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)$/i);
   if (adminDevice && request.method === "PATCH") return updateDevice(request, env, adminDevice[1]);
+  if (adminDevice && request.method === "DELETE") return unpairDevice(request, env, adminDevice[1]);
+  const adminSite = path.match(/^\/api\/v1\/admin\/sites\/([0-9a-f-]+)$/i);
+  if (adminSite && request.method === "PATCH") return updateSite(request, env, adminSite[1]);
   const install = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/commands$/i);
   if (install && request.method === "POST") return queueInstall(request, env, install[1]);
   if (path === "/api/v1/devices/config" && request.method === "GET") return deviceConfig(request, env);

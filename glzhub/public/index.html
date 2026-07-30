@@ -16,6 +16,7 @@
       </a>
       <nav>
         <button class="nav active" data-view="devices">▣ <span>Devices</span></button>
+        <button class="nav" data-view="sites">⌂ <span>Properties</span></button>
         <button class="nav" data-view="experience">✦ <span>Guest experience</span></button>
         <button class="nav" data-view="apps">⬡ <span>App library</span></button>
         <button class="nav" data-view="pair">＋ <span>Pair a TV</span></button>
@@ -88,10 +89,20 @@
           <div id="appEmpty" class="empty hidden"><h3>No managed apps yet</h3><p>Add an app once, then deploy it to any paired television.</p></div>
         </section>
 
+        <section id="sitesView" class="hidden">
+          <div class="section-toolbar">
+            <div><h3>Properties</h3><p>Organize televisions by hotel, building, or managed location.</p></div>
+            <button id="addSiteButton" class="primary">＋ Add property</button>
+          </div>
+          <div id="siteList" class="management-list"></div>
+          <div id="siteEmpty" class="empty hidden"><h3>No properties yet</h3><p>Create a property before assigning televisions.</p></div>
+        </section>
+
         <section id="experienceView" class="hidden">
           <form id="experienceForm" class="experience-editor">
             <div class="section-toolbar">
-              <div><h3>Property guest experience</h3><p>Branding, stay information and services delivered to every paired TV.</p></div>
+              <div><h3>Property guest experience</h3><p>Branding, stay information and services delivered to TVs assigned to this property.</p></div>
+              <label class="property-picker">Property<select id="experienceSite"></select></label>
               <button class="primary" type="submit">Save &amp; publish</button>
             </div>
             <div class="experience-grid">
@@ -132,6 +143,7 @@
             <label>Pairing code<input id="pairingCode" placeholder="GLZ-ABC123" maxlength="10" required></label>
             <label>Device name<input id="pairDeviceName" placeholder="Living Room"></label>
             <label>Guest name<input id="pairGuestName" placeholder="Guest"></label>
+            <label class="wide">Property<select id="pairSite"></select></label>
             <div class="form-actions">
               <button type="button" class="secondary" data-view-button="devices">Cancel</button>
               <button type="submit" class="primary">Pair television</button>
@@ -154,6 +166,7 @@
       <div class="form-grid">
         <label>Device name<input id="deviceName" required></label>
         <label>Welcome guest name<input id="guestName" required></label>
+        <label class="wide">Property<select id="deviceSite"></select></label>
         <label>Room number<input id="roomNumber" maxlength="30"></label>
         <label>Arrival date<input id="arrivalDate" type="date"></label>
         <label>Departure date<input id="departureDate" type="date"></label>
@@ -162,7 +175,7 @@
         <label>Weather location<input id="weatherLocation"></label>
         <label>Start screen
           <select id="startDestination">
-            <option>Home</option><option>Live</option><option>Guide</option>
+            <option>Home</option><option>Live</option><option>You</option>
           </select>
         </label>
         <label>Theme
@@ -188,9 +201,22 @@
       </div>
       <p id="deviceError" class="error"></p>
       <div class="form-actions">
+        <button id="unpairDevice" type="button" class="danger-button">Remove pairing</button>
         <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button type="submit" class="primary">Save &amp; sync</button>
       </div>
+    </form>
+  </dialog>
+  <dialog id="siteDialog">
+    <form id="siteForm">
+      <div class="dialog-head"><div><div class="eyebrow">PROPERTY</div><h3 id="siteDialogTitle">Add property</h3></div><button class="icon-button" type="button" data-close-site>×</button></div>
+      <input id="siteId" type="hidden">
+      <div class="form-grid">
+        <label>Property name<input id="siteName" required maxlength="100" placeholder="GLZ Hotel Downtown"></label>
+        <label>Address or location<input id="siteAddress" maxlength="240" placeholder="Orlando, Florida"></label>
+      </div>
+      <p id="siteError" class="error"></p>
+      <div class="form-actions"><button type="button" class="secondary" data-close-site>Cancel</button><button class="primary" type="submit">Save property</button></div>
     </form>
   </dialog>
   <dialog id="appDialog">

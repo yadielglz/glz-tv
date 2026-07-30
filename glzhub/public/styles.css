@@ -38,12 +38,14 @@ p { color: var(--muted); line-height: 1.65; }
 .primary { color: #1e1608; background: var(--orange); }
 .primary:hover { filter: brightness(1.08); }
 .secondary { color: var(--text); background: var(--panel-2); border: 1px solid var(--line); }
+.danger-button { margin-right: auto; border: 1px solid #ff7b7b66; border-radius: 12px; padding: 12px 18px; color: #ffd0d0; background: #5a2028; font-weight: 850; }
+.danger-button:hover { background: #762b35; }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
 .stats article { border: 1px solid var(--line); background: #101d2ebb; padding: 20px; border-radius: 18px; }
 .stats span { display: block; color: var(--muted); font-size: 13px; }
 .stats strong { font-size: 32px; display: block; margin-top: 8px; }
 .device-list, .management-list { overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: #0d1928cc; }
-.list-head, .device-row { display: grid; grid-template-columns: minmax(230px, 1.5fr) 110px minmax(180px, 1fr) 80px minmax(170px, 1fr); gap: 18px; align-items: center; }
+.list-head, .device-row { display: grid; grid-template-columns: minmax(210px, 1.35fr) minmax(130px, .8fr) 100px minmax(160px, 1fr) 70px minmax(160px, 1fr); gap: 16px; align-items: center; }
 .list-head { padding: 12px 18px; color: var(--muted); background: #142438; font-size: 11px; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
 .device-row { width: 100%; padding: 17px 18px; color: var(--muted); text-align: left; background: transparent; border: 0; border-top: 1px solid var(--line); font-size: 13px; transition: background .16s; }
 .device-row:hover, .device-row:focus-visible { background: #1a2d43; outline: 2px solid var(--orange); outline-offset: -2px; }
@@ -59,6 +61,12 @@ p { color: var(--muted); line-height: 1.65; }
 .section-toolbar h3, .section-toolbar p { margin: 0; }
 .app-row { display: grid; grid-template-columns: 42px minmax(240px, 1fr) 130px 100px; gap: 16px; align-items: center; padding: 16px 18px; border-top: 1px solid var(--line); }
 .app-row:first-child { border-top: 0; }
+.site-row { width: 100%; display: grid; grid-template-columns: 44px minmax(240px, 1fr) 120px 60px; gap: 16px; align-items: center; padding: 16px 18px; color: var(--muted); text-align: left; background: transparent; border: 0; border-top: 1px solid var(--line); }
+.site-row:first-child { border-top: 0; }
+.site-row:hover, .site-row:focus-visible { background: #1a2d43; outline: 2px solid var(--orange); outline-offset: -2px; }
+.site-row strong, .site-row small { display: block; }
+.site-row small { margin-top: 3px; }
+.site-glyph { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--panel-2); color: var(--orange); font-size: 22px; }
 .app-glyph { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; background: var(--orange); color: var(--ink); font-weight: 950; }
 .source-badge { color: var(--lime); font-size: 10px; font-weight: 900; letter-spacing: .08em; }
 .check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
@@ -66,6 +74,7 @@ p { color: var(--muted); line-height: 1.65; }
 .inline-action { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 .experience-editor { max-width: 1100px; }
 .experience-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.property-picker { min-width: 210px; }
 .experience-grid fieldset { display: grid; align-content: start; gap: 15px; margin: 0; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: #0d1928cc; }
 .experience-grid legend { padding: 0 8px; color: var(--lime); font-weight: 900; }
 .empty, .panel { max-width: 680px; margin: 40px auto; border: 1px solid var(--line); background: var(--panel); border-radius: 24px; padding: 38px; }
@@ -116,6 +125,8 @@ small { color: var(--muted); font-weight: 400; }
   .device-row [data-label]::before { content: attr(data-label) ": "; color: var(--text); font-weight: 800; }
   .app-row { grid-template-columns: 42px 1fr; }
   .app-row > span:nth-child(n+3) { grid-column: 2; }
+  .site-row { grid-template-columns: 42px 1fr; }
+  .site-row > span:nth-child(n+3) { grid-column: 2; }
   .section-toolbar { align-items: flex-start; }
   .experience-grid { grid-template-columns: 1fr; }
 }
