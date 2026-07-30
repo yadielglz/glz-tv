@@ -9,6 +9,18 @@ type JsonValue = Record<string, unknown> | unknown[];
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const DEFAULT_VISIBLE_APPS = [
+  "com.google.android.youtube.tv",
+  "com.netflix.ninja",
+  "com.bamnetworks.mobile.android.gameday.atbat",
+  "com.android.mgsandroid",
+  "com.glztech.radiostream",
+  "com.live.geesports",
+  "com.cbs.ott",
+  "com.disney.disneyplus",
+  "com.peacocktv.peacockandroid",
+  "com.TWCableTV"
+];
 
 function json(value: JsonValue, status = 200, extraHeaders: HeadersInit = {}): Response {
   return new Response(JSON.stringify(value), {
@@ -150,6 +162,7 @@ async function claimEnrollment(request: Request, env: Env): Promise<Response> {
       app_version: enrollment.app_version,
       name: input.name || "New TV",
       guest_name: input.guestName || "Guest",
+      visible_apps: DEFAULT_VISIBLE_APPS,
       config_version: 1,
       last_seen_at: new Date().toISOString()
     })

@@ -122,10 +122,11 @@
             <option value="light">Light</option>
           </select>
         </label>
-        <label class="wide">Visible app package names
-          <textarea id="visibleApps" rows="5" placeholder="com.netflix.ninja&#10;com.google.android.youtube.tv"></textarea>
-          <small>One Android package name per line. Apps omitted here are hidden inside GLZ TV.</small>
-        </label>
+        <fieldset class="wide app-fieldset">
+          <legend>Apps shown inside GLZ TV</legend>
+          <p class="field-help">Check the entertainment apps this television should display.</p>
+          <div id="visibleApps" class="app-checklist"></div>
+        </fieldset>
       </div>
       <p id="deviceError" class="error"></p>
       <div class="form-actions">

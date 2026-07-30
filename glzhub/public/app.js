@@ -1,6 +1,18 @@
 const state = { config: null, session: null, devices: [] };
 const inviteParams = new URLSearchParams(location.hash.replace(/^#/, ""));
 const inviteToken = inviteParams.get("type") === "invite" ? inviteParams.get("access_token") : null;
+const APP_CATALOG = [
+  ["YouTube", "com.google.android.youtube.tv"],
+  ["Netflix", "com.netflix.ninja"],
+  ["MLB", "com.bamnetworks.mobile.android.gameday.atbat"],
+  ["OleadaTV", "com.android.mgsandroid"],
+  ["GLZ Radio", "com.glztech.radiostream"],
+  ["GeeSports", "com.live.geesports"],
+  ["Paramount+", "com.cbs.ott"],
+  ["Disney+", "com.disney.disneyplus"],
+  ["Peacock", "com.peacocktv.peacockandroid"],
+  ["Spectrum TV", "com.TWCableTV"]
+];
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -129,7 +141,12 @@ function openDevice(id) {
   $("#weatherLocation").value = device.weather_location || "";
   $("#startDestination").value = device.start_destination || "Home";
   $("#themeMode").value = device.theme_mode || "adaptive";
-  $("#visibleApps").value = (device.visible_apps || []).map((app) => typeof app === "string" ? app : app.packageName).join("\n");
+  const enabledApps = new Set(
+    (device.visible_apps || []).map((app) => typeof app === "string" ? app : app.packageName)
+  );
+  $$("#visibleApps input").forEach((input) => {
+    input.checked = enabledApps.has(input.value);
+  });
   $("#deviceError").textContent = "";
   $("#deviceDialog").showModal();
 }
@@ -189,7 +206,7 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         weather_location: $("#weatherLocation").value,
         start_destination: $("#startDestination").value,
         theme_mode: $("#themeMode").value,
-        visible_apps: $("#visibleApps").value.split(/\s+/).filter(Boolean)
+        visible_apps: $$("#visibleApps input:checked").map((input) => input.value)
       })
     });
     $("#deviceDialog").close();
@@ -210,6 +227,13 @@ $$("[data-open-pair]").forEach((button) => button.addEventListener("click", () =
 $$("[data-view-button]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.viewButton)));
 $$(".nav").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
 $("[data-close-dialog]").addEventListener("click", () => $("#deviceDialog").close());
+
+$("#visibleApps").innerHTML = APP_CATALOG.map(([name, packageName]) => `
+  <label class="app-option">
+    <input type="checkbox" value="${packageName}">
+    <span><strong>${name}</strong><small>${packageName}</small></span>
+  </label>
+`).join("");
 
 await loadPublicConfig();
 restoreSession();

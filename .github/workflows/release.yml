@@ -1,0 +1,51 @@
+name: Build GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Restore signing key
+        env:
+          SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY_BASE64 }}
+        run: printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/glztv.keystore"
+
+      - name: Build signed Fire TV APK
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/glztv.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleFireTvRelease testFireTvDebugUnitTest
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          apk="app/build/outputs/apk/fireTv/release/app-fireTv-release.apk"
+          cp "$apk" "Glz-TV-${version}.apk"
+          gh release create "$GITHUB_REF_NAME" "Glz-TV-${version}.apk" \
+            --title "Glz TV ${version}" \
+            --generate-notes \
+            --latest

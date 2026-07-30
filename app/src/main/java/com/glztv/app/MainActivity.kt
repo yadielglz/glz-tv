@@ -366,6 +366,9 @@ private fun TvScreen(
                 else "Not connected"
         )
     }
+    var availableUpdate by remember { mutableStateOf<GithubUpdateManager.UpdateInfo?>(null) }
+    var updateDownloadStatus by remember { mutableStateOf<String?>(null) }
+    var updateDownloading by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showSettingsPin by remember { mutableStateOf(false) }
     var captionsEnabled by remember {
@@ -450,6 +453,19 @@ private fun TvScreen(
         loading = false
     }
 
+    suspend fun checkForAppUpdate(): String {
+        return runCatching {
+            withContext(Dispatchers.IO) { GithubUpdateManager.check(client) }
+        }.fold(
+            onSuccess = { update ->
+                availableUpdate = update
+                if (update == null) "Version ${BuildConfig.VERSION_NAME} is current"
+                else "Version ${update.version} is ready to install"
+            },
+            onFailure = { "Update check failed: ${it.message}" }
+        )
+    }
+
     LaunchedEffect(Unit) {
         val initialSync = runCatching {
             withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
@@ -465,7 +481,7 @@ private fun TvScreen(
         }
         loadSources(forceRefresh = initialSync?.changed == true)
         while (true) {
-            delay(2 * 60 * 1000L)
+            delay(30_000L)
             runCatching {
                 withContext(Dispatchers.IO) {
                     val result = GlzHubManager.sync(prefs, client)
@@ -487,6 +503,14 @@ private fun TvScreen(
             }.onFailure {
                 hubStatus = "GLZ Hub sync unavailable · using saved settings"
             }
+        }
+    }
+    LaunchedEffect(prefs.getBoolean(AUTO_UPDATE_CHECK, true)) {
+        if (!prefs.getBoolean(AUTO_UPDATE_CHECK, true)) return@LaunchedEffect
+        delay(6_000L)
+        while (true) {
+            checkForAppUpdate()
+            delay(6 * 60 * 60 * 1000L)
         }
     }
     LaunchedEffect(weatherLocation) {
@@ -659,6 +683,7 @@ private fun TvScreen(
                 ?: AppSection.Home.name,
             sourceStatus = status,
             hubStatus = hubStatus,
+            onCheckForUpdate = { checkForAppUpdate() },
             onBeginHubEnrollment = {
                 withContext(Dispatchers.IO) {
                     GlzHubManager.beginEnrollment(prefs, client)
@@ -687,6 +712,72 @@ private fun TvScreen(
                 guestName = name
                 showSettings = false
                 scope.launch { loadSources() }
+            }
+        )
+    }
+
+    availableUpdate?.let { update ->
+        AlertDialog(
+            onDismissRequest = {
+                if (!updateDownloading) {
+                    availableUpdate = null
+                    updateDownloadStatus = null
+                }
+            },
+            icon = { Icon(Icons.Default.Refresh, null) },
+            title = { Text("GLZ TV ${update.version} is available") },
+            text = {
+                Column {
+                    Text(
+                        update.notes.ifBlank {
+                            "A new version is ready from the official GLZ TV GitHub release."
+                        },
+                        maxLines = 8,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    updateDownloadStatus?.let {
+                        Spacer(Modifier.height(12.dp))
+                        Text(it, color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !updateDownloading,
+                    onClick = {
+                        if (!GithubUpdateManager.canInstall(context)) {
+                            updateDownloadStatus =
+                                "Allow GLZ TV to install unknown apps, then choose Install again."
+                            GithubUpdateManager.requestInstallPermission(context)
+                        } else {
+                            updateDownloading = true
+                            updateDownloadStatus = "Downloading update…"
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        GithubUpdateManager.download(context, client, update)
+                                    }
+                                }.onSuccess { apk ->
+                                    updateDownloadStatus = "Opening system installer…"
+                                    GithubUpdateManager.launchInstaller(context, apk)
+                                }.onFailure {
+                                    updateDownloadStatus = "Download failed: ${it.message}"
+                                }
+                                updateDownloading = false
+                            }
+                        }
+                    }
+                ) { Text(if (updateDownloading) "Downloading…" else "Install") }
+            },
+            dismissButton = {
+                Button(
+                    enabled = !updateDownloading,
+                    onClick = {
+                        availableUpdate = null
+                        updateDownloadStatus = null
+                    }
+                ) { Text("Later") }
             }
         )
     }
@@ -2215,6 +2306,7 @@ private fun SettingsDialog(
     startDestination: String,
     sourceStatus: String,
     hubStatus: String,
+    onCheckForUpdate: suspend () -> String,
     onBeginHubEnrollment: suspend () -> String,
     onDismiss: () -> Unit,
     onSave: (
@@ -2347,7 +2439,10 @@ private fun SettingsDialog(
                     Text(updateStatus, Modifier.weight(1f),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     TvSettingsButton("Check now", onClick = {
-                        updateStatus = "No update feed configured"
+                        updateStatus = "Checking GitHub…"
+                        settingsScope.launch {
+                            updateStatus = onCheckForUpdate()
+                        }
                     })
                 }
                 SettingsLabel("STARTUP")

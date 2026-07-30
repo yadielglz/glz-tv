@@ -27,6 +27,7 @@ Android Media3.
 - No local Node server or web proxy required
 - Optional GLZ Hub enrollment for centrally managed guest names, playlists,
   EPG sources, themes, startup screens, and visible entertainment apps
+- Automatic GitHub Release checks with an on-TV download and installation prompt
 
 ## GLZ Hub management
 
@@ -48,6 +49,11 @@ Only use playlists and streams you are authorized to access.
 
 The Fire TV debug APK is written to
 `app\build\outputs\apk\fireTv\debug\app-fireTv-debug.apk`.
+
+Git tag builds are signed and published by `.github/workflows/release.yml`.
+On Android 8 or newer, allow **Install unknown apps** for GLZ TV the first time
+the in-app updater requests it. Android still shows its system confirmation
+screen for every update.
 
 ## Use
 

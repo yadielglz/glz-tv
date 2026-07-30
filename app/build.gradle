@@ -12,8 +12,8 @@ android {
         applicationId "com.glztv.app"
         minSdk 24
         targetSdk 36
-        versionCode 3
-        versionName "1.6"
+        versionCode 4
+        versionName "1.6.1"
     }
 
     flavorDimensions += "platform"
@@ -26,9 +26,24 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            def signingPath = System.getenv("ANDROID_KEYSTORE_PATH")
+            if (signingPath) {
+                storeFile file(signingPath)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
+            if (System.getenv("ANDROID_KEYSTORE_PATH")) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
@@ -50,6 +65,7 @@ dependencies {
     def composeBom = platform("androidx.compose:compose-bom:2026.06.00")
     implementation composeBom
     implementation "androidx.activity:activity-compose:1.13.0"
+    implementation "androidx.core:core-ktx:1.17.0"
     implementation "androidx.compose.material3:material3"
     implementation "androidx.compose.material:material-icons-extended"
     implementation "androidx.compose.ui:ui"
