@@ -20,6 +20,12 @@ object GlzHubManager {
     const val VISIBLE_APPS = "hub_visible_apps"
     const val VISIBLE_APPS_MANAGED = "hub_visible_apps_managed"
     const val GUEST_EXPERIENCE = "hub_guest_experience"
+    private const val ACTIVITY_TYPE = "hub_activity_type"
+    private const val ACTIVITY_LABEL = "hub_activity_label"
+    private const val ACTIVITY_PACKAGE = "hub_activity_package"
+    private const val PREVIOUS_ACTIVITY_TYPE = "hub_previous_activity_type"
+    private const val PREVIOUS_ACTIVITY_LABEL = "hub_previous_activity_label"
+    private const val PREVIOUS_ACTIVITY_PACKAGE = "hub_previous_activity_package"
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
@@ -53,6 +59,43 @@ object GlzHubManager {
 
     fun visibleApps(prefs: SharedPreferences): Set<String> =
         prefs.getStringSet(VISIBLE_APPS, emptySet()).orEmpty()
+
+    fun reportActivity(
+        prefs: SharedPreferences,
+        type: String,
+        label: String? = null,
+        packageName: String? = null
+    ) {
+        prefs.edit()
+            .putString(ACTIVITY_TYPE, type)
+            .putString(ACTIVITY_LABEL, label?.take(160))
+            .putString(ACTIVITY_PACKAGE, packageName?.take(180))
+            .apply()
+    }
+
+    fun reportLaunchedApp(prefs: SharedPreferences, label: String, packageName: String) {
+        prefs.edit()
+            .putString(PREVIOUS_ACTIVITY_TYPE, prefs.getString(ACTIVITY_TYPE, "idle"))
+            .putString(PREVIOUS_ACTIVITY_LABEL, prefs.getString(ACTIVITY_LABEL, null))
+            .putString(PREVIOUS_ACTIVITY_PACKAGE, prefs.getString(ACTIVITY_PACKAGE, null))
+            .putString(ACTIVITY_TYPE, "app")
+            .putString(ACTIVITY_LABEL, label.take(160))
+            .putString(ACTIVITY_PACKAGE, packageName.take(180))
+            .apply()
+    }
+
+    fun restoreActivityAfterApp(prefs: SharedPreferences): Boolean {
+        if (prefs.getString(ACTIVITY_TYPE, null) != "app") return false
+        prefs.edit()
+            .putString(ACTIVITY_TYPE, prefs.getString(PREVIOUS_ACTIVITY_TYPE, "idle"))
+            .putString(ACTIVITY_LABEL, prefs.getString(PREVIOUS_ACTIVITY_LABEL, null))
+            .putString(ACTIVITY_PACKAGE, prefs.getString(PREVIOUS_ACTIVITY_PACKAGE, null))
+            .remove(PREVIOUS_ACTIVITY_TYPE)
+            .remove(PREVIOUS_ACTIVITY_LABEL)
+            .remove(PREVIOUS_ACTIVITY_PACKAGE)
+            .apply()
+        return true
+    }
 
     fun beginEnrollment(
         prefs: SharedPreferences,
@@ -200,7 +243,13 @@ object GlzHubManager {
     fun heartbeat(prefs: SharedPreferences, client: OkHttpClient) {
         if (!prefs.getString(PAIRING_CODE, null).isNullOrBlank()) return
         val token = prefs.getString(DEVICE_TOKEN, null) ?: return
-        val payload = JSONObject().put("appVersion", BuildConfig.VERSION_NAME)
+        val payload = JSONObject()
+            .put("appVersion", BuildConfig.VERSION_NAME)
+            .put("activity", JSONObject()
+                .put("type", prefs.getString(ACTIVITY_TYPE, "idle"))
+                .put("label", prefs.getString(ACTIVITY_LABEL, null))
+                .put("packageName", prefs.getString(ACTIVITY_PACKAGE, null))
+            )
         client.newCall(
             Request.Builder()
                 .url("$HUB_URL/api/v1/devices/heartbeat")

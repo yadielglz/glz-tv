@@ -56,6 +56,10 @@ p { color: var(--muted); line-height: 1.65; }
 .screen-icon::after { content: ""; position: absolute; width: 18px; left: 12px; bottom: -7px; border-bottom: 2px solid var(--muted); }
 .status { font-size: 11px; font-weight: 850; padding: 6px 9px; border-radius: 999px; background: #1c3b34; color: #8effc5; }
 .status.offline { background: #3d292c; color: #ffaca9; }
+.activity { display: inline-block; max-width: 100%; padding: 6px 9px; border-radius: 9px; color: var(--muted); background: var(--panel-2); font-size: 11px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity.watching { color: #dfff94; background: #26391e; }
+.activity.app-active { color: #b9deff; background: #193653; }
+.activity.offline { color: #ffaca9; background: #3d292c; }
 .attention { color: var(--danger); margin-top: 3px; }
 .section-toolbar { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-bottom: 20px; }
 .section-toolbar h3, .section-toolbar p { margin: 0; }

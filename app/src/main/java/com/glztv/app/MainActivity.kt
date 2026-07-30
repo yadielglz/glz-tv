@@ -21,6 +21,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
@@ -246,6 +247,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         deepLinkChannelId.value = intent.data?.takeIf { it.host == "channel" }?.lastPathSegment
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (GlzHubManager.restoreActivityAfterApp(prefs)) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                GlzHubManager.heartbeat(prefs, OkHttpClient())
+            }
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -589,6 +600,7 @@ private fun TvScreen(
             channels.firstOrNull { it.id == deepLinkChannelId }?.let {
                 selected = it
                 playerActive = true
+                GlzHubManager.reportActivity(prefs, "channel", it.name)
                 section = AppSection.Live
             }
         }
@@ -604,6 +616,7 @@ private fun TvScreen(
     val tuneChannel: (Channel) -> Unit = {
         selected = it
         playerActive = true
+        GlzHubManager.reportActivity(prefs, "channel", it.name)
         prefs.edit().putString(LAST_CHANNEL_ID, it.id).apply()
     }
     val weatherChannel = ordered.firstOrNull {
@@ -650,6 +663,7 @@ private fun TvScreen(
                     onTune = tuneChannel,
                     onExit = {
                         playerActive = false
+                        GlzHubManager.reportActivity(prefs, "idle")
                         section = AppSection.Home
                     }
                 )
@@ -662,7 +676,10 @@ private fun TvScreen(
                     ExpressiveNavigationRail(
                         section = section,
                         onSection = {
-                            if (it == AppSection.Live) playerActive = false
+                            if (it == AppSection.Live) {
+                                playerActive = false
+                                GlzHubManager.reportActivity(prefs, "idle")
+                            }
                             section = it
                         }
                     )
@@ -674,6 +691,7 @@ private fun TvScreen(
                                 entertainmentApps = managedEntertainmentApps,
                                 onLive = {
                                     playerActive = false
+                                    GlzHubManager.reportActivity(prefs, "idle")
                                     section = AppSection.Live
                                 },
                                 modifier = Modifier.fillMaxSize()
@@ -1542,6 +1560,11 @@ private fun EntertainmentAppCard(
     height: androidx.compose.ui.unit.Dp = 100.dp
 ) {
     val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    }
+    val client = remember { OkHttpClient() }
+    val scope = rememberCoroutineScope()
     val packageManager = context.packageManager
     val launchIntent = remember(app.packageName) {
         findAppLaunchIntent(context, app.packageName)
@@ -1559,7 +1582,13 @@ private fun EntertainmentAppCard(
     }
     PremiumFocusCard(
         modifier = Modifier.width(width).height(height),
-        onClick = { launchEntertainmentApp(context, app.packageName, launchIntent) },
+        onClick = {
+            GlzHubManager.reportLaunchedApp(prefs, app.name, app.packageName)
+            scope.launch(Dispatchers.IO) {
+                GlzHubManager.heartbeat(prefs, client)
+            }
+            launchEntertainmentApp(context, app.packageName, launchIntent)
+        },
         accent = app.accent
     ) {
         Row(
@@ -1987,6 +2016,12 @@ private fun ImmersivePlayerScreen(
     onTune: (Channel) -> Unit,
     onExit: () -> Unit
 ) {
+    val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    }
+    val client = remember { OkHttpClient() }
+    val scope = rememberCoroutineScope()
     var drawer by remember { mutableStateOf(PlayerDrawer.None) }
     var showNavigationTip by remember { mutableStateOf(true) }
     var showOsd by remember { mutableStateOf(false) }
@@ -2245,7 +2280,6 @@ private fun ImmersivePlayerScreen(
             }
         }
         if (drawer == PlayerDrawer.Services) {
-            val context = LocalContext.current
             val drawerWidth = if (maxWidth < 520.dp) maxWidth * .88f else 390.dp
             Surface(
                 Modifier.width(drawerWidth).fillMaxHeight().align(Alignment.CenterEnd),
@@ -2280,6 +2314,12 @@ private fun ImmersivePlayerScreen(
                                     else Modifier)
                                     .onFocusChanged { isFocused = it.isFocused }
                                     .clickable {
+                                        GlzHubManager.reportLaunchedApp(
+                                            prefs, app.name, app.packageName
+                                        )
+                                        scope.launch(Dispatchers.IO) {
+                                            GlzHubManager.heartbeat(prefs, client)
+                                        }
                                         launchEntertainmentApp(context, app.packageName, launchIntent)
                                     }
                                     .focusable(),
