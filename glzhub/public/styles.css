@@ -61,6 +61,14 @@ p { color: var(--muted); line-height: 1.65; }
 .section-toolbar h3, .section-toolbar p { margin: 0; }
 .app-row { display: grid; grid-template-columns: 42px minmax(240px, 1fr) 130px 100px; gap: 16px; align-items: center; padding: 16px 18px; border-top: 1px solid var(--line); }
 .app-row:first-child { border-top: 0; }
+.pairing-requests { margin-top: 24px; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--panel-2); }
+.pairing-heading, .pairing-request { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 14px 16px; }
+.pairing-heading { color: var(--muted); font-size: 13px; }
+.pairing-heading strong { color: var(--text); }
+.pairing-request { border-top: 1px solid var(--line); }
+.pairing-request-info strong, .pairing-request-info small { display: block; }
+.pairing-request-info small { margin-top: 3px; color: var(--muted); }
+.pairing-request .primary { flex: 0 0 auto; }
 .site-row { width: 100%; display: grid; grid-template-columns: 44px minmax(240px, 1fr) 120px 60px; gap: 16px; align-items: center; padding: 16px 18px; color: var(--muted); text-align: left; background: transparent; border: 0; border-top: 1px solid var(--line); }
 .site-row:first-child { border-top: 0; }
 .site-row:hover, .site-row:focus-visible { background: #1a2d43; outline: 2px solid var(--orange); outline-offset: -2px; }

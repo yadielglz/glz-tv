@@ -524,12 +524,13 @@ private fun TvScreen(
             visibleAppPackages = GlzHubManager.visibleApps(prefs)
             appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
             onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
-            hubStatus = if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
-            else "Not connected"
+            hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
+                ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
+                else "Not connected"
         }
         loadSources(forceRefresh = initialSync?.changed == true)
         while (true) {
-            delay(30_000L)
+            delay(if (GlzHubManager.pairingCode(prefs) != null) 3_000L else 5_000L)
             runCatching {
                 withContext(Dispatchers.IO) {
                     val result = GlzHubManager.sync(prefs, client)
@@ -551,8 +552,9 @@ private fun TvScreen(
                     onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
                     loadSources(forceRefresh = true)
                 }
-                hubStatus = if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
-                else "Not connected"
+                hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
+                    ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
+                    else "Not connected"
             }.onFailure {
                 hubStatus = "GLZ Hub sync unavailable · using saved settings"
             }

@@ -48,7 +48,8 @@ object GlzHubManager {
         prefs.getString(PAIRING_CODE, null)
 
     fun isEnrolled(prefs: SharedPreferences): Boolean =
-        !prefs.getString(DEVICE_TOKEN, null).isNullOrBlank()
+        !prefs.getString(DEVICE_TOKEN, null).isNullOrBlank() &&
+            prefs.getString(PAIRING_CODE, null).isNullOrBlank()
 
     fun visibleApps(prefs: SharedPreferences): Set<String> =
         prefs.getStringSet(VISIBLE_APPS, emptySet()).orEmpty()
@@ -197,6 +198,7 @@ object GlzHubManager {
     }
 
     fun heartbeat(prefs: SharedPreferences, client: OkHttpClient) {
+        if (!prefs.getString(PAIRING_CODE, null).isNullOrBlank()) return
         val token = prefs.getString(DEVICE_TOKEN, null) ?: return
         val payload = JSONObject().put("appVersion", BuildConfig.VERSION_NAME)
         client.newCall(
