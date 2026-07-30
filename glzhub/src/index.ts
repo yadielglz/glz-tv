@@ -40,6 +40,12 @@ async function sha256(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function clientAddress(request: Request): string {
+  return request.headers.get("cf-connecting-ip")
+    ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    ?? "local";
+}
+
 async function body(request: Request): Promise<Record<string, unknown>> {
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) throw new Error("Expected application/json");
@@ -153,6 +159,7 @@ async function enroll(request: Request, env: Env): Promise<Response> {
       platform,
       model,
       app_version: appVersion,
+      request_network_hash: await sha256(clientAddress(request)),
       expires_at: new Date(Date.now() + 60 * 60_000).toISOString()
     })
   });
@@ -162,6 +169,20 @@ async function enroll(request: Request, env: Env): Promise<Response> {
     expiresInSeconds: 3600,
     pairUrl: "https://glzhub.glztech.com/pair"
   }, 201);
+}
+
+async function listNearbyEnrollments(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const networkHash = await sha256(clientAddress(request));
+  const now = new Date().toISOString();
+  const enrollments = await supabaseJson(
+    env,
+    `/rest/v1/enrollments?request_network_hash=eq.${networkHash}` +
+      `&expires_at=gt.${encodeURIComponent(now)}` +
+      "&select=pairing_code,platform,model,app_version,created_at,expires_at" +
+      "&order=created_at.desc&limit=12"
+  ) as Record<string, unknown>[];
+  return json({ enrollments });
 }
 
 async function claimEnrollment(request: Request, env: Env): Promise<Response> {
@@ -537,6 +558,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (path === "/api/v1/enrollment" && request.method === "POST") return enroll(request, env);
   if (path === "/api/v1/enrollment/claim" && request.method === "POST") return claimEnrollment(request, env);
+  if (path === "/api/v1/admin/enrollments" && request.method === "GET") return listNearbyEnrollments(request, env);
   if (path === "/api/v1/admin/devices" && request.method === "GET") return listDevices(request, env);
   if (path === "/api/v1/admin/sites" && request.method === "GET") return listSites(request, env);
   if (path === "/api/v1/admin/sites" && request.method === "POST") return createSite(request, env);

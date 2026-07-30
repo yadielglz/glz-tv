@@ -1,6 +1,6 @@
 const state = {
   config: null, session: null, devices: [], apps: [], sites: [],
-  experience: null, selectedSiteId: null
+  experience: null, selectedSiteId: null, enrollments: []
 };
 const inviteParams = new URLSearchParams(location.hash.replace(/^#/, ""));
 const inviteToken = inviteParams.get("type") === "invite" ? inviteParams.get("access_token") : null;
@@ -97,6 +97,7 @@ function showView(name) {
     name === "apps" ? "App management" : name === "sites" ? "Properties" :
     name === "experience" ? "Guest experience" : "Your TVs";
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+  if (name === "pair") loadPairingRequests();
 }
 
 function isOnline(device) {
@@ -145,6 +146,36 @@ async function loadDevices() {
   renderSiteSelectors();
   renderExperience();
 }
+
+async function loadPairingRequests() {
+  if (!state.session || $("#pairView").classList.contains("hidden")) return;
+  try {
+    const result = await api("/api/v1/admin/enrollments");
+    state.enrollments = result.enrollments || [];
+    $("#pairingScanStatus").textContent = state.enrollments.length
+      ? `${state.enrollments.length} waiting`
+      : "No requests yet";
+    $("#pairingRequestList").innerHTML = state.enrollments.map((enrollment) => `
+      <div class="pairing-request">
+        <span class="pairing-request-info">
+          <strong>${escapeHtml(enrollment.model || "Android TV")}</strong>
+          <small>${escapeHtml(enrollment.platform || "Android TV")} · v${escapeHtml(enrollment.app_version || "unknown")} · requested ${new Date(enrollment.created_at).toLocaleTimeString()}</small>
+        </span>
+        <button type="button" class="primary" data-pairing-code="${escapeHtml(enrollment.pairing_code)}">Pair</button>
+      </div>`).join("");
+    $$("[data-pairing-code]").forEach((button) => button.addEventListener("click", () => {
+      $("#pairingCode").value = button.dataset.pairingCode;
+      $("#pairDeviceName").value ||= state.enrollments.find(
+        (item) => item.pairing_code === button.dataset.pairingCode
+      )?.model || "New TV";
+      $("#pairDeviceName").focus();
+    }));
+  } catch (error) {
+    $("#pairingScanStatus").textContent = "Discovery unavailable";
+  }
+}
+
+setInterval(loadPairingRequests, 3_000);
 
 async function loadExperience() {
   if (!state.selectedSiteId) {

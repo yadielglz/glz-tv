@@ -138,7 +138,15 @@
         <section id="pairView" class="panel hidden">
           <div class="eyebrow">ADD A SCREEN</div>
           <h3>Pair a GLZ TV</h3>
-          <p>On the television, open Settings → GLZ Hub. Enter the code shown on screen.</p>
+          <p>Open Settings → GLZ Hub on the television. Pairing requests on this network will appear automatically.</p>
+          <div class="pairing-requests">
+            <div class="pairing-heading">
+              <strong>Nearby pairing requests</strong>
+              <span id="pairingScanStatus">Looking for televisions…</span>
+            </div>
+            <div id="pairingRequestList"></div>
+          </div>
+          <p class="field-help">Pairing remotely? Enter the code shown on the television instead.</p>
           <form id="pairForm" class="form-grid">
             <label>Pairing code<input id="pairingCode" placeholder="GLZ-ABC123" maxlength="10" required></label>
             <label>Device name<input id="pairDeviceName" placeholder="Living Room"></label>
