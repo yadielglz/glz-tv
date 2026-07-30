@@ -96,6 +96,12 @@ object GlzHubManager {
                 .build()
         ).execute()
         if (response.code == 401) {
+            // A newly generated token is not recognized by /devices/config until
+            // an administrator claims its enrollment. Keep pending credentials so
+            // the code remains visible and adoption can finish.
+            if (!prefs.getString(PAIRING_CODE, null).isNullOrBlank()) {
+                return SyncResult(false, null, visibleApps(prefs))
+            }
             prefs.edit()
                 .remove(DEVICE_TOKEN)
                 .remove(PAIRING_CODE)

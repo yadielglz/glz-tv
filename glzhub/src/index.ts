@@ -153,13 +153,13 @@ async function enroll(request: Request, env: Env): Promise<Response> {
       platform,
       model,
       app_version: appVersion,
-      expires_at: new Date(Date.now() + 15 * 60_000).toISOString()
+      expires_at: new Date(Date.now() + 60 * 60_000).toISOString()
     })
   });
   return json({
     pairingCode,
     deviceToken,
-    expiresInSeconds: 900,
+    expiresInSeconds: 3600,
     pairUrl: "https://glzhub.glztech.com/pair"
   }, 201);
 }
