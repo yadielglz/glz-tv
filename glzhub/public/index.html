@@ -16,6 +16,7 @@
       </a>
       <nav>
         <button class="nav active" data-view="devices">▣ <span>Devices</span></button>
+        <button class="nav" data-view="apps">⬡ <span>App library</span></button>
         <button class="nav" data-view="pair">＋ <span>Pair a TV</span></button>
       </nav>
       <div class="rail-foot">
@@ -68,13 +69,22 @@
             <article><span>Online now</span><strong id="onlineCount">0</strong></article>
             <article><span>Needs attention</span><strong id="attentionCount">0</strong></article>
           </div>
-          <div id="deviceGrid" class="device-grid"></div>
+          <div id="deviceGrid" class="device-list"></div>
           <div id="emptyState" class="empty hidden">
             <div class="empty-icon">＋</div>
             <h3>Pair your first TV</h3>
             <p>Open GLZ TV settings on the television and enter its pairing code here.</p>
             <button class="primary" data-open-pair>Pair a TV</button>
           </div>
+        </section>
+
+        <section id="appsView" class="hidden">
+          <div class="section-toolbar">
+            <div><h3>Managed app library</h3><p>Publish Play Store listings or HTTPS APKs from your repository to paired TVs.</p></div>
+            <button id="addAppButton" class="primary">＋ Add app</button>
+          </div>
+          <div id="appList" class="management-list"></div>
+          <div id="appEmpty" class="empty hidden"><h3>No managed apps yet</h3><p>Add an app once, then deploy it to any paired television.</p></div>
         </section>
 
         <section id="pairView" class="panel hidden">
@@ -122,17 +132,40 @@
             <option value="light">Light</option>
           </select>
         </label>
+        <label>Closed captions language<input id="captionsLanguage" maxlength="12" placeholder="en"></label>
+        <label class="check"><input id="captionsEnabled" type="checkbox"> Enable closed captions</label>
+        <label class="check"><input id="autoStart" type="checkbox"> Start GLZ TV after device boot</label>
+        <label class="check"><input id="resumeLastChannel" type="checkbox"> Resume the last channel</label>
         <fieldset class="wide app-fieldset">
           <legend>Apps shown inside GLZ TV</legend>
           <p class="field-help">Check the entertainment apps this television should display.</p>
           <div id="visibleApps" class="app-checklist"></div>
         </fieldset>
+        <label class="wide">Deploy a managed app
+          <div class="inline-action"><select id="deployApp"></select><button id="deployButton" type="button" class="secondary">Send to TV</button></div>
+          <small>The TV will open the Play Store or secure repository installer. Android may require guest confirmation.</small>
+        </label>
       </div>
       <p id="deviceError" class="error"></p>
       <div class="form-actions">
         <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button type="submit" class="primary">Save &amp; sync</button>
       </div>
+    </form>
+  </dialog>
+  <dialog id="appDialog">
+    <form id="appForm">
+      <div class="dialog-head"><div><div class="eyebrow">APP LIBRARY</div><h3>Add a managed app</h3></div><button class="icon-button" type="button" data-close-app>×</button></div>
+      <div class="form-grid">
+        <label>Display name<input id="appName" required maxlength="100"></label>
+        <label>Android package<input id="appPackage" required placeholder="com.example.tv"></label>
+        <label>Source<select id="appSource"><option value="play_store">Google Play Store</option><option value="repository">My HTTPS repository</option></select></label>
+        <label>Version (optional)<input id="appVersion" maxlength="40"></label>
+        <label class="wide">APK URL for repository apps<input id="appUrl" type="url" placeholder="https://repo.example.com/app.apk"></label>
+        <label class="wide">SHA-256 checksum (recommended)<input id="appSha" maxlength="64"></label>
+      </div>
+      <p id="appError" class="error"></p>
+      <div class="form-actions"><button type="button" class="secondary" data-close-app>Cancel</button><button class="primary" type="submit">Add to library</button></div>
     </form>
   </dialog>
   <div id="toast" role="status"></div>

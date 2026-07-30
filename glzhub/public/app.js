@@ -1,4 +1,4 @@
-const state = { config: null, session: null, devices: [] };
+const state = { config: null, session: null, devices: [], apps: [] };
 const inviteParams = new URLSearchParams(location.hash.replace(/^#/, ""));
 const inviteToken = inviteParams.get("type") === "invite" ? inviteParams.get("access_token") : null;
 const APP_CATALOG = [
@@ -85,9 +85,10 @@ $("#inviteForm").addEventListener("submit", async (event) => {
 
 function showView(name) {
   $("#devicesView").classList.toggle("hidden", name !== "devices");
+  $("#appsView").classList.toggle("hidden", name !== "apps");
   $("#pairView").classList.toggle("hidden", name !== "pair");
   $("#pairButton").classList.toggle("hidden", name === "pair");
-  $("#pageTitle").textContent = name === "pair" ? "Pair a television" : "Your TVs";
+  $("#pageTitle").textContent = name === "pair" ? "Pair a television" : name === "apps" ? "App management" : "Your TVs";
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
 }
 
@@ -107,25 +108,34 @@ function renderDevices() {
   $("#onlineCount").textContent = online;
   $("#attentionCount").textContent = state.devices.filter((device) => device.last_error).length;
   $("#emptyState").classList.toggle("hidden", state.devices.length > 0);
-  $("#deviceGrid").innerHTML = state.devices.map((device) => `
-    <button class="device-card" data-device-id="${device.id}">
-      <div class="device-top"><span class="screen-icon"></span>
-        <span class="status ${isOnline(device) ? "" : "offline"}">${isOnline(device) ? "ONLINE" : "OFFLINE"}</span>
-      </div>
-      <h3>${escapeHtml(device.name)}</h3>
-      <p>Welcome, ${escapeHtml(device.guest_name)}</p>
-      <div class="device-meta">
-        <span>${escapeHtml(device.platform)} · ${escapeHtml(device.model)}</span>
-        <span>v${escapeHtml(device.app_version)}</span>
-      </div>
-    </button>`).join("");
-  $$(".device-card").forEach((card) => card.addEventListener("click", () => openDevice(card.dataset.deviceId)));
+  $("#deviceGrid").innerHTML = state.devices.length ? `<div class="list-head"><span>Device</span><span>Status</span><span>Hardware</span><span>App</span><span>Last contact</span></div>` +
+    state.devices.map((device) => `
+    <button class="device-row" data-device-id="${device.id}">
+      <span class="device-identity"><span class="screen-icon"></span><span><strong>${escapeHtml(device.name)}</strong><small>Welcome, ${escapeHtml(device.guest_name)}</small></span></span>
+      <span><span class="status ${isOnline(device) ? "" : "offline"}">${isOnline(device) ? "ONLINE" : "OFFLINE"}</span></span>
+      <span data-label="Hardware">${escapeHtml(device.platform)} · ${escapeHtml(device.model)}</span>
+      <span data-label="App">v${escapeHtml(device.app_version)}</span>
+      <span data-label="Last contact">${device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}${device.last_error ? `<small class="attention">${escapeHtml(device.last_error)}</small>` : ""}</span>
+    </button>`).join("") : "";
+  $$(".device-row").forEach((row) => row.addEventListener("click", () => openDevice(row.dataset.deviceId)));
 }
 
 async function loadDevices() {
-  const result = await api("/api/v1/admin/devices");
-  state.devices = result.devices;
+  const [deviceResult, appResult] = await Promise.all([api("/api/v1/admin/devices"), api("/api/v1/admin/apps")]);
+  state.devices = deviceResult.devices;
+  state.apps = appResult.apps;
   renderDevices();
+  renderApps();
+}
+
+function renderApps() {
+  $("#appEmpty").classList.toggle("hidden", state.apps.length > 0);
+  $("#appList").innerHTML = state.apps.map((app) => `<article class="app-row">
+    <span class="app-glyph">${escapeHtml(app.name.slice(0, 1).toUpperCase())}</span>
+    <span><strong>${escapeHtml(app.name)}</strong><small>${escapeHtml(app.package_name)}</small></span>
+    <span class="source-badge">${app.source_type === "play_store" ? "PLAY STORE" : "REPOSITORY"}</span>
+    <span>${escapeHtml(app.version_name || "Latest")}</span>
+  </article>`).join("");
 }
 
 function openDevice(id) {
@@ -141,12 +151,20 @@ function openDevice(id) {
   $("#weatherLocation").value = device.weather_location || "";
   $("#startDestination").value = device.start_destination || "Home";
   $("#themeMode").value = device.theme_mode || "adaptive";
+  $("#captionsEnabled").checked = Boolean(device.captions_enabled);
+  $("#captionsLanguage").value = device.captions_language || "en";
+  $("#autoStart").checked = Boolean(device.auto_start);
+  $("#resumeLastChannel").checked = device.resume_last_channel !== false;
   const enabledApps = new Set(
     (device.visible_apps || []).map((app) => typeof app === "string" ? app : app.packageName)
   );
   $$("#visibleApps input").forEach((input) => {
     input.checked = enabledApps.has(input.value);
   });
+  $("#deployApp").innerHTML = state.apps.length
+    ? state.apps.map((app) => `<option value="${app.id}">${escapeHtml(app.name)} · ${escapeHtml(app.package_name)}</option>`).join("")
+    : `<option value="">Add an app to the library first</option>`;
+  $("#deployButton").disabled = !state.apps.length;
   $("#deviceError").textContent = "";
   $("#deviceDialog").showModal();
 }
@@ -206,6 +224,10 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         weather_location: $("#weatherLocation").value,
         start_destination: $("#startDestination").value,
         theme_mode: $("#themeMode").value,
+        captions_enabled: $("#captionsEnabled").checked,
+        captions_language: $("#captionsLanguage").value || "en",
+        auto_start: $("#autoStart").checked,
+        resume_last_channel: $("#resumeLastChannel").checked,
         visible_apps: $$("#visibleApps input:checked").map((input) => input.value)
       })
     });
@@ -215,6 +237,39 @@ $("#deviceForm").addEventListener("submit", async (event) => {
   } catch (error) {
     $("#deviceError").textContent = error.message;
   }
+});
+
+$("#addAppButton").addEventListener("click", () => {
+  $("#appForm").reset();
+  $("#appError").textContent = "";
+  $("#appDialog").showModal();
+});
+$$("[data-close-app]").forEach((button) => button.addEventListener("click", () => $("#appDialog").close()));
+$("#appForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("#appError").textContent = "";
+  try {
+    await api("/api/v1/admin/apps", { method: "POST", body: JSON.stringify({
+      name: $("#appName").value, package_name: $("#appPackage").value,
+      source_type: $("#appSource").value, source_url: $("#appUrl").value || null,
+      version_name: $("#appVersion").value || null, sha256: $("#appSha").value || null
+    }) });
+    $("#appDialog").close();
+    await loadDevices();
+    toast("App added to library");
+  } catch (error) { $("#appError").textContent = error.message; }
+});
+$("#deployButton").addEventListener("click", async () => {
+  const deviceId = $("#deviceId").value;
+  const appId = $("#deployApp").value;
+  if (!deviceId || !appId) return;
+  $("#deviceError").textContent = "";
+  try {
+    await api(`/api/v1/admin/devices/${deviceId}/commands`, {
+      method: "POST", body: JSON.stringify({ appId })
+    });
+    toast("Install request queued for the TV");
+  } catch (error) { $("#deviceError").textContent = error.message; }
 });
 
 $("#signOut").addEventListener("click", () => {

@@ -8,3 +8,6 @@ captures/
 **/.dev.vars
 **/.wrangler/
 **/supabase/.temp/
+*.jks
+*.keystore
+key.properties
