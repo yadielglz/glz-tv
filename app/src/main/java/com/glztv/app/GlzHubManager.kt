@@ -16,8 +16,10 @@ object GlzHubManager {
     const val DEVICE_TOKEN = "hub_device_token"
     const val PAIRING_CODE = "hub_pairing_code"
     const val CONFIG_VERSION = "hub_config_version"
+    const val EXPERIENCE_VERSION = "hub_experience_version"
     const val VISIBLE_APPS = "hub_visible_apps"
     const val VISIBLE_APPS_MANAGED = "hub_visible_apps_managed"
+    const val GUEST_EXPERIENCE = "hub_guest_experience"
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
@@ -99,14 +101,19 @@ object GlzHubManager {
         val text = response.body?.string().orEmpty()
         check(response.isSuccessful) { "GLZ Hub returned ${response.code}" }
         val config = JSONObject(text)
-        val version = config.optLong("version", 0)
-        val previousVersion = prefs.getLong(CONFIG_VERSION, -1)
+        val version = config.optString("version", "0")
+        val previousVersion = prefs.all[CONFIG_VERSION]?.toString()
+        val experienceVersion = config.optString("experienceVersion", "default")
+        val previousExperienceVersion = prefs.getString(EXPERIENCE_VERSION, null)
         val appPackages = config.optJSONArray("visibleApps").toPackageSet()
-        if (version == previousVersion) {
+        if (version == previousVersion && experienceVersion == previousExperienceVersion) {
             return SyncResult(false, null, visibleApps(prefs), commands(prefs, client))
         }
 
-        val editor = prefs.edit().putLong(CONFIG_VERSION, version).remove(PAIRING_CODE)
+        val editor = prefs.edit()
+            .putString(CONFIG_VERSION, version)
+            .putString(EXPERIENCE_VERSION, experienceVersion)
+            .remove(PAIRING_CODE)
         config.stringOrNull("guestName")?.let { editor.putString("guest_name", it) }
         if (config.has("playlistUrl")) {
             if (config.isNull("playlistUrl")) editor.remove("playlist_url")
@@ -124,6 +131,9 @@ object GlzHubManager {
         if (config.has("autoStart")) editor.putBoolean("auto_start", config.optBoolean("autoStart"))
         if (config.has("resumeLastChannel")) {
             editor.putBoolean("resume_last_channel", config.optBoolean("resumeLastChannel", true))
+        }
+        config.optJSONObject("guestExperience")?.let {
+            editor.putString(GUEST_EXPERIENCE, it.toString())
         }
         config.optJSONObject("requestHeaders")?.let { headers ->
             editor.putString(

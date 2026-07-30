@@ -63,6 +63,23 @@ function isHttpsUrl(value: string | null): boolean {
   try { return new URL(value).protocol === "https:"; } catch { return false; }
 }
 
+function guestServices(value: unknown): Record<string, string | null>[] {
+  if (!Array.isArray(value) || value.length > 12) throw new Error("Invalid services");
+  return value.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`Invalid service ${index + 1}`);
+    }
+    const service = item as Record<string, unknown>;
+    const actionUrl = optionalString(service.actionUrl, `service ${index + 1} URL`);
+    if (actionUrl && !isHttpsUrl(actionUrl)) throw new Error(`Invalid service ${index + 1} URL`);
+    return {
+      title: requiredString(service.title, `service ${index + 1} title`, 60),
+      subtitle: optionalString(service.subtitle, `service ${index + 1} subtitle`, 120),
+      actionUrl
+    };
+  });
+}
+
 async function supabase(
   env: Env,
   path: string,
@@ -206,6 +223,7 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     "name", "guest_name", "playlist_url", "epg_url", "request_headers",
     "visible_apps", "theme_mode", "weather_location", "start_destination",
     "captions_enabled", "captions_language", "auto_start", "resume_last_channel"
+    , "room_number", "arrival_date", "departure_date"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
   patch.config_version = Number(currentRows[0].config_version || 0) + 1;
@@ -225,8 +243,13 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
 
 async function deviceConfig(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
+  const profiles = await supabaseJson(env,
+    `/rest/v1/guest_experience_profiles?owner_id=eq.${device.owner_id}&select=*`
+  ) as Record<string, unknown>[];
+  const profile = profiles[0] ?? {};
   return json({
     version: device.config_version,
+    experienceVersion: profile.updated_at ?? "default",
     deviceName: device.name,
     guestName: device.guest_name,
     playlistUrl: device.playlist_url,
@@ -239,8 +262,64 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     captionsEnabled: device.captions_enabled,
     captionsLanguage: device.captions_language,
     autoStart: device.auto_start,
-    resumeLastChannel: device.resume_last_channel
+    resumeLastChannel: device.resume_last_channel,
+    guestExperience: {
+      propertyName: profile.property_name ?? "",
+      welcomeMessage: profile.welcome_message ?? "",
+      logoUrl: profile.logo_url ?? null,
+      heroImageUrl: profile.hero_image_url ?? null,
+      wifiName: profile.wifi_name ?? null,
+      wifiInstructions: profile.wifi_instructions ?? null,
+      checkoutTime: profile.checkout_time ?? null,
+      frontDesk: profile.front_desk ?? null,
+      noticeTitle: profile.notice_title ?? null,
+      noticeBody: profile.notice_body ?? null,
+      services: profile.services ?? [],
+      roomNumber: device.room_number ?? null,
+      arrivalDate: device.arrival_date ?? null,
+      departureDate: device.departure_date ?? null
+    }
   });
+}
+
+async function getGuestExperience(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const profiles = await supabaseJson(env,
+    `/rest/v1/guest_experience_profiles?owner_id=eq.${user.id}&select=*`
+  ) as Record<string, unknown>[];
+  return json({ profile: profiles[0] ?? null });
+}
+
+async function updateGuestExperience(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const profile = {
+    owner_id: user.id,
+    property_name: requiredString(input.property_name, "property name", 100),
+    welcome_message: requiredString(input.welcome_message, "welcome message", 180),
+    logo_url: optionalString(input.logo_url, "logo URL"),
+    hero_image_url: optionalString(input.hero_image_url, "hero image URL"),
+    wifi_name: optionalString(input.wifi_name, "Wi-Fi name", 100),
+    wifi_instructions: optionalString(input.wifi_instructions, "Wi-Fi instructions", 300),
+    checkout_time: optionalString(input.checkout_time, "checkout time", 40),
+    front_desk: optionalString(input.front_desk, "front desk", 100),
+    notice_title: optionalString(input.notice_title, "notice title", 100),
+    notice_body: optionalString(input.notice_body, "notice body", 500),
+    services: guestServices(input.services ?? []),
+    updated_at: new Date().toISOString()
+  };
+  for (const key of ["logo_url", "hero_image_url"] as const) {
+    if (profile[key] && !isHttpsUrl(profile[key])) throw new Error(`Invalid ${key.replace("_", " ")}`);
+  }
+  const profiles = await supabaseJson(env,
+    "/rest/v1/guest_experience_profiles?on_conflict=owner_id&select=*",
+    {
+      method: "POST",
+      headers: { prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify(profile)
+    }
+  ) as Record<string, unknown>[];
+  return json({ profile: profiles[0] });
 }
 
 async function listApps(request: Request, env: Env): Promise<Response> {
@@ -357,6 +436,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/v1/admin/devices" && request.method === "GET") return listDevices(request, env);
   if (path === "/api/v1/admin/apps" && request.method === "GET") return listApps(request, env);
   if (path === "/api/v1/admin/apps" && request.method === "POST") return createApp(request, env);
+  if (path === "/api/v1/admin/guest-experience" && request.method === "GET") return getGuestExperience(request, env);
+  if (path === "/api/v1/admin/guest-experience" && request.method === "PATCH") return updateGuestExperience(request, env);
   const adminDevice = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)$/i);
   if (adminDevice && request.method === "PATCH") return updateDevice(request, env, adminDevice[1]);
   const install = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/commands$/i);

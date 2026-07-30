@@ -124,6 +124,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -227,6 +229,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        GlzBackgroundSync.schedule(applicationContext)
         deepLinkChannelId.value = intent?.data?.takeIf { it.host == "channel" }?.lastPathSegment
         setContent {
             GlzTvApp(deepLinkChannelId.value, networkPermissionRevision.value)
@@ -354,6 +357,7 @@ private fun TvScreen(
     var guestName by remember {
         mutableStateOf(prefs.getString(GUEST_NAME, "Guest") ?: "Guest")
     }
+    var guestExperience by remember { mutableStateOf(GuestExperience.from(prefs)) }
     var visibleAppPackages by remember {
         mutableStateOf(GlzHubManager.visibleApps(prefs))
     }
@@ -476,6 +480,7 @@ private fun TvScreen(
         }
         if (initialSync?.changed == true) {
             guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+            guestExperience = GuestExperience.from(prefs)
             weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
                 ?: DEFAULT_WEATHER_LOCATION
             visibleAppPackages = GlzHubManager.visibleApps(prefs)
@@ -498,6 +503,7 @@ private fun TvScreen(
                 }
                 if (result.changed) {
                     guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+                    guestExperience = GuestExperience.from(prefs)
                     weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
                         ?: DEFAULT_WEATHER_LOCATION
                     visibleAppPackages = GlzHubManager.visibleApps(prefs)
@@ -614,6 +620,7 @@ private fun TvScreen(
                 if (section == AppSection.Home) {
                     GuestHubHome(
                         guestName = guestName,
+                        experience = guestExperience,
                         entertainmentApps = managedEntertainmentApps,
                         onLive = { section = AppSection.Live },
                         modifier = Modifier.fillMaxSize()
@@ -963,6 +970,7 @@ private fun FloatingDestination(
 @Composable
 private fun GuestHubHome(
     guestName: String,
+    experience: GuestExperience,
     entertainmentApps: List<EntertainmentApp>,
     onLive: () -> Unit,
     modifier: Modifier = Modifier
@@ -978,8 +986,9 @@ private fun GuestHubHome(
             )
         ).padding(horizontal = 24.dp, vertical = 8.dp)
     ) {
-        val guestHeight = (maxHeight * .38f).coerceIn(105.dp, 165.dp)
-        val appHeight = (maxHeight * .30f).coerceIn(88.dp, 118.dp)
+        val guestHeight = (maxHeight * .30f).coerceIn(105.dp, 145.dp)
+        val appHeight = (maxHeight * .22f).coerceIn(78.dp, 105.dp)
+        val serviceHeight = (maxHeight * .19f).coerceIn(72.dp, 92.dp)
         val appWidth = appHeight * 1.9f
         Column(
             Modifier.fillMaxSize(),
@@ -1003,16 +1012,40 @@ private fun GuestHubHome(
                     )
                 ).padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
+                experience.heroImageUrl?.let { imageUrl ->
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(26.dp))
+                    )
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .52f)))
+                }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        experience.logoUrl?.let { logoUrl ->
+                            AsyncImage(
+                                model = logoUrl,
+                                contentDescription = experience.propertyName,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.height(34.dp).width(120.dp)
+                            )
+                        }
                         Text("WELCOME", color = MaterialTheme.colorScheme.secondary,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Black)
                         Text("Welcome, ${guestName.ifBlank { "Guest" }}",
                             fontSize = 32.sp, fontWeight = FontWeight.Black)
-                        Text("Relax, explore, and enjoy your stay.",
+                        Text(experience.welcomeMessage,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 18.sp)
+                        val stayLine = listOfNotNull(
+                            experience.propertyName.takeIf(String::isNotBlank),
+                            experience.roomNumber?.let { "Room $it" },
+                            experience.checkoutTime?.let { "Checkout $it" }
+                        ).joinToString("  •  ")
+                        if (stayLine.isNotBlank()) Text(stayLine, fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -1027,6 +1060,58 @@ private fun GuestHubHome(
                 items(entertainmentApps, key = EntertainmentApp::packageName) { app ->
                     EntertainmentAppCard(app, appWidth, appHeight)
                 }
+            }
+            val serviceItems = buildList {
+                experience.noticeTitle?.let {
+                    add(GuestService(it, experience.noticeBody, null))
+                }
+                experience.wifiName?.let {
+                    add(GuestService("Wi-Fi · $it", experience.wifiInstructions, null))
+                }
+                experience.frontDesk?.let {
+                    add(GuestService("Front Desk", it, null))
+                }
+                addAll(experience.services)
+            }
+            if (serviceItems.isNotEmpty()) {
+                HubSectionTitle("YOUR STAY", experience.noticeTitle ?: "Hotel information and services")
+                LazyRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp)
+                ) {
+                    items(serviceItems, key = { "${it.title}-${it.actionUrl}" }) { service ->
+                        GuestServiceCard(service, appWidth, serviceHeight)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuestServiceCard(service: GuestService, width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.unit.Dp) {
+    val context = LocalContext.current
+    var focused by remember { mutableStateOf(false) }
+    Card(
+        onClick = {
+            service.actionUrl?.let { url ->
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                }
+            }
+        },
+        modifier = Modifier.width(width).height(height).onFocusChanged { focused = it.isFocused },
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(if (focused) 4.dp else 1.dp,
+            if (focused) MaterialTheme.colorScheme.secondary else Color.White.copy(alpha = .08f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+    ) {
+        Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.Center) {
+            Text(service.title, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            service.subtitle?.let {
+                Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -2245,7 +2330,28 @@ private fun VideoPlayer(
     val mediaSession = remember {
         MediaSession.Builder(context, player).build()
     }
-    LaunchedEffect(channel.streamUrl, captionsEnabled, captionLanguage) {
+    var retryAttempt by remember(channel.id) { mutableStateOf(0) }
+    var playbackMessage by remember(channel.id) { mutableStateOf<String?>(null) }
+    DisposableEffect(player, channel.id) {
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                if (retryAttempt < 3) {
+                    retryAttempt += 1
+                    playbackMessage = "Reconnecting… attempt $retryAttempt of 3"
+                } else {
+                    playbackMessage = "This channel is temporarily unavailable"
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) playbackMessage = null
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    LaunchedEffect(channel.streamUrl, captionsEnabled, captionLanguage, retryAttempt) {
+        if (retryAttempt > 0) delay((1L shl (retryAttempt - 1)) * 1_000L)
         httpFactory
             .setDefaultRequestProperties(channel.headers)
             .setUserAgent(channel.headers["User-Agent"] ?: "GLZ-TV/2.0")
@@ -2253,6 +2359,7 @@ private fun VideoPlayer(
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !captionsEnabled)
             .setPreferredTextLanguage(captionLanguage.ifBlank { null })
             .build()
+        player.stop()
         player.setMediaItem(
             MediaItem.Builder()
                 .setUri(channel.streamUrl)
@@ -2276,11 +2383,28 @@ private fun VideoPlayer(
             player.release()
         }
     }
-    AndroidView(
-        factory = { PlayerView(it).apply { this.player = player; keepScreenOn = true } },
-        update = { it.player = player },
-        modifier = modifier.background(Color.Black, RoundedCornerShape(24.dp))
-    )
+    Box(modifier.background(Color.Black, RoundedCornerShape(24.dp))) {
+        AndroidView(
+            factory = { PlayerView(it).apply { this.player = player; keepScreenOn = true } },
+            update = { it.player = player },
+            modifier = Modifier.fillMaxSize()
+        )
+        playbackMessage?.let { message ->
+            Surface(
+                color = Color.Black.copy(alpha = .82f),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                Column(
+                    Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (retryAttempt in 1..3) LinearProgressIndicator(Modifier.width(180.dp))
+                    Text(message, Modifier.padding(top = 10.dp), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
 }
 
 @Composable

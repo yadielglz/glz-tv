@@ -64,6 +64,10 @@ p { color: var(--muted); line-height: 1.65; }
 .check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 .check input { width: 18px; height: 18px; accent-color: var(--lime); }
 .inline-action { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.experience-editor { max-width: 1100px; }
+.experience-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.experience-grid fieldset { display: grid; align-content: start; gap: 15px; margin: 0; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: #0d1928cc; }
+.experience-grid legend { padding: 0 8px; color: var(--lime); font-weight: 900; }
 .empty, .panel { max-width: 680px; margin: 40px auto; border: 1px solid var(--line); background: var(--panel); border-radius: 24px; padding: 38px; }
 .empty { text-align: center; }
 .empty-icon { width: 58px; height: 58px; margin: auto; border-radius: 50%; background: var(--panel-2); color: var(--orange); display: grid; place-items: center; font-size: 30px; }
@@ -113,4 +117,5 @@ small { color: var(--muted); font-weight: 400; }
   .app-row { grid-template-columns: 42px 1fr; }
   .app-row > span:nth-child(n+3) { grid-column: 2; }
   .section-toolbar { align-items: flex-start; }
+  .experience-grid { grid-template-columns: 1fr; }
 }

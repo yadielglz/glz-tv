@@ -108,5 +108,13 @@ Android requires an on-device install confirmation on ordinary consumer TVs. Sil
 installation requires GLZ TV to be provisioned as the Android device owner (managed
 or kiosk deployment); the portal intentionally does not bypass that security model.
 
+## Guest Experience
+
+Apply `003_guest_experience.sql` after the earlier migrations. The Guest Experience
+editor manages property-wide branding, Wi-Fi and checkout details, notices, front
+desk information, and up to 12 HTTPS service tiles. Room number and stay dates remain
+per-device settings. TVs persist the latest profile locally so text remains available
+when the Hub is temporarily unreachable; remote artwork uses the image cache.
+
 App visibility controls only the apps shown inside GLZ TV. It does not modify
 the Google TV or Fire TV system launcher.

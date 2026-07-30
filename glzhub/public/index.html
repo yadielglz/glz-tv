@@ -16,6 +16,7 @@
       </a>
       <nav>
         <button class="nav active" data-view="devices">▣ <span>Devices</span></button>
+        <button class="nav" data-view="experience">✦ <span>Guest experience</span></button>
         <button class="nav" data-view="apps">⬡ <span>App library</span></button>
         <button class="nav" data-view="pair">＋ <span>Pair a TV</span></button>
       </nav>
@@ -87,6 +88,42 @@
           <div id="appEmpty" class="empty hidden"><h3>No managed apps yet</h3><p>Add an app once, then deploy it to any paired television.</p></div>
         </section>
 
+        <section id="experienceView" class="hidden">
+          <form id="experienceForm" class="experience-editor">
+            <div class="section-toolbar">
+              <div><h3>Property guest experience</h3><p>Branding, stay information and services delivered to every paired TV.</p></div>
+              <button class="primary" type="submit">Save &amp; publish</button>
+            </div>
+            <div class="experience-grid">
+              <fieldset>
+                <legend>Welcome</legend>
+                <label>Property name<input id="propertyName" required maxlength="100"></label>
+                <label>Welcome message<input id="welcomeMessage" required maxlength="180"></label>
+                <label>Logo URL<input id="logoUrl" type="url" placeholder="https://…"></label>
+                <label>Hero image URL<input id="heroImageUrl" type="url" placeholder="https://…"></label>
+              </fieldset>
+              <fieldset>
+                <legend>Stay essentials</legend>
+                <label>Wi-Fi name<input id="wifiName" maxlength="100"></label>
+                <label>Wi-Fi instructions<textarea id="wifiInstructions" rows="3" maxlength="300"></textarea></label>
+                <label>Checkout time<input id="checkoutTime" placeholder="11:00 AM" maxlength="40"></label>
+                <label>Front desk contact<input id="frontDesk" placeholder="Dial 0" maxlength="100"></label>
+              </fieldset>
+              <fieldset>
+                <legend>Guest notice</legend>
+                <label>Notice title<input id="noticeTitle" maxlength="100"></label>
+                <label>Notice message<textarea id="noticeBody" rows="5" maxlength="500"></textarea></label>
+              </fieldset>
+              <fieldset>
+                <legend>Service tiles</legend>
+                <p class="field-help">One per line: Title | Short description | HTTPS link</p>
+                <textarea id="guestServices" rows="8" placeholder="Room Service | View today’s menu | https://hotel.example/menu&#10;Spa | Hours and reservations | https://hotel.example/spa"></textarea>
+              </fieldset>
+            </div>
+            <p id="experienceError" class="error"></p>
+          </form>
+        </section>
+
         <section id="pairView" class="panel hidden">
           <div class="eyebrow">ADD A SCREEN</div>
           <h3>Pair a GLZ TV</h3>
@@ -117,6 +154,9 @@
       <div class="form-grid">
         <label>Device name<input id="deviceName" required></label>
         <label>Welcome guest name<input id="guestName" required></label>
+        <label>Room number<input id="roomNumber" maxlength="30"></label>
+        <label>Arrival date<input id="arrivalDate" type="date"></label>
+        <label>Departure date<input id="departureDate" type="date"></label>
         <label class="wide">M3U playlist URL<input id="playlistUrl" type="url" placeholder="https://…"></label>
         <label class="wide">XMLTV EPG URL<input id="epgUrl" type="url" placeholder="https://…"></label>
         <label>Weather location<input id="weatherLocation"></label>
