@@ -21,6 +21,7 @@ create table if not exists public.guest_experience_profiles (
 
 alter table public.guest_experience_profiles enable row level security;
 
+drop policy if exists "owners manage guest experience" on public.guest_experience_profiles;
 create policy "owners manage guest experience" on public.guest_experience_profiles
   for all to authenticated
   using (owner_id = auth.uid())
