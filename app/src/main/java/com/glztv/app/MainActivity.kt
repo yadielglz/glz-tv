@@ -1036,22 +1036,29 @@ private fun GuestHubHome(
     onLive: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    val timeGreeting = when (hour) {
+        in 5..11 -> "Good Morning"
+        in 12..17 -> "Good Afternoon"
+        else -> "Good Evening"
+    }
+
     BoxWithConstraints(
-        modifier.background(
-            Brush.radialGradient(
-                colors = listOf(
-                    MaterialTheme.colorScheme.primary.copy(alpha = .20f),
-                    MaterialTheme.colorScheme.background,
-                    MaterialTheme.colorScheme.background
+        modifier
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = .35f),
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.background
+                    )
                 )
             )
-        ).padding(horizontal = 4.dp, vertical = 6.dp)
+            .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         val compactHeight = maxHeight < 420.dp
-        val guestHeight = if (compactHeight) 112.dp
-            else (maxHeight * .36f).coerceIn(168.dp, 196.dp)
-        val appHeight = if (compactHeight) 82.dp
-            else (maxHeight * .20f).coerceIn(86.dp, 102.dp)
+        val guestHeight = if (compactHeight) 120.dp else (maxHeight * .38f).coerceIn(170.dp, 210.dp)
+        val appHeight = if (compactHeight) 84.dp else (maxHeight * .21f).coerceIn(88.dp, 106.dp)
         val visibleCards = when {
             maxWidth >= 840.dp -> 5
             maxWidth >= 640.dp -> 4
@@ -1063,82 +1070,140 @@ private fun GuestHubHome(
         val appWidth = (
             (maxWidth - rowEdgePadding * 2 - cardSpacing * (visibleCards - 1)) / visibleCards
         ).coerceAtLeast(132.dp)
+
         Column(
             Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(if (compactHeight) 5.dp else 8.dp)
+            verticalArrangement = Arrangement.spacedBy(if (compactHeight) 6.dp else 10.dp)
         ) {
             Card(
-            Modifier.fillMaxWidth().height(guestHeight),
-            shape = RoundedCornerShape(26.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            ),
-            elevation = CardDefaults.cardElevation(8.dp)
-        ) {
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    )
-                )
+                Modifier
+                    .fillMaxWidth()
+                    .height(guestHeight),
+                shape = RoundedCornerShape(28.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ),
+                elevation = CardDefaults.cardElevation(10.dp)
             ) {
-                experience.heroImageUrl?.let { imageUrl ->
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .52f)))
-                }
                 Box(
-                    Modifier.fillMaxSize()
-                        .padding(horizontal = 20.dp, vertical = if (compactHeight) 9.dp else 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        experience.logoUrl?.let { logoUrl ->
-                            AsyncImage(
-                                model = logoUrl,
-                                contentDescription = experience.propertyName,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.height(34.dp).width(120.dp)
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    MaterialTheme.colorScheme.surface
+                                )
                             )
-                        }
-                        Text("WELCOME", color = MaterialTheme.colorScheme.secondary,
-                            style = if (compactHeight) MaterialTheme.typography.labelMedium
-                            else MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Black)
-                        Text("Welcome, ${guestName.ifBlank { "Guest" }}",
-                            fontSize = if (compactHeight) 27.sp else 32.sp,
-                            fontWeight = FontWeight.Black, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis)
-                        Text(experience.welcomeMessage,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = if (compactHeight) 15.sp else 18.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val stayLine = listOfNotNull(
-                            experience.propertyName.takeIf(String::isNotBlank),
-                            experience.roomNumber?.let { "Room $it" },
-                            experience.checkoutTime?.let { "Checkout $it" }
-                        ).joinToString("  •  ")
-                        if (!compactHeight && stayLine.isNotBlank()) {
-                            Text(stayLine, fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        )
+                ) {
+                    experience.heroImageUrl?.let { imageUrl ->
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.Black.copy(alpha = 0.35f),
+                                            Color.Black.copy(alpha = 0.70f)
+                                        )
+                                    )
+                                )
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 24.dp, vertical = if (compactHeight) 10.dp else 16.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    ) {
+                                        Text(
+                                            timeGreeting.uppercase(),
+                                            Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                    }
+                                    experience.logoUrl?.let { logoUrl ->
+                                        AsyncImage(
+                                            model = logoUrl,
+                                            contentDescription = experience.propertyName,
+                                            contentScale = ContentScale.Fit,
+                                            modifier = Modifier.height(26.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "$timeGreeting, ${guestName.ifBlank { "Guest" }}",
+                                    fontSize = if (compactHeight) 24.sp else 30.sp,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    experience.welcomeMessage,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = if (compactHeight) 14.sp else 16.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                val stayLine = listOfNotNull(
+                                    experience.propertyName.takeIf(String::isNotBlank),
+                                    experience.roomNumber?.let { "Room $it" },
+                                    experience.checkoutTime?.let { "Checkout $it" }
+                                ).joinToString("  •  ")
+                                if (!compactHeight && stayLine.isNotBlank()) {
+                                    Text(
+                                        stayLine,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            TvSettingsButton(
+                                label = "Watch Live TV",
+                                onClick = onLive,
+                                modifier = Modifier.height(48.dp)
+                            )
                         }
                     }
                 }
             }
-        }
-            HubSectionTitle("ENTERTAINMENT", "Live TV, apps and services")
+            HubSectionTitle("ENTERTAINMENT", "Live TV, apps and streaming services")
             LazyRow(
-                Modifier.fillMaxWidth().focusGroup(),
+                Modifier
+                    .fillMaxWidth()
+                    .focusGroup(),
                 horizontalArrangement = Arrangement.spacedBy(cardSpacing),
-                contentPadding = PaddingValues(horizontal = rowEdgePadding, vertical = 5.dp)
+                contentPadding = PaddingValues(horizontal = rowEdgePadding, vertical = 6.dp)
             ) {
                 item { LiveTvHubCard(onLive, appWidth, appHeight) }
                 items(entertainmentApps, key = EntertainmentApp::packageName) { app ->
@@ -1799,47 +1864,85 @@ private fun EpgGrid(
     val horizontal = rememberScrollState()
 
     Column(modifier.horizontalScroll(horizontal)) {
-        Column(Modifier.width(totalWidth).fillMaxHeight()) {
-            Row(
-                Modifier.height(48.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
-            ) {
-                Box(
-                    Modifier.width(channelWidth).fillMaxHeight().padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.CenterStart
+        Box(Modifier.width(totalWidth).fillMaxHeight()) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier.height(48.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
                 ) {
-                    Text("CHANNEL", style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.secondary)
-                }
-                repeat(slots) { slot ->
                     Box(
-                        Modifier.width(slotWidth).fillMaxHeight()
-                            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = .25f)),
+                        Modifier.width(channelWidth).fillMaxHeight().padding(horizontal = 16.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
-                        Text(
-                            DateFormat.getTimeInstance(DateFormat.SHORT)
-                                .format(Date(start + slot * halfHour)),
-                            Modifier.padding(start = 12.dp),
-                            fontWeight = FontWeight.Bold
+                        Text("CHANNEL", style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.secondary)
+                    }
+                    repeat(slots) { slot ->
+                        Box(
+                            Modifier.width(slotWidth).fillMaxHeight()
+                                .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = .25f)),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Text(
+                                DateFormat.getTimeInstance(DateFormat.SHORT)
+                                    .format(Date(start + slot * halfHour)),
+                                Modifier.padding(start = 12.dp),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(channels, key = { "grid-${it.streamUrl}" }) { channel ->
+                        EpgGridRow(
+                            channel = channel,
+                            programmes = guide.forChannel(channel),
+                            guide = guide,
+                            windowStart = start,
+                            windowEnd = start + slots * halfHour,
+                            channelWidth = channelWidth,
+                            timelineWidth = timelineWidth,
+                            slotWidth = slotWidth,
+                            onWatch = { onWatch(channel) }
                         )
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(channels, key = { "grid-${it.streamUrl}" }) { channel ->
-                    EpgGridRow(
-                        channel = channel,
-                        programmes = guide.forChannel(channel),
-                        guide = guide,
-                        windowStart = start,
-                        windowEnd = start + slots * halfHour,
-                        channelWidth = channelWidth,
-                        timelineWidth = timelineWidth,
-                        slotWidth = slotWidth,
-                        onWatch = { onWatch(channel) }
-                    )
+
+            if (now in start..(start + slots * halfHour)) {
+                val elapsedRatio = (now - start).toFloat() / (slots * halfHour).toFloat()
+                val clockX = channelWidth + (timelineWidth * elapsedRatio)
+                Box(
+                    Modifier
+                        .offset(x = clockX - 1.dp)
+                        .width(2.5.dp)
+                        .fillMaxHeight()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.secondary,
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.75f),
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+                                )
+                            )
+                        )
+                )
+                Surface(
+                    modifier = Modifier.offset(x = clockX - 20.dp, y = 10.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                    shadowElevation = 6.dp
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(Modifier.size(5.dp).background(Color.Red, CircleShape))
+                        Text("NOW", fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    }
                 }
             }
         }
