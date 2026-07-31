@@ -1172,32 +1172,6 @@ private fun GuestHubHome(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                    ) {
-                                        Text(
-                                            timeGreeting.uppercase(),
-                                            Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Black
-                                        )
-                                    }
-                                    experience.logoUrl?.let { logoUrl ->
-                                        AsyncImage(
-                                            model = logoUrl,
-                                            contentDescription = experience.propertyName,
-                                            contentScale = ContentScale.Fit,
-                                            modifier = Modifier.height(26.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.height(6.dp))
                                 Text(
                                     "$timeGreeting, ${guestName.ifBlank { "Guest" }}",
                                     fontSize = if (compactHeight) 24.sp else 30.sp,
