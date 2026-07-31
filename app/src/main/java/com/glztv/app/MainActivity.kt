@@ -170,6 +170,7 @@ private const val START_DESTINATION = "start_destination"
 private const val LAST_CHANNEL_ID = "last_channel_id"
 private const val WEATHER_LOCATION = "weather_location"
 private const val GUEST_NAME = "guest_name"
+private const val OSD_TIMEOUT_SECONDS = "osd_timeout_seconds"
 private const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
 private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
@@ -433,6 +434,9 @@ private fun TvScreen(
     var captionLanguage by remember {
         mutableStateOf(prefs.getString(CAPTION_LANGUAGE, "en") ?: "en")
     }
+    var osdTimeoutSeconds by remember {
+        mutableStateOf(prefs.getInt(OSD_TIMEOUT_SECONDS, 8))
+    }
     var section by remember {
         mutableStateOf(
             runCatching {
@@ -661,6 +665,7 @@ private fun TvScreen(
                     guide = guide,
                     captionsEnabled = captionsEnabled,
                     captionLanguage = captionLanguage,
+                    osdTimeoutSeconds = osdTimeoutSeconds,
                     entertainmentApps = managedEntertainmentApps,
                     onTune = tuneChannel,
                     onExit = {
@@ -728,6 +733,7 @@ private fun TvScreen(
             themeMode = themeMode,
             captionsEnabled = captionsEnabled,
             captionLanguage = captionLanguage,
+            osdTimeoutSeconds = osdTimeoutSeconds,
             autoUpdate = prefs.getBoolean(AUTO_UPDATE_CHECK, true),
             wifiOnly = prefs.getBoolean(WIFI_ONLY_UPDATES, true),
             autoStart = prefs.getBoolean(AUTO_START, false),
@@ -746,7 +752,7 @@ private fun TvScreen(
                 }
             },
             onDismiss = { showSettings = false },
-            onSave = { playlist, epg, headers, location, name, theme, captions, language, autoUpdate,
+            onSave = { playlist, epg, headers, location, name, theme, captions, language, osdTimeout, autoUpdate,
                        wifiOnly, autoStart, resumeLast, startDestination ->
                 prefs.edit().putString(PLAYLIST_URL, playlist).putString(EPG_URL, epg)
                     .putString(REQUEST_HEADERS, headers)
@@ -754,6 +760,7 @@ private fun TvScreen(
                     .putString(GUEST_NAME, name)
                     .putBoolean(CAPTIONS_ENABLED, captions)
                     .putString(CAPTION_LANGUAGE, language)
+                    .putInt(OSD_TIMEOUT_SECONDS, osdTimeout)
                     .putBoolean(AUTO_UPDATE_CHECK, autoUpdate)
                     .putBoolean(WIFI_ONLY_UPDATES, wifiOnly)
                     .putBoolean(AUTO_START, autoStart)
@@ -762,6 +769,7 @@ private fun TvScreen(
                 onThemeMode(theme)
                 captionsEnabled = captions
                 captionLanguage = language
+                osdTimeoutSeconds = osdTimeout
                 weatherLocation = location
                 guestName = name
                 showSettings = false
@@ -1785,7 +1793,7 @@ private fun EpgGrid(
     val start = now - (now % halfHour)
     val slots = 8
     val slotWidth = 150.dp
-    val channelWidth = 210.dp
+    val channelWidth = 260.dp
     val timelineWidth = slotWidth * slots
     val totalWidth = channelWidth + timelineWidth
     val horizontal = rememberScrollState()
@@ -1859,19 +1867,28 @@ private fun EpgGridRow(
     ) {
         Row(
             Modifier.width(channelWidth).fillMaxHeight().clickable(onClick = onWatch)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ChannelLogo(channel, 46.dp, guide)
             Spacer(Modifier.width(10.dp))
-            Column {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                 Text(
                     channel.number.ifBlank { "TV" },
                     color = MaterialTheme.colorScheme.secondary,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Black
                 )
-                Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelLarge)
+                Text(
+                    channel.name,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = if (channel.name.length > 22) 12.sp else 13.sp,
+                        lineHeight = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
             }
         }
         Box(
@@ -2030,6 +2047,7 @@ private fun ImmersivePlayerScreen(
     guide: EpgGuide,
     captionsEnabled: Boolean,
     captionLanguage: String,
+    osdTimeoutSeconds: Int = 8,
     entertainmentApps: List<EntertainmentApp>,
     onTune: (Channel) -> Unit,
     onExit: () -> Unit
@@ -2067,9 +2085,9 @@ private fun ImmersivePlayerScreen(
             now = System.currentTimeMillis()
         }
     }
-    LaunchedEffect(showOsd, channel.id) {
+    LaunchedEffect(showOsd, channel.id, osdTimeoutSeconds) {
         if (showOsd) {
-            delay(4_000)
+            delay(osdTimeoutSeconds * 1_000L)
             showOsd = false
         }
     }
@@ -2668,6 +2686,7 @@ private fun SettingsDialog(
     themeMode: String,
     captionsEnabled: Boolean,
     captionLanguage: String,
+    osdTimeoutSeconds: Int = 8,
     autoUpdate: Boolean,
     wifiOnly: Boolean,
     autoStart: Boolean,
@@ -2680,7 +2699,7 @@ private fun SettingsDialog(
     onBeginHubEnrollment: suspend () -> String,
     onDismiss: () -> Unit,
     onSave: (
-        String, String, String, String, String, String, Boolean, String, Boolean, Boolean,
+        String, String, String, String, String, String, Boolean, String, Int, Boolean, Boolean,
         Boolean, Boolean, String
     ) -> Unit
 ) {
@@ -2692,6 +2711,7 @@ private fun SettingsDialog(
     var themeValue by remember { mutableStateOf(themeMode) }
     var captionsValue by remember { mutableStateOf(captionsEnabled) }
     var languageValue by remember { mutableStateOf(captionLanguage) }
+    var osdTimeoutValue by remember { mutableStateOf(osdTimeoutSeconds) }
     var autoUpdateValue by remember { mutableStateOf(autoUpdate) }
     var wifiOnlyValue by remember { mutableStateOf(wifiOnly) }
     var autoStartValue by remember { mutableStateOf(autoStart) }
@@ -2840,6 +2860,49 @@ private fun SettingsDialog(
                 ProtectedSourceField(languageValue, { languageValue = it },
                     "Preferred language code", "Examples: en, es, fr",
                     enabled = captionsValue)
+                SettingsLabel("OSD TIMEOUT")
+                Text("Player banner visibility duration", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(5, 7, 8, 10).forEach { timeout ->
+                        var focused by remember(timeout) { mutableStateOf(false) }
+                        Surface(
+                            Modifier
+                                .onFocusChanged { focused = it.isFocused }
+                                .onPreviewKeyEvent { event ->
+                                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                                        event.nativeKeyEvent.keyCode in listOf(
+                                            KeyEvent.KEYCODE_DPAD_CENTER,
+                                            KeyEvent.KEYCODE_ENTER,
+                                            KeyEvent.KEYCODE_NUMPAD_ENTER
+                                        )
+                                    ) {
+                                        osdTimeoutValue = timeout
+                                        true
+                                    } else false
+                                }
+                                .clickable { osdTimeoutValue = timeout }
+                                .focusable(),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(
+                                if (focused) 4.dp else 1.dp,
+                                if (focused) MaterialTheme.colorScheme.secondary
+                                else Color.Transparent
+                            ),
+                            color = if (osdTimeoutValue == timeout)
+                                MaterialTheme.colorScheme.secondary
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (osdTimeoutValue == timeout)
+                                MaterialTheme.colorScheme.onSecondary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        ) {
+                            Text(
+                                "${timeout}s",
+                                Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
                 SettingsLabel("APP UPDATES")
                 SettingsToggle("Check automatically", autoUpdateValue) { autoUpdateValue = it }
                 SettingsToggle("Download on Wi-Fi only", wifiOnlyValue) { wifiOnlyValue = it }
@@ -2932,7 +2995,7 @@ private fun SettingsDialog(
                             playlistValue.trim(), epgValue.trim(), headerValue.trim(),
                             weatherLocationValue.trim().ifBlank { DEFAULT_WEATHER_LOCATION },
                             guestNameValue.trim().ifBlank { "Guest" },
-                            themeValue, captionsValue, languageValue.trim(),
+                            themeValue, captionsValue, languageValue.trim(), osdTimeoutValue,
                             autoUpdateValue, wifiOnlyValue, autoStartValue, resumeLastValue,
                             startDestinationValue
                         )
