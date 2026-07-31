@@ -1229,12 +1229,6 @@ private fun GuestHubHome(
                                     )
                                 }
                             }
-                            Spacer(Modifier.width(16.dp))
-                            TvSettingsButton(
-                                label = "Watch Live TV",
-                                onClick = onLive,
-                                modifier = Modifier.height(48.dp)
-                            )
                         }
                     }
                 }
