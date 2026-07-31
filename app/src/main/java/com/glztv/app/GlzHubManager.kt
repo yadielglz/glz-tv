@@ -33,15 +33,24 @@ object GlzHubManager {
         val changed: Boolean,
         val guestName: String?,
         val visibleApps: Set<String>,
-        val commands: List<AppCommand> = emptyList()
+        val commands: List<HubCommand> = emptyList(),
+        val forceRefreshTriggered: Boolean = false
     )
 
+    sealed interface HubCommand {
+        val id: String
+    }
+
     data class AppCommand(
-        val id: String,
+        override val id: String,
         val packageName: String,
         val sourceType: String,
         val sourceUrl: String?
-    )
+    ) : HubCommand
+
+    data class ForceRefreshCommand(
+        override val id: String
+    ) : HubCommand
 
     fun installationId(prefs: SharedPreferences): String {
         prefs.getString(INSTALLATION_ID, null)?.let { return it }
@@ -188,6 +197,22 @@ object GlzHubManager {
         if (config.has("resumeLastChannel")) {
             editor.putBoolean("resume_last_channel", config.optBoolean("resumeLastChannel", true))
         }
+        if (config.has("osdTimeoutSeconds")) {
+            editor.putInt("osd_timeout_seconds", config.optInt("osdTimeoutSeconds", 8))
+        }
+        if (config.has("autoUpdate")) {
+            editor.putBoolean("auto_update", config.optBoolean("autoUpdate", true))
+        }
+        if (config.has("wifiOnly")) {
+            editor.putBoolean("wifi_only", config.optBoolean("wifiOnly", false))
+        }
+        val forceRefreshToken = config.stringOrNull("forceRefreshToken")
+        val previousForceRefreshToken = prefs.getString("last_force_refresh_token", null)
+        var forceRefreshTriggered = false
+        if (forceRefreshToken != null && forceRefreshToken != previousForceRefreshToken) {
+            editor.putString("last_force_refresh_token", forceRefreshToken)
+            forceRefreshTriggered = true
+        }
         config.optJSONObject("guestExperience")?.let {
             editor.putString(GUEST_EXPERIENCE, it.toString())
         }
@@ -200,10 +225,16 @@ object GlzHubManager {
         editor.putStringSet(VISIBLE_APPS, appPackages)
             .putBoolean(VISIBLE_APPS_MANAGED, true)
             .apply()
-        return SyncResult(true, config.stringOrNull("guestName"), appPackages, commands(prefs, client))
+        return SyncResult(
+            changed = true,
+            guestName = config.stringOrNull("guestName"),
+            visibleApps = appPackages,
+            commands = commands(prefs, client),
+            forceRefreshTriggered = forceRefreshTriggered
+        )
     }
 
-    fun commands(prefs: SharedPreferences, client: OkHttpClient): List<AppCommand> {
+    fun commands(prefs: SharedPreferences, client: OkHttpClient): List<HubCommand> {
         val token = prefs.getString(DEVICE_TOKEN, null) ?: return emptyList()
         val response = client.newCall(Request.Builder()
             .url("$HUB_URL/api/v1/devices/commands")
@@ -214,13 +245,19 @@ object GlzHubManager {
         return buildList {
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
-                val payload = item.optJSONObject("payload") ?: continue
                 val id = item.optString("id")
-                val packageName = payload.optString("packageName")
-                if (id.isNotBlank() && packageName.isNotBlank()) add(AppCommand(
-                    id, packageName, payload.optString("sourceType", "play_store"),
-                    payload.stringOrNull("sourceUrl")
-                ))
+                val action = item.optString("action")
+                if (id.isBlank()) continue
+                if (action == "force_refresh") {
+                    add(ForceRefreshCommand(id))
+                } else if (action == "install_app") {
+                    val payload = item.optJSONObject("payload") ?: continue
+                    val packageName = payload.optString("packageName")
+                    if (packageName.isNotBlank()) add(AppCommand(
+                        id, packageName, payload.optString("sourceType", "play_store"),
+                        payload.stringOrNull("sourceUrl")
+                    ))
+                }
             }
         }
     }

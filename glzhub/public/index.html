@@ -62,7 +62,10 @@
             <div class="eyebrow">GLZTECH CONTROL CENTER</div>
             <h2 id="pageTitle">Your TVs</h2>
           </div>
-          <button id="pairButton" class="primary">＋ Pair a TV</button>
+          <div class="header-actions">
+            <button id="refreshDashboardButton" type="button" class="secondary" title="Refresh all device status">🔄 Refresh</button>
+            <button id="pairButton" class="primary">＋ Pair a TV</button>
+          </div>
         </header>
 
         <section id="devicesView">
@@ -193,12 +196,25 @@
             <option value="light">Light</option>
             <option value="ocean">Ocean</option>
             <option value="sunset">Sunset</option>
+            <option value="emerald">Emerald</option>
+            <option value="cyberpunk">Cyberpunk</option>
+            <option value="midnight">Midnight</option>
+          </select>
+        </label>
+        <label>OSD Banner Timeout
+          <select id="osdTimeoutSeconds">
+            <option value="5">5 seconds</option>
+            <option value="7">7 seconds</option>
+            <option value="8">8 seconds (default)</option>
+            <option value="10">10 seconds</option>
           </select>
         </label>
         <label>Closed captions language<input id="captionsLanguage" maxlength="12" placeholder="en"></label>
         <label class="check"><input id="captionsEnabled" type="checkbox"> Enable closed captions</label>
         <label class="check"><input id="autoStart" type="checkbox"> Start GLZ TV after device boot</label>
         <label class="check"><input id="resumeLastChannel" type="checkbox"> Resume the last channel</label>
+        <label class="check"><input id="autoUpdate" type="checkbox"> Auto update GLZ TV app</label>
+        <label class="check"><input id="wifiOnly" type="checkbox"> Download updates on Wi-Fi only</label>
         <fieldset class="wide app-fieldset">
           <legend>Apps shown inside GLZ TV</legend>
           <p class="field-help">Check the entertainment apps this television should display.</p>
@@ -211,6 +227,7 @@
       </div>
       <p id="deviceError" class="error"></p>
       <div class="form-actions">
+        <button id="forceRefreshDevice" type="button" class="secondary" style="margin-right: auto;">⚡ Force Refresh EPG &amp; M3U</button>
         <button id="unpairDevice" type="button" class="danger-button">Remove pairing</button>
         <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button type="submit" class="primary">Save &amp; sync</button>

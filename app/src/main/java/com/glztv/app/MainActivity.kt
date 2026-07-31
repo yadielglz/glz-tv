@@ -572,8 +572,12 @@ private fun TvScreen(
         val initialSync = runCatching {
             withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
         }.getOrNull()
-        initialSync?.commands?.forEach { command ->
-            handleManagedAppCommand(context, prefs, client, command)
+        initialSync?.commands?.let { commands ->
+            for (command in commands) {
+                handleManagedHubCommand(context, prefs, client, command) {
+                    loadSources(forceRefresh = true)
+                }
+            }
         }
         if (initialSync?.changed == true) {
             guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
@@ -597,10 +601,12 @@ private fun TvScreen(
                     result
                 }
             }.onSuccess { result ->
-                result.commands.forEach { command ->
-                    handleManagedAppCommand(context, prefs, client, command)
+                for (command in result.commands) {
+                    handleManagedHubCommand(context, prefs, client, command) {
+                        loadSources(forceRefresh = true)
+                    }
                 }
-                if (result.changed) {
+                if (result.changed || result.forceRefreshTriggered) {
                     guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
                     guestExperience = GuestExperience.from(prefs)
                     weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
@@ -1785,26 +1791,41 @@ private fun launchEntertainmentApp(context: Context, packageName: String, launch
     }
 }
 
-private suspend fun handleManagedAppCommand(
+private suspend fun handleManagedHubCommand(
     context: Context,
     prefs: SharedPreferences,
     client: OkHttpClient,
-    command: GlzHubManager.AppCommand
+    command: GlzHubManager.HubCommand,
+    onForceRefresh: suspend () -> Unit
 ) {
-    val result = runCatching {
-        val uri = if (command.sourceType == "repository") {
-            Uri.parse(requireNotNull(command.sourceUrl) { "Repository URL is missing" })
-        } else {
-            Uri.parse("market://details?id=${command.packageName}")
+    when (command) {
+        is GlzHubManager.ForceRefreshCommand -> {
+            onForceRefresh()
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    GlzHubManager.completeCommand(
+                        prefs, client, command.id, true, "EPG and M3U force refresh completed on TV"
+                    )
+                }
+            }
         }
-        context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
-    withContext(Dispatchers.IO) {
-        runCatching {
-            GlzHubManager.completeCommand(
-                prefs, client, command.id, result.isSuccess,
-                if (result.isSuccess) "Installer opened on TV" else (result.exceptionOrNull()?.message ?: "Could not open installer")
-            )
+        is GlzHubManager.AppCommand -> {
+            val result = runCatching {
+                val uri = if (command.sourceType == "repository") {
+                    Uri.parse(requireNotNull(command.sourceUrl) { "Repository URL is missing" })
+                } else {
+                    Uri.parse("market://details?id=${command.packageName}")
+                }
+                context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    GlzHubManager.completeCommand(
+                        prefs, client, command.id, result.isSuccess,
+                        if (result.isSuccess) "Installer opened on TV" else (result.exceptionOrNull()?.message ?: "Could not open installer")
+                    )
+                }
+            }
         }
     }
 }

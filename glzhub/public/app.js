@@ -304,10 +304,13 @@ function openDevice(id) {
   $("#weatherLocation").value = device.weather_location || "";
   $("#startDestination").value = device.start_destination || "Home";
   $("#themeMode").value = device.theme_mode || "adaptive";
+  $("#osdTimeoutSeconds").value = String(device.osd_timeout_seconds || 8);
   $("#captionsEnabled").checked = Boolean(device.captions_enabled);
   $("#captionsLanguage").value = device.captions_language || "en";
   $("#autoStart").checked = Boolean(device.auto_start);
   $("#resumeLastChannel").checked = device.resume_last_channel !== false;
+  $("#autoUpdate").checked = device.auto_update !== false;
+  $("#wifiOnly").checked = Boolean(device.wifi_only);
   const enabledApps = new Set(
     (device.visible_apps || []).map((app) => typeof app === "string" ? app : app.packageName)
   );
@@ -382,16 +385,31 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         weather_location: $("#weatherLocation").value,
         start_destination: $("#startDestination").value,
         theme_mode: $("#themeMode").value,
+        osd_timeout_seconds: Number($("#osdTimeoutSeconds").value || 8),
         captions_enabled: $("#captionsEnabled").checked,
         captions_language: $("#captionsLanguage").value || "en",
         auto_start: $("#autoStart").checked,
         resume_last_channel: $("#resumeLastChannel").checked,
+        auto_update: $("#autoUpdate").checked,
+        wifi_only: $("#wifiOnly").checked,
         visible_apps: $$("#visibleApps input:checked").map((input) => input.value)
       })
     });
     $("#deviceDialog").close();
     await loadDevices();
     toast("Configuration queued for sync");
+  } catch (error) {
+    $("#deviceError").textContent = error.message;
+  }
+});
+
+$("#forceRefreshDevice").addEventListener("click", async () => {
+  const id = $("#deviceId").value;
+  if (!id) return;
+  $("#deviceError").textContent = "";
+  try {
+    await api(`/api/v1/admin/devices/${id}/force-refresh`, { method: "POST" });
+    toast("⚡ Force refresh signal sent to TV");
   } catch (error) {
     $("#deviceError").textContent = error.message;
   }
@@ -512,6 +530,14 @@ $("#signOut").addEventListener("click", () => {
   localStorage.removeItem("glzhub_session");
   state.session = null;
   showApp();
+});
+$("#refreshDashboardButton").addEventListener("click", async () => {
+  try {
+    await loadDevices();
+    toast("Dashboard refreshed");
+  } catch (error) {
+    toast(error.message);
+  }
 });
 $("#pairButton").addEventListener("click", () => showView("pair"));
 $$("[data-open-pair]").forEach((button) => button.addEventListener("click", () => showView("pair")));

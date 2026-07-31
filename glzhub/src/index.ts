@@ -252,8 +252,9 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
   const allowed = [
     "name", "guest_name", "playlist_url", "epg_url", "request_headers",
     "visible_apps", "theme_mode", "weather_location", "start_destination",
-    "captions_enabled", "captions_language", "auto_start", "resume_last_channel"
-    , "room_number", "arrival_date", "departure_date", "site_id"
+    "captions_enabled", "captions_language", "auto_start", "resume_last_channel",
+    "osd_timeout_seconds", "auto_update", "wifi_only",
+    "room_number", "arrival_date", "departure_date", "site_id"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
   if ("site_id" in input) {
@@ -280,6 +281,38 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
   ) as Record<string, unknown>[];
   if (!devices[0]) return json({ error: "Device not found." }, 404);
   return json({ device: devices[0] });
+}
+
+async function forceRefreshDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const currentRows = await supabaseJson(
+    env,
+    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=config_version`
+  ) as Record<string, unknown>[];
+  if (!currentRows[0]) return json({ error: "Device not found." }, 404);
+  const token = new Date().toISOString();
+  const patch = {
+    force_refresh_token: token,
+    config_version: Number(currentRows[0].config_version || 0) + 1,
+    updated_at: token
+  };
+  const devices = await supabaseJson(
+    env,
+    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=*`,
+    {
+      method: "PATCH",
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify(patch)
+    }
+  ) as Record<string, unknown>[];
+  await supabaseJson(env, "/rest/v1/device_commands?select=*", {
+    method: "POST", headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      owner_id: user.id, device_id: deviceId, action: "force_refresh",
+      payload: { timestamp: token }
+    })
+  });
+  return json({ ok: true, device: devices[0] });
 }
 
 async function unpairDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
@@ -324,6 +357,10 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     captionsLanguage: device.captions_language,
     autoStart: device.auto_start,
     resumeLastChannel: device.resume_last_channel,
+    osdTimeoutSeconds: device.osd_timeout_seconds ?? 8,
+    autoUpdate: device.auto_update ?? true,
+    wifiOnly: device.wifi_only ?? false,
+    forceRefreshToken: device.force_refresh_token ?? null,
     guestExperience: {
       propertyName: profile.property_name ?? "",
       welcomeMessage: profile.welcome_message ?? "",
@@ -585,6 +622,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   const adminDevice = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)$/i);
   if (adminDevice && request.method === "PATCH") return updateDevice(request, env, adminDevice[1]);
   if (adminDevice && request.method === "DELETE") return unpairDevice(request, env, adminDevice[1]);
+  const forceRefresh = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/force-refresh$/i);
+  if (forceRefresh && request.method === "POST") return forceRefreshDevice(request, env, forceRefresh[1]);
   const adminSite = path.match(/^\/api\/v1\/admin\/sites\/([0-9a-f-]+)$/i);
   if (adminSite && request.method === "PATCH") return updateSite(request, env, adminSite[1]);
   const install = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/commands$/i);
