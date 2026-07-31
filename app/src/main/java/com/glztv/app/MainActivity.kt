@@ -344,6 +344,45 @@ private val GlzSunsetColors = darkColorScheme(
     onSurfaceVariant = Color(0xFFE3C2D1)
 )
 
+private val GlzEmeraldColors = darkColorScheme(
+    primary = Color(0xFF50E3C2),
+    onPrimary = Color(0xFF00382B),
+    primaryContainer = Color(0xFF005240),
+    secondary = Color(0xFFA8FF78),
+    onSecondary = Color(0xFF1E3800),
+    background = Color(0xFF041A14),
+    surface = Color(0xFF0A2920),
+    surfaceVariant = Color(0xFF12382C),
+    onSurface = Color(0xFFE6FAF5),
+    onSurfaceVariant = Color(0xFFA3D6C9)
+)
+
+private val GlzCyberpunkColors = darkColorScheme(
+    primary = Color(0xFFFF007F),
+    onPrimary = Color(0xFF4A0022),
+    primaryContainer = Color(0xFF7A003D),
+    secondary = Color(0xFF00F0FF),
+    onSecondary = Color(0xFF00363D),
+    background = Color(0xFF0D021A),
+    surface = Color(0xFF190632),
+    surfaceVariant = Color(0xFF280C4B),
+    onSurface = Color(0xFFFDE8FF),
+    onSurfaceVariant = Color(0xFFD4B3E6)
+)
+
+private val GlzMidnightColors = darkColorScheme(
+    primary = Color(0xFFFFD700),
+    onPrimary = Color(0xFF423700),
+    primaryContainer = Color(0xFF6B5800),
+    secondary = Color(0xFFFF9100),
+    onSecondary = Color(0xFF472400),
+    background = Color(0xFF000000),
+    surface = Color(0xFF0D0D0D),
+    surfaceVariant = Color(0xFF181818),
+    onSurface = Color(0xFFF5F5F5),
+    onSurfaceVariant = Color(0xFFCCCCCC)
+)
+
 @Composable
 private fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int) {
     val context = LocalContext.current
@@ -353,12 +392,15 @@ private fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int)
     val dark = when (themeMode) {
         "dark" -> true
         "light" -> false
-        "ocean", "sunset" -> true
+        "ocean", "sunset", "emerald", "cyberpunk", "midnight" -> true
         else -> systemDark
     }
     val colors = when {
         themeMode == "ocean" -> GlzOceanColors
         themeMode == "sunset" -> GlzSunsetColors
+        themeMode == "emerald" -> GlzEmeraldColors
+        themeMode == "cyberpunk" -> GlzCyberpunkColors
+        themeMode == "midnight" -> GlzMidnightColors
         themeMode == "adaptive" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         dark -> GlzColors
@@ -2516,31 +2558,28 @@ private fun PlayerOsd(
     } ?: 0f
 
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp),
-        shape = RoundedCornerShape(24.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-        color = Color(0xF5090E14),
-        shadowElevation = 20.dp
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
+        color = Color(0xF5080C10),
+        shadowElevation = 24.dp
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 14.dp)
+                .padding(horizontal = 32.dp, vertical = 16.dp)
         ) {
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Channel Logo & Number Header
+                // Channel Logo & Full Channel Name
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.width(260.dp)
+                    modifier = Modifier.weight(0.42f)
                 ) {
-                    ChannelLogo(channel, 56.dp, guide)
+                    ChannelLogo(channel, 58.dp, guide)
                     Spacer(Modifier.width(14.dp))
-                    Column {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.secondary,
@@ -2553,22 +2592,23 @@ private fun PlayerOsd(
                                 fontWeight = FontWeight.Black
                             )
                         }
-                        Spacer(Modifier.height(3.dp))
+                        Spacer(Modifier.height(4.dp))
                         Text(
                             channel.name,
                             color = Color.White,
-                            fontSize = 20.sp,
+                            fontSize = if (channel.name.length > 22) 17.sp else 20.sp,
+                            lineHeight = 22.sp,
                             fontWeight = FontWeight.Black,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Spacer(Modifier.width(20.dp))
+                Spacer(Modifier.width(24.dp))
 
                 // Programme Title & Progress
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(0.58f)) {
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -2623,7 +2663,7 @@ private fun PlayerOsd(
 
             // Up Next Footer Snippet
             nextProgramme?.let { next ->
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.10f)))
                 Spacer(Modifier.height(8.dp))
                 Row(
@@ -2997,7 +3037,10 @@ private fun SettingsDialog(
                         "dark" to "Dark",
                         "light" to "Light",
                         "ocean" to "Ocean",
-                        "sunset" to "Sunset"
+                        "sunset" to "Sunset",
+                        "emerald" to "Emerald",
+                        "cyberpunk" to "Cyberpunk",
+                        "midnight" to "Midnight"
                     )
                         .forEach { (value, label) ->
                             var focused by remember(value) { mutableStateOf(false) }
