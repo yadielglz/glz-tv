@@ -1,7 +1,7 @@
 {
   "name": "glzhub",
   "private": true,
-  "version": "2.2.6",
+  "version": "2.7.0",
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
