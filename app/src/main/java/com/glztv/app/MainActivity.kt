@@ -63,6 +63,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -2889,9 +2890,73 @@ private fun VideoPlayer(
     }
 }
 
+private enum class SettingsTab(val title: String, val icon: ImageVector) {
+    Sources("Sources & Refresh", Icons.Default.Refresh),
+    Appearance("Appearance", Icons.Default.Settings),
+    Playback("Player & Captions", Icons.Default.LiveTv),
+    Startup("Startup & Updates", Icons.Default.Home),
+    Hub("GLZ Hub", Icons.Default.Settings),
+    Guest("Guest & Location", Icons.Default.Person)
+}
+
+@Composable
+private fun TvCategoryTab(
+    tab: SettingsTab,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .focusable()
+            .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                    event.nativeKeyEvent.keyCode in listOf(
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER
+                    )
+                ) {
+                    onSelect()
+                    true
+                } else false
+            }
+            .clickable(onClick = onSelect),
+        shape = RoundedCornerShape(16.dp),
+        color = when {
+            focused -> MaterialTheme.colorScheme.primary
+            selected -> MaterialTheme.colorScheme.primaryContainer
+            else -> MaterialTheme.colorScheme.surfaceVariant
+        },
+        contentColor = when {
+            focused -> MaterialTheme.colorScheme.onPrimary
+            selected -> MaterialTheme.colorScheme.onPrimaryContainer
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        border = BorderStroke(
+            if (focused) 4.dp else 1.dp,
+            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
+        )
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(tab.icon, contentDescription = null, Modifier.size(22.dp))
+            Spacer(Modifier.width(14.dp))
+            Text(tab.title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        }
+    }
+}
+
 @Composable
 private fun SettingsDialog(
-    playlist: String, epg: String, headers: String,
+    playlist: String,
+    epg: String,
+    headers: String,
     weatherLocation: String,
     guestName: String,
     themeMode: String,
@@ -2914,6 +2979,7 @@ private fun SettingsDialog(
         Boolean, Boolean, String
     ) -> Unit
 ) {
+    var activeTab by remember { mutableStateOf(SettingsTab.Sources) }
     var playlistValue by remember { mutableStateOf(playlist) }
     var epgValue by remember { mutableStateOf(epg) }
     var headerValue by remember { mutableStateOf(headers) }
@@ -2944,267 +3010,26 @@ private fun SettingsDialog(
         Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 42.dp, vertical = 24.dp)) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 36.dp, vertical = 24.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Settings, null, Modifier.size(38.dp),
+                Icon(Icons.Default.Settings, null, Modifier.size(36.dp),
                     tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Settings", fontSize = 30.sp, fontWeight = FontWeight.Black)
-                    Text("Glz TV guest hub configuration",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.Black)
+                    Text("GLZ TV TV-Optimized Configuration",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                 }
                 TvSettingsButton(
-                    label = "Back",
-                    onClick = onDismiss,
-                    modifier = Modifier.focusRequester(initialFocus)
+                    label = "Cancel",
+                    onClick = onDismiss
                 )
-            }
-            Spacer(Modifier.height(18.dp))
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .focusGroup()
-                    .padding(horizontal = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                SettingsLabel("SOURCE STATUS & REFRESH")
-                Surface(
-                    Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(
-                            sourceStatus,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        TvSettingsButton(
-                            label = "Force refresh EPG & M3U",
-                            onClick = onForceRefresh
-                        )
-                    }
-                }
-                SettingsLabel("GLZ HUB")
-                Surface(
-                    Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(hubMessage, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Manage this television at glzhub.glztech.com/pair",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        TvSettingsButton(
-                            label = if (hubLoading) "Connecting…" else "Generate pairing code",
-                            enabled = !hubLoading,
-                            onClick = {
-                                hubLoading = true
-                                settingsScope.launch {
-                                    runCatching { onBeginHubEnrollment() }
-                                        .onSuccess { hubMessage = "Pairing code: $it · expires in 1 hour" }
-                                        .onFailure { hubMessage = "Could not reach GLZ Hub: ${it.message}" }
-                                    hubLoading = false
-                                }
-                            }
-                        )
-                    }
-                }
-                SettingsLabel("APPEARANCE")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(
-                        "adaptive" to "Adaptive",
-                        "dark" to "Dark",
-                        "light" to "Light",
-                        "ocean" to "Ocean",
-                        "sunset" to "Sunset",
-                        "emerald" to "Emerald",
-                        "cyberpunk" to "Cyberpunk",
-                        "midnight" to "Midnight"
-                    )
-                        .forEach { (value, label) ->
-                            var focused by remember(value) { mutableStateOf(false) }
-                            Surface(
-                                Modifier
-                                    .onFocusChanged { focused = it.isFocused }
-                                    .onPreviewKeyEvent { event ->
-                                        if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                                            event.nativeKeyEvent.keyCode in listOf(
-                                                KeyEvent.KEYCODE_DPAD_CENTER,
-                                                KeyEvent.KEYCODE_ENTER,
-                                                KeyEvent.KEYCODE_NUMPAD_ENTER
-                                            )
-                                        ) {
-                                            themeValue = value
-                                            true
-                                        } else false
-                                    }
-                                    .clickable { themeValue = value }
-                                    .focusable(),
-                                shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(
-                                    if (focused) 4.dp else 1.dp,
-                                    if (focused) MaterialTheme.colorScheme.secondary
-                                    else Color.Transparent
-                                ),
-                                color = if (themeValue == value) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (themeValue == value) MaterialTheme.colorScheme.onPrimary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            ) {
-                                Text(label, Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                    fontWeight = FontWeight.Bold)
-                            }
-                        }
-                }
-                ProtectedSourceField(guestNameValue, { guestNameValue = it },
-                    "Welcome guest name", "Shown in the Home welcome message")
-                ProtectedSourceField(weatherLocationValue, { weatherLocationValue = it },
-                    "Weather location", "City or municipality used by Open-Meteo")
-                SettingsLabel("CLOSED CAPTIONS")
-                SettingsToggle("Enable captions", captionsValue) { captionsValue = it }
-                ProtectedSourceField(languageValue, { languageValue = it },
-                    "Preferred language code", "Examples: en, es, fr",
-                    enabled = captionsValue)
-                SettingsLabel("OSD TIMEOUT")
-                Text("Player banner visibility duration", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(5, 7, 8, 10).forEach { timeout ->
-                        var focused by remember(timeout) { mutableStateOf(false) }
-                        Surface(
-                            Modifier
-                                .onFocusChanged { focused = it.isFocused }
-                                .onPreviewKeyEvent { event ->
-                                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                                        event.nativeKeyEvent.keyCode in listOf(
-                                            KeyEvent.KEYCODE_DPAD_CENTER,
-                                            KeyEvent.KEYCODE_ENTER,
-                                            KeyEvent.KEYCODE_NUMPAD_ENTER
-                                        )
-                                    ) {
-                                        osdTimeoutValue = timeout
-                                        true
-                                    } else false
-                                }
-                                .clickable { osdTimeoutValue = timeout }
-                                .focusable(),
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(
-                                if (focused) 4.dp else 1.dp,
-                                if (focused) MaterialTheme.colorScheme.secondary
-                                else Color.Transparent
-                            ),
-                            color = if (osdTimeoutValue == timeout)
-                                MaterialTheme.colorScheme.secondary
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = if (osdTimeoutValue == timeout)
-                                MaterialTheme.colorScheme.onSecondary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        ) {
-                            Text(
-                                "${timeout}s",
-                                Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-                SettingsLabel("APP UPDATES")
-                SettingsToggle("Check automatically", autoUpdateValue) { autoUpdateValue = it }
-                SettingsToggle("Download on Wi-Fi only", wifiOnlyValue) { wifiOnlyValue = it }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(updateStatus, Modifier.weight(1f),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TvSettingsButton("Check now", onClick = {
-                        updateStatus = "Checking GitHub…"
-                        settingsScope.launch {
-                            updateStatus = onCheckForUpdate()
-                        }
-                    })
-                }
-                SettingsLabel("STARTUP")
-                SettingsToggle("Open after device restart", autoStartValue) {
-                    autoStartValue = it
-                }
-                SettingsToggle("Resume last channel", resumeLastValue) {
-                    resumeLastValue = it
-                }
-                Text("Start destination", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(AppSection.Home, AppSection.Live, AppSection.You)
-                        .forEach { destination ->
-                        var focused by remember(destination) { mutableStateOf(false) }
-                        Surface(
-                            Modifier
-                                .onFocusChanged { focused = it.isFocused }
-                                .onPreviewKeyEvent { event ->
-                                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                                        event.nativeKeyEvent.keyCode in listOf(
-                                            KeyEvent.KEYCODE_DPAD_CENTER,
-                                            KeyEvent.KEYCODE_ENTER,
-                                            KeyEvent.KEYCODE_NUMPAD_ENTER
-                                        )
-                                    ) {
-                                        startDestinationValue = destination.name
-                                        true
-                                    } else false
-                                }
-                                .clickable { startDestinationValue = destination.name }
-                                .focusable(),
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(
-                                if (focused) 4.dp else 1.dp,
-                                if (focused) MaterialTheme.colorScheme.secondary
-                                else Color.Transparent
-                            ),
-                            color = if (startDestinationValue == destination.name)
-                                MaterialTheme.colorScheme.secondary
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = if (startDestinationValue == destination.name)
-                                MaterialTheme.colorScheme.onSecondary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        ) {
-                            Text(
-                                destination.name,
-                                Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-                SettingsLabel("TV SOURCES")
-                ProtectedSourceField(
-                    value = playlistValue,
-                    onValueChange = { playlistValue = it },
-                    label = "M3U playlist URL"
-                )
-                ProtectedSourceField(
-                    value = epgValue,
-                    onValueChange = { epgValue = it },
-                    label = "XMLTV EPG URL"
-                )
-                ProtectedSourceField(headerValue, { headerValue = it },
-                    "Request headers", "One Name: value header per line",
-                    singleLine = false, minLines = 3)
-                Spacer(Modifier.height(20.dp))
-            }
-            Row(
-                Modifier.fillMaxWidth().padding(top = 16.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TvSettingsButton("Cancel", onDismiss)
                 Spacer(Modifier.width(12.dp))
                 TvSettingsButton(
-                    label = "Save & load",
+                    label = "Save & Apply",
                     onClick = {
                         onSave(
                             playlistValue.trim(), epgValue.trim(), headerValue.trim(),
@@ -3217,6 +3042,312 @@ private fun SettingsDialog(
                     },
                     enabled = playlistValue.startsWith("http")
                 )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Row(Modifier.fillMaxWidth().weight(1f)) {
+                Column(
+                    Modifier
+                        .width(260.dp)
+                        .fillMaxHeight()
+                        .padding(end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SettingsTab.values().forEachIndexed { index, tab ->
+                        TvCategoryTab(
+                            tab = tab,
+                            selected = activeTab == tab,
+                            onSelect = { activeTab = tab },
+                            modifier = if (index == 0) Modifier.focusRequester(initialFocus) else Modifier
+                        )
+                    }
+                }
+
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                )
+
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(start = 24.dp)
+                        .verticalScroll(rememberScrollState())
+                        .focusGroup(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    when (activeTab) {
+                        SettingsTab.Sources -> {
+                            SettingsLabel("SOURCE STATUS & REFRESH")
+                            Surface(
+                                Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Column(Modifier.padding(18.dp)) {
+                                    Text(
+                                        sourceStatus,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 15.sp
+                                    )
+                                    Spacer(Modifier.height(14.dp))
+                                    TvSettingsButton(
+                                        label = "⚡ Force refresh EPG & M3U",
+                                        onClick = onForceRefresh
+                                    )
+                                }
+                            }
+                            SettingsLabel("PLAYLIST & EPG SOURCES")
+                            ProtectedSourceField(
+                                value = playlistValue,
+                                onValueChange = { playlistValue = it },
+                                label = "M3U playlist URL"
+                            )
+                            ProtectedSourceField(
+                                value = epgValue,
+                                onValueChange = { epgValue = it },
+                                label = "XMLTV EPG URL"
+                            )
+                            ProtectedSourceField(
+                                headerValue, { headerValue = it },
+                                "Request headers", "One Name: value header per line",
+                                singleLine = false, minLines = 3
+                            )
+                        }
+
+                        SettingsTab.Appearance -> {
+                            SettingsLabel("COLOR THEME")
+                            Text("Choose your preferred TV color palette", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val themes = listOf(
+                                "adaptive" to "Adaptive",
+                                "dark" to "Dark Mode",
+                                "light" to "Light Mode",
+                                "ocean" to "Ocean Breeze",
+                                "sunset" to "Sunset Glow",
+                                "emerald" to "Emerald Forest",
+                                "cyberpunk" to "Neon Cyberpunk",
+                                "midnight" to "Midnight Gold"
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                themes.forEach { (value, label) ->
+                                    var focused by remember(value) { mutableStateOf(false) }
+                                    Surface(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .onFocusChanged { focused = it.isFocused }
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                                                    event.nativeKeyEvent.keyCode in listOf(
+                                                        KeyEvent.KEYCODE_DPAD_CENTER,
+                                                        KeyEvent.KEYCODE_ENTER,
+                                                        KeyEvent.KEYCODE_NUMPAD_ENTER
+                                                    )
+                                                ) {
+                                                    themeValue = value
+                                                    true
+                                                } else false
+                                            }
+                                            .clickable { themeValue = value }
+                                            .focusable(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(
+                                            if (focused) 4.dp else 1.dp,
+                                            if (focused) MaterialTheme.colorScheme.secondary
+                                            else Color.Transparent
+                                        ),
+                                        color = if (themeValue == value) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (themeValue == value) MaterialTheme.colorScheme.onPrimary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                                    ) {
+                                        Row(
+                                            Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                                            if (themeValue == value) {
+                                                Text("Selected ✓", fontWeight = FontWeight.Black, fontSize = 14.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        SettingsTab.Playback -> {
+                            SettingsLabel("PLAYER BANNERS (OSD)")
+                            Text("Banner display duration during channel change", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                listOf(5 to "5 Seconds", 7 to "7 Seconds", 8 to "8 Seconds (Default)", 10 to "10 Seconds").forEach { (timeout, label) ->
+                                    var focused by remember(timeout) { mutableStateOf(false) }
+                                    Surface(
+                                        Modifier
+                                            .weight(1f)
+                                            .onFocusChanged { focused = it.isFocused }
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                                                    event.nativeKeyEvent.keyCode in listOf(
+                                                        KeyEvent.KEYCODE_DPAD_CENTER,
+                                                        KeyEvent.KEYCODE_ENTER,
+                                                        KeyEvent.KEYCODE_NUMPAD_ENTER
+                                                    )
+                                                ) {
+                                                    osdTimeoutValue = timeout
+                                                    true
+                                                } else false
+                                            }
+                                            .clickable { osdTimeoutValue = timeout }
+                                            .focusable(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(
+                                            if (focused) 4.dp else 1.dp,
+                                            if (focused) MaterialTheme.colorScheme.secondary
+                                            else Color.Transparent
+                                        ),
+                                        color = if (osdTimeoutValue == timeout)
+                                            MaterialTheme.colorScheme.secondary
+                                        else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (osdTimeoutValue == timeout)
+                                            MaterialTheme.colorScheme.onSecondary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                                    ) {
+                                        Text(
+                                            label,
+                                            Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsLabel("CLOSED CAPTIONS")
+                            SettingsToggle("Enable Closed Captions", captionsValue) { captionsValue = it }
+                            ProtectedSourceField(
+                                languageValue, { languageValue = it },
+                                "Preferred language code", "Examples: en, es, fr",
+                                enabled = captionsValue
+                            )
+                        }
+
+                        SettingsTab.Startup -> {
+                            SettingsLabel("START DESTINATION")
+                            Text("Screen shown when GLZ TV launches", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                listOf(AppSection.Home to "Home Screen", AppSection.Live to "Live TV Direct", AppSection.You to "You & Apps")
+                                    .forEach { (destination, label) ->
+                                        var focused by remember(destination) { mutableStateOf(false) }
+                                        Surface(
+                                            Modifier
+                                                .weight(1f)
+                                                .onFocusChanged { focused = it.isFocused }
+                                                .onPreviewKeyEvent { event ->
+                                                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                                                        event.nativeKeyEvent.keyCode in listOf(
+                                                            KeyEvent.KEYCODE_DPAD_CENTER,
+                                                            KeyEvent.KEYCODE_ENTER,
+                                                            KeyEvent.KEYCODE_NUMPAD_ENTER
+                                                        )
+                                                    ) {
+                                                        startDestinationValue = destination.name
+                                                        true
+                                                    } else false
+                                                }
+                                                .clickable { startDestinationValue = destination.name }
+                                                .focusable(),
+                                            shape = RoundedCornerShape(14.dp),
+                                            border = BorderStroke(
+                                                if (focused) 4.dp else 1.dp,
+                                                if (focused) MaterialTheme.colorScheme.secondary
+                                                else Color.Transparent
+                                            ),
+                                            color = if (startDestinationValue == destination.name)
+                                                MaterialTheme.colorScheme.secondary
+                                            else MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = if (startDestinationValue == destination.name)
+                                                MaterialTheme.colorScheme.onSecondary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                        ) {
+                                            Text(
+                                                label,
+                                                Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                    }
+                            }
+
+                            SettingsLabel("STARTUP & REBOOT")
+                            SettingsToggle("Open after device restart", autoStartValue) { autoStartValue = it }
+                            SettingsToggle("Resume last channel", resumeLastValue) { resumeLastValue = it }
+
+                            SettingsLabel("APPLICATION UPDATES")
+                            SettingsToggle("Check automatically for updates", autoUpdateValue) { autoUpdateValue = it }
+                            SettingsToggle("Download updates on Wi-Fi only", wifiOnlyValue) { wifiOnlyValue = it }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(updateStatus, Modifier.weight(1f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+                                TvSettingsButton("Check now", onClick = {
+                                    updateStatus = "Checking GitHub…"
+                                    settingsScope.launch {
+                                        updateStatus = onCheckForUpdate()
+                                    }
+                                })
+                            }
+                        }
+
+                        SettingsTab.Hub -> {
+                            SettingsLabel("GLZ HUB PAIRING STATUS")
+                            Surface(
+                                Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Column(Modifier.padding(18.dp)) {
+                                    Text(hubMessage, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        "Manage this television at glzhub.glztech.com/pair",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(Modifier.height(14.dp))
+                                    TvSettingsButton(
+                                        label = if (hubLoading) "Connecting…" else "🔑 Generate pairing code",
+                                        enabled = !hubLoading,
+                                        onClick = {
+                                            hubLoading = true
+                                            settingsScope.launch {
+                                                runCatching { onBeginHubEnrollment() }
+                                                    .onSuccess { hubMessage = "Pairing code: $it · expires in 1 hour" }
+                                                    .onFailure { hubMessage = "Could not reach GLZ Hub: ${it.message}" }
+                                                hubLoading = false
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        SettingsTab.Guest -> {
+                            SettingsLabel("GUEST & LOCATION")
+                            ProtectedSourceField(
+                                guestNameValue, { guestNameValue = it },
+                                "Welcome guest name", "Shown in the Home welcome card"
+                            )
+                            ProtectedSourceField(
+                                weatherLocationValue, { weatherLocationValue = it },
+                                "Weather location", "City or municipality used by Open-Meteo"
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(24.dp))
+                }
             }
         }
     }
