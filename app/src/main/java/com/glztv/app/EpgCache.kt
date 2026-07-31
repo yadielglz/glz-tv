@@ -14,12 +14,18 @@ object EpgCache {
         val file = context.filesDir.resolve(EPG_CACHE_FILE)
         if (!file.isFile) return null
         DataInputStream(BufferedInputStream(file.inputStream())).use { input ->
-            if (input.readInt() != 1 || input.readString() != sourceUrl) return null
+            val version = input.readInt()
+            if ((version != 1 && version != 2) || input.readString() != sourceUrl) return null
             val savedAt = input.readLong()
             if (System.currentTimeMillis() - savedAt > EPG_CACHE_MAX_AGE_MS) return null
             val names = buildMap {
                 repeat(input.readInt()) { put(input.readString(), input.readString()) }
             }
+            val logos = if (version >= 2) {
+                buildMap {
+                    repeat(input.readInt()) { put(input.readString(), input.readString()) }
+                }
+            } else emptyMap()
             val programmes = buildMap {
                 repeat(input.readInt()) {
                     val channelId = input.readString()
@@ -38,7 +44,7 @@ object EpgCache {
                     })
                 }
             }
-            EpgGuide(programmes, names)
+            EpgGuide(programmes, names, logos)
         }
     }.getOrNull()
 
@@ -47,13 +53,18 @@ object EpgCache {
             val target = context.filesDir.resolve(EPG_CACHE_FILE)
             val temporary = context.filesDir.resolve("$EPG_CACHE_FILE.tmp")
             DataOutputStream(BufferedOutputStream(temporary.outputStream())).use { output ->
-                output.writeInt(1)
+                output.writeInt(2)
                 output.writeString(sourceUrl)
                 output.writeLong(System.currentTimeMillis())
                 output.writeInt(guide.channelNames.size)
                 guide.channelNames.forEach { (id, name) ->
                     output.writeString(id)
                     output.writeString(name)
+                }
+                output.writeInt(guide.channelLogos.size)
+                guide.channelLogos.forEach { (id, logoUrl) ->
+                    output.writeString(id)
+                    output.writeString(logoUrl)
                 }
                 output.writeInt(guide.programmes.size)
                 guide.programmes.forEach { (channelId, entries) ->

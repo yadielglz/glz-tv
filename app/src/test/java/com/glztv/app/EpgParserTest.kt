@@ -33,4 +33,25 @@ class EpgParserTest {
         assertTrue(guide.forChannel(channel).single().endMillis >
             guide.forChannel(channel).single().startMillis)
     }
+
+    @Test
+    fun parsesChannelLogosAndResolvesFallback() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tv>
+              <channel id="WKAQ.us">
+                <display-name>Telemundo PR</display-name>
+                <icon src="https://example.com/epg_logo.png" />
+              </channel>
+            </tv>
+        """.trimIndent()
+
+        val guide = EpgParser.parse(xml)
+        val channelWithoutLogo = Channel(
+            "WKAQ.us", "Telemundo PR", "TV", "1", "",
+            "https://example.com/live.m3u8", emptyMap()
+        )
+
+        assertEquals("https://example.com/epg_logo.png", guide.logoForChannel(channelWithoutLogo))
+    }
 }

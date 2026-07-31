@@ -136,6 +136,9 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.session.MediaSession
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
@@ -424,7 +427,6 @@ private fun TvScreen(
     var updateDownloadStatus by remember { mutableStateOf<String?>(null) }
     var updateDownloading by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
-    var showSettingsPin by remember { mutableStateOf(false) }
     var captionsEnabled by remember {
         mutableStateOf(prefs.getBoolean(CAPTIONS_ENABLED, false))
     }
@@ -646,7 +648,7 @@ private fun TvScreen(
                         }
                     },
                     onRefresh = { scope.launch { loadSources(forceRefresh = true) } },
-                    onSettings = { showSettingsPin = true }
+                    onSettings = { showSettings = true }
                 )
             }
         }
@@ -714,16 +716,6 @@ private fun TvScreen(
         }
     }
 
-    if (showSettingsPin) {
-        SettingsPinDialog(
-            onDismiss = { showSettingsPin = false },
-            onUnlocked = {
-                showSettingsPin = false
-                showSettings = true
-            }
-        )
-    }
-
     if (showSettings) {
         SettingsDialog(
             playlist = prefs.getString(PLAYLIST_URL, DEFAULT_PLAYLIST_URL)
@@ -744,6 +736,7 @@ private fun TvScreen(
                 ?: AppSection.Home.name,
             sourceStatus = status,
             hubStatus = hubStatus,
+            onForceRefresh = { scope.launch { loadSources(forceRefresh = true) } },
             onCheckForUpdate = { checkForAppUpdate() },
             onBeginHubEnrollment = {
                 withContext(Dispatchers.IO) {
@@ -1379,6 +1372,7 @@ private fun GuestServiceCard(service: GuestService) {
 private fun PremiumHero(
     channel: Channel,
     programme: Programme?,
+    guide: EpgGuide? = null,
     onWatch: () -> Unit,
     onGuide: () -> Unit,
     onFocused: () -> Unit
@@ -1408,7 +1402,7 @@ private fun PremiumHero(
                 Modifier.fillMaxSize().padding(30.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ChannelLogo(channel, 112.dp)
+                ChannelLogo(channel, 112.dp, guide)
                 Spacer(Modifier.width(28.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -1478,6 +1472,7 @@ private fun HubSectionTitle(title: String, subtitle: String) {
 private fun LiveHubCard(
     channel: Channel,
     programmes: List<Programme>,
+    guide: EpgGuide? = null,
     now: Long,
     onClick: () -> Unit
 ) {
@@ -1493,7 +1488,7 @@ private fun LiveHubCard(
     ) {
         Row(Modifier.padding(start = 15.dp, top = 14.dp, end = 15.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            ChannelLogo(channel, 52.dp)
+            ChannelLogo(channel, 52.dp, guide)
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(channel.number, color = MaterialTheme.colorScheme.secondary,
@@ -1829,6 +1824,7 @@ private fun EpgGrid(
                     EpgGridRow(
                         channel = channel,
                         programmes = guide.forChannel(channel),
+                        guide = guide,
                         windowStart = start,
                         windowEnd = start + slots * halfHour,
                         channelWidth = channelWidth,
@@ -1846,6 +1842,7 @@ private fun EpgGrid(
 private fun EpgGridRow(
     channel: Channel,
     programmes: List<Programme>,
+    guide: EpgGuide? = null,
     windowStart: Long,
     windowEnd: Long,
     channelWidth: androidx.compose.ui.unit.Dp,
@@ -1865,7 +1862,7 @@ private fun EpgGridRow(
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ChannelLogo(channel, 46.dp)
+            ChannelLogo(channel, 46.dp, guide)
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(
@@ -1918,14 +1915,33 @@ private fun EpgGridRow(
 }
 
 @Composable
-private fun ChannelLogo(channel: Channel, size: androidx.compose.ui.unit.Dp) {
+private fun ChannelLogo(
+    channel: Channel,
+    size: androidx.compose.ui.unit.Dp,
+    guide: EpgGuide? = null,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val logoUrl = channel.logoUrl.takeIf { it.isNotBlank() } ?: guide?.logoForChannel(channel)
+    val model = remember(logoUrl, channel.headers) {
+        if (logoUrl.isNullOrBlank()) null
+        else if (channel.headers.isEmpty()) logoUrl
+        else {
+            val headersBuilder = NetworkHeaders.Builder()
+            channel.headers.forEach { (k, v) -> headersBuilder.set(k, v) }
+            ImageRequest.Builder(context)
+                .data(logoUrl)
+                .httpHeaders(headersBuilder.build())
+                .build()
+        }
+    }
     Surface(
-        modifier = Modifier.size(size),
+        modifier = modifier.then(Modifier.size(size)),
         shape = CircleShape,
         color = Color.White
     ) {
         AsyncImage(
-            model = channel.logoUrl.takeIf { it.isNotBlank() },
+            model = model,
             contentDescription = "${channel.name} logo",
             modifier = Modifier.fillMaxSize().clip(CircleShape),
             contentScale = ContentScale.Crop,
@@ -1941,6 +1957,7 @@ private fun ChannelPane(
     channels: List<Channel>,
     selected: Channel?,
     favorites: Set<String>,
+    guide: EpgGuide? = null,
     onSelect: (Channel) -> Unit,
     onFavorite: (Channel) -> Unit,
     modifier: Modifier = Modifier
@@ -1957,7 +1974,7 @@ private fun ChannelPane(
             ) {
                 items(channels, key = { it.streamUrl }) { channel ->
                     ChannelCard(channel, channel == selected, channel.id in favorites,
-                        { onSelect(channel) }, { onFavorite(channel) })
+                        guide, { onSelect(channel) }, { onFavorite(channel) })
                 }
             }
         }
@@ -1967,6 +1984,7 @@ private fun ChannelPane(
 @Composable
 private fun ChannelCard(
     channel: Channel, selected: Boolean, favorite: Boolean,
+    guide: EpgGuide? = null,
     onClick: () -> Unit, onFavorite: () -> Unit
 ) {
     var focused by remember(channel.id) { mutableStateOf(false) }
@@ -1987,7 +2005,7 @@ private fun ChannelCard(
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            ChannelLogo(channel, 48.dp)
+            ChannelLogo(channel, 48.dp, guide)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(channel.name, fontWeight = FontWeight.Bold, maxLines = 1,
@@ -2152,6 +2170,7 @@ private fun ImmersivePlayerScreen(
                 channel = channel,
                 currentProgramme = currentProgramme,
                 nextProgramme = nextProgramme,
+                guide = guide,
                 now = now,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
@@ -2185,7 +2204,7 @@ private fun ImmersivePlayerScreen(
                         Modifier.fillMaxWidth().padding(horizontal = 22.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        ChannelLogo(channel, 66.dp)
+                        ChannelLogo(channel, 66.dp, guide)
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
                             Text(channel.number.ifBlank { "LIVE" },
@@ -2257,7 +2276,7 @@ private fun ImmersivePlayerScreen(
                             ) {
                                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
-                                    ChannelLogo(item, 42.dp)
+                                    ChannelLogo(item, 42.dp, guide)
                                     Spacer(Modifier.width(12.dp))
                                     Text(item.number.ifBlank { "—" }, Modifier.width(45.dp),
                                         color = if (isSelected) MaterialTheme.colorScheme.secondary
@@ -2363,6 +2382,7 @@ private fun PlayerOsd(
     channel: Channel,
     currentProgramme: Programme?,
     nextProgramme: Programme?,
+    guide: EpgGuide? = null,
     now: Long,
     modifier: Modifier = Modifier
 ) {
@@ -2384,7 +2404,7 @@ private fun PlayerOsd(
             Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ChannelLogo(channel, 64.dp)
+            ChannelLogo(channel, 64.dp, guide)
             Spacer(Modifier.width(18.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2641,45 +2661,6 @@ private fun VideoPlayer(
 }
 
 @Composable
-private fun SettingsPinDialog(
-    onDismiss: () -> Unit,
-    onUnlocked: () -> Unit
-) {
-    var pin by remember { mutableStateOf("") }
-    var invalid by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.Settings, null) },
-        title = { Text("Protected settings", fontWeight = FontWeight.Black) },
-        text = {
-            OutlinedTextField(
-                value = pin,
-                onValueChange = {
-                    pin = it.filter(Char::isDigit).take(4)
-                    invalid = false
-                },
-                label = { Text("Settings PIN") },
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true,
-                isError = invalid,
-                supportingText = {
-                    Text(if (invalid) "Incorrect PIN" else "Enter the 4-digit administrator PIN")
-                }
-            )
-        },
-        confirmButton = {
-            Button(onClick = {
-                if (pin == "1989") onUnlocked() else invalid = true
-            }) { Text("Unlock") }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) { Text("Cancel") }
-        },
-        shape = RoundedCornerShape(28.dp)
-    )
-}
-
-@Composable
 private fun SettingsDialog(
     playlist: String, epg: String, headers: String,
     weatherLocation: String,
@@ -2694,6 +2675,7 @@ private fun SettingsDialog(
     startDestination: String,
     sourceStatus: String,
     hubStatus: String,
+    onForceRefresh: () -> Unit,
     onCheckForUpdate: suspend () -> String,
     onBeginHubEnrollment: suspend () -> String,
     onDismiss: () -> Unit,
@@ -2719,6 +2701,12 @@ private fun SettingsDialog(
     var hubMessage by remember(hubStatus) { mutableStateOf(hubStatus) }
     var hubLoading by remember { mutableStateOf(false) }
     val settingsScope = rememberCoroutineScope()
+    val initialFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        runCatching { initialFocus.requestFocus() }
+    }
+
     BackHandler(onBack = onDismiss)
     Surface(
         Modifier.fillMaxSize(),
@@ -2737,25 +2725,39 @@ private fun SettingsDialog(
                     Text("Glz TV guest hub configuration",
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                TvSettingsButton("Back", onDismiss)
+                TvSettingsButton(
+                    label = "Back",
+                    onClick = onDismiss,
+                    modifier = Modifier.focusRequester(initialFocus)
+                )
             }
             Spacer(Modifier.height(18.dp))
             Column(
-                Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .focusGroup()
                     .padding(horizontal = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                SettingsLabel("SOURCE STATUS")
+                SettingsLabel("SOURCE STATUS & REFRESH")
                 Surface(
                     Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
-                    Text(
-                        sourceStatus,
-                        Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            sourceStatus,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        TvSettingsButton(
+                            label = "Force refresh EPG & M3U",
+                            onClick = onForceRefresh
+                        )
+                    }
                 }
                 SettingsLabel("GLZ HUB")
                 Surface(
@@ -2799,6 +2801,18 @@ private fun SettingsDialog(
                             Surface(
                                 Modifier
                                     .onFocusChanged { focused = it.isFocused }
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                                            event.nativeKeyEvent.keyCode in listOf(
+                                                KeyEvent.KEYCODE_DPAD_CENTER,
+                                                KeyEvent.KEYCODE_ENTER,
+                                                KeyEvent.KEYCODE_NUMPAD_ENTER
+                                            )
+                                        ) {
+                                            themeValue = value
+                                            true
+                                        } else false
+                                    }
                                     .clickable { themeValue = value }
                                     .focusable(),
                                 shape = RoundedCornerShape(16.dp),
@@ -2854,6 +2868,18 @@ private fun SettingsDialog(
                         Surface(
                             Modifier
                                 .onFocusChanged { focused = it.isFocused }
+                                .onPreviewKeyEvent { event ->
+                                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                                        event.nativeKeyEvent.keyCode in listOf(
+                                            KeyEvent.KEYCODE_DPAD_CENTER,
+                                            KeyEvent.KEYCODE_ENTER,
+                                            KeyEvent.KEYCODE_NUMPAD_ENTER
+                                        )
+                                    ) {
+                                        startDestinationValue = destination.name
+                                        true
+                                    } else false
+                                }
                                 .clickable { startDestinationValue = destination.name }
                                 .focusable(),
                             shape = RoundedCornerShape(14.dp),
@@ -2922,18 +2948,31 @@ private fun SettingsDialog(
 private fun TvSettingsButton(
     label: String,
     onClick: () -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
     Surface(
-        Modifier
+        modifier
             .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (enabled && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                    event.nativeKeyEvent.keyCode in listOf(
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER
+                    )
+                ) {
+                    onClick()
+                    true
+                } else false
+            }
             .clickable(enabled = enabled, onClick = onClick)
             .focusable(enabled),
         shape = RoundedCornerShape(16.dp),
         color = if (focused) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (enabled) MaterialTheme.colorScheme.onSurface
+        contentColor = if (enabled) (if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
         else MaterialTheme.colorScheme.onSurface.copy(alpha = .38f),
         border = BorderStroke(
             if (focused) 4.dp else 1.dp,

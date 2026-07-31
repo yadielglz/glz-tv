@@ -18,23 +18,37 @@ data class Programme(
 
 data class EpgGuide(
     val programmes: Map<String, List<Programme>>,
-    val channelNames: Map<String, String>
+    val channelNames: Map<String, String>,
+    val channelLogos: Map<String, String> = emptyMap()
 ) {
     companion object {
-        val Empty = EpgGuide(emptyMap(), emptyMap())
+        val Empty = EpgGuide(emptyMap(), emptyMap(), emptyMap())
     }
 
     val programmeCount: Int get() = programmes.values.sumOf(List<Programme>::size)
 
+    private fun findMatchedChannelId(channel: Channel): String? {
+        if (channel.id.isNotBlank() && (programmes.containsKey(channel.id) || channelLogos.containsKey(channel.id) || channelNames.containsKey(channel.id))) {
+            return channel.id
+        }
+        val normalizedName = normalize(channel.name)
+        if (normalizedName.isBlank()) return null
+        return channelNames.entries.firstOrNull { entry ->
+            val norm = normalize(entry.value)
+            norm == normalizedName || (norm.isNotEmpty() && (normalizedName.startsWith(norm) || norm.startsWith(normalizedName)))
+        }?.key
+    }
+
     fun forChannel(channel: Channel): List<Programme> {
         programmes[channel.id]?.takeIf(List<Programme>::isNotEmpty)?.let { return it }
-        val normalizedName = normalize(channel.name)
-        val matchedId = channelNames.entries.firstOrNull {
-            normalize(it.value) == normalizedName ||
-                normalizedName.startsWith(normalize(it.value)) ||
-                normalize(it.value).startsWith(normalizedName)
-        }?.key
+        val matchedId = findMatchedChannelId(channel)
         return matchedId?.let(programmes::get).orEmpty()
+    }
+
+    fun logoForChannel(channel: Channel): String? {
+        channelLogos[channel.id]?.takeIf(String::isNotBlank)?.let { return it }
+        val matchedId = findMatchedChannelId(channel)
+        return matchedId?.let { channelLogos[it] }?.takeIf(String::isNotBlank)
     }
 }
 
@@ -47,11 +61,12 @@ object EpgParser {
         }.newSAXParser().parse(InputSource(StringReader(xml)), handler)
 
         handler.programmes.values.forEach { it.sortBy(Programme::startMillis) }
-        return EpgGuide(handler.programmes, handler.channelNames)
+        return EpgGuide(handler.programmes, handler.channelNames, handler.channelLogos)
     }
 
     private class GuideHandler : DefaultHandler() {
         val channelNames = mutableMapOf<String, String>()
+        val channelLogos = mutableMapOf<String, String>()
         val programmes = mutableMapOf<String, MutableList<Programme>>()
         private var channelId: String? = null
         private var programmeId: String? = null
@@ -65,6 +80,12 @@ object EpgParser {
         override fun startElement(uri: String?, localName: String?, qName: String, attributes: Attributes) {
             when (qName) {
                 "channel" -> channelId = attributes.getValue("id")
+                "icon" -> {
+                    val src = attributes.getValue("src")
+                    if (!src.isNullOrBlank() && channelId != null) {
+                        channelLogos[channelId!!] = src
+                    }
+                }
                 "programme" -> {
                     programmeId = attributes.getValue("channel")
                     startMillis = parseXmlTvTime(attributes.getValue("start")) ?: 0L
