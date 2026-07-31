@@ -2516,68 +2516,147 @@ private fun PlayerOsd(
     } ?: 0f
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(0.dp),
-        color = Color(0xEB0B0F12),
-        shadowElevation = 16.dp
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = 12.dp),
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+        color = Color(0xF5090E14),
+        shadowElevation = 20.dp
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp, vertical = 14.dp)
         ) {
-            ChannelLogo(channel, 64.dp, guide)
-            Spacer(Modifier.width(18.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(channel.number.ifBlank { "LIVE" }, color = MaterialTheme.colorScheme.secondary,
-                        fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    Spacer(Modifier.width(12.dp))
-                    Text(channel.name, color = Color.White, fontSize = 23.sp,
-                        fontWeight = FontWeight.Black, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis)
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                    Text(currentProgramme?.title ?: "Live programming",
-                        Modifier.weight(1f), color = Color.White, fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis)
-                    remainingMinutes?.let {
-                        Text("$it min remaining", color = Color.White.copy(alpha = .74f),
-                            style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-                currentProgramme?.let {
-                    Text(
-                        "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.startMillis))} – " +
-                            DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.endMillis)),
-                        color = MaterialTheme.colorScheme.secondary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth().padding(top = 9.dp).height(4.dp),
-                    color = MaterialTheme.colorScheme.secondary,
-                    trackColor = Color.White.copy(alpha = .18f)
-                )
-                nextProgramme?.let {
-                    Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "NEXT  ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.startMillis))}",
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Channel Logo & Number Header
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.width(260.dp)
+                ) {
+                    ChannelLogo(channel, 56.dp, guide)
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.secondary,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Black
-                        )
-                        Spacer(Modifier.width(12.dp))
+                            contentColor = MaterialTheme.colorScheme.onSecondary
+                        ) {
+                            Text(
+                                "CH ${channel.number.ifBlank { "LIVE" }}",
+                                Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                        Spacer(Modifier.height(3.dp))
                         Text(
-                            it.title,
-                            color = Color.White.copy(alpha = .75f),
-                            style = MaterialTheme.typography.bodySmall,
+                            channel.name,
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                }
+
+                Spacer(Modifier.width(20.dp))
+
+                // Programme Title & Progress
+                Column(Modifier.weight(1f)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            currentProgramme?.title ?: "Live Broadcast",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        remainingMinutes?.let {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color.White.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    "$it min left",
+                                    Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    currentProgramme?.let { prog ->
+                        Text(
+                            "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))} – ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))}",
+                            color = Color.White.copy(alpha = 0.70f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = MaterialTheme.colorScheme.secondary,
+                        trackColor = Color.White.copy(alpha = 0.18f)
+                    )
+                }
+            }
+
+            // Up Next Footer Snippet
+            nextProgramme?.let { next ->
+                Spacer(Modifier.height(10.dp))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.10f)))
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Text(
+                            "UP NEXT",
+                            Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(next.startMillis)),
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        next.title,
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
