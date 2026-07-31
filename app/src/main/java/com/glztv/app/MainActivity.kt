@@ -2906,6 +2906,7 @@ private fun SettingsDialog(
     val initialFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
+        delay(60)
         runCatching { initialFocus.requestFocus() }
     }
 
@@ -3199,6 +3200,7 @@ private fun TvSettingsButton(
     var focused by remember { mutableStateOf(false) }
     Surface(
         modifier
+            .focusable(enabled)
             .onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (enabled && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
@@ -3212,8 +3214,7 @@ private fun TvSettingsButton(
                     true
                 } else false
             }
-            .clickable(enabled = enabled, onClick = onClick)
-            .focusable(enabled),
+            .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = if (focused) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.surfaceVariant,
@@ -3246,60 +3247,70 @@ private fun ProtectedSourceField(
 
     LaunchedEffect(editing) {
         if (editing) {
-            focusRequester.requestFocus()
+            runCatching { focusRequester.requestFocus() }
             keyboard?.show()
         }
     }
 
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .border(
-                if (focused) 4.dp else 0.dp,
-                if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent,
-                RoundedCornerShape(8.dp)
-            )
-            .then(if (!editing) Modifier.clickable { editing = true } else Modifier)
-            .focusRequester(focusRequester)
+            .focusable(enabled)
             .onFocusChanged {
                 focused = it.isFocused
                 if (!it.isFocused) editing = false
             }
             .onPreviewKeyEvent { event ->
-                val isSelect = event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                    event.nativeKeyEvent.keyCode in listOf(
+                if (enabled && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (event.nativeKeyEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_CENTER,
                         KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER
-                    )
-                if (isSelect && !editing) {
-                    editing = true
-                    true
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            if (!editing) {
+                                editing = true
+                                true
+                            } else false
+                        }
+                        else -> false
+                    }
                 } else false
-            },
-        label = { Text(label) },
-        readOnly = !editing,
-        enabled = enabled,
-        singleLine = singleLine,
-        minLines = minLines,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.secondary,
-            focusedLabelColor = MaterialTheme.colorScheme.secondary,
-            cursorColor = MaterialTheme.colorScheme.secondary
-        ),
-        supportingText = {
-            Text(
-                when {
-                    editing -> "Editing enabled"
-                    focused -> "Press OK to edit${help.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}"
-                    help.isNotBlank() -> help
-                    else -> "Press OK to edit"
-                }
-            )
-        }
-    )
+            }
+            .clickable(enabled = enabled) { editing = true },
+        shape = RoundedCornerShape(14.dp),
+        color = Color.Transparent,
+        border = BorderStroke(
+            if (focused) 4.dp else 1.dp,
+            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
+        )
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
+            label = { Text(label) },
+            readOnly = !editing,
+            enabled = enabled,
+            singleLine = singleLine,
+            minLines = minLines,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.secondary,
+                focusedLabelColor = MaterialTheme.colorScheme.secondary,
+                cursorColor = MaterialTheme.colorScheme.secondary
+            ),
+            supportingText = {
+                Text(
+                    when {
+                        editing -> "Editing active · Press Back when done"
+                        focused -> "Press OK to edit${help.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}"
+                        help.isNotBlank() -> help
+                        else -> "Press OK to edit"
+                    }
+                )
+            }
+        )
+    }
 }
 
 @Composable
@@ -3317,10 +3328,23 @@ private fun SettingsLabel(value: String) {
 private fun SettingsToggle(label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Surface(
-        Modifier.fillMaxWidth()
+        Modifier
+            .fillMaxWidth()
+            .focusable()
             .onFocusChanged { focused = it.isFocused }
-            .clickable { onChecked(!checked) }
-            .focusable(),
+            .onPreviewKeyEvent { event ->
+                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                    event.nativeKeyEvent.keyCode in listOf(
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER
+                    )
+                ) {
+                    onChecked(!checked)
+                    true
+                } else false
+            }
+            .clickable { onChecked(!checked) },
         shape = RoundedCornerShape(14.dp),
         color = if (focused) MaterialTheme.colorScheme.surfaceContainerHighest
         else Color.Transparent,
@@ -3330,10 +3354,10 @@ private fun SettingsToggle(label: String, checked: Boolean, onChecked: (Boolean)
         )
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, Modifier.weight(1f))
+            Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             Switch(checked = checked, onCheckedChange = null)
         }
     }
