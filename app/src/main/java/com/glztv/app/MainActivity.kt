@@ -2330,7 +2330,9 @@ private fun ImmersivePlayerScreen(
 
         if (drawer == PlayerDrawer.None && showNavigationTip) {
             Surface(
-                modifier = Modifier.align(Alignment.TopStart).padding(24.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 24.dp),
                 color = Color.Black.copy(alpha = .58f),
                 shape = RoundedCornerShape(14.dp)
             ) {
@@ -3232,7 +3234,6 @@ private fun TvSettingsButton(
     var focused by remember { mutableStateOf(false) }
     Surface(
         modifier
-            .focusable(enabled)
             .onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (enabled && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
@@ -3246,7 +3247,8 @@ private fun TvSettingsButton(
                     true
                 } else false
             }
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick)
+            .focusable(enabled),
         shape = RoundedCornerShape(16.dp),
         color = if (focused) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.surfaceVariant,
@@ -3287,7 +3289,6 @@ private fun ProtectedSourceField(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .focusable(enabled)
             .onFocusChanged {
                 focused = it.isFocused
                 if (!it.isFocused) editing = false
@@ -3307,7 +3308,8 @@ private fun ProtectedSourceField(
                     }
                 } else false
             }
-            .clickable(enabled = enabled) { editing = true },
+            .clickable(enabled = enabled) { editing = true }
+            .focusable(enabled),
         shape = RoundedCornerShape(14.dp),
         color = Color.Transparent,
         border = BorderStroke(
@@ -3362,7 +3364,6 @@ private fun SettingsToggle(label: String, checked: Boolean, onChecked: (Boolean)
     Surface(
         Modifier
             .fillMaxWidth()
-            .focusable()
             .onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
@@ -3376,7 +3377,8 @@ private fun SettingsToggle(label: String, checked: Boolean, onChecked: (Boolean)
                     true
                 } else false
             }
-            .clickable { onChecked(!checked) },
+            .clickable { onChecked(!checked) }
+            .focusable(),
         shape = RoundedCornerShape(14.dp),
         color = if (focused) MaterialTheme.colorScheme.surfaceContainerHighest
         else Color.Transparent,
