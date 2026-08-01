@@ -171,6 +171,7 @@ private const val LAST_CHANNEL_ID = "last_channel_id"
 private const val WEATHER_LOCATION = "weather_location"
 private const val GUEST_NAME = "guest_name"
 private const val OSD_TIMEOUT_SECONDS = "osd_timeout_seconds"
+private const val LOGO_USER_AGENT = "GLZ-TV/2.9 (Android TV; https://github.com/yadielglz/glz-tv)"
 private const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
 private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
@@ -2076,9 +2077,8 @@ private fun ChannelLogo(
     val logoUrl = channel.logoUrl.takeIf { it.isNotBlank() } ?: guide?.logoForChannel(channel)
     val model = remember(logoUrl, channel.headers) {
         if (logoUrl.isNullOrBlank()) null
-        else if (channel.headers.isEmpty()) logoUrl
         else {
-            val headersBuilder = NetworkHeaders.Builder()
+            val headersBuilder = NetworkHeaders.Builder().set("User-Agent", LOGO_USER_AGENT)
             channel.headers.forEach { (k, v) -> headersBuilder.set(k, v) }
             ImageRequest.Builder(context)
                 .data(logoUrl)
@@ -2297,6 +2297,11 @@ private fun ImmersivePlayerScreen(
                         }
                         else -> false
                     }
+                } else if (showActionBar) {
+                    // Let the focused action-bar button handle D-pad and OK events.
+                    // Player-level shortcuts must not replace the bar with a side drawer.
+                    if (isOkKey && keyEvent.action == KeyEvent.ACTION_UP) okKeyPressed = false
+                    false
                 } else if (keyEvent.action != KeyEvent.ACTION_DOWN) {
                     false
                 } else when (keyEvent.keyCode) {
