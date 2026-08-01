@@ -2195,7 +2195,11 @@ private fun ImmersivePlayerScreen(
     var drawer by remember { mutableStateOf(PlayerDrawer.None) }
     var showNavigationTip by remember { mutableStateOf(true) }
     var showOsd by remember { mutableStateOf(false) }
+    var showActionBar by remember { mutableStateOf(false) }
+    var okKeyPressed by remember { mutableStateOf(false) }
+    var playbackCaptionsEnabled by remember(captionsEnabled) { mutableStateOf(captionsEnabled) }
     val playerFocus = remember { FocusRequester() }
+    val actionBarFocus = remember { FocusRequester() }
     val selectedChannelFocus = remember { FocusRequester() }
     val firstServiceFocus = remember { FocusRequester() }
     val selectedIndex = channels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
@@ -2238,10 +2242,17 @@ private fun ImmersivePlayerScreen(
     }
 
     BackHandler {
-        if (drawer != PlayerDrawer.None) drawer = PlayerDrawer.None else onExit()
+        when {
+            showActionBar -> showActionBar = false
+            drawer != PlayerDrawer.None -> drawer = PlayerDrawer.None
+            else -> onExit()
+        }
     }
-    LaunchedEffect(channel.id, drawer) {
-        when (drawer) {
+    LaunchedEffect(channel.id, drawer, showActionBar) {
+        if (showActionBar) {
+            delay(60)
+            actionBarFocus.requestFocus()
+        } else when (drawer) {
             PlayerDrawer.None -> playerFocus.requestFocus()
             PlayerDrawer.Channels -> {
                 channelListState.scrollToItem((selectedIndex - 2).coerceAtLeast(0))
@@ -2262,8 +2273,33 @@ private fun ImmersivePlayerScreen(
             .focusRequester(playerFocus)
             .focusable()
             .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
-                when (event.nativeKeyEvent.keyCode) {
+                val keyEvent = event.nativeKeyEvent
+                val isOkKey = keyEvent.keyCode in listOf(
+                    KeyEvent.KEYCODE_DPAD_CENTER,
+                    KeyEvent.KEYCODE_ENTER,
+                    KeyEvent.KEYCODE_NUMPAD_ENTER
+                )
+                if (isOkKey && drawer == PlayerDrawer.None && !showActionBar) {
+                    when (keyEvent.action) {
+                        KeyEvent.ACTION_DOWN -> {
+                            okKeyPressed = true
+                            if (keyEvent.repeatCount > 0 || keyEvent.isLongPress) {
+                                showNavigationTip = false
+                                showOsd = false
+                                showActionBar = true
+                            }
+                            true
+                        }
+                        KeyEvent.ACTION_UP -> {
+                            if (okKeyPressed) showOsd = !showOsd
+                            okKeyPressed = false
+                            true
+                        }
+                        else -> false
+                    }
+                } else if (keyEvent.action != KeyEvent.ACTION_DOWN) {
+                    false
+                } else when (keyEvent.keyCode) {
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
                         showNavigationTip = false
                         drawer = PlayerDrawer.Channels
@@ -2273,15 +2309,6 @@ private fun ImmersivePlayerScreen(
                         showNavigationTip = false
                         drawer = PlayerDrawer.Services
                         true
-                    }
-                    KeyEvent.KEYCODE_DPAD_CENTER,
-                    KeyEvent.KEYCODE_ENTER,
-                    KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        if (drawer == PlayerDrawer.None) {
-                            showNavigationTip = false
-                            showOsd = !showOsd
-                            true
-                        } else false
                     }
                     KeyEvent.KEYCODE_CHANNEL_UP -> {
                         stepChannel(-1)
@@ -2309,7 +2336,7 @@ private fun ImmersivePlayerScreen(
     ) {
         VideoPlayer(
             channel,
-            captionsEnabled,
+            playbackCaptionsEnabled,
             captionLanguage,
             Modifier.fillMaxSize(),
             onPlaybackReady = { readyChannelId ->
@@ -2343,6 +2370,28 @@ private fun ImmersivePlayerScreen(
                     style = MaterialTheme.typography.labelLarge
                 )
             }
+        }
+
+        if (drawer == PlayerDrawer.None && showActionBar) {
+            PlayerActionBar(
+                captionsEnabled = playbackCaptionsEnabled,
+                initialFocus = actionBarFocus,
+                onEpg = {
+                    showActionBar = false
+                    drawer = PlayerDrawer.Channels
+                },
+                onToggleCaptions = {
+                    playbackCaptionsEnabled = !playbackCaptionsEnabled
+                    prefs.edit().putBoolean(CAPTIONS_ENABLED, playbackCaptionsEnabled).apply()
+                },
+                onServices = {
+                    showActionBar = false
+                    drawer = PlayerDrawer.Services
+                },
+                onClose = { showActionBar = false },
+                onExit = onExit,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
 
         if (drawer == PlayerDrawer.Channels) {
@@ -2528,6 +2577,66 @@ private fun ImmersivePlayerScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PlayerActionBar(
+    captionsEnabled: Boolean,
+    initialFocus: FocusRequester,
+    onEpg: () -> Unit,
+    onToggleCaptions: () -> Unit,
+    onServices: () -> Unit,
+    onClose: () -> Unit,
+    onExit: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.padding(bottom = 28.dp),
+        color = Color(0xF20B1114),
+        shape = RoundedCornerShape(22.dp),
+        tonalElevation = 18.dp,
+        shadowElevation = 24.dp
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 12.dp).focusGroup(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PlayerActionButton("EPG", onEpg, Modifier.focusRequester(initialFocus))
+            PlayerActionButton(if (captionsEnabled) "CC: On" else "CC: Off", onToggleCaptions)
+            PlayerActionButton("Entertainment", onServices)
+            PlayerActionButton("Close", onClose)
+            PlayerActionButton("Exit", onExit)
+        }
+    }
+}
+
+@Composable
+private fun PlayerActionButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier
+            .onFocusChanged { focused = it.isFocused }
+            .clickable(onClick = onClick)
+            .focusable(),
+        shape = RoundedCornerShape(14.dp),
+        color = if (focused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .1f),
+        contentColor = Color.White,
+        border = BorderStroke(
+            if (focused) 4.dp else 1.dp,
+            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
+        )
+    ) {
+        Text(
+            label,
+            Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+            fontWeight = FontWeight.Black
+        )
     }
 }
 
