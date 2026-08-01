@@ -18,6 +18,8 @@
         <button class="nav active" data-view="devices">▣ <span>Devices</span></button>
         <button class="nav" data-view="sites">⌂ <span>Properties</span></button>
         <button class="nav" data-view="experience">✦ <span>Guest experience</span></button>
+        <button class="nav" data-view="radio">🎙️ <span>Radio streams</span></button>
+        <button class="nav" data-view="studio">🎵 <span>Playlist studio</span></button>
         <button class="nav" data-view="apps">⬡ <span>App library</span></button>
         <button class="nav" data-view="pair">＋ <span>Pair a TV</span></button>
       </nav>
@@ -90,6 +92,24 @@
           </div>
           <div id="appList" class="management-list"></div>
           <div id="appEmpty" class="empty hidden"><h3>No managed apps yet</h3><p>Add an app once, then deploy it to any paired television.</p></div>
+        </section>
+
+        <section id="radioView" class="hidden">
+          <div class="section-toolbar">
+            <div><h3>GLZ Radio Streams</h3><p>Manage audio broadcast streams and metadata consumed by glz-radio.</p></div>
+            <button id="addRadioStationButton" class="primary">＋ Add radio station</button>
+          </div>
+          <div id="radioList" class="management-list"></div>
+          <div id="radioEmpty" class="empty hidden"><h3>No radio streams configured</h3><p>Create live audio stations to broadcast across GLZ Radio app.</p></div>
+        </section>
+
+        <section id="studioView" class="hidden">
+          <div class="section-toolbar">
+            <div><h3>Playlist Studio</h3><p>Curate media tracks and scheduled channels for GLZ TV &amp; GLZ Radio.</p></div>
+            <button id="addPlaylistButton" class="primary">＋ Add playlist</button>
+          </div>
+          <div id="playlistList" class="management-list"></div>
+          <div id="studioEmpty" class="empty hidden"><h3>No playlists curated yet</h3><p>Create track playlists and schedule sequences for television and radio broadcasts.</p></div>
         </section>
 
         <section id="sitesView" class="hidden">
@@ -259,6 +279,43 @@
       </div>
       <p id="appError" class="error"></p>
       <div class="form-actions"><button type="button" class="secondary" data-close-app>Cancel</button><button class="primary" type="submit">Add to library</button></div>
+    </form>
+  </dialog>
+  <dialog id="radioDialog">
+    <form id="radioForm">
+      <div class="dialog-head"><div><div class="eyebrow">RADIO STREAMS</div><h3 id="radioDialogTitle">Add radio station</h3></div><button class="icon-button" type="button" data-close-radio>×</button></div>
+      <input id="radioId" type="hidden">
+      <div class="form-grid">
+        <label>Station name<input id="radioName" required maxlength="100" placeholder="GLZ Lounge FM"></label>
+        <label>Station code<input id="radioCode" required maxlength="40" placeholder="GLZ-LOUNGE"></label>
+        <label>Genre<input id="radioGenre" required maxlength="60" placeholder="Chillout / Lounge"></label>
+        <label>Bitrate (kbps)<input id="radioBitrate" type="number" value="128" min="32" max="320"></label>
+        <label class="wide">Audio stream URL<input id="radioStreamUrl" type="url" required placeholder="https://stream.glztech.com/lounge"></label>
+        <label class="wide">Logo URL (optional)<input id="radioLogoUrl" type="url" placeholder="https://…/logo.png"></label>
+      </div>
+      <p id="radioError" class="error"></p>
+      <div class="form-actions"><button type="button" class="secondary" data-close-radio>Cancel</button><button class="primary" type="submit">Save radio station</button></div>
+    </form>
+  </dialog>
+  <dialog id="playlistDialog">
+    <form id="playlistForm">
+      <div class="dialog-head"><div><div class="eyebrow">PLAYLIST STUDIO</div><h3 id="playlistDialogTitle">Add playlist</h3></div><button class="icon-button" type="button" data-close-playlist>×</button></div>
+      <input id="playlistId" type="hidden">
+      <div class="form-grid">
+        <label>Title<input id="playlistTitle" required maxlength="120" placeholder="Morning Chill Mix"></label>
+        <label>Category<input id="playlistCategory" required maxlength="60" placeholder="Lobby Ambient"></label>
+        <label>Target app
+          <select id="playlistTargetApp">
+            <option value="both">Both (GLZ TV &amp; Radio)</option>
+            <option value="tv">GLZ TV Only</option>
+            <option value="radio">GLZ Radio Only</option>
+          </select>
+        </label>
+        <label class="wide">Description<textarea id="playlistDescription" rows="3" maxlength="500" placeholder="Curated ambient playlist for morning guests."></textarea></label>
+        <label class="wide">Artwork URL<input id="playlistArtworkUrl" type="url" placeholder="https://…/cover.jpg"></label>
+      </div>
+      <p id="playlistError" class="error"></p>
+      <div class="form-actions"><button type="button" class="secondary" data-close-playlist>Cancel</button><button class="primary" type="submit">Save playlist</button></div>
     </form>
   </dialog>
   <div id="toast" role="status"></div>

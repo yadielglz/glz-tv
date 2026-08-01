@@ -91,13 +91,18 @@ function showView(name) {
   $("#sitesView").classList.toggle("hidden", name !== "sites");
   $("#appsView").classList.toggle("hidden", name !== "apps");
   $("#experienceView").classList.toggle("hidden", name !== "experience");
+  $("#radioView").classList.toggle("hidden", name !== "radio");
+  $("#studioView").classList.toggle("hidden", name !== "studio");
   $("#pairView").classList.toggle("hidden", name !== "pair");
   $("#pairButton").classList.toggle("hidden", name === "pair");
   $("#pageTitle").textContent = name === "pair" ? "Pair a television" :
     name === "apps" ? "App management" : name === "sites" ? "Properties" :
-    name === "experience" ? "Guest experience" : "Your TVs";
+    name === "experience" ? "Guest experience" : name === "radio" ? "Radio Streams" :
+    name === "studio" ? "Playlist Studio" : "Your TVs";
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
   if (name === "pair") loadPairingRequests();
+  if (name === "radio") loadRadioStations();
+  if (name === "studio") loadPlaylists();
 }
 
 function isOnline(device) {
@@ -555,8 +560,178 @@ $("#visibleApps").innerHTML = APP_CATALOG.map(([name, packageName]) => `
 await loadPublicConfig();
 restoreSession();
 showApp();
-if (state.session) loadDevices().catch(() => {
-  localStorage.removeItem("glzhub_session");
-  state.session = null;
-  showApp();
+if (state.session) loadDevices().catch(() => {});
+
+async function loadRadioStations() {
+  try {
+    const { stations } = await api("/api/v1/radio/stations");
+    state.stations = stations || [];
+    renderRadioStations();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+function renderRadioStations() {
+  const container = $("#radioList");
+  const empty = $("#radioEmpty");
+  container.innerHTML = "";
+  empty.classList.toggle("hidden", state.stations.length > 0);
+
+  state.stations.forEach((station) => {
+    const card = document.createElement("article");
+    card.className = "management-card";
+    card.innerHTML = `
+      <div>
+        <div class="eyebrow">${station.genre} • ${station.bitrate} kbps</div>
+        <h4>${station.name}</h4>
+        <small>Code: ${station.station_code} | Stream: ${station.stream_url}</small>
+      </div>
+      <div class="form-actions">
+        <button class="secondary edit-radio" data-id="${station.id}">Edit</button>
+        <button class="danger-button delete-radio" data-id="${station.id}">Delete</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  $$(".edit-radio").forEach((btn) => btn.addEventListener("click", () => openRadioDialog(btn.dataset.id)));
+  $$(".delete-radio").forEach((btn) => btn.addEventListener("click", () => deleteRadioStation(btn.dataset.id)));
+}
+
+function openRadioDialog(id = null) {
+  const dialog = $("#radioDialog");
+  const station = state.stations?.find((s) => s.id === id);
+  $("#radioId").value = station ? station.id : "";
+  $("#radioName").value = station ? station.name : "";
+  $("#radioCode").value = station ? station.station_code : "";
+  $("#radioGenre").value = station ? station.genre : "";
+  $("#radioBitrate").value = station ? station.bitrate : 128;
+  $("#radioStreamUrl").value = station ? station.stream_url : "";
+  $("#radioLogoUrl").value = station ? station.logo_url || "" : "";
+  $("#radioDialogTitle").textContent = station ? "Edit radio station" : "Add radio station";
+  $("#radioError").textContent = "";
+  dialog.showModal();
+}
+
+$("#addRadioStationButton")?.addEventListener("click", () => openRadioDialog());
+$("[data-close-radio]")?.addEventListener("click", () => $("#radioDialog").close());
+
+$("#radioForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("#radioError").textContent = "";
+  const payload = {
+    id: $("#radioId").value || null,
+    name: $("#radioName").value,
+    stationCode: $("#radioCode").value,
+    genre: $("#radioGenre").value,
+    bitrate: Number($("#radioBitrate").value),
+    streamUrl: $("#radioStreamUrl").value,
+    logoUrl: $("#radioLogoUrl").value || null
+  };
+  try {
+    await api("/api/v1/radio/stations", { method: "POST", body: JSON.stringify(payload) });
+    $("#radioDialog").close();
+    showToast("Radio station saved.");
+    loadRadioStations();
+  } catch (error) {
+    $("#radioError").textContent = error.message;
+  }
 });
+
+async function deleteRadioStation(id) {
+  if (!confirm("Are you sure you want to delete this radio station?")) return;
+  try {
+    await api(`/api/v1/radio/stations/${id}`, { method: "DELETE" });
+    showToast("Radio station deleted.");
+    loadRadioStations();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function loadPlaylists() {
+  try {
+    const { playlists } = await api("/api/v1/studio/playlists");
+    state.playlists = playlists || [];
+    renderPlaylists();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+function renderPlaylists() {
+  const container = $("#playlistList");
+  const empty = $("#studioEmpty");
+  container.innerHTML = "";
+  empty.classList.toggle("hidden", state.playlists.length > 0);
+
+  state.playlists.forEach((pl) => {
+    const card = document.createElement("article");
+    card.className = "management-card";
+    card.innerHTML = `
+      <div>
+        <div class="eyebrow">${pl.category} • Target: ${pl.target_app}</div>
+        <h4>${pl.title}</h4>
+        <small>${pl.description || "No description"} (${(pl.playlist_items || []).length} items)</small>
+      </div>
+      <div class="form-actions">
+        <button class="secondary edit-playlist" data-id="${pl.id}">Edit</button>
+        <button class="danger-button delete-playlist" data-id="${pl.id}">Delete</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  $$(".edit-playlist").forEach((btn) => btn.addEventListener("click", () => openPlaylistDialog(btn.dataset.id)));
+  $$(".delete-playlist").forEach((btn) => btn.addEventListener("click", () => deletePlaylist(btn.dataset.id)));
+}
+
+function openPlaylistDialog(id = null) {
+  const dialog = $("#playlistDialog");
+  const pl = state.playlists?.find((p) => p.id === id);
+  $("#playlistId").value = pl ? pl.id : "";
+  $("#playlistTitle").value = pl ? pl.title : "";
+  $("#playlistCategory").value = pl ? pl.category : "";
+  $("#playlistTargetApp").value = pl ? pl.target_app : "both";
+  $("#playlistDescription").value = pl ? pl.description || "" : "";
+  $("#playlistArtworkUrl").value = pl ? pl.artwork_url || "" : "";
+  $("#playlistDialogTitle").textContent = pl ? "Edit playlist" : "Add playlist";
+  $("#playlistError").textContent = "";
+  dialog.showModal();
+}
+
+$("#addPlaylistButton")?.addEventListener("click", () => openPlaylistDialog());
+$("[data-close-playlist]")?.addEventListener("click", () => $("#playlistDialog").close());
+
+$("#playlistForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("#playlistError").textContent = "";
+  const payload = {
+    id: $("#playlistId").value || null,
+    title: $("#playlistTitle").value,
+    category: $("#playlistCategory").value,
+    targetApp: $("#playlistTargetApp").value,
+    description: $("#playlistDescription").value || null,
+    artworkUrl: $("#playlistArtworkUrl").value || null
+  };
+  try {
+    await api("/api/v1/studio/playlists", { method: "POST", body: JSON.stringify(payload) });
+    $("#playlistDialog").close();
+    showToast("Playlist saved.");
+    loadPlaylists();
+  } catch (error) {
+    $("#playlistError").textContent = error.message;
+  }
+});
+
+async function deletePlaylist(id) {
+  if (!confirm("Are you sure you want to delete this playlist?")) return;
+  try {
+    await api(`/api/v1/studio/playlists/${id}`, { method: "DELETE" });
+    showToast("Playlist deleted.");
+    loadPlaylists();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
