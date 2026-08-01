@@ -2299,9 +2299,11 @@ private fun ImmersivePlayerScreen(
                     }
                 } else if (showActionBar) {
                     // Let the focused action-bar button handle D-pad and OK events.
-                    // Player-level shortcuts must not replace the bar with a side drawer.
-                    if (isOkKey && keyEvent.action == KeyEvent.ACTION_UP) okKeyPressed = false
-                    false
+                    // Consume the rest of the long press so its key-up cannot click EPG.
+                    if (isOkKey && okKeyPressed) {
+                        if (keyEvent.action == KeyEvent.ACTION_UP) okKeyPressed = false
+                        true
+                    } else false
                 } else if (keyEvent.action != KeyEvent.ACTION_DOWN) {
                     false
                 } else when (keyEvent.keyCode) {
