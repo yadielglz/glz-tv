@@ -1,7 +1,8 @@
 const state = {
   config: null, session: null, devices: [], apps: [], sites: [],
-  experience: null, selectedSiteId: null, enrollments: [], stations: [], playlists: []
+  experience: null, selectedSiteId: null, enrollments: [], stations: [], playlists: [], groups: []
 };
+const epgState = { doc: null, playlistId: "", dirty: false, sourceUrl: "" };
 const inviteParams = new URLSearchParams(location.hash.replace(/^#/, ""));
 const inviteToken = inviteParams.get("type") === "invite" ? inviteParams.get("access_token") : null;
 const APP_CATALOG = [
@@ -88,21 +89,25 @@ $("#inviteForm").addEventListener("submit", async (event) => {
 
 function showView(name) {
   $("#devicesView").classList.toggle("hidden", name !== "devices");
+  $("#groupsView").classList.toggle("hidden", name !== "groups");
   $("#sitesView").classList.toggle("hidden", name !== "sites");
   $("#appsView").classList.toggle("hidden", name !== "apps");
   $("#experienceView").classList.toggle("hidden", name !== "experience");
   $("#radioView").classList.toggle("hidden", name !== "radio");
   $("#studioView").classList.toggle("hidden", name !== "studio");
+  $("#epgView").classList.toggle("hidden", name !== "epg");
   $("#pairView").classList.toggle("hidden", name !== "pair");
   $("#pairButton").classList.toggle("hidden", name === "pair");
   $("#pageTitle").textContent = name === "pair" ? "Pair a television" :
-    name === "apps" ? "App management" : name === "sites" ? "Properties" :
+    name === "apps" ? "App management" : name === "groups" ? "Box Groups" : name === "sites" ? "Properties" :
       name === "experience" ? "Guest experience" : name === "radio" ? "Radio Streams" :
-        name === "studio" ? "Playlist Studio" : "Your TVs";
+        name === "studio" ? "Playlist Studio" : name === "epg" ? "EPG Studio" : "Your TVs";
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
   if (name === "pair") loadPairingRequests();
   if (name === "radio") loadRadioStations();
   if (name === "studio") loadPlaylists();
+  if (name === "epg") openEpgStudio();
+  if (name === "groups") loadBoxGroups();
 }
 
 function isOnline(device) {
@@ -166,12 +171,13 @@ async function refreshDeviceActivity() {
 setInterval(() => refreshDeviceActivity().catch(() => { }), 5_000);
 
 async function loadDevices() {
-  const [deviceResult, appResult, siteResult] = await Promise.all([
-    api("/api/v1/admin/devices"), api("/api/v1/admin/apps"), api("/api/v1/admin/sites")
+  const [deviceResult, appResult, siteResult, groupResult] = await Promise.all([
+    api("/api/v1/admin/devices"), api("/api/v1/admin/apps"), api("/api/v1/admin/sites"), api("/api/v1/admin/box-groups")
   ]);
   state.devices = deviceResult.devices;
   state.apps = appResult.apps;
   state.sites = siteResult.sites;
+  state.groups = groupResult.groups || [];
   if (!state.sites.some((site) => site.id === state.selectedSiteId)) {
     state.selectedSiteId = state.sites[0]?.id || null;
   }
@@ -181,6 +187,7 @@ async function loadDevices() {
   renderSites();
   renderSiteSelectors();
   renderExperience();
+  renderBoxGroups();
 }
 
 async function loadPairingRequests() {
@@ -305,6 +312,9 @@ function openDevice(id) {
     `<option value="${pl.id}">${escapeHtml(pl.title)} (${(pl.playlist_items || []).length} channels)</option>`
   ).join("");
   $("#deviceAssignedPlaylist").value = device.assigned_playlist_id || "";
+  $("#deviceBoxGroup").innerHTML = `<option value="">No box group</option>` + state.groups.map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`).join("");
+  $("#deviceBoxGroup").value = device.box_group_id || "";
+  $("#editDeviceChannelPolicy").disabled = !(device.assigned_playlist_id || state.groups.find((group) => group.id === device.box_group_id)?.playlist_id);
   $("#roomNumber").value = device.room_number || "";
   $("#arrivalDate").value = device.arrival_date || "";
   $("#departureDate").value = device.departure_date || "";
@@ -390,6 +400,7 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         guest_name: $("#guestName").value,
         site_id: $("#deviceSite").value || null,
         assigned_playlist_id: $("#deviceAssignedPlaylist").value || null,
+        box_group_id: $("#deviceBoxGroup").value || null,
         room_number: $("#roomNumber").value || null,
         arrival_date: $("#arrivalDate").value || null,
         departure_date: $("#departureDate").value || null,
@@ -717,12 +728,18 @@ async function loadPlaylists() {
 function renderPlaylists() {
   const container = $("#playlistList");
   const empty = $("#studioEmpty");
+  const pageScroll = { x: window.scrollX, y: window.scrollY };
+  const tableScroll = new Map($$(".studio-playlist-card[data-playlist-id]").map((card) => {
+    const wrap = card.querySelector(".studio-table-wrap");
+    return [card.dataset.playlistId, { top: wrap?.scrollTop || 0, left: wrap?.scrollLeft || 0 }];
+  }));
   container.innerHTML = "";
   empty.classList.toggle("hidden", state.playlists.length > 0);
 
   state.playlists.forEach((pl) => {
     const card = document.createElement("article");
     card.className = "studio-playlist-card";
+    card.dataset.playlistId = pl.id;
     const items = [...(pl.playlist_items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
     card.innerHTML = `
       <div class="studio-card-head">
@@ -740,6 +757,8 @@ function renderPlaylists() {
         <div class="studio-card-actions">
           <button type="button" class="secondary import-playlist" data-id="${pl.id}">⇧ Import M3U</button>
           <button type="button" class="secondary export-playlist" data-id="${pl.id}">⇩ Export M3U</button>
+          <button type="button" class="secondary edit-guide" data-id="${pl.id}">▤ EPG editor</button>
+          <button type="button" class="secondary push-playlist" data-id="${pl.id}">↻ Push to TVs</button>
           <button type="button" class="secondary toggle-playlist" data-id="${pl.id}">${pl.is_published ? "Unpublish" : "Publish"}</button>
           <button type="button" class="secondary edit-playlist" data-id="${pl.id}">Settings</button>
           <button type="button" class="primary add-channel-item" data-id="${pl.id}">＋ Channel</button>
@@ -756,7 +775,7 @@ function renderPlaylists() {
           <div class="studio-table-wrap">
             <table class="studio-table">
               <thead>
-                <tr><th>Order</th><th>Channel</th><th>Group</th><th>EPG ID</th><th>Stream URL</th><th>Status</th><th></th></tr>
+                <tr><th>Order</th><th>CH #</th><th>Channel name</th><th>Group</th><th>EPG ID</th><th>Stream URL</th><th>Status</th><th></th></tr>
               </thead>
               <tbody>
                 ${items.map((item) => {
@@ -764,12 +783,13 @@ function renderPlaylists() {
                   const searchable = [item.title, item.media_url, meta.group, meta.tvg_id, meta.tvg_chno].filter(Boolean).join(" ").toLowerCase();
                   return `<tr class="studio-channel-row" draggable="true" data-playlist-id="${pl.id}" data-item-id="${item.id}" data-search="${escapeHtml(searchable)}">
                     <td style="color:var(--orange);font-weight:900;">↕ ${item.position || 0}</td>
-                    <td><div class="studio-channel-title">${meta.tvg_logo ? `<img src="${escapeHtml(meta.tvg_logo)}" alt="">` : "<span>▣</span>"}<span>${escapeHtml(item.title)}${meta.tvg_chno ? `<small style="display:block;">Channel ${escapeHtml(meta.tvg_chno)}</small>` : ""}</span></div></td>
-                    <td>${escapeHtml(meta.group || "—")}</td>
-                    <td style="font-family:monospace;">${escapeHtml(meta.tvg_id || "—")}</td>
-                    <td><div class="studio-url" title="${escapeHtml(item.media_url)}">${escapeHtml(item.media_url)}</div></td>
+                    <td><input class="studio-inline-field inline-channel-number" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.tvg_chno || "")}" aria-label="Channel number" placeholder="—" maxlength="20"></td>
+                    <td><div class="studio-channel-title">${meta.tvg_logo ? `<img src="${escapeHtml(meta.tvg_logo)}" alt="">` : "<span>▣</span>"}<input class="studio-inline-field inline-channel-name" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(item.title)}" aria-label="Channel name" maxlength="120"></div></td>
+                    <td><input class="studio-inline-field inline-channel-group" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.group || "")}" aria-label="Channel group" placeholder="—" maxlength="100"></td>
+                    <td><input class="studio-inline-field inline-channel-epg" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.tvg_id || "")}" aria-label="EPG ID" placeholder="—" maxlength="120"></td>
+                    <td><input class="studio-inline-field inline-channel-url" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(item.media_url)}" aria-label="Stream URL" maxlength="2048"></td>
                     <td><button type="button" class="studio-badge channel-visibility ${meta.hidden ? "hidden-channel" : "published"}" data-playlist-id="${pl.id}" data-item-id="${item.id}" data-hidden="${meta.hidden === true}">${meta.hidden ? "HIDDEN" : "VISIBLE"}</button></td>
-                    <td><button type="button" class="secondary edit-playlist-item" data-item-id="${item.id}" data-playlist-id="${pl.id}" style="padding:5px 8px;">Edit</button></td>
+                    <td><button type="button" class="secondary edit-playlist-item" data-item-id="${item.id}" data-playlist-id="${pl.id}" style="padding:5px 8px;">Edit logo &amp; details</button></td>
                   </tr>`;
                 }).join("")}
               </tbody>
@@ -781,12 +801,27 @@ function renderPlaylists() {
     container.appendChild(card);
   });
 
+  tableScroll.forEach((position, playlistId) => {
+    const wrap = container.querySelector(`.studio-playlist-card[data-playlist-id="${playlistId}"] .studio-table-wrap`);
+    if (wrap) { wrap.scrollTop = position.top; wrap.scrollLeft = position.left; }
+  });
+  requestAnimationFrame(() => window.scrollTo(pageScroll.x, pageScroll.y));
+
   $$(".edit-playlist").forEach((btn) => btn.addEventListener("click", () => openPlaylistDialog(btn.dataset.id)));
   $$(".add-channel-item").forEach((btn) => btn.addEventListener("click", () => {
     $("#playlistId").value = btn.dataset.id;
     openPlaylistItemDialog();
   }));
   $$(".edit-playlist-item").forEach((btn) => btn.addEventListener("click", () => openPlaylistItemDialog(btn.dataset.playlistId, btn.dataset.itemId)));
+  $$(".studio-inline-field").forEach((input) => {
+    input.dataset.original = input.value;
+    input.addEventListener("pointerdown", (event) => event.stopPropagation());
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); input.blur(); }
+      if (event.key === "Escape") { input.value = input.dataset.original; input.blur(); }
+    });
+    input.addEventListener("blur", () => saveInlineChannelField(input));
+  });
   $$(".channel-visibility").forEach((btn) => btn.addEventListener("click", async () => {
     const playlist = state.playlists.find((entry) => entry.id === btn.dataset.playlistId);
     const item = playlist?.playlist_items?.find((entry) => entry.id === btn.dataset.itemId);
@@ -809,6 +844,18 @@ function renderPlaylists() {
     $("#m3uFileInput").click();
   }));
   $$(".export-playlist").forEach((btn) => btn.addEventListener("click", () => exportPlaylist(btn.dataset.id)));
+  $$(".edit-guide").forEach((btn) => btn.addEventListener("click", () => {
+    epgState.playlistId = btn.dataset.id;
+    showView("epg");
+  }));
+  $$(".push-playlist").forEach((btn) => btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      const result = await api(`/api/v1/admin/playlists/${btn.dataset.id}/push`, { method: "POST" });
+      toast(`Playlist and guide pushed to ${result.devices} TV${result.devices === 1 ? "" : "s"}.`);
+    } catch (error) { toast(error.message); }
+    finally { btn.disabled = false; }
+  }));
   $$(".toggle-playlist").forEach((btn) => btn.addEventListener("click", async () => {
     const playlist = state.playlists.find((item) => item.id === btn.dataset.id);
     if (!playlist) return;
@@ -825,6 +872,120 @@ function renderPlaylists() {
   $$(".delete-playlist").forEach((btn) => btn.addEventListener("click", () => deletePlaylist(btn.dataset.id)));
   wirePlaylistDragging();
 }
+
+async function saveInlineChannelField(input) {
+  if (input.value === input.dataset.original) return;
+  const playlist = state.playlists.find((entry) => entry.id === input.dataset.playlistId);
+  const item = playlist?.playlist_items?.find((entry) => entry.id === input.dataset.itemId);
+  if (!item) return;
+  const value = input.value.trim();
+  if (input.classList.contains("inline-channel-name") && !value) {
+    input.value = input.dataset.original;
+    toast("Channel name cannot be empty.");
+    return;
+  }
+  input.disabled = true;
+  try {
+    let payload;
+    if (input.classList.contains("inline-channel-name")) payload = { title: value };
+    else if (input.classList.contains("inline-channel-url")) payload = { mediaUrl: value };
+    else {
+      const key = input.classList.contains("inline-channel-number") ? "tvg_chno"
+        : input.classList.contains("inline-channel-epg") ? "tvg_id" : "group";
+      payload = { metadata: { ...(item.metadata || {}), [key]: value || null } };
+    }
+    const result = await api(`/api/v1/admin/playlists/${playlist.id}/items/${item.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+    if (result.item) Object.assign(item, result.item);
+    input.dataset.original = value;
+    input.disabled = false;
+    const row = input.closest(".studio-channel-row");
+    if (row) {
+      const meta = item.metadata || {};
+      row.dataset.search = [item.title, item.media_url, meta.group, meta.tvg_id, meta.tvg_chno].filter(Boolean).join(" ").toLowerCase();
+    }
+    toast("Channel field saved.");
+  } catch (error) {
+    input.value = input.dataset.original;
+    input.disabled = false;
+    toast(error.message);
+  }
+}
+
+async function openGuideDialog(playlistId) {
+  const playlist = state.playlists.find((entry) => entry.id === playlistId);
+  if (!playlist) return;
+  $("#guideForm").reset();
+  $("#guidePlaylistId").value = playlistId;
+  $("#guideDialogTitle").textContent = `${playlist.title} · EPG editor`;
+  $("#guideSourceUrl").value = playlist.epg_url?.includes("/api/v1/guides/") ? "" : (playlist.epg_url || "");
+  $("#guideStatus").textContent = "Checking for a managed guide…";
+  $("#guideError").textContent = "";
+  $("#guideDialog").showModal();
+  try {
+    const result = await api(`/api/v1/admin/playlists/${playlistId}/guide`);
+    const guide = result.guide;
+    $("#guideName").value = guide?.name || `${playlist.title} Guide`;
+    $("#guideSourceUrl").value = guide?.source_url || $("#guideSourceUrl").value;
+    $("#guideStatus").textContent = guide
+      ? `${guide.channel_count} channels · ${guide.programme_count} programs · updated ${new Date(guide.updated_at).toLocaleString()}`
+      : "No managed guide yet. Upload XML/XML.GZ or fetch one from an HTTPS source such as epg.best.";
+    $("#downloadGuideXml").disabled = !guide;
+    $("#downloadGuideGz").disabled = !guide;
+  } catch (error) { $("#guideStatus").textContent = error.message; }
+}
+
+async function readGuideFile(file) {
+  if (!file) return null;
+  if (file.name.toLowerCase().endsWith(".gz")) {
+    if (!("DecompressionStream" in window)) throw new Error("This browser cannot open gzip files. Upload XML or use a source URL.");
+    return new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  }
+  return file.text();
+}
+
+async function downloadGuide(playlistId, gzip) {
+  const response = await fetch(`/api/v1/admin/playlists/${playlistId}/guide.xml${gzip ? ".gz" : ""}`, {
+    headers: { authorization: `Bearer ${state.session.access_token}` }
+  });
+  if (!response.ok) throw new Error("Could not export guide.");
+  let blob = await response.blob();
+  let suffix = ".xml";
+  if (gzip) {
+    if (!("CompressionStream" in window)) throw new Error("This browser cannot create a gzip download.");
+    blob = await new Response(blob.stream().pipeThrough(new CompressionStream("gzip"))).blob();
+    suffix = ".xml.gz";
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = `glz-guide${suffix}`; link.click(); URL.revokeObjectURL(url);
+}
+
+$$('[data-close-guide]').forEach((button) => button.addEventListener("click", () => $("#guideDialog").close()));
+$("#guideForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const playlistId = $("#guidePlaylistId").value;
+  const sourceUrl = $("#guideSourceUrl").value.trim();
+  const file = $("#guideFile").files?.[0];
+  $("#guideError").textContent = "";
+  if (!sourceUrl && !file) { $("#guideError").textContent = "Choose an XML/XML.GZ file or enter an HTTPS guide URL."; return; }
+  const submit = event.submitter;
+  if (submit) submit.disabled = true;
+  try {
+    const xml = sourceUrl ? null : await readGuideFile(file);
+    const result = await api(`/api/v1/admin/playlists/${playlistId}/guide`, {
+      method: "PUT",
+      body: JSON.stringify({ name: $("#guideName").value || null, sourceUrl: sourceUrl || null, xml })
+    });
+    $("#guideStatus").textContent = `${result.guide.channel_count} channels · ${result.guide.programme_count} programs · published now`;
+    $("#downloadGuideXml").disabled = false;
+    $("#downloadGuideGz").disabled = false;
+    toast("EPG imported and published to the lineup.");
+    await loadPlaylists();
+  } catch (error) { $("#guideError").textContent = error.message; }
+  finally { if (submit) submit.disabled = false; }
+});
+$("#downloadGuideXml")?.addEventListener("click", () => downloadGuide($("#guidePlaylistId").value, false).catch((error) => toast(error.message)));
+$("#downloadGuideGz")?.addEventListener("click", () => downloadGuide($("#guidePlaylistId").value, true).catch((error) => toast(error.message)));
 
 function parseM3u(text) {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
@@ -1112,3 +1273,312 @@ async function deletePlaylistItem(playlistId, itemId) {
     showToast(error.message);
   }
 }
+
+async function loadBoxGroups() {
+  if (!state.playlists.length) await loadPlaylists();
+  const result = await api("/api/v1/admin/box-groups");
+  state.groups = result.groups || [];
+  renderBoxGroups();
+}
+
+function renderBoxGroups() {
+  const container = $("#boxGroupList"); if (!container) return;
+  $("#boxGroupEmpty").classList.toggle("hidden", state.groups.length > 0);
+  container.innerHTML = state.groups.map((group) => {
+    const playlist = state.playlists.find((item) => item.id === group.playlist_id);
+    const devices = group.devices || state.devices.filter((device) => device.box_group_id === group.id);
+    return `<article class="group-card"><span class="site-glyph">▦</span><span><h4>${escapeHtml(group.name)}</h4><p>${devices.length} box${devices.length === 1 ? "" : "es"} · ${escapeHtml(playlist?.title || "No playlist")}</p></span><span class="activity">${group.default_channel_policy === "block" ? "ONLY EXPLICITLY ALLOWED" : "ALL EXCEPT BLOCKED"}</span><span class="group-actions"><button class="secondary edit-group-policy" data-id="${group.id}">Channel policy</button><button class="secondary edit-box-group" data-id="${group.id}">Edit group</button></span></article>`;
+  }).join("");
+  $$(".edit-box-group").forEach((button) => button.addEventListener("click", () => openBoxGroup(button.dataset.id)));
+  $$(".edit-group-policy").forEach((button) => button.addEventListener("click", () => openChannelPolicy("group", button.dataset.id)));
+}
+
+function openBoxGroup(id = "") {
+  const group = state.groups.find((item) => item.id === id);
+  $("#boxGroupId").value = group?.id || ""; $("#boxGroupName").value = group?.name || "";
+  $("#boxGroupPlaylist").innerHTML = state.playlists.map((playlist) => `<option value="${playlist.id}">${escapeHtml(playlist.title)} · ${(playlist.playlist_items || []).length} channels</option>`).join("");
+  $("#boxGroupPlaylist").value = group?.playlist_id || state.playlists[0]?.id || "";
+  $("#boxGroupDevices").innerHTML = state.devices.map((device) => `<label><input type="checkbox" value="${device.id}" ${(device.box_group_id === id) ? "checked" : ""}> <span>${escapeHtml(device.name)}<small>${escapeHtml(device.room_number || "No room")}</small></span></label>`).join("");
+  $("#boxGroupDialogTitle").textContent = group ? "Edit box group" : "Add box group"; $("#deleteBoxGroup").classList.toggle("hidden", !group); $("#boxGroupError").textContent = ""; $("#boxGroupDialog").showModal();
+}
+
+$("#addBoxGroup")?.addEventListener("click", () => openBoxGroup());
+$$('[data-close-box-group]').forEach((button) => button.addEventListener("click", () => $("#boxGroupDialog").close()));
+$("#boxGroupForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault(); const oldId = $("#boxGroupId").value; $("#boxGroupError").textContent = "";
+  try {
+    const result = await api(oldId ? `/api/v1/admin/box-groups/${oldId}` : "/api/v1/admin/box-groups", { method: oldId ? "PATCH" : "POST", body: JSON.stringify({ name: $("#boxGroupName").value, playlistId: $("#boxGroupPlaylist").value }) });
+    const groupId = result.group.id; const selected = new Set($$("#boxGroupDevices input:checked").map((input) => input.value));
+    await Promise.all(state.devices.filter((device) => selected.has(device.id) || device.box_group_id === groupId).map((device) => api(`/api/v1/admin/devices/${device.id}`, { method: "PATCH", body: JSON.stringify({ box_group_id: selected.has(device.id) ? groupId : null }) })));
+    $("#boxGroupDialog").close(); await loadDevices(); await loadBoxGroups(); toast("Box group saved and queued for sync.");
+  } catch (error) { $("#boxGroupError").textContent = error.message; }
+});
+$("#deleteBoxGroup")?.addEventListener("click", async () => { const id = $("#boxGroupId").value; if (!id || !confirm("Delete this box group? Devices will keep their individual policy rules.")) return; await api(`/api/v1/admin/box-groups/${id}`, { method: "DELETE" }); $("#boxGroupDialog").close(); await loadDevices(); await loadBoxGroups(); toast("Box group deleted."); });
+
+let activePolicy = null;
+async function openChannelPolicy(targetType, targetId) {
+  if (!state.playlists.length) await loadPlaylists();
+  const target = targetType === "group" ? state.groups.find((item) => item.id === targetId) : state.devices.find((item) => item.id === targetId);
+  const group = targetType === "device" ? state.groups.find((item) => item.id === target?.box_group_id) : target;
+  const playlistId = targetType === "group" ? target?.playlist_id : (target?.assigned_playlist_id || group?.playlist_id);
+  const playlist = state.playlists.find((item) => item.id === playlistId);
+  if (!target || !playlist) { toast("Assign a master playlist before setting channel policy."); return; }
+  const own = await api(`/api/v1/admin/channel-policy/${targetType}/${targetId}`);
+  let inherited = { rules: [], defaultPolicy: "allow" };
+  if (targetType === "device" && group) inherited = await api(`/api/v1/admin/channel-policy/group/${group.id}`);
+  activePolicy = { targetType, targetId, playlist, ownRules: new Map(own.rules.filter((rule) => rule.playlist_id === playlist.id).map((rule) => [rule.playlist_item_id, rule.decision])), ownDefault: own.defaultPolicy || (targetType === "group" ? "allow" : "inherit"), groupRules: new Map(inherited.rules.filter((rule) => rule.playlist_id === playlist.id).map((rule) => [rule.playlist_item_id, rule.decision])), groupDefault: inherited.defaultPolicy || "allow", groupName: group?.name || "" };
+  $("#channelPolicyTargetType").value = targetType; $("#channelPolicyTargetId").value = targetId; $("#channelPolicyPlaylistId").value = playlist.id;
+  $("#channelPolicyTitle").textContent = `${target.name} channel policy`; $("#channelPolicySubtitle").textContent = `${playlist.title} · Individual box decisions always have final precedence.`;
+  $("#channelPolicyDefault").innerHTML = targetType === "group" ? `<option value="allow">Allow all unless blocked</option><option value="block">Block all unless allowed</option>` : `<option value="inherit">Inherit group/default</option><option value="allow">Allow all unless this box blocks</option><option value="block">Block all unless this box allows</option>`;
+  $("#channelPolicyDefault").value = activePolicy.ownDefault; $("#channelPolicySearch").value = "";
+  const groups = [...new Set((playlist.playlist_items || []).map((item) => item.metadata?.group).filter(Boolean))].sort();
+  $("#channelPolicyGroupFilter").innerHTML = `<option value="">All channel groups</option>` + groups.map((name) => `<option>${escapeHtml(name)}</option>`).join("");
+  renderChannelPolicy(); $("#channelPolicyError").textContent = ""; $("#channelPolicyDialog").showModal();
+}
+
+function policyEffective(itemId) {
+  const own = activePolicy.ownRules.get(itemId); if (own) return { decision: own, reason: activePolicy.targetType === "device" ? "This box" : "This group" };
+  if (activePolicy.ownDefault !== "inherit") return { decision: activePolicy.ownDefault, reason: "Default policy" };
+  const group = activePolicy.groupRules.get(itemId); if (group) return { decision: group, reason: activePolicy.groupName || "Box group" };
+  return { decision: activePolicy.groupDefault || "allow", reason: activePolicy.groupName ? `${activePolicy.groupName} default` : "Playlist default" };
+}
+
+function renderChannelPolicy() {
+  const query = $("#channelPolicySearch").value.trim().toLowerCase(); const groupFilter = $("#channelPolicyGroupFilter").value;
+  const items = [...(activePolicy.playlist.playlist_items || [])].sort((a, b) => Number(a.position) - Number(b.position)).filter((item) => { const meta = item.metadata || {}; return (!groupFilter || meta.group === groupFilter) && [item.title, meta.tvg_chno, meta.group, meta.tvg_id].filter(Boolean).join(" ").toLowerCase().includes(query); });
+  let allowed = 0; let blocked = 0;
+  $("#channelPolicyList").innerHTML = items.map((item) => { const meta = item.metadata || {}; const effective = policyEffective(item.id); effective.decision === "block" ? blocked++ : allowed++; return `<div class="policy-channel-row" data-item-id="${item.id}"><strong>CH ${escapeHtml(meta.tvg_chno || item.position || "—")}</strong><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(meta.tvg_id || "No EPG ID")}</small></span><span>${escapeHtml(meta.group || "Ungrouped")}</span><span class="policy-result ${effective.decision === "block" ? "blocked" : "allowed"}">${effective.decision.toUpperCase()}<small>${escapeHtml(effective.reason)}</small></span><select class="policy-rule"><option value="">Inherit</option><option value="allow">Allow</option><option value="block">Block</option></select></div>`; }).join("");
+  $$(".policy-channel-row").forEach((row) => { const select = row.querySelector("select"); select.value = activePolicy.ownRules.get(row.dataset.itemId) || ""; select.addEventListener("change", () => { select.value ? activePolicy.ownRules.set(row.dataset.itemId, select.value) : activePolicy.ownRules.delete(row.dataset.itemId); renderChannelPolicy(); }); });
+  $("#channelPolicySummary").textContent = `${allowed} allowed · ${blocked} blocked · ${items.length} visible in this filter`;
+}
+
+$("#channelPolicySearch")?.addEventListener("input", renderChannelPolicy); $("#channelPolicyGroupFilter")?.addEventListener("change", renderChannelPolicy); $("#channelPolicyDefault")?.addEventListener("change", (event) => { activePolicy.ownDefault = event.target.value; renderChannelPolicy(); });
+function setVisiblePolicy(decision) { $$(".policy-channel-row").forEach((row) => decision ? activePolicy.ownRules.set(row.dataset.itemId, decision) : activePolicy.ownRules.delete(row.dataset.itemId)); renderChannelPolicy(); }
+$("#policyAllowVisible")?.addEventListener("click", () => setVisiblePolicy("allow")); $("#policyBlockVisible")?.addEventListener("click", () => setVisiblePolicy("block")); $("#policyInheritVisible")?.addEventListener("click", () => setVisiblePolicy(""));
+$$('[data-close-channel-policy]').forEach((button) => button.addEventListener("click", () => $("#channelPolicyDialog").close()));
+$("#channelPolicyForm")?.addEventListener("submit", async (event) => { event.preventDefault(); $("#channelPolicyError").textContent = ""; try { await api(`/api/v1/admin/channel-policy/${activePolicy.targetType}/${activePolicy.targetId}`, { method: "PUT", body: JSON.stringify({ playlistId: activePolicy.playlist.id, defaultPolicy: activePolicy.ownDefault, rules: [...activePolicy.ownRules].map(([playlistItemId, decision]) => ({ playlistItemId, decision })) }) }); $("#channelPolicyDialog").close(); await loadDevices(); await loadBoxGroups(); toast("Channel policy saved and pushed."); } catch (error) { $("#channelPolicyError").textContent = error.message; } });
+$("#editDeviceChannelPolicy")?.addEventListener("click", () => openChannelPolicy("device", $("#deviceId").value));
+$("#deviceAssignedPlaylist")?.addEventListener("change", () => $("#editDeviceChannelPolicy").disabled = !($("#deviceAssignedPlaylist").value || state.groups.find((group) => group.id === $("#deviceBoxGroup").value)?.playlist_id));
+$("#deviceBoxGroup")?.addEventListener("change", () => $("#editDeviceChannelPolicy").disabled = !($("#deviceAssignedPlaylist").value || state.groups.find((group) => group.id === $("#deviceBoxGroup").value)?.playlist_id));
+
+async function openEpgStudio() {
+  if (!state.playlists.length) await loadPlaylists();
+  const select = $("#epgPlaylistSelect");
+  const current = select.value || epgState.playlistId;
+  select.innerHTML = `<option value="">Select a TV playlist…</option>` + state.playlists.map((playlist) =>
+    `<option value="${playlist.id}">${escapeHtml(playlist.title)} · ${(playlist.playlist_items || []).length} channels</option>`
+  ).join("");
+  if (current && state.playlists.some((playlist) => playlist.id === current)) select.value = current;
+  if (select.value && (!epgState.doc || epgState.playlistId !== select.value)) await loadManagedEpg(select.value);
+}
+
+function epgNotice(message, error = false) {
+  $("#epgNotice").textContent = message;
+  $("#epgNotice").classList.toggle("error", error);
+}
+
+function parseXmlTv(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.querySelector("parsererror") || doc.documentElement?.tagName.toLowerCase() !== "tv") throw new Error("This is not a valid XMLTV guide.");
+  return doc;
+}
+
+function serializeEpg() {
+  if (!epgState.doc) throw new Error("Load an XMLTV guide first.");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(epgState.doc.documentElement)}`;
+}
+
+function xmlTvDate(value) {
+  const match = String(value || "").match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?:\s*([+-])(\d{2})(\d{2}))?/);
+  if (!match) return null;
+  let time = Date.UTC(+match[1], +match[2] - 1, +match[3], +match[4], +match[5], +match[6]);
+  if (match[7]) time -= (match[7] === "+" ? 1 : -1) * (+match[8] * 60 + +match[9]) * 60_000;
+  return new Date(time);
+}
+
+function xmlTvStamp(date) {
+  const part = (value) => String(value).padStart(2, "0");
+  return `${date.getUTCFullYear()}${part(date.getUTCMonth() + 1)}${part(date.getUTCDate())}${part(date.getUTCHours())}${part(date.getUTCMinutes())}${part(date.getUTCSeconds())} +0000`;
+}
+
+function localInputValue(date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function setEpgDocument(doc, message) {
+  epgState.doc = doc;
+  epgState.dirty = false;
+  const programmeDates = [...doc.querySelectorAll("programme")].flatMap((node) => [xmlTvDate(node.getAttribute("start")), xmlTvDate(node.getAttribute("stop"))]).filter(Boolean).sort((a, b) => a - b);
+  const now = new Date();
+  const initialDate = programmeDates.length && (now < programmeDates[0] || now > programmeDates.at(-1)) ? programmeDates[0] : now;
+  const localInitialDate = new Date(initialDate.getTime() - initialDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  $("#epgScheduleDate").value = localInitialDate;
+  ["#epgPublish", "#epgExportXml", "#epgExportGz", "#epgAddChannel", "#epgAddProgramme"].forEach((id) => $(id).disabled = false);
+  renderEpgTimeline();
+  const dates = [...doc.querySelectorAll("programme")].flatMap((node) => [xmlTvDate(node.getAttribute("start")), xmlTvDate(node.getAttribute("stop"))]).filter(Boolean).sort((a, b) => a - b);
+  const coverage = dates.length ? ` Coverage: ${dates[0].toLocaleString()} through ${dates.at(-1).toLocaleString()}.` : " This guide contains no programmes.";
+  epgNotice(message + coverage);
+}
+
+async function loadManagedEpg(playlistId) {
+  epgState.playlistId = playlistId;
+  if (!playlistId) {
+    epgState.doc = null;
+    $("#epgTimeline").innerHTML = `<div class="epg-empty">Select a TV playlist to begin.</div>`;
+    return;
+  }
+  epgNotice("Loading managed guide…");
+  try {
+    const meta = await api(`/api/v1/admin/playlists/${playlistId}/guide`);
+    if (!meta.guide) {
+      epgState.doc = document.implementation.createDocument(null, "tv");
+      epgState.sourceUrl = "";
+      epgState.doc.documentElement.setAttribute("generator-info-name", "GLZ Hub EPG Studio");
+      setEpgDocument(epgState.doc, "No managed guide yet. Open XMLTV, fetch a URL, or start adding channels and programmes.");
+      return;
+    }
+    epgState.sourceUrl = meta.guide.source_url || "";
+    $("#epgFetchUrl").value = epgState.sourceUrl;
+    const response = await fetch(`/api/v1/admin/playlists/${playlistId}/guide.xml`, { headers: { authorization: `Bearer ${state.session.access_token}` } });
+    if (!response.ok) throw new Error("Could not load the managed guide.");
+    setEpgDocument(parseXmlTv(await response.text()), `${meta.guide.channel_count} channels · ${meta.guide.programme_count} programmes · last published ${new Date(meta.guide.updated_at).toLocaleString()}`);
+  } catch (error) { epgNotice(error.message, true); }
+}
+
+function renderEpgTimeline() {
+  if (!epgState.doc) return;
+  const dateText = $("#epgScheduleDate").value || new Date().toISOString().slice(0, 10);
+  const dayStart = new Date(`${dateText}T00:00:00`);
+  const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+  const query = $("#epgChannelFilter").value.trim().toLowerCase();
+  const allProgrammes = [...epgState.doc.querySelectorAll("programme")];
+  const guideChannels = [...epgState.doc.querySelectorAll("channel")];
+  const guideById = new Map(guideChannels.map((channel) => [channel.getAttribute("id"), channel]));
+  const playlist = state.playlists.find((item) => item.id === epgState.playlistId);
+  const channelRows = playlist ? [...(playlist.playlist_items || [])]
+    .sort((a, b) => String(a.metadata?.tvg_chno || a.position || "").localeCompare(String(b.metadata?.tvg_chno || b.position || ""), undefined, { numeric: true }))
+    .map((item) => ({ channel: guideById.get(item.metadata?.tvg_id), item, id: item.metadata?.tvg_id || "" }))
+    : guideChannels.map((channel) => ({ channel, item: null, id: channel.getAttribute("id") }));
+  const channels = channelRows.filter(({ channel, item, id }) => {
+    const label = `${id} ${item?.title || channel?.querySelector("display-name")?.textContent || ""} ${item?.metadata?.tvg_chno || ""}`.toLowerCase();
+    return label.includes(query);
+  });
+  const hours = Array.from({ length: 24 }, (_, hour) => `<span class="epg-hour" style="left:${hour * 100}px">${String(hour).padStart(2, "0")}:00</span>`).join("");
+  const rows = channels.map(({ channel, item, id }) => {
+    const name = item?.title || channel?.querySelector("display-name")?.textContent || id || "Unmapped channel";
+    const number = item?.metadata?.tvg_chno || item?.position || "—";
+    const icon = item?.metadata?.tvg_logo || channel?.querySelector("icon")?.getAttribute("src");
+    const programmes = allProgrammes.map((node, index) => ({ node, index })).filter(({ node }) => {
+      const start = xmlTvDate(node.getAttribute("start")); const stop = xmlTvDate(node.getAttribute("stop"));
+      return node.getAttribute("channel") === id && start && stop && start < dayEnd && stop > dayStart;
+    });
+    return `<div class="epg-channel-line">
+      <button class="epg-channel-label" data-channel-id="${escapeHtml(channel ? id : "")}" ${channel ? "" : "disabled"}>${icon ? `<img src="${escapeHtml(icon)}" alt="">` : "<span>▣</span>"}<span><strong>CH ${escapeHtml(number)} · ${escapeHtml(name)}</strong><small>${channel ? escapeHtml(id) : `No guide match · set tvg-id`}</small></span></button>
+      <div class="epg-programmes">${programmes.map(({ node, index }) => {
+        const start = xmlTvDate(node.getAttribute("start")); const stop = xmlTvDate(node.getAttribute("stop"));
+        const clippedStart = Math.max(start.getTime(), dayStart.getTime()); const clippedStop = Math.min(stop.getTime(), dayEnd.getTime());
+        const left = (clippedStart - dayStart.getTime()) / 36_000; const width = Math.max(28, (clippedStop - clippedStart) / 36_000);
+        const title = node.querySelector("title")?.textContent || "Untitled programme";
+        return `<button class="epg-programme" data-programme-index="${index}" style="left:${left}px;width:${width}px" title="${escapeHtml(title)}"><strong>${escapeHtml(title)}</strong><small>${start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}–${stop.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></button>`;
+      }).join("")}</div>
+    </div>`;
+  }).join("");
+  const now = new Date();
+  const nowLine = now >= dayStart && now < dayEnd ? `<div class="epg-now-line" style="left:${170 + (now - dayStart) / 36_000}px"></div>` : "";
+  $("#epgTimeline").innerHTML = channels.length ? `<div class="epg-grid">${nowLine}<div class="epg-hours"><div class="epg-corner">${playlist ? "ASSIGNED CH" : "CHANNEL"}</div><div class="epg-hour-scale">${hours}</div></div>${rows}</div>` : `<div class="epg-empty">No channels match this filter.</div>`;
+  $$(".epg-channel-label[data-channel-id]:not([disabled])").forEach((button) => button.addEventListener("click", () => openEpgChannelEditor(button.dataset.channelId)));
+  $$(".epg-programme").forEach((button) => button.addEventListener("click", () => openEpgProgrammeEditor(Number(button.dataset.programmeIndex))));
+}
+
+function markEpgDirty() { epgState.dirty = true; epgNotice("Unsaved guide changes · Publish EPG when ready."); renderEpgTimeline(); }
+
+function openEpgChannelEditor(channelId = "") {
+  const channel = channelId ? [...epgState.doc.querySelectorAll("channel")].find((node) => node.getAttribute("id") === channelId) : null;
+  $("#epgOriginalChannelId").value = channelId;
+  $("#epgChannelId").value = channelId;
+  $("#epgChannelName").value = channel?.querySelector("display-name")?.textContent || "";
+  $("#epgChannelIcon").value = channel?.querySelector("icon")?.getAttribute("src") || "";
+  $("#epgChannelDialogTitle").textContent = channel ? "Edit EPG channel" : "Add EPG channel";
+  $("#epgDeleteChannel").classList.toggle("hidden", !channel);
+  $("#epgChannelError").textContent = "";
+  $("#epgChannelDialog").showModal();
+}
+
+function openEpgProgrammeEditor(index = -1) {
+  const programmes = [...epgState.doc.querySelectorAll("programme")];
+  const node = index >= 0 ? programmes[index] : null;
+  const channels = [...epgState.doc.querySelectorAll("channel")];
+  $("#epgProgrammeIndex").value = String(index);
+  $("#epgProgrammeChannel").innerHTML = channels.map((channel) => `<option value="${escapeHtml(channel.getAttribute("id"))}">${escapeHtml(channel.querySelector("display-name")?.textContent || channel.getAttribute("id"))}</option>`).join("");
+  $("#epgProgrammeChannel").value = node?.getAttribute("channel") || channels[0]?.getAttribute("id") || "";
+  $("#epgProgrammeTitle").value = node?.querySelector("title")?.textContent || "";
+  const defaultStart = new Date(`${$("#epgScheduleDate").value}T12:00:00`);
+  $("#epgProgrammeStart").value = localInputValue(xmlTvDate(node?.getAttribute("start")) || defaultStart);
+  $("#epgProgrammeEnd").value = localInputValue(xmlTvDate(node?.getAttribute("stop")) || new Date(defaultStart.getTime() + 3_600_000));
+  $("#epgProgrammeCategory").value = node?.querySelector("category")?.textContent || "";
+  $("#epgProgrammeSubtitle").value = node?.querySelector("sub-title")?.textContent || "";
+  $("#epgProgrammeDescription").value = node?.querySelector("desc")?.textContent || "";
+  $("#epgProgrammeDialogTitle").textContent = node ? "Edit programme" : "Add programme";
+  $("#epgDeleteProgramme").classList.toggle("hidden", !node);
+  $("#epgProgrammeError").textContent = "";
+  if (!channels.length) { toast("Add an EPG channel first."); return; }
+  $("#epgProgrammeDialog").showModal();
+}
+
+function replaceChildText(parent, tag, value) {
+  parent.querySelectorAll(`:scope > ${tag}`).forEach((node) => node.remove());
+  if (!value) return;
+  const node = epgState.doc.createElement(tag); node.setAttribute("lang", "en"); node.textContent = value; parent.appendChild(node);
+}
+
+function downloadEpgDocument(gzip) {
+  let blob = new Blob([serializeEpg()], { type: "application/xml;charset=utf-8" });
+  const finish = (download, suffix) => { const url = URL.createObjectURL(download); const link = document.createElement("a"); link.href = url; link.download = `glz-guide.${suffix}`; link.click(); URL.revokeObjectURL(url); };
+  if (!gzip) return finish(blob, "xml");
+  if (!("CompressionStream" in window)) return toast("This browser cannot create gzip files.");
+  new Response(blob.stream().pipeThrough(new CompressionStream("gzip"))).blob().then((result) => finish(result, "xml.gz"));
+}
+
+$("#epgPlaylistSelect")?.addEventListener("change", (event) => loadManagedEpg(event.target.value));
+$("#epgScheduleDate")?.addEventListener("change", renderEpgTimeline);
+$("#epgChannelFilter")?.addEventListener("input", renderEpgTimeline);
+$("#epgOpenButton")?.addEventListener("click", () => $("#epgOpenInput").click());
+$("#epgOpenInput")?.addEventListener("change", async (event) => { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; try { epgState.sourceUrl = ""; setEpgDocument(parseXmlTv(await readGuideFile(file)), `Loaded ${file.name} · review and publish when ready.`); } catch (error) { epgNotice(error.message, true); } });
+$("#epgFetchButton")?.addEventListener("click", async () => {
+  const url = $("#epgFetchUrl").value.trim(); if (!url) return epgNotice("Enter an HTTPS XMLTV URL.", true);
+  epgNotice("Fetching and validating guide…");
+  try { const response = await fetch(`/api/v1/admin/epg/fetch?url=${encodeURIComponent(url)}`, { headers: { authorization: `Bearer ${state.session.access_token}` } }); if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(result.error || "Could not fetch guide."); } epgState.sourceUrl = url; setEpgDocument(parseXmlTv(await response.text()), `Guide loaded from ${new URL(url).hostname} · review and publish when ready. GLZ Hub will refresh this source when accessed after six hours.`); } catch (error) { epgNotice(error.message, true); }
+});
+$("#epgPublish")?.addEventListener("click", async () => {
+  if (!epgState.playlistId || !epgState.doc) return epgNotice("Select a playlist and load a guide first.", true);
+  $("#epgPublish").disabled = true;
+  try { const result = await api(`/api/v1/admin/playlists/${epgState.playlistId}/guide`, { method: "PUT", body: JSON.stringify({ name: `${state.playlists.find((p) => p.id === epgState.playlistId)?.title || "GLZ TV"} Guide`, sourceUrl: epgState.sourceUrl || null, xml: serializeEpg() }) }); const pushed = await api(`/api/v1/admin/playlists/${epgState.playlistId}/push`, { method: "POST" }); epgState.dirty = false; epgNotice(`${result.guide.channel_count} channels · ${result.guide.programme_count} programmes published and pushed to ${pushed.devices} TV${pushed.devices === 1 ? "" : "s"}.${epgState.sourceUrl ? " Automatic source refresh is active." : ""}`); toast("EPG published."); } catch (error) { epgNotice(error.message, true); } finally { $("#epgPublish").disabled = false; }
+});
+$("#epgExportXml")?.addEventListener("click", () => downloadEpgDocument(false));
+$("#epgExportGz")?.addEventListener("click", () => downloadEpgDocument(true));
+$("#epgAddChannel")?.addEventListener("click", () => openEpgChannelEditor());
+$("#epgAddProgramme")?.addEventListener("click", () => openEpgProgrammeEditor());
+$$('[data-close-epg-channel]').forEach((button) => button.addEventListener("click", () => $("#epgChannelDialog").close()));
+$$('[data-close-epg-programme]').forEach((button) => button.addEventListener("click", () => $("#epgProgrammeDialog").close()));
+
+$("#epgChannelForm")?.addEventListener("submit", (event) => {
+  event.preventDefault(); const oldId = $("#epgOriginalChannelId").value; const newId = $("#epgChannelId").value.trim();
+  let channel = oldId ? [...epgState.doc.querySelectorAll("channel")].find((node) => node.getAttribute("id") === oldId) : null;
+  if (!channel) { channel = epgState.doc.createElement("channel"); epgState.doc.documentElement.insertBefore(channel, epgState.doc.querySelector("programme")); }
+  channel.setAttribute("id", newId); replaceChildText(channel, "display-name", $("#epgChannelName").value.trim()); channel.querySelectorAll(":scope > icon").forEach((node) => node.remove());
+  const iconUrl = $("#epgChannelIcon").value.trim(); if (iconUrl) { const icon = epgState.doc.createElement("icon"); icon.setAttribute("src", iconUrl); channel.appendChild(icon); }
+  if (oldId && oldId !== newId) [...epgState.doc.querySelectorAll("programme")].filter((node) => node.getAttribute("channel") === oldId).forEach((node) => node.setAttribute("channel", newId));
+  $("#epgChannelDialog").close(); markEpgDirty();
+});
+$("#epgDeleteChannel")?.addEventListener("click", () => { const id = $("#epgOriginalChannelId").value; if (!id || !confirm(`Delete ${id} and all of its programmes?`)) return; [...epgState.doc.querySelectorAll("channel")].find((node) => node.getAttribute("id") === id)?.remove(); [...epgState.doc.querySelectorAll("programme")].filter((node) => node.getAttribute("channel") === id).forEach((node) => node.remove()); $("#epgChannelDialog").close(); markEpgDirty(); });
+
+$("#epgProgrammeForm")?.addEventListener("submit", (event) => {
+  event.preventDefault(); const index = Number($("#epgProgrammeIndex").value); let node = [...epgState.doc.querySelectorAll("programme")][index];
+  const start = new Date($("#epgProgrammeStart").value); const stop = new Date($("#epgProgrammeEnd").value); if (!(stop > start)) { $("#epgProgrammeError").textContent = "End time must be after start time."; return; }
+  if (!node) { node = epgState.doc.createElement("programme"); epgState.doc.documentElement.appendChild(node); }
+  node.setAttribute("channel", $("#epgProgrammeChannel").value); node.setAttribute("start", xmlTvStamp(start)); node.setAttribute("stop", xmlTvStamp(stop));
+  replaceChildText(node, "title", $("#epgProgrammeTitle").value.trim()); replaceChildText(node, "sub-title", $("#epgProgrammeSubtitle").value.trim()); replaceChildText(node, "category", $("#epgProgrammeCategory").value.trim()); replaceChildText(node, "desc", $("#epgProgrammeDescription").value.trim());
+  $("#epgProgrammeDialog").close(); markEpgDirty();
+});
+$("#epgDeleteProgramme")?.addEventListener("click", () => { const node = [...epgState.doc.querySelectorAll("programme")][Number($("#epgProgrammeIndex").value)]; if (!node || !confirm("Delete this programme?")) return; node.remove(); $("#epgProgrammeDialog").close(); markEpgDirty(); });

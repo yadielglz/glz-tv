@@ -69,6 +69,32 @@ function isHttpsUrl(value: string | null): boolean {
   try { return new URL(value).protocol === "https:"; } catch { return false; }
 }
 
+const MAX_XMLTV_BYTES = 40 * 1024 * 1024;
+
+function validateXmlTv(value: unknown): { xml: string; channelCount: number; programmeCount: number } {
+  if (typeof value !== "string" || value.length < 20) throw new Error("Invalid XMLTV guide");
+  const size = new TextEncoder().encode(value).byteLength;
+  if (size > MAX_XMLTV_BYTES) {
+    throw new Error(`XMLTV guide is ${(size / 1024 / 1024).toFixed(1)} MB after decompression; maximum is 40 MB`);
+  }
+  const xml = value.replace(/^\uFEFF/, "").trim();
+  if (!/<tv(?:\s|>)/i.test(xml) || !/<\/tv>/i.test(xml)) throw new Error("Invalid XMLTV guide");
+  return {
+    xml,
+    channelCount: (xml.match(/<channel(?:\s|>)/gi) || []).length,
+    programmeCount: (xml.match(/<programme(?:\s|>)/gi) || []).length
+  };
+}
+
+async function xmlTextFromResponse(response: Response): Promise<string> {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    const decompressed = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Response(decompressed).text();
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 function guestServices(value: unknown): Record<string, string | null>[] {
   if (!Array.isArray(value) || value.length > 12) throw new Error("Invalid services");
   return value.map((item, index) => {
@@ -254,7 +280,7 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     "visible_apps", "theme_mode", "weather_location", "start_destination",
     "captions_enabled", "captions_language", "auto_start", "resume_last_channel",
     "osd_timeout_seconds", "auto_update", "wifi_only",
-    "room_number", "arrival_date", "departure_date", "site_id", "assigned_playlist_id"
+    "room_number", "arrival_date", "departure_date", "site_id", "assigned_playlist_id", "box_group_id"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
   if ("site_id" in input) {
@@ -278,6 +304,16 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
       if (!playlists[0]) return json({ error: "TV playlist not found." }, 404);
     }
     patch.assigned_playlist_id = playlistId;
+  }
+  if ("box_group_id" in input) {
+    const groupId = optionalString(input.box_group_id, "boxGroupId", 64);
+    if (groupId) {
+      const groups = await supabaseJson(env,
+        `/rest/v1/box_groups?id=eq.${encodeURIComponent(groupId)}&owner_id=eq.${user.id}&select=id`
+      ) as Record<string, unknown>[];
+      if (!groups[0]) return json({ error: "Box group not found." }, 404);
+    }
+    patch.box_group_id = groupId;
   }
   patch.config_version = Number(currentRows[0].config_version || 0) + 1;
   patch.updated_at = new Date().toISOString();
@@ -348,8 +384,26 @@ async function unpairDevice(request: Request, env: Env, deviceId: string): Promi
 
 async function deviceConfig(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
-  const managedPlaylistUrl = `${new URL(request.url).origin}/api/v1/devices/playlist.m3u`;
-  const playlistUrl = device.playlist_url || managedPlaylistUrl;
+  const origin = new URL(request.url).origin;
+  const managedPlaylistUrl = `${origin}/api/v1/devices/playlist.m3u`;
+  let managedEpgUrl: unknown = null;
+  let groupPlaylistId: unknown = null;
+  if (device.box_group_id) {
+    const groups = await supabaseJson(env,
+      `/rest/v1/box_groups?id=eq.${encodeURIComponent(String(device.box_group_id))}&owner_id=eq.${device.owner_id}&select=playlist_id`
+    ) as Record<string, unknown>[];
+    groupPlaylistId = groups[0]?.playlist_id ?? null;
+  }
+  const effectivePlaylistId = device.assigned_playlist_id || groupPlaylistId;
+  const hasManagedAssignment = Boolean(effectivePlaylistId);
+  const playlistUrl = hasManagedAssignment ? managedPlaylistUrl : (device.playlist_url || managedPlaylistUrl);
+  if (hasManagedAssignment || !device.epg_url) {
+    const playlistFilter = effectivePlaylistId
+      ? `id=eq.${encodeURIComponent(String(effectivePlaylistId))}`
+      : `owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&is_published=eq.true&order=created_at.asc&limit=1`;
+    const assigned = await supabaseJson(env, `/rest/v1/playlists?${playlistFilter}&select=id,epg_url`) as Record<string, unknown>[];
+    if (assigned[0]?.epg_url) managedEpgUrl = assigned[0].epg_url;
+  }
   const profiles = device.site_id ? await supabaseJson(env,
     `/rest/v1/guest_experience_profiles?site_id=eq.${device.site_id}&owner_id=eq.${device.owner_id}&select=*`
   ) as Record<string, unknown>[] : [];
@@ -360,7 +414,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     deviceName: device.name,
     guestName: device.guest_name,
     playlistUrl,
-    epgUrl: device.epg_url,
+    epgUrl: hasManagedAssignment ? managedEpgUrl : (device.epg_url || managedEpgUrl),
     requestHeaders: device.request_headers ?? {},
     visibleApps: device.visible_apps ?? [],
     themeMode: device.theme_mode,
@@ -391,6 +445,88 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
       departureDate: device.departure_date ?? null
     }
   });
+}
+
+async function listBoxGroups(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const groups = await supabaseJson(env,
+    `/rest/v1/box_groups?owner_id=eq.${user.id}&select=*,devices(id,name)&order=name.asc`
+  ) as Record<string, unknown>[];
+  return json({ groups });
+}
+
+async function createBoxGroup(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env); const input = await body(request);
+  const playlistId = optionalString(input.playlistId || input.playlist_id, "playlistId", 64);
+  if (playlistId) {
+    const playlists = await supabaseJson(env, `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id`) as Record<string, unknown>[];
+    if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+  }
+  const defaultPolicy = input.defaultPolicy === 'block' ? 'block' : 'allow';
+  const rows = await supabaseJson(env, "/rest/v1/box_groups?select=*", { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify({ owner_id: user.id, name: requiredString(input.name, "group name", 100), playlist_id: playlistId, default_channel_policy: defaultPolicy }) }) as Record<string, unknown>[];
+  return json({ group: rows[0] }, 201);
+}
+
+async function updateBoxGroup(request: Request, env: Env, groupId: string): Promise<Response> {
+  const user = await adminUser(request, env); const input = await body(request); const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.name !== undefined) patch.name = requiredString(input.name, "group name", 100);
+  if (input.defaultPolicy !== undefined) patch.default_channel_policy = input.defaultPolicy === 'block' ? 'block' : 'allow';
+  if (input.playlistId !== undefined || input.playlist_id !== undefined) {
+    const playlistId = optionalString(input.playlistId || input.playlist_id, "playlistId", 64);
+    if (playlistId) {
+      const playlists = await supabaseJson(env, `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id`) as Record<string, unknown>[];
+      if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+    }
+    patch.playlist_id = playlistId;
+  }
+  const rows = await supabaseJson(env, `/rest/v1/box_groups?id=eq.${encodeURIComponent(groupId)}&owner_id=eq.${user.id}&select=*`, { method: "PATCH", headers: { prefer: "return=representation" }, body: JSON.stringify(patch) }) as Record<string, unknown>[];
+  if (!rows[0]) return json({ error: "Box group not found." }, 404);
+  return json({ group: rows[0] });
+}
+
+async function deleteBoxGroup(request: Request, env: Env, groupId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  await supabaseJson(env, `/rest/v1/box_groups?id=eq.${encodeURIComponent(groupId)}&owner_id=eq.${user.id}`, { method: "DELETE" });
+  return json({ ok: true });
+}
+
+async function channelPolicy(request: Request, env: Env, targetType: string, targetId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  if (!['group', 'device'].includes(targetType)) throw new Error("Invalid policy target");
+  const targetTable = targetType === 'group' ? 'box_groups' : 'devices';
+  const targets = await supabaseJson(env, `/rest/v1/${targetTable}?id=eq.${encodeURIComponent(targetId)}&owner_id=eq.${user.id}&select=id`) as Record<string, unknown>[];
+  if (!targets[0]) return json({ error: "Policy target not found." }, 404);
+  if (request.method === "GET") {
+    const rules = await supabaseJson(env, `/rest/v1/channel_policy_rules?target_type=eq.${targetType}&target_id=eq.${encodeURIComponent(targetId)}&owner_id=eq.${user.id}&select=playlist_item_id,decision,playlist_id`) as Record<string, unknown>[];
+    const settings = await supabaseJson(env, `/rest/v1/${targetTable}?id=eq.${encodeURIComponent(targetId)}&owner_id=eq.${user.id}&select=${targetType === 'group' ? 'default_channel_policy' : 'channel_policy_mode'}`) as Record<string, unknown>[];
+    return json({ rules, defaultPolicy: targetType === 'group' ? settings[0]?.default_channel_policy : settings[0]?.channel_policy_mode });
+  }
+  const input = await body(request); const playlistId = requiredString(input.playlistId || input.playlist_id, "playlistId", 64);
+  const playlists = await supabaseJson(env, `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id,playlist_items(id)`) as Record<string, unknown>[];
+  if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+  const validIds = new Set(((playlists[0].playlist_items as Record<string, unknown>[]) || []).map((item) => String(item.id)));
+  if (!Array.isArray(input.rules) || input.rules.length > 3000) throw new Error("Invalid channel policy");
+  const rules = input.rules.map((value, index) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Invalid policy rule ${index + 1}`);
+    const rule = value as Record<string, unknown>; const itemId = requiredString(rule.playlistItemId || rule.playlist_item_id, `policy channel ${index + 1}`, 64);
+    const decision = requiredString(rule.decision, `policy decision ${index + 1}`, 10);
+    if (!validIds.has(itemId) || !['allow', 'block'].includes(decision)) throw new Error(`Invalid policy rule ${index + 1}`);
+    return { owner_id: user.id, playlist_id: playlistId, target_type: targetType, target_id: targetId, playlist_item_id: itemId, decision };
+  });
+  await supabaseJson(env, `/rest/v1/channel_policy_rules?target_type=eq.${targetType}&target_id=eq.${encodeURIComponent(targetId)}`, { method: "DELETE" });
+  if (rules.length) await supabaseJson(env, "/rest/v1/channel_policy_rules", { method: "POST", body: JSON.stringify(rules) });
+  const defaultPolicy = targetType === 'group'
+    ? (input.defaultPolicy === 'block' ? 'block' : 'allow')
+    : (['inherit', 'allow', 'block'].includes(String(input.defaultPolicy)) ? String(input.defaultPolicy) : 'inherit');
+  await supabaseJson(env, `/rest/v1/${targetTable}?id=eq.${encodeURIComponent(targetId)}&owner_id=eq.${user.id}`, {
+    method: 'PATCH', body: JSON.stringify(targetType === 'group' ? { default_channel_policy: defaultPolicy } : { channel_policy_mode: defaultPolicy })
+  });
+  const refreshFilter = targetType === 'device' ? `id=eq.${encodeURIComponent(targetId)}` : `box_group_id=eq.${encodeURIComponent(targetId)}`;
+  const affectedDevices = await supabaseJson(env, `/rest/v1/devices?owner_id=eq.${user.id}&${refreshFilter}&select=id,config_version`) as Record<string, unknown>[];
+  await Promise.all(affectedDevices.map((device) => supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}&owner_id=eq.${user.id}`, {
+    method: "PATCH", body: JSON.stringify({ config_version: Number(device.config_version || 0) + 1, force_refresh_token: crypto.randomUUID() })
+  })));
+  return json({ ok: true, rules: rules.length });
 }
 
 async function getGuestExperience(request: Request, env: Env): Promise<Response> {
@@ -976,14 +1112,10 @@ async function reorderPlaylistItems(request: Request, env: Env, playlistId: stri
   if (itemIds.length !== existingIds.size || itemIds.some((id) => !existingIds.has(id))) {
     throw new Error("Invalid channel order");
   }
-  for (let start = 0; start < itemIds.length; start += 25) {
-    await Promise.all(itemIds.slice(start, start + 25).map((itemId, offset) => supabaseJson(
-      env,
-      `/rest/v1/playlist_items?id=eq.${encodeURIComponent(itemId)}&playlist_id=eq.${encodeURIComponent(playlistId)}`,
-      { method: "PATCH", body: JSON.stringify({ position: start + offset + 1 }) }
-    )));
-  }
-  return json({ ok: true });
+  const updated = await supabaseJson(env, "/rest/v1/rpc/reorder_playlist_items", {
+    method: "POST", body: JSON.stringify({ p_owner_id: user.id, p_playlist_id: playlistId, p_item_ids: itemIds })
+  }) as number;
+  return json({ ok: true, updated });
 }
 
 async function deletePlaylistItem(request: Request, env: Env, playlistId: string, itemId: string): Promise<Response> {
@@ -1002,15 +1134,142 @@ async function deletePlaylistItem(request: Request, env: Env, playlistId: string
   return json({ ok: true });
 }
 
+async function ownedPlaylist(request: Request, env: Env, playlistId: string): Promise<{ user: { id: string }; playlist: Record<string, unknown> }> {
+  const user = await adminUser(request, env);
+  const rows = await supabaseJson(env,
+    `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id,title,is_published`
+  ) as Record<string, unknown>[];
+  if (!rows[0]) throw new Response("Playlist not found", { status: 404 });
+  return { user, playlist: rows[0] };
+}
+
+async function getManagedGuide(request: Request, env: Env, playlistId: string): Promise<Response> {
+  const { user } = await ownedPlaylist(request, env, playlistId);
+  const rows = await supabaseJson(env,
+    `/rest/v1/epg_guides?playlist_id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id,name,source_url,channel_count,programme_count,updated_at`
+  ) as Record<string, unknown>[];
+  return json({ guide: rows[0] ?? null });
+}
+
+async function saveManagedGuide(request: Request, env: Env, playlistId: string): Promise<Response> {
+  const { user, playlist } = await ownedPlaylist(request, env, playlistId);
+  const input = await body(request);
+  let sourceUrl = optionalString(input.sourceUrl || input.source_url, "EPG source URL");
+  let rawXml = input.xml;
+  if (sourceUrl && typeof rawXml !== "string") {
+    if (!isHttpsUrl(sourceUrl)) throw new Error("Invalid EPG source URL");
+    const source = await fetch(sourceUrl, { headers: { "user-agent": "GLZ-Hub-EPG/1.0", accept: "application/xml,text/xml,application/gzip,*/*" } });
+    if (!source.ok) throw new Error(`Invalid EPG source response (${source.status})`);
+    rawXml = await xmlTextFromResponse(source);
+  }
+  const guide = validateXmlTv(rawXml);
+  const name = optionalString(input.name, "guide name", 120) || `${String(playlist.title)} Guide`;
+  const rows = await supabaseJson(env, "/rest/v1/epg_guides?on_conflict=playlist_id&select=id,name,source_url,channel_count,programme_count,updated_at", {
+    method: "POST",
+    headers: { prefer: "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify({
+      owner_id: user.id, playlist_id: playlistId, name, source_url: sourceUrl,
+      xml_content: guide.xml, channel_count: guide.channelCount, programme_count: guide.programmeCount,
+      updated_at: new Date().toISOString()
+    })
+  }) as Record<string, unknown>[];
+  const publicUrl = `${new URL(request.url).origin}/api/v1/guides/${playlistId}.xml.gz`;
+  await supabaseJson(env, `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}`, {
+    method: "PATCH", body: JSON.stringify({ epg_url: publicUrl, updated_at: new Date().toISOString() })
+  });
+  return json({ guide: rows[0], url: publicUrl });
+}
+
+async function fetchGuidePreview(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const sourceUrl = new URL(request.url).searchParams.get("url");
+  if (!sourceUrl || !isHttpsUrl(sourceUrl)) throw new Error("Invalid EPG source URL");
+  const source = await fetch(sourceUrl, { headers: { "user-agent": "GLZ-Hub-EPG/1.0", accept: "application/xml,text/xml,application/gzip,*/*" } });
+  if (!source.ok) throw new Error(`Invalid EPG source response (${source.status})`);
+  const guide = validateXmlTv(await xmlTextFromResponse(source));
+  return new Response(guide.xml, { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" } });
+}
+
+async function exportManagedGuide(request: Request, env: Env, playlistId: string, gzip: boolean, requireAdmin = false): Promise<Response> {
+  let ownerFilter = "";
+  if (requireAdmin) {
+    const { user } = await ownedPlaylist(request, env, playlistId);
+    ownerFilter = `&owner_id=eq.${user.id}`;
+  } else {
+    const playlists = await supabaseJson(env,
+      `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&is_published=eq.true&select=id`
+    ) as Record<string, unknown>[];
+    if (!playlists[0]) return json({ error: "Guide not found." }, 404);
+  }
+  const rows = await supabaseJson(env,
+    `/rest/v1/epg_guides?playlist_id=eq.${encodeURIComponent(playlistId)}${ownerFilter}&select=id,name,source_url,xml_content,updated_at`
+  ) as Record<string, unknown>[];
+  if (!rows[0]) return json({ error: "Guide not found." }, 404);
+  const row = rows[0];
+  let xmlContent = String(row.xml_content);
+  const stale = row.source_url && Date.now() - new Date(String(row.updated_at)).getTime() >= 6 * 60 * 60_000;
+  if (stale) {
+    try {
+      const source = await fetch(String(row.source_url), { headers: { "user-agent": "GLZ-Hub-EPG/1.0", accept: "application/xml,text/xml,application/gzip,*/*" } });
+      if (source.ok) {
+        const refreshed = validateXmlTv(await xmlTextFromResponse(source));
+        xmlContent = refreshed.xml;
+        await supabaseJson(env, `/rest/v1/epg_guides?id=eq.${encodeURIComponent(String(row.id))}`, {
+          method: "PATCH",
+          body: JSON.stringify({ xml_content: refreshed.xml, channel_count: refreshed.channelCount, programme_count: refreshed.programmeCount, updated_at: new Date().toISOString() })
+        });
+      }
+    } catch (error) { console.error("On-demand EPG refresh failed", row.id, error); }
+  }
+  const headers = new Headers({
+    "content-type": "application/xml; charset=utf-8",
+    "cache-control": "public, max-age=300",
+    "content-disposition": `attachment; filename="guide-${playlistId}.xml${gzip ? ".gz" : ""}"`
+  });
+  let body: BodyInit = xmlContent;
+  if (gzip) {
+    headers.set("content-encoding", "gzip");
+    body = new Blob([body]).stream().pipeThrough(new CompressionStream("gzip"));
+  }
+  return new Response(body, { headers });
+}
+
+async function pushPlaylist(request: Request, env: Env, playlistId: string): Promise<Response> {
+  const { user } = await ownedPlaylist(request, env, playlistId);
+  const token = crypto.randomUUID();
+  const devices = await supabaseJson(env,
+    `/rest/v1/devices?owner_id=eq.${user.id}&or=(assigned_playlist_id.eq.${encodeURIComponent(playlistId)},assigned_playlist_id.is.null)&select=id`
+  ) as Record<string, unknown>[];
+  await supabaseJson(env,
+    `/rest/v1/devices?owner_id=eq.${user.id}&or=(assigned_playlist_id.eq.${encodeURIComponent(playlistId)},assigned_playlist_id.is.null)`,
+    { method: "PATCH", body: JSON.stringify({ force_refresh_token: token }) }
+  );
+  return json({ ok: true, devices: devices.length });
+}
+
 async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
 
   let playlistQuery = `/rest/v1/playlists?owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&is_published=eq.true&select=*,playlist_items(*)&order=created_at.asc`;
-  if (device.assigned_playlist_id) {
-    playlistQuery = `/rest/v1/playlists?id=eq.${encodeURIComponent(String(device.assigned_playlist_id))}&owner_id=eq.${device.owner_id}&select=*,playlist_items(*)`;
+  let group: Record<string, unknown> | null = null;
+  if (device.box_group_id) {
+    const groups = await supabaseJson(env, `/rest/v1/box_groups?id=eq.${encodeURIComponent(String(device.box_group_id))}&owner_id=eq.${device.owner_id}&select=id,playlist_id,default_channel_policy`) as Record<string, unknown>[];
+    group = groups[0] ?? null;
+  }
+  const effectivePlaylistId = device.assigned_playlist_id || group?.playlist_id;
+  const useGroupPolicy = Boolean(group && (!device.assigned_playlist_id || String(device.assigned_playlist_id) === String(group.playlist_id)));
+  if (effectivePlaylistId) {
+    playlistQuery = `/rest/v1/playlists?id=eq.${encodeURIComponent(String(effectivePlaylistId))}&owner_id=eq.${device.owner_id}&select=*,playlist_items(*)`;
   }
 
   const playlists = await supabaseJson(env, playlistQuery) as Record<string, unknown>[];
+  const targetFilters = [`and(target_type.eq.device,target_id.eq.${device.id})`];
+  if (group?.id) targetFilters.push(`and(target_type.eq.group,target_id.eq.${group.id})`);
+  const rules = await supabaseJson(env,
+    `/rest/v1/channel_policy_rules?owner_id=eq.${device.owner_id}&or=(${targetFilters.join(',')})&select=target_type,playlist_item_id,decision`
+  ) as Record<string, unknown>[];
+  const groupRules = new Map(rules.filter((rule) => rule.target_type === 'group').map((rule) => [String(rule.playlist_item_id), String(rule.decision)]));
+  const deviceRules = new Map(rules.filter((rule) => rule.target_type === 'device').map((rule) => [String(rule.playlist_item_id), String(rule.decision)]));
 
   let m3uContent = '#EXTM3U x-tvg-url="https://play.glztech.com/epg.xml.gz"\n\n';
 
@@ -1031,6 +1290,12 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
       const mediaUrl = String(item.media_url || "");
       const metadata = (item.metadata && typeof item.metadata === "object") ? item.metadata as Record<string, unknown> : {};
       if (metadata.hidden === true || metadata.hidden === "true") continue;
+      const deviceMode = String(device.channel_policy_mode || 'inherit');
+      const decision = deviceRules.get(String(item.id))
+        ?? (deviceMode !== 'inherit' ? deviceMode : undefined)
+        ?? (useGroupPolicy ? groupRules.get(String(item.id)) : undefined)
+        ?? String(useGroupPolicy ? (group?.default_channel_policy || 'allow') : 'allow');
+      if (decision === 'block') continue;
 
       const tvgId = metadata.tvg_id || metadata.tvgId ? ` tvg-id="${cleanAttribute(metadata.tvg_id || metadata.tvgId)}"` : "";
       const tvgChno = metadata.tvg_chno || metadata.tvgChno ? ` tvg-chno="${cleanAttribute(metadata.tvg_chno || metadata.tvgChno)}"` : "";
@@ -1066,6 +1331,8 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (path === "/api/health") return json({ ok: true, service: "glzhub" });
   if (path === "/api/v1/radio/stations" && request.method === "GET") return publicRadioCatalog(request, env);
+  const publicGuide = path.match(/^\/api\/v1\/guides\/([0-9a-f-]+)\.xml(\.gz)?$/i);
+  if (publicGuide && request.method === "GET") return exportManagedGuide(request, env, publicGuide[1], Boolean(publicGuide[2]));
   if (path === "/api/v1/public-config") {
     return json({ supabaseUrl: env.SUPABASE_URL, publishableKey: env.SUPABASE_PUBLISHABLE_KEY });
   }
@@ -1073,6 +1340,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/v1/enrollment/claim" && request.method === "POST") return claimEnrollment(request, env);
   if (path === "/api/v1/admin/enrollments" && request.method === "GET") return listNearbyEnrollments(request, env);
   if (path === "/api/v1/admin/devices" && request.method === "GET") return listDevices(request, env);
+  if (path === "/api/v1/admin/box-groups" && request.method === "GET") return listBoxGroups(request, env);
+  if (path === "/api/v1/admin/box-groups" && request.method === "POST") return createBoxGroup(request, env);
   if (path === "/api/v1/admin/sites" && request.method === "GET") return listSites(request, env);
   if (path === "/api/v1/admin/sites" && request.method === "POST") return createSite(request, env);
   if (path === "/api/v1/admin/apps" && request.method === "GET") return listApps(request, env);
@@ -1084,6 +1353,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (adminDevice && request.method === "DELETE") return unpairDevice(request, env, adminDevice[1]);
   const forceRefresh = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/force-refresh$/i);
   if (forceRefresh && request.method === "POST") return forceRefreshDevice(request, env, forceRefresh[1]);
+  const adminGroup = path.match(/^\/api\/v1\/admin\/box-groups\/([0-9a-f-]+)$/i);
+  if (adminGroup && request.method === "PATCH") return updateBoxGroup(request, env, adminGroup[1]);
+  if (adminGroup && request.method === "DELETE") return deleteBoxGroup(request, env, adminGroup[1]);
+  const policy = path.match(/^\/api\/v1\/admin\/channel-policy\/(group|device)\/([0-9a-f-]+)$/i);
+  if (policy && (request.method === "GET" || request.method === "PUT")) return channelPolicy(request, env, policy[1].toLowerCase(), policy[2]);
   const adminSite = path.match(/^\/api\/v1\/admin\/sites\/([0-9a-f-]+)$/i);
   if (adminSite && request.method === "PATCH") return updateSite(request, env, adminSite[1]);
   const install = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/commands$/i);
@@ -1103,6 +1377,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (adminRadio && request.method === "DELETE") return deleteRadioStation(request, env, adminRadio[1]);
 
   if (path === "/api/v1/admin/playlists" && request.method === "GET") return listPlaylists(request, env);
+  if (path === "/api/v1/admin/epg/fetch" && request.method === "GET") return fetchGuidePreview(request, env);
   if (path === "/api/v1/admin/playlists" && request.method === "POST") return createPlaylist(request, env);
   const adminPlaylist = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)$/i);
   if (adminPlaylist && request.method === "GET") return getPlaylist(request, env, adminPlaylist[1]);
@@ -1114,6 +1389,13 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (playlistImport && request.method === "POST") return importPlaylistItems(request, env, playlistImport[1]);
   const playlistReorder = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/reorder$/i);
   if (playlistReorder && request.method === "PATCH") return reorderPlaylistItems(request, env, playlistReorder[1]);
+  const playlistGuide = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/guide$/i);
+  if (playlistGuide && request.method === "GET") return getManagedGuide(request, env, playlistGuide[1]);
+  if (playlistGuide && request.method === "PUT") return saveManagedGuide(request, env, playlistGuide[1]);
+  const playlistGuideExport = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/guide\.xml(\.gz)?$/i);
+  if (playlistGuideExport && request.method === "GET") return exportManagedGuide(request, env, playlistGuideExport[1], Boolean(playlistGuideExport[2]), true);
+  const playlistPush = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/push$/i);
+  if (playlistPush && request.method === "POST") return pushPlaylist(request, env, playlistPush[1]);
   const playlistItemDelete = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/items\/([0-9a-f-]+)$/i);
   if (playlistItemDelete && request.method === "PATCH") return updatePlaylistItem(request, env, playlistItemDelete[1], playlistItemDelete[2]);
   if (playlistItemDelete && request.method === "DELETE") return deletePlaylistItem(request, env, playlistItemDelete[1], playlistItemDelete[2]);

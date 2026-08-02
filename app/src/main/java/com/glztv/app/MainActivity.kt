@@ -113,6 +113,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
@@ -562,6 +563,33 @@ private fun TvScreen(
         loading = false
     }
 
+    suspend fun syncEverythingNow(): String {
+        status = "Syncing everything from GLZ Hub…"
+        val (syncResult, radioCount) = withContext(Dispatchers.IO) {
+            val result = GlzHubManager.sync(prefs, client)
+            GlzHubManager.heartbeat(prefs, client)
+            val radio = RadioCatalogManager.load(prefs, client)
+            result to radio.stations.size
+        }
+        for (command in syncResult.commands) {
+            handleManagedHubCommand(context, prefs, client, command) {
+                loadSources(forceRefresh = true)
+            }
+        }
+        guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+        guestExperience = GuestExperience.from(prefs)
+        weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
+            ?: DEFAULT_WEATHER_LOCATION
+        visibleAppPackages = GlzHubManager.visibleApps(prefs)
+        appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
+        onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
+        captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
+        captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
+        osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
+        loadSources(forceRefresh = true)
+        return "Synced now · ${channels.size} TV channels · $radioCount radio stations · ${guide.programmeCount} guide entries"
+    }
+
     suspend fun checkForAppUpdate(): String {
         return runCatching {
             withContext(Dispatchers.IO) { GithubUpdateManager.check(client) }
@@ -802,7 +830,7 @@ private fun TvScreen(
                 ?: AppSection.Home.name,
             sourceStatus = status,
             hubStatus = hubStatus,
-            onForceRefresh = { scope.launch { loadSources(forceRefresh = true) } },
+            onSyncNow = { syncEverythingNow() },
             onCheckForUpdate = { checkForAppUpdate() },
             onBeginHubEnrollment = {
                 withContext(Dispatchers.IO) {
@@ -3124,7 +3152,6 @@ private fun TvCategoryTab(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .focusable()
             .onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
@@ -3184,7 +3211,7 @@ private fun SettingsDialog(
     startDestination: String,
     sourceStatus: String,
     hubStatus: String,
-    onForceRefresh: () -> Unit,
+    onSyncNow: suspend () -> String,
     onCheckForUpdate: suspend () -> String,
     onBeginHubEnrollment: suspend () -> String,
     onDismiss: () -> Unit,
@@ -3211,6 +3238,8 @@ private fun SettingsDialog(
     var updateStatus by remember { mutableStateOf("Version ${BuildConfig.VERSION_NAME}") }
     var hubMessage by remember(hubStatus) { mutableStateOf(hubStatus) }
     var hubLoading by remember { mutableStateOf(false) }
+    var syncLoading by remember { mutableStateOf(false) }
+    var syncMessage by remember(sourceStatus) { mutableStateOf(sourceStatus) }
     val settingsScope = rememberCoroutineScope()
     val initialFocus = remember { FocusRequester() }
 
@@ -3304,14 +3333,23 @@ private fun SettingsDialog(
                             ) {
                                 Column(Modifier.padding(18.dp)) {
                                     Text(
-                                        sourceStatus,
+                                        syncMessage,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 15.sp
                                     )
                                     Spacer(Modifier.height(14.dp))
                                     TvSettingsButton(
-                                        label = "⚡ Force refresh EPG & M3U",
-                                        onClick = onForceRefresh
+                                        label = if (syncLoading) "Syncing everything…" else "↻ Sync Now",
+                                        enabled = !syncLoading,
+                                        onClick = {
+                                            syncLoading = true
+                                            syncMessage = "Contacting GLZ Hub and refreshing all managed data…"
+                                            settingsScope.launch {
+                                                syncMessage = runCatching { onSyncNow() }
+                                                    .getOrElse { "Sync failed · ${it.message}" }
+                                                syncLoading = false
+                                            }
+                                        }
                                     )
                                 }
                             }
@@ -3365,8 +3403,7 @@ private fun SettingsDialog(
                                                     true
                                                 } else false
                                             }
-                                            .clickable { themeValue = value }
-                                            .focusable(),
+                                            .clickable { themeValue = value },
                                         shape = RoundedCornerShape(16.dp),
                                         border = BorderStroke(
                                             if (focused) 4.dp else 1.dp,
@@ -3414,8 +3451,7 @@ private fun SettingsDialog(
                                                     true
                                                 } else false
                                             }
-                                            .clickable { osdTimeoutValue = timeout }
-                                            .focusable(),
+                                            .clickable { osdTimeoutValue = timeout },
                                         shape = RoundedCornerShape(14.dp),
                                         border = BorderStroke(
                                             if (focused) 4.dp else 1.dp,
@@ -3471,8 +3507,7 @@ private fun SettingsDialog(
                                                         true
                                                     } else false
                                                 }
-                                                .clickable { startDestinationValue = destination.name }
-                                                .focusable(),
+                                                .clickable { startDestinationValue = destination.name },
                                             shape = RoundedCornerShape(14.dp),
                                             border = BorderStroke(
                                                 if (focused) 4.dp else 1.dp,
@@ -3577,7 +3612,6 @@ private fun TvSettingsButton(
     var focused by remember { mutableStateOf(false) }
     Surface(
         modifier
-            .focusable(enabled)
             .onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (enabled && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
@@ -3632,7 +3666,6 @@ private fun ProtectedSourceField(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .focusable(enabled)
             .onFocusChanged {
                 focused = it.isFocused
                 if (!it.isFocused) editing = false
@@ -3665,7 +3698,8 @@ private fun ProtectedSourceField(
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .focusRequester(focusRequester),
+                .focusRequester(focusRequester)
+                .focusProperties { canFocus = editing },
             label = { Text(label) },
             readOnly = !editing,
             enabled = enabled,
@@ -3707,7 +3741,6 @@ private fun SettingsToggle(label: String, checked: Boolean, onChecked: (Boolean)
     Surface(
         Modifier
             .fillMaxWidth()
-            .focusable()
             .onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&

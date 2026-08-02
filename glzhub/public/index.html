@@ -18,10 +18,12 @@
       </a>
       <nav>
         <button class="nav active" data-view="devices">▣ <span>Devices</span></button>
+        <button class="nav" data-view="groups">▦ <span>Box groups</span></button>
         <button class="nav" data-view="sites">⌂ <span>Properties</span></button>
         <button class="nav" data-view="experience">✦ <span>Guest experience</span></button>
         <button class="nav" data-view="radio">🎙️ <span>Radio streams</span></button>
         <button class="nav" data-view="studio">🎬 <span>TV playlists</span></button>
+        <button class="nav" data-view="epg">▤ <span>EPG Studio</span></button>
         <button class="nav" data-view="apps">⬡ <span>App library</span></button>
         <button class="nav" data-view="pair">＋ <span>Pair a TV</span></button>
       </nav>
@@ -90,6 +92,40 @@
           </div>
         </section>
 
+        <section id="epgView" class="hidden">
+          <div class="epg-toolbar">
+            <div><div class="eyebrow">XMLTV PROGRAMME GUIDE</div><h3>EPG Studio</h3><p>Load, inspect, edit and publish complete television schedules.</p></div>
+            <div class="epg-toolbar-actions">
+              <button id="epgExportXml" class="secondary" disabled>⇩ Export XMLTV</button>
+              <button id="epgExportGz" class="secondary" disabled>⇩ Export XML.GZ</button>
+              <button id="epgPublish" class="primary" disabled>⇧ Publish EPG</button>
+            </div>
+          </div>
+          <div class="epg-source-bar">
+            <select id="epgPlaylistSelect" aria-label="TV playlist"><option value="">Select a TV playlist…</option></select>
+            <input id="epgFetchUrl" type="url" placeholder="https://epg.best/.../guide.xml.gz" aria-label="Guide URL">
+            <button id="epgFetchButton" class="secondary">◎ Fetch URL</button>
+            <button id="epgOpenButton" class="secondary">⇧ Open XMLTV</button>
+            <input id="epgOpenInput" class="hidden" type="file" accept=".xml,.gz,.xml.gz,application/xml,text/xml,application/gzip">
+          </div>
+          <div id="epgNotice" class="epg-notice">Select a playlist, then load its managed guide or open an XMLTV source.</div>
+          <div class="epg-workspace">
+            <div class="epg-workspace-tools">
+              <input id="epgChannelFilter" placeholder="⌕  Filter channels…">
+              <label>Schedule date<input id="epgScheduleDate" type="date"></label>
+              <button id="epgAddChannel" class="secondary" disabled>＋ Add channel</button>
+              <button id="epgAddProgramme" class="primary" disabled>＋ Add programme</button>
+            </div>
+            <div id="epgTimeline" class="epg-timeline"><div class="epg-empty">Load an XMLTV guide to begin editing.</div></div>
+          </div>
+        </section>
+
+        <section id="groupsView" class="hidden">
+          <div class="section-toolbar"><div><div class="eyebrow">CHANNEL ACCESS CONTROL</div><h3>Box Groups</h3><p>Assign a shared lineup and channel policy to multiple GLZ TV boxes.</p></div><button id="addBoxGroup" class="primary">＋ Add box group</button></div>
+          <div id="boxGroupList" class="management-list"></div>
+          <div id="boxGroupEmpty" class="empty"><h3>No box groups yet</h3><p>Create a group such as Puerto Rico Rooms, Lobby TVs, or Sports Bar.</p></div>
+        </section>
+
         <section id="appsView" class="hidden">
           <div class="section-toolbar">
             <div>
@@ -130,9 +166,9 @@
             <button id="addPlaylistButton" class="primary">＋ Add TV playlist</button>
           </div>
           <div class="studio-help">
-            <span><strong>Import M3U</strong> preserves channel names, groups, numbers, EPG IDs and logos.</span>
-            <span><strong>Drag channels</strong> to reorder, or select a row to edit every field.</span>
-            <span><strong>Published lineups</strong> are available to assigned televisions immediately.</span>
+            <span><strong>Click to edit</strong> channel numbers and names directly in the table.</span>
+            <span><strong>Edit logo &amp; details</strong> opens stream, EPG ID, group, visibility and artwork controls.</span>
+            <span><strong>EPG editor</strong> imports XML/XML.GZ or fetches a guide from epg.best and publishes it with the M3U.</span>
           </div>
           <input id="m3uFileInput" class="hidden" type="file" accept=".m3u,.m3u8,audio/x-mpegurl">
           <div id="playlistList" class="management-list"></div>
@@ -246,6 +282,8 @@
             <option value="">Default (All Published TV Playlists)</option>
           </select>
         </label>
+        <label class="wide">Box group<select id="deviceBoxGroup"><option value="">No box group</option></select></label>
+        <div class="wide channel-policy-launch"><span><strong>Channel access</strong><small>Individual box rules override its group.</small></span><button id="editDeviceChannelPolicy" type="button" class="secondary">Set channel policy</button></div>
         <label>Room number<input id="roomNumber" maxlength="30"></label>
         <label>Arrival date<input id="arrivalDate" type="date"></label>
         <label>Departure date<input id="departureDate" type="date"></label>
@@ -307,6 +345,39 @@
       </div>
     </form>
   </dialog>
+  <dialog id="boxGroupDialog">
+    <form id="boxGroupForm">
+      <div class="dialog-head"><div><div class="eyebrow">BOX GROUP</div><h3 id="boxGroupDialogTitle">Add box group</h3></div><button class="icon-button" type="button" data-close-box-group>×</button></div>
+      <input id="boxGroupId" type="hidden">
+      <div class="form-grid">
+        <label>Group name<input id="boxGroupName" required maxlength="100" placeholder="Puerto Rico Rooms"></label>
+        <label>Master playlist<select id="boxGroupPlaylist" required></select></label>
+        <fieldset class="wide app-fieldset"><legend>Boxes in this group</legend><div id="boxGroupDevices" class="policy-device-list"></div></fieldset>
+      </div>
+      <p id="boxGroupError" class="error"></p>
+      <div class="form-actions"><button id="deleteBoxGroup" type="button" class="danger-button hidden">Delete group</button><button type="button" class="secondary" data-close-box-group>Cancel</button><button class="primary">Save group</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="channelPolicyDialog" class="policy-dialog">
+    <form id="channelPolicyForm">
+      <div class="dialog-head"><div><div class="eyebrow">CHANNEL ACCESS POLICY</div><h3 id="channelPolicyTitle">Channel policy</h3><p id="channelPolicySubtitle"></p></div><button class="icon-button" type="button" data-close-channel-policy>×</button></div>
+      <input id="channelPolicyTargetType" type="hidden"><input id="channelPolicyTargetId" type="hidden"><input id="channelPolicyPlaylistId" type="hidden">
+      <div class="policy-controls">
+        <label>Default behavior<select id="channelPolicyDefault"></select></label>
+        <input id="channelPolicySearch" placeholder="Search number, channel, group, or EPG ID…">
+        <select id="channelPolicyGroupFilter"><option value="">All channel groups</option></select>
+        <button id="policyAllowVisible" type="button" class="secondary">Allow visible</button>
+        <button id="policyBlockVisible" type="button" class="secondary">Block visible</button>
+        <button id="policyInheritVisible" type="button" class="secondary">Reset visible</button>
+      </div>
+      <div class="policy-summary" id="channelPolicySummary"></div>
+      <div id="channelPolicyList" class="policy-channel-list"></div>
+      <p id="channelPolicyError" class="error"></p>
+      <div class="form-actions"><button type="button" class="secondary" data-close-channel-policy>Cancel</button><button class="primary">Save &amp; push policy</button></div>
+    </form>
+  </dialog>
+
   <dialog id="siteDialog">
     <form id="siteForm">
       <div class="dialog-head">
@@ -413,6 +484,66 @@
       <p id="playlistError" class="error"></p>
       <div class="form-actions"><button type="button" class="secondary" data-close-playlist>Close</button><button
           class="primary" type="submit">Save playlist</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="guideDialog" style="max-width: 720px; width: 92vw;">
+    <form id="guideForm">
+      <div class="dialog-head">
+        <div><div class="eyebrow">XMLTV GUIDE WORKSPACE</div><h3 id="guideDialogTitle">EPG editor</h3></div>
+        <button class="icon-button" type="button" data-close-guide>×</button>
+      </div>
+      <input id="guidePlaylistId" type="hidden">
+      <div class="form-grid">
+        <label class="wide">Guide name<input id="guideName" maxlength="120" placeholder="GLZ TV Guide"></label>
+        <label class="wide">Fetch guide from HTTPS URL
+          <input id="guideSourceUrl" type="url" placeholder="https://epg.best/.../guide.xml.gz">
+          <small>GLZ Hub fetches, validates, stores and republishes the XMLTV guide.</small>
+        </label>
+        <div class="guide-or wide"><span>OR</span></div>
+        <label class="wide">Upload XMLTV guide<input id="guideFile" type="file" accept=".xml,.gz,.xml.gz,application/xml,text/xml,application/gzip"></label>
+      </div>
+      <div class="guide-status" id="guideStatus"></div>
+      <p id="guideError" class="error"></p>
+      <div class="form-actions guide-actions">
+        <button id="downloadGuideXml" type="button" class="secondary" disabled>⇩ Export XML</button>
+        <button id="downloadGuideGz" type="button" class="secondary" disabled>⇩ Export XML.GZ</button>
+        <span class="form-spacer"></span>
+        <button type="button" class="secondary" data-close-guide>Close</button>
+        <button class="primary" type="submit">Import &amp; publish guide</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="epgChannelDialog">
+    <form id="epgChannelForm">
+      <div class="dialog-head"><div><div class="eyebrow">EPG CHANNEL</div><h3 id="epgChannelDialogTitle">Add channel</h3></div><button class="icon-button" type="button" data-close-epg-channel>×</button></div>
+      <input id="epgOriginalChannelId" type="hidden">
+      <div class="form-grid">
+        <label>XMLTV channel ID<input id="epgChannelId" required maxlength="120" placeholder="WKAQ.us"></label>
+        <label>Display name<input id="epgChannelName" required maxlength="120" placeholder="Telemundo Puerto Rico"></label>
+        <label class="wide">Icon URL<input id="epgChannelIcon" type="url" placeholder="https://static.epg.best/...png"></label>
+      </div>
+      <p id="epgChannelError" class="error"></p>
+      <div class="form-actions"><button id="epgDeleteChannel" type="button" class="danger-button hidden">Delete channel</button><button type="button" class="secondary" data-close-epg-channel>Cancel</button><button class="primary">Save channel</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="epgProgrammeDialog">
+    <form id="epgProgrammeForm">
+      <div class="dialog-head"><div><div class="eyebrow">PROGRAMME</div><h3 id="epgProgrammeDialogTitle">Add programme</h3></div><button class="icon-button" type="button" data-close-epg-programme>×</button></div>
+      <input id="epgProgrammeIndex" type="hidden">
+      <div class="form-grid">
+        <label class="wide">Channel<select id="epgProgrammeChannel" required></select></label>
+        <label class="wide">Programme title<input id="epgProgrammeTitle" required maxlength="240"></label>
+        <label>Starts<input id="epgProgrammeStart" type="datetime-local" required></label>
+        <label>Ends<input id="epgProgrammeEnd" type="datetime-local" required></label>
+        <label>Category<input id="epgProgrammeCategory" maxlength="120"></label>
+        <label>Episode / subtitle<input id="epgProgrammeSubtitle" maxlength="240"></label>
+        <label class="wide">Description<textarea id="epgProgrammeDescription" rows="4" maxlength="4000"></textarea></label>
+      </div>
+      <p id="epgProgrammeError" class="error"></p>
+      <div class="form-actions"><button id="epgDeleteProgramme" type="button" class="danger-button hidden">Delete programme</button><button type="button" class="secondary" data-close-epg-programme>Cancel</button><button class="primary">Save programme</button></div>
     </form>
   </dialog>
 
