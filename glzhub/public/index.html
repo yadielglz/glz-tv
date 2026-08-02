@@ -78,6 +78,15 @@
         </header>
 
         <section id="devicesView">
+          <div class="dashboard-grid">
+            <article class="preview-card">
+              <div class="preview-card-head"><div><div class="eyebrow">LIVE TV PREVIEW</div><h3>Admin preview</h3></div><button id="previewMute" class="icon-button" type="button" aria-label="Mute preview">🔊</button></div>
+              <div class="preview-screen"><video id="previewVideo" controls playsinline muted></video><div id="previewEmpty">Choose a channel to preview it here.</div></div>
+              <div class="preview-controls"><select id="previewChannel" aria-label="Preview channel"><option value="">Select a channel…</option></select><button id="previewPlay" class="secondary" type="button">Play preview</button></div>
+            </article>
+            <article class="health-card"><div class="eyebrow">OPERATIONS</div><h3>Screen health</h3><div id="healthSummary" class="health-summary"></div><p>Use bulk actions to keep a property’s TVs aligned.</p></article>
+          </div>
+          <div class="bulk-toolbar" aria-label="Bulk device actions"><label class="bulk-select"><input id="selectAllDevices" type="checkbox"> Select all screens</label><span id="bulkSelectionCount">0 selected</span><button id="bulkRefresh" class="secondary" type="button" disabled>⚡ Force refresh</button><button id="bulkTheme" class="secondary" type="button" disabled>Set theme</button><button id="bulkPlaylist" class="secondary" type="button" disabled>Assign playlist</button></div>
           <div class="stats">
             <article><span>Managed screens</span><strong id="deviceCount">0</strong></article>
             <article><span>Online now</span><strong id="onlineCount">0</strong></article>
@@ -282,6 +291,10 @@
             <option value="">Default (All Published TV Playlists)</option>
           </select>
         </label>
+        <label class="wide">Home screen TV preview channel
+          <select id="homePreviewChannel"><option value="">No home preview</option></select>
+          <small>This channel plays in the small preview card beside the welcome hero.</small>
+        </label>
         <label class="wide">Box group<select id="deviceBoxGroup"><option value="">No box group</option></select></label>
         <div class="wide channel-policy-launch"><span><strong>Channel access</strong><small>Individual box rules override its group.</small></span><button id="editDeviceChannelPolicy" type="button" class="secondary">Set channel policy</button></div>
         <label>Room number<input id="roomNumber" maxlength="30"></label>
@@ -309,6 +322,7 @@
             <option value="midnight">Midnight</option>
           </select>
         </label>
+        <fieldset class="wide app-fieldset schedule-fieldset"><legend>Scheduled experience</legend><p class="field-help">Apply a theme and playlist automatically during a recurring time window.</p><div class="form-grid schedule-grid"><label>Days<input id="scheduleDays" placeholder="Mon–Fri"></label><label>Start<input id="scheduleStart" type="time"></label><label>End<input id="scheduleEnd" type="time"></label><label>Theme<select id="scheduleTheme"><option value="">Keep current theme</option><option value="adaptive">Adaptive</option><option value="dark">Dark</option><option value="light">Light</option><option value="ocean">Ocean</option><option value="sunset">Sunset</option><option value="emerald">Emerald</option><option value="cyberpunk">Cyberpunk</option><option value="midnight">Midnight</option></select></label><label class="wide">Playlist<select id="schedulePlaylist"><option value="">Keep current playlist</option></select></label></div></fieldset>
         <label>OSD Banner Timeout
           <select id="osdTimeoutSeconds">
             <option value="5">5 seconds</option>

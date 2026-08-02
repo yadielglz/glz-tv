@@ -20,6 +20,7 @@ object GlzHubManager {
     const val VISIBLE_APPS = "hub_visible_apps"
     const val VISIBLE_APPS_MANAGED = "hub_visible_apps_managed"
     const val GUEST_EXPERIENCE = "hub_guest_experience"
+    const val HOME_PREVIEW_CHANNEL_ID = "home_preview_channel_id"
     private const val ACTIVITY_TYPE = "hub_activity_type"
     private const val ACTIVITY_LABEL = "hub_activity_label"
     private const val ACTIVITY_PACKAGE = "hub_activity_package"
@@ -201,6 +202,10 @@ object GlzHubManager {
         config.stringOrNull("themeMode")?.let { editor.putString("theme_mode", it) }
         config.stringOrNull("weatherLocation")?.let { editor.putString("weather_location", it) }
         config.stringOrNull("startDestination")?.let { editor.putString("start_destination", it) }
+        if (config.has("homePreviewChannelId")) {
+            if (config.isNull("homePreviewChannelId")) editor.remove(HOME_PREVIEW_CHANNEL_ID)
+            else editor.putString(HOME_PREVIEW_CHANNEL_ID, config.optString("homePreviewChannelId"))
+        }
         if (config.has("captionsEnabled")) editor.putBoolean("captions_enabled", config.optBoolean("captionsEnabled"))
         config.stringOrNull("captionsLanguage")?.let { editor.putString("captions_language", it) }
         if (config.has("autoStart")) editor.putBoolean("auto_start", config.optBoolean("autoStart"))
