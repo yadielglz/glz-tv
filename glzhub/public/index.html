@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,6 +8,7 @@
   <title>GLZ Hub</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
+
 <body>
   <div class="shell">
     <aside class="rail">
@@ -19,7 +21,7 @@
         <button class="nav" data-view="sites">⌂ <span>Properties</span></button>
         <button class="nav" data-view="experience">✦ <span>Guest experience</span></button>
         <button class="nav" data-view="radio">🎙️ <span>Radio streams</span></button>
-        <button class="nav" data-view="studio">🎵 <span>Playlist studio</span></button>
+        <button class="nav" data-view="studio">🎬 <span>TV playlists</span></button>
         <button class="nav" data-view="apps">⬡ <span>App library</span></button>
         <button class="nav" data-view="pair">＋ <span>Pair a TV</span></button>
       </nav>
@@ -50,8 +52,10 @@
           <h1>Choose your<br><em>admin password.</em></h1>
           <p>Your email has been verified. Create the password you’ll use to manage your televisions.</p>
           <form id="inviteForm">
-            <label>New password<input id="invitePassword" type="password" autocomplete="new-password" minlength="10" required></label>
-            <label>Confirm password<input id="invitePasswordConfirm" type="password" autocomplete="new-password" minlength="10" required></label>
+            <label>New password<input id="invitePassword" type="password" autocomplete="new-password" minlength="10"
+                required></label>
+            <label>Confirm password<input id="invitePasswordConfirm" type="password" autocomplete="new-password"
+                minlength="10" required></label>
             <button class="primary" type="submit">Activate administrator account</button>
             <p id="inviteError" class="error"></p>
           </form>
@@ -65,7 +69,8 @@
             <h2 id="pageTitle">Your TVs</h2>
           </div>
           <div class="header-actions">
-            <button id="refreshDashboardButton" type="button" class="secondary" title="Refresh all device status">🔄 Refresh</button>
+            <button id="refreshDashboardButton" type="button" class="secondary" title="Refresh all device status">🔄
+              Refresh</button>
             <button id="pairButton" class="primary">＋ Pair a TV</button>
           </div>
         </header>
@@ -87,44 +92,78 @@
 
         <section id="appsView" class="hidden">
           <div class="section-toolbar">
-            <div><h3>Managed app library</h3><p>Publish Play Store listings or HTTPS APKs from your repository to paired TVs.</p></div>
+            <div>
+              <h3>Managed app library</h3>
+              <p>Publish Play Store listings or HTTPS APKs from your repository to paired TVs.</p>
+            </div>
             <button id="addAppButton" class="primary">＋ Add app</button>
           </div>
           <div id="appList" class="management-list"></div>
-          <div id="appEmpty" class="empty hidden"><h3>No managed apps yet</h3><p>Add an app once, then deploy it to any paired television.</p></div>
+          <div id="appEmpty" class="empty hidden">
+            <h3>No managed apps yet</h3>
+            <p>Add an app once, then deploy it to any paired television.</p>
+          </div>
         </section>
 
         <section id="radioView" class="hidden">
           <div class="section-toolbar">
-            <div><h3>GLZ Radio Streams</h3><p>Manage audio broadcast streams and metadata consumed by glz-radio.</p></div>
+            <div>
+              <h3>GLZ Radio Streams</h3>
+              <p>Manage audio broadcast streams and metadata consumed by glz-radio.</p>
+            </div>
             <button id="addRadioStationButton" class="primary">＋ Add radio station</button>
           </div>
           <div id="radioList" class="management-list"></div>
-          <div id="radioEmpty" class="empty hidden"><h3>No radio streams configured</h3><p>Create live audio stations to broadcast across GLZ Radio app.</p></div>
+          <div id="radioEmpty" class="empty hidden">
+            <h3>No radio streams configured</h3>
+            <p>Create live audio stations to broadcast across GLZ Radio app.</p>
+          </div>
         </section>
 
         <section id="studioView" class="hidden">
           <div class="section-toolbar">
-            <div><h3>Playlist Studio</h3><p>Curate media tracks and scheduled channels for GLZ TV &amp; GLZ Radio.</p></div>
-            <button id="addPlaylistButton" class="primary">＋ Add playlist</button>
+            <div>
+              <div class="eyebrow">M3U &amp; XMLTV WORKSPACE</div>
+              <h3>Playlist Studio</h3>
+              <p>Import, organize, edit and publish channel lineups served to GLZ TV devices.</p>
+            </div>
+            <button id="addPlaylistButton" class="primary">＋ Add TV playlist</button>
           </div>
+          <div class="studio-help">
+            <span><strong>Import M3U</strong> preserves channel names, groups, numbers, EPG IDs and logos.</span>
+            <span><strong>Drag channels</strong> to reorder, or select a row to edit every field.</span>
+            <span><strong>Published lineups</strong> are available to assigned televisions immediately.</span>
+          </div>
+          <input id="m3uFileInput" class="hidden" type="file" accept=".m3u,.m3u8,audio/x-mpegurl">
           <div id="playlistList" class="management-list"></div>
-          <div id="studioEmpty" class="empty hidden"><h3>No playlists curated yet</h3><p>Create track playlists and schedule sequences for television and radio broadcasts.</p></div>
+          <div id="studioEmpty" class="empty hidden">
+            <h3>No TV playlists yet</h3>
+            <p>Create a channel lineup, then assign it to a television.</p>
+          </div>
         </section>
 
         <section id="sitesView" class="hidden">
           <div class="section-toolbar">
-            <div><h3>Properties</h3><p>Organize televisions by hotel, building, or managed location.</p></div>
+            <div>
+              <h3>Properties</h3>
+              <p>Organize televisions by hotel, building, or managed location.</p>
+            </div>
             <button id="addSiteButton" class="primary">＋ Add property</button>
           </div>
           <div id="siteList" class="management-list"></div>
-          <div id="siteEmpty" class="empty hidden"><h3>No properties yet</h3><p>Create a property before assigning televisions.</p></div>
+          <div id="siteEmpty" class="empty hidden">
+            <h3>No properties yet</h3>
+            <p>Create a property before assigning televisions.</p>
+          </div>
         </section>
 
         <section id="experienceView" class="hidden">
           <form id="experienceForm" class="experience-editor">
             <div class="section-toolbar">
-              <div><h3>Property guest experience</h3><p>Branding, stay information and services delivered to TVs assigned to this property.</p></div>
+              <div>
+                <h3>Property guest experience</h3>
+                <p>Branding, stay information and services delivered to TVs assigned to this property.</p>
+              </div>
               <label class="property-picker">Property<select id="experienceSite"></select></label>
               <button class="primary" type="submit">Save &amp; publish</button>
             </div>
@@ -151,7 +190,8 @@
               <fieldset>
                 <legend>Service tiles</legend>
                 <p class="field-help">One per line: Title | Short description | HTTPS link</p>
-                <textarea id="guestServices" rows="8" placeholder="Room Service | View today’s menu | https://hotel.example/menu&#10;Spa | Hours and reservations | https://hotel.example/spa"></textarea>
+                <textarea id="guestServices" rows="8"
+                  placeholder="Room Service | View today’s menu | https://hotel.example/menu&#10;Spa | Hours and reservations | https://hotel.example/spa"></textarea>
               </fieldset>
             </div>
             <p id="experienceError" class="error"></p>
@@ -189,7 +229,10 @@
   <dialog id="deviceDialog">
     <form id="deviceForm" method="dialog">
       <div class="dialog-head">
-        <div><div class="eyebrow">DEVICE SETTINGS</div><h3 id="dialogTitle">Living Room</h3></div>
+        <div>
+          <div class="eyebrow">DEVICE SETTINGS</div>
+          <h3 id="dialogTitle">Living Room</h3>
+        </div>
         <button class="icon-button" value="cancel" aria-label="Close">×</button>
       </div>
       <input id="deviceId" type="hidden">
@@ -198,6 +241,11 @@
         <label>Device name<input id="deviceName" required></label>
         <label>Welcome guest name<input id="guestName" required></label>
         <label class="wide">Property<select id="deviceSite"></select></label>
+        <label class="wide">Assigned TV Playlist Lineup
+          <select id="deviceAssignedPlaylist">
+            <option value="">Default (All Published TV Playlists)</option>
+          </select>
+        </label>
         <label>Room number<input id="roomNumber" maxlength="30"></label>
         <label>Arrival date<input id="arrivalDate" type="date"></label>
         <label>Departure date<input id="departureDate" type="date"></label>
@@ -206,7 +254,9 @@
         <label>Weather location<input id="weatherLocation"></label>
         <label>Start screen
           <select id="startDestination">
-            <option>Home</option><option>Live</option><option>You</option>
+            <option>Home</option>
+            <option>Live</option>
+            <option>You</option>
           </select>
         </label>
         <label>Theme
@@ -241,13 +291,16 @@
           <div id="visibleApps" class="app-checklist"></div>
         </fieldset>
         <label class="wide">Deploy a managed app
-          <div class="inline-action"><select id="deployApp"></select><button id="deployButton" type="button" class="secondary">Send to TV</button></div>
-          <small>The TV will open the Play Store or secure repository installer. Android may require guest confirmation.</small>
+          <div class="inline-action"><select id="deployApp"></select><button id="deployButton" type="button"
+              class="secondary">Send to TV</button></div>
+          <small>The TV will open the Play Store or secure repository installer. Android may require guest
+            confirmation.</small>
         </label>
       </div>
       <p id="deviceError" class="error"></p>
       <div class="form-actions">
-        <button id="forceRefreshDevice" type="button" class="secondary" style="margin-right: auto;">⚡ Force Refresh EPG &amp; M3U</button>
+        <button id="forceRefreshDevice" type="button" class="secondary" style="margin-right: auto;">⚡ Force Refresh EPG
+          &amp; M3U</button>
         <button id="unpairDevice" type="button" class="danger-button">Remove pairing</button>
         <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button type="submit" class="primary">Save &amp; sync</button>
@@ -256,69 +309,143 @@
   </dialog>
   <dialog id="siteDialog">
     <form id="siteForm">
-      <div class="dialog-head"><div><div class="eyebrow">PROPERTY</div><h3 id="siteDialogTitle">Add property</h3></div><button class="icon-button" type="button" data-close-site>×</button></div>
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">PROPERTY</div>
+          <h3 id="siteDialogTitle">Add property</h3>
+        </div><button class="icon-button" type="button" data-close-site>×</button>
+      </div>
       <input id="siteId" type="hidden">
       <div class="form-grid">
         <label>Property name<input id="siteName" required maxlength="100" placeholder="GLZ Hotel Downtown"></label>
         <label>Address or location<input id="siteAddress" maxlength="240" placeholder="Orlando, Florida"></label>
       </div>
       <p id="siteError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-site>Cancel</button><button class="primary" type="submit">Save property</button></div>
+      <div class="form-actions"><button type="button" class="secondary" data-close-site>Cancel</button><button
+          class="primary" type="submit">Save property</button></div>
     </form>
   </dialog>
   <dialog id="appDialog">
     <form id="appForm">
-      <div class="dialog-head"><div><div class="eyebrow">APP LIBRARY</div><h3>Add a managed app</h3></div><button class="icon-button" type="button" data-close-app>×</button></div>
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">APP LIBRARY</div>
+          <h3>Add a managed app</h3>
+        </div><button class="icon-button" type="button" data-close-app>×</button>
+      </div>
       <div class="form-grid">
         <label>Display name<input id="appName" required maxlength="100"></label>
         <label>Android package<input id="appPackage" required placeholder="com.example.tv"></label>
-        <label>Source<select id="appSource"><option value="play_store">Google Play Store</option><option value="repository">My HTTPS repository</option></select></label>
+        <label>Source<select id="appSource">
+            <option value="play_store">Google Play Store</option>
+            <option value="repository">My HTTPS repository</option>
+          </select></label>
         <label>Version (optional)<input id="appVersion" maxlength="40"></label>
-        <label class="wide">APK URL for repository apps<input id="appUrl" type="url" placeholder="https://repo.example.com/app.apk"></label>
+        <label class="wide">APK URL for repository apps<input id="appUrl" type="url"
+            placeholder="https://repo.example.com/app.apk"></label>
         <label class="wide">SHA-256 checksum (recommended)<input id="appSha" maxlength="64"></label>
       </div>
       <p id="appError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-app>Cancel</button><button class="primary" type="submit">Add to library</button></div>
+      <div class="form-actions"><button type="button" class="secondary" data-close-app>Cancel</button><button
+          class="primary" type="submit">Add to library</button></div>
     </form>
   </dialog>
   <dialog id="radioDialog">
     <form id="radioForm">
-      <div class="dialog-head"><div><div class="eyebrow">RADIO STREAMS</div><h3 id="radioDialogTitle">Add radio station</h3></div><button class="icon-button" type="button" data-close-radio>×</button></div>
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">RADIO STREAMS</div>
+          <h3 id="radioDialogTitle">Add radio station</h3>
+        </div><button class="icon-button" type="button" data-close-radio>×</button>
+      </div>
       <input id="radioId" type="hidden">
       <div class="form-grid">
         <label>Station name<input id="radioName" required maxlength="100" placeholder="GLZ Lounge FM"></label>
         <label>Station code<input id="radioCode" required maxlength="40" placeholder="GLZ-LOUNGE"></label>
         <label>Genre<input id="radioGenre" required maxlength="60" placeholder="Chillout / Lounge"></label>
         <label>Bitrate (kbps)<input id="radioBitrate" type="number" value="128" min="32" max="320"></label>
-        <label class="wide">Audio stream URL<input id="radioStreamUrl" type="url" required placeholder="https://stream.glztech.com/lounge"></label>
-        <label class="wide">Logo URL (optional)<input id="radioLogoUrl" type="url" placeholder="https://…/logo.png"></label>
+        <label class="wide">Audio stream URL<input id="radioStreamUrl" type="url" required
+            placeholder="https://stream.glztech.com/lounge"></label>
+        <label class="wide">Logo URL (optional)<input id="radioLogoUrl" type="url"
+            placeholder="https://…/logo.png"></label>
       </div>
       <p id="radioError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-radio>Cancel</button><button class="primary" type="submit">Save radio station</button></div>
+      <div class="form-actions"><button type="button" class="secondary" data-close-radio>Cancel</button><button
+          class="primary" type="submit">Save radio station</button></div>
     </form>
   </dialog>
-  <dialog id="playlistDialog">
+  <dialog id="playlistDialog" style="max-width: 680px; width: 90vw;">
     <form id="playlistForm">
-      <div class="dialog-head"><div><div class="eyebrow">PLAYLIST STUDIO</div><h3 id="playlistDialogTitle">Add playlist</h3></div><button class="icon-button" type="button" data-close-playlist>×</button></div>
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">PLAYLIST STUDIO</div>
+          <h3 id="playlistDialogTitle">Edit playlist &amp; channels</h3>
+        </div><button class="icon-button" type="button" data-close-playlist>×</button>
+      </div>
       <input id="playlistId" type="hidden">
       <div class="form-grid">
-        <label>Title<input id="playlistTitle" required maxlength="120" placeholder="Morning Chill Mix"></label>
-        <label>Category<input id="playlistCategory" required maxlength="60" placeholder="Lobby Ambient"></label>
-        <label>Target app
-          <select id="playlistTargetApp">
-            <option value="both">Both (GLZ TV &amp; Radio)</option>
-            <option value="tv">GLZ TV Only</option>
-            <option value="radio">GLZ Radio Only</option>
-          </select>
-        </label>
-        <label class="wide">Description<textarea id="playlistDescription" rows="3" maxlength="500" placeholder="Curated ambient playlist for morning guests."></textarea></label>
-        <label class="wide">Artwork URL<input id="playlistArtworkUrl" type="url" placeholder="https://…/cover.jpg"></label>
+        <label>Title<input id="playlistTitle" required maxlength="120" placeholder="Main TV Lineup"></label>
+        <label>Category<input id="playlistCategory" required maxlength="60" placeholder="Live TV"></label>
+        <input id="playlistTargetApp" type="hidden" value="tv">
+        <label class="wide">Description<textarea id="playlistDescription" rows="2" maxlength="500"
+            placeholder="Primary M3U channel stream lineup for television screens."></textarea></label>
+        <label class="wide">Artwork / Group Logo URL<input id="playlistArtworkUrl" type="url"
+            placeholder="https://…/logo.png"></label>
+        <label class="wide">XMLTV EPG URL<input id="playlistEpgUrl" type="url"
+            placeholder="https://play.glztech.com/epg.xml.gz"></label>
+        <label class="check wide"><input id="playlistPublished" type="checkbox" checked> Publish this lineup to assigned televisions</label>
       </div>
+
+      <!-- Channel & Track Items Section -->
+      <div id="playlistItemsSection"
+        style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <h4 style="margin: 0; font-size: 0.95rem; text-transform: uppercase; tracking: 0.05em;">Channels / Media Items
+          </h4>
+          <button type="button" id="addPlaylistItemButton" class="secondary"
+            style="font-size: 0.8rem; padding: 0.25rem 0.6rem;">＋ Add Channel</button>
+        </div>
+        <div id="playlistItemsList"
+          style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 220px; overflow-y: auto; padding-right: 4px;">
+        </div>
+      </div>
+
       <p id="playlistError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-playlist>Cancel</button><button class="primary" type="submit">Save playlist</button></div>
+      <div class="form-actions"><button type="button" class="secondary" data-close-playlist>Close</button><button
+          class="primary" type="submit">Save playlist</button></div>
+    </form>
+  </dialog>
+
+  <!-- Add/Edit Playlist Item Sub-Dialog -->
+  <dialog id="playlistItemDialog">
+    <form id="playlistItemForm">
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">CHANNEL / TRACK ITEM</div>
+          <h3 id="playlistItemDialogTitle">Add channel to playlist</h3>
+        </div><button class="icon-button" type="button" data-close-playlist-item>×</button>
+      </div>
+      <input id="itemPlaylistId" type="hidden">
+      <input id="itemId" type="hidden">
+      <div class="form-grid">
+        <label>Channel Title<input id="itemTitle" required maxlength="120" placeholder="WKAQ-TV | TELEMUNDO"></label>
+        <label>EPG ID (tvg-id)<input id="itemTvgId" maxlength="120" placeholder="WKAQ.us"></label>
+        <label>Channel Number (tvg-chno)<input id="itemTvgChno" maxlength="20" placeholder="2"></label>
+        <label>Group<input id="itemGroup" maxlength="100" placeholder="Local / News / Sports"></label>
+        <label>Position / Order<input id="itemPosition" type="number" value="0"></label>
+        <label class="wide">Stream URL<input id="itemMediaUrl" type="url" required
+            placeholder="https://nbculocallive.akamaized.net/…/master.m3u8"></label>
+        <label class="wide">Channel Logo URL (tvg-logo)<input id="itemTvgLogo" type="url"
+            placeholder="https://static.epg.best/us/WKAQ.us.png"></label>
+        <label class="check wide"><input id="itemHidden" type="checkbox"> Hide this channel from the published lineup</label>
+      </div>
+      <p id="itemError" class="error"></p>
+      <div class="form-actions"><button id="deleteCurrentChannel" type="button" class="danger-button hidden">Delete channel</button><button type="button" class="secondary" data-close-playlist-item>Cancel</button><button
+          class="primary" type="submit">Save item</button></div>
     </form>
   </dialog>
   <div id="toast" role="status"></div>
   <script type="module" src="/app.js"></script>
 </body>
+
 </html>

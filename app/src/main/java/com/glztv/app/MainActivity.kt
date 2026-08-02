@@ -70,9 +70,13 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -128,6 +132,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -176,7 +181,7 @@ private const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
 private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
 
-private enum class AppSection { Home, Live, You }
+private enum class AppSection { Home, Live, Radio, You }
 private enum class PlayerDrawer { None, Channels, Services }
 
 private data class WeatherInfo(
@@ -503,6 +508,7 @@ private fun TvScreen(
         loading = true
         status = "Loading your lineup…"
         val headers = parseHeaders(prefs.getString(REQUEST_HEADERS, "").orEmpty())
+        val sourceHeaders = GlzHubManager.sourceRequestHeaders(prefs, playlistUrl, headers)
         val epgUrl = prefs.getString(EPG_URL, DEFAULT_EPG_URL)
             .orEmpty().ifBlank { DEFAULT_EPG_URL }
         val cached = withContext(Dispatchers.IO) {
@@ -525,7 +531,7 @@ private fun TvScreen(
         runCatching {
             withContext(Dispatchers.IO) {
                 val parsed = cached.first ?: M3uParser.parse(
-                    fetchText(client, playlistUrl, headers),
+                    fetchText(client, playlistUrl, sourceHeaders),
                     playlistUrl,
                     headers
                 ).also { ChannelCache.write(context, playlistUrl, it) }
@@ -756,6 +762,11 @@ private fun TvScreen(
                                 channels = ordered,
                                 guide = guide,
                                 onWatch = tuneChannel,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            AppSection.Radio -> RadioSection(
+                                prefs = prefs,
+                                client = client,
                                 modifier = Modifier.fillMaxSize()
                             )
                             AppSection.You -> GuestYouSection(
@@ -1020,6 +1031,9 @@ private fun ExpressiveNavigationRail(
             }
             RailDestination("Live TV", section == AppSection.Live, Icons.Default.LiveTv) {
                 onSection(AppSection.Live)
+            }
+            RailDestination("Radio", section == AppSection.Radio, Icons.Default.Radio) {
+                onSection(AppSection.Radio)
             }
             RailDestination("You", section == AppSection.You, Icons.Default.Person) {
                 onSection(AppSection.You)
@@ -1300,6 +1314,206 @@ private fun GuestYouSection(
             items(services, key = { "${it.title}-${it.actionUrl}" }) { service ->
                 GuestServiceCard(service)
             }
+        }
+    }
+}
+
+@Composable
+private fun RadioSection(
+    prefs: SharedPreferences,
+    client: OkHttpClient,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var stations by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
+    var selected by remember { mutableStateOf<RadioStation?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var status by remember { mutableStateOf("Loading stations from GLZ Hub…") }
+    var playing by remember { mutableStateOf(false) }
+    val dataSourceFactory = remember { DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}") }
+    val player = remember {
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .build().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .setUsage(C.USAGE_MEDIA)
+                        .build(),
+                    true
+                )
+                setHandleAudioBecomingNoisy(true)
+            }
+    }
+
+    fun stopRadio() {
+        player.stop()
+        player.clearMediaItems()
+        playing = false
+        status = "Stopped"
+        GlzHubManager.reportActivity(prefs, "idle")
+    }
+
+    fun playStation(station: RadioStation) {
+        selected = station
+        dataSourceFactory.setDefaultRequestProperties(station.requestHeaders)
+        val metadata = MediaMetadata.Builder()
+            .setTitle(station.name)
+            .setArtist(station.genre)
+            .apply { station.logoUrl?.let { setArtworkUri(Uri.parse(it)) } }
+            .build()
+        player.setMediaItem(MediaItem.Builder().setUri(station.streamUrl).setMediaMetadata(metadata).build())
+        player.prepare()
+        player.play()
+        status = "Connecting…"
+        GlzHubManager.reportActivity(prefs, "radio", station.name)
+    }
+
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                playing = isPlaying
+                if (isPlaying) status = "Live"
+                else if (player.playbackState == Player.STATE_READY && selected != null) status = "Paused"
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                playing = false
+                status = "Station unavailable · choose another station"
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.stop()
+            player.release()
+            GlzHubManager.reportActivity(prefs, "idle")
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching { withContext(Dispatchers.IO) { RadioCatalogManager.load(prefs, client) } }
+            .onSuccess { result ->
+                stations = result.stations
+                loading = false
+                status = if (result.fromCache) "Saved station list · Hub temporarily unavailable" else "Choose a station"
+            }
+            .onFailure {
+                loading = false
+                status = "Radio stations unavailable"
+            }
+    }
+
+    Column(modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text("GLZ Radio", fontSize = 34.sp, fontWeight = FontWeight.Black)
+                Text("Live stations managed by GLZ Hub", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Surface(shape = RoundedCornerShape(999.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Text("${stations.size} STATIONS", Modifier.padding(horizontal = 16.dp, vertical = 9.dp), fontWeight = FontWeight.Black, fontSize = 12.sp)
+            }
+        }
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Surface(
+                modifier = Modifier.weight(1.15f).fillMaxHeight(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .9f)
+            ) {
+                if (loading) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LinearProgressIndicator(Modifier.width(220.dp)) }
+                } else if (stations.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(status, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                } else {
+                    LazyColumn(
+                        Modifier.fillMaxSize().padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(stations, key = { it.code }) { station ->
+                            RadioStationRow(station, selected?.code == station.code) { playStation(station) }
+                        }
+                    }
+                }
+            }
+            Surface(
+                modifier = Modifier.weight(.85f).fillMaxHeight(),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Column(
+                    Modifier.fillMaxSize().padding(30.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    AsyncImage(
+                        model = selected?.logoUrl ?: R.drawable.ic_launcher,
+                        contentDescription = selected?.name,
+                        modifier = Modifier.size(150.dp).clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = .08f)),
+                        contentScale = ContentScale.Fit
+                    )
+                    Text(
+                        selected?.name ?: "Choose a station",
+                        Modifier.padding(top = 24.dp),
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(selected?.genre ?: "Browse the live station list", color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .7f))
+                    Text(status.uppercase(Locale.ROOT), Modifier.padding(top = 16.dp), color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                    Row(Modifier.padding(top = 28.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Button(
+                            enabled = selected != null,
+                            onClick = {
+                                if (playing) player.pause()
+                                else if (player.mediaItemCount > 0) player.play()
+                                else selected?.let(::playStation)
+                            }
+                        ) {
+                            Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null)
+                            Text(if (playing) "Pause" else "Play", Modifier.padding(start = 8.dp))
+                        }
+                        Button(enabled = selected != null || player.mediaItemCount > 0, onClick = ::stopRadio) {
+                            Icon(Icons.Default.Stop, null)
+                            Text("Stop", Modifier.padding(start = 8.dp))
+                        }
+                    }
+                    Text("Stop ends playback completely.", Modifier.padding(top = 18.dp), color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .6f), fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RadioStationRow(station: RadioStation, selected: Boolean, onPlay: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val parts = station.name.split("|").map(String::trim)
+    val title = parts.lastOrNull().orEmpty().ifBlank { station.name }
+    val frequency = parts.takeIf { it.size > 1 }?.firstOrNull().orEmpty()
+    Surface(
+        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }.clickable(onClick = onPlay).focusable(),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(if (focused) 4.dp else 1.dp, if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent),
+        color = when {
+            focused -> MaterialTheme.colorScheme.primary
+            selected -> MaterialTheme.colorScheme.secondaryContainer
+            else -> MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        contentColor = if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            AsyncImage(
+                model = station.logoUrl ?: R.drawable.ic_launcher,
+                contentDescription = null,
+                modifier = Modifier.size(54.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = .08f)),
+                contentScale = ContentScale.Fit
+            )
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Black, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(listOf(frequency, station.genre).filter(String::isNotBlank).joinToString(" · "), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (selected) Icon(Icons.Default.Radio, "Playing station", tint = MaterialTheme.colorScheme.secondary)
         }
     }
 }
@@ -3238,7 +3452,7 @@ private fun SettingsDialog(
                             SettingsLabel("START DESTINATION")
                             Text("Screen shown when GLZ TV launches", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                listOf(AppSection.Home to "Home Screen", AppSection.Live to "Live TV Direct", AppSection.You to "You & Apps")
+                                listOf(AppSection.Home to "Home Screen", AppSection.Live to "Live TV Direct", AppSection.Radio to "Radio", AppSection.You to "You & Apps")
                                     .forEach { (destination, label) ->
                                         var focused by remember(destination) { mutableStateOf(false) }
                                         Surface(

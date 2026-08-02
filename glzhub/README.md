@@ -91,8 +91,19 @@ Apply a Cloudflare rate-limit rule to `POST /api/v1/enrollment` and
 | `POST` | `/api/v1/enrollment/claim` | Supabase administrator JWT |
 | `GET` | `/api/v1/admin/devices` | Supabase administrator JWT |
 | `PATCH` | `/api/v1/admin/devices/:id` | Supabase administrator JWT |
+| `GET` | `/api/v1/admin/radio-stations` | Supabase administrator JWT |
+| `POST` | `/api/v1/admin/radio-stations` | Supabase administrator JWT |
+| `GET` | `/api/v1/admin/playlists` | Supabase administrator JWT |
+| `POST` | `/api/v1/admin/playlists` | Supabase administrator JWT |
+| `GET` | `/api/v1/radio/stations` | Public GLZ Radio catalog |
 | `GET` | `/api/v1/devices/config` | Device token |
+| `GET` | `/api/v1/devices/playlist.m3u` | Device token |
 | `POST` | `/api/v1/devices/heartbeat` | Device token |
+
+The standalone GLZ Radio app reads `GET /api/v1/radio/stations`. The response
+contains only active stations, a content-derived `version`, and an `ETag`.
+Clients should retain the `ETag` and send `If-None-Match` on later refreshes;
+the Hub returns `304 Not Modified` when the station catalog has not changed.
 
 ## Device and app management
 
@@ -118,3 +129,15 @@ when the Hub is temporarily unreachable; remote artwork uses the image cache.
 
 App visibility controls only the apps shown inside GLZ TV. It does not modify
 the Android TV system launcher.
+
+## Managed TV playlists
+
+Apply migrations `009_ecosystem_radio_playlists.sql`,
+`010_seed_m3u_recovered_channels.sql`, and
+`011_device_playlist_assignment.sql`, then `012_playlist_studio_metadata.sql`
+in order. Playlist Studio in GLZ Hub imports and exports M3U files, edits full
+channel metadata, persists drag-and-drop ordering, manages an XMLTV source URL,
+and publishes TV channel lineups. Each paired television can be assigned one lineup. An
+unassigned television receives all published TV playlists owned by its Hub
+administrator. Radio stations are managed separately and never enter the TV
+M3U output.

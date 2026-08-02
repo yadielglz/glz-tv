@@ -66,6 +66,16 @@ object GlzHubManager {
         !prefs.getString(DEVICE_TOKEN, null).isNullOrBlank() &&
             prefs.getString(PAIRING_CODE, null).isNullOrBlank()
 
+    fun sourceRequestHeaders(
+        prefs: SharedPreferences,
+        url: String,
+        headers: Map<String, String>
+    ): Map<String, String> {
+        if (url != "$HUB_URL/api/v1/devices/playlist.m3u") return headers
+        val token = prefs.getString(DEVICE_TOKEN, null)?.takeIf(String::isNotBlank) ?: return headers
+        return headers + ("Authorization" to "Bearer $token")
+    }
+
     fun visibleApps(prefs: SharedPreferences): Set<String> =
         prefs.getStringSet(VISIBLE_APPS, emptySet()).orEmpty()
 

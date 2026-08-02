@@ -254,7 +254,7 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     "visible_apps", "theme_mode", "weather_location", "start_destination",
     "captions_enabled", "captions_language", "auto_start", "resume_last_channel",
     "osd_timeout_seconds", "auto_update", "wifi_only",
-    "room_number", "arrival_date", "departure_date", "site_id"
+    "room_number", "arrival_date", "departure_date", "site_id", "assigned_playlist_id"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
   if ("site_id" in input) {
@@ -267,6 +267,17 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
       if (!sites[0]) return json({ error: "Property not found." }, 404);
     }
     patch.site_id = siteId;
+  }
+  if ("assigned_playlist_id" in input) {
+    const playlistId = optionalString(input.assigned_playlist_id, "assignedPlaylistId", 64);
+    if (playlistId) {
+      const playlists = await supabaseJson(
+        env,
+        `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&target_app=in.(tv,both)&select=id`
+      ) as Record<string, unknown>[];
+      if (!playlists[0]) return json({ error: "TV playlist not found." }, 404);
+    }
+    patch.assigned_playlist_id = playlistId;
   }
   patch.config_version = Number(currentRows[0].config_version || 0) + 1;
   patch.updated_at = new Date().toISOString();
@@ -337,6 +348,8 @@ async function unpairDevice(request: Request, env: Env, deviceId: string): Promi
 
 async function deviceConfig(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
+  const managedPlaylistUrl = `${new URL(request.url).origin}/api/v1/devices/playlist.m3u`;
+  const playlistUrl = device.playlist_url || managedPlaylistUrl;
   const profiles = device.site_id ? await supabaseJson(env,
     `/rest/v1/guest_experience_profiles?site_id=eq.${device.site_id}&owner_id=eq.${device.owner_id}&select=*`
   ) as Record<string, unknown>[] : [];
@@ -346,7 +359,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     experienceVersion: profile.updated_at ?? "default",
     deviceName: device.name,
     guestName: device.guest_name,
-    playlistUrl: device.playlist_url,
+    playlistUrl,
     epgUrl: device.epg_url,
     requestHeaders: device.request_headers ?? {},
     visibleApps: device.visible_apps ?? [],
@@ -601,11 +614,458 @@ async function heartbeat(request: Request, env: Env): Promise<Response> {
   return json({ ok: true, configVersion: device.config_version });
 }
 
+async function listRadioStations(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const stations = await supabaseJson(
+    env,
+    `/rest/v1/radio_stations?owner_id=eq.${user.id}&select=*&order=created_at.desc`
+  ) as Record<string, unknown>[];
+  return json({ stations });
+}
+
+async function createRadioStation(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const stationCode = requiredString(input.station_code || input.stationCode, "station code", 32).toUpperCase();
+  const name = requiredString(input.name, "station name", 100);
+  const streamUrl = requiredString(input.stream_url || input.streamUrl, "stream URL", 2048);
+  if (!isHttpsUrl(streamUrl)) throw new Error("Invalid stream URL");
+
+  const stations = await supabaseJson(env, "/rest/v1/radio_stations?select=*", {
+    method: "POST",
+    headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      owner_id: user.id,
+      station_code: stationCode,
+      name,
+      genre: optionalString(input.genre, "genre", 50) ?? "Variety",
+      stream_url: streamUrl,
+      epg_channel_id: optionalString(input.epg_channel_id || input.epgChannelId, "EPG channel ID", 64),
+      logo_url: optionalString(input.logo_url || input.logoUrl, "logo URL"),
+      bitrate: typeof input.bitrate === "number" ? input.bitrate : 128,
+      is_active: input.is_active ?? true
+    })
+  }) as Record<string, unknown>[];
+  return json({ station: stations[0] }, 201);
+}
+
+async function updateRadioStation(request: Request, env: Env, stationId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.name) patch.name = requiredString(input.name, "name", 100);
+  if (input.station_code || input.stationCode) {
+    patch.station_code = requiredString(input.station_code || input.stationCode, "station code", 32).toUpperCase();
+  }
+  if (input.genre) patch.genre = requiredString(input.genre, "genre", 50);
+  if (input.stream_url || input.streamUrl) {
+    const streamUrl = requiredString(input.stream_url || input.streamUrl, "stream URL");
+    if (!isHttpsUrl(streamUrl)) throw new Error("Invalid stream URL");
+    patch.stream_url = streamUrl;
+  }
+  if (input.logo_url || input.logoUrl !== undefined) patch.logo_url = optionalString(input.logo_url || input.logoUrl, "logo URL");
+  if (input.epg_channel_id !== undefined || input.epgChannelId !== undefined) {
+    patch.epg_channel_id = optionalString(input.epg_channel_id || input.epgChannelId, "EPG channel ID", 64);
+  }
+  if (typeof input.bitrate === "number" && input.bitrate >= 32 && input.bitrate <= 320) patch.bitrate = input.bitrate;
+  if (typeof input.is_active === "boolean") patch.is_active = input.is_active;
+
+  const stations = await supabaseJson(
+    env,
+    `/rest/v1/radio_stations?id=eq.${encodeURIComponent(stationId)}&owner_id=eq.${user.id}&select=*`,
+    {
+      method: "PATCH",
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify(patch)
+    }
+  ) as Record<string, unknown>[];
+  if (!stations[0]) return json({ error: "Radio station not found." }, 404);
+  return json({ station: stations[0] });
+}
+
+async function deleteRadioStation(request: Request, env: Env, stationId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  await supabaseJson(
+    env,
+    `/rest/v1/radio_stations?id=eq.${encodeURIComponent(stationId)}&owner_id=eq.${user.id}`,
+    { method: "DELETE" }
+  );
+  return json({ ok: true });
+}
+
+type PublicRadioStation = {
+  code: string;
+  name: string;
+  genre: string;
+  streamUrl: string;
+  logoUrl: string | null;
+  epgChannelId: string | null;
+  bitrateKbps: number;
+  requestHeaders: Record<string, string>;
+};
+
+function publicRadioStation(row: Record<string, unknown>): PublicRadioStation {
+  const rawHeaders = row.request_headers;
+  const requestHeaders = rawHeaders && typeof rawHeaders === "object" && !Array.isArray(rawHeaders)
+    ? Object.fromEntries(Object.entries(rawHeaders).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+    : {};
+  return {
+    code: String(row.station_code || ""),
+    name: String(row.name || ""),
+    genre: String(row.genre || "Variety"),
+    streamUrl: String(row.stream_url || ""),
+    logoUrl: typeof row.logo_url === "string" ? row.logo_url : null,
+    epgChannelId: typeof row.epg_channel_id === "string" ? row.epg_channel_id : null,
+    bitrateKbps: Number(row.bitrate || 128),
+    requestHeaders
+  };
+}
+
+async function radioCatalogResponse(request: Request, stations: PublicRadioStation[]): Promise<Response> {
+  const serializedStations = JSON.stringify(stations);
+  const version = await sha256(serializedStations);
+  const etag = `"${version}"`;
+  const headers = {
+    "access-control-allow-origin": "*",
+    "cache-control": "public, max-age=60, stale-while-revalidate=300",
+    etag
+  };
+  if (request.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers });
+  const payload = JSON.stringify({
+    version,
+    generatedAt: new Date().toISOString(),
+    stations
+  });
+  return new Response(payload, {
+    headers: {
+      ...JSON_HEADERS,
+      ...headers
+    }
+  });
+}
+
+async function publicRadioCatalog(request: Request, env: Env): Promise<Response> {
+  const rows = await supabaseJson(
+    env,
+    "/rest/v1/radio_stations?is_active=eq.true&select=station_code,name,genre,stream_url,logo_url,epg_channel_id,bitrate,request_headers&order=station_code.asc"
+  ) as Record<string, unknown>[];
+  return radioCatalogResponse(request, rows.map(publicRadioStation));
+}
+
+async function listPlaylists(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const playlists = await supabaseJson(
+    env,
+    `/rest/v1/playlists?owner_id=eq.${user.id}&target_app=in.(tv,both)&select=*,playlist_items(*)&order=created_at.desc`
+  ) as Record<string, unknown>[];
+  return json({ playlists });
+}
+
+async function getPlaylist(request: Request, env: Env, playlistId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const playlists = await supabaseJson(
+    env,
+    `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=*,playlist_items(*)`
+  ) as Record<string, unknown>[];
+  if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+  return json({ playlist: playlists[0] });
+}
+
+async function createPlaylist(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const title = requiredString(input.title, "title", 120);
+  const epgUrl = optionalString(input.epg_url || input.epgUrl, "EPG URL");
+  if (epgUrl && !isHttpsUrl(epgUrl)) throw new Error("Invalid EPG URL");
+
+  const playlists = await supabaseJson(env, "/rest/v1/playlists?select=*", {
+    method: "POST",
+    headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      owner_id: user.id,
+      title,
+      description: optionalString(input.description, "description", 500),
+      artwork_url: optionalString(input.artwork_url || input.artworkUrl, "artwork URL"),
+      epg_url: epgUrl,
+      category: optionalString(input.category, "category", 50) ?? "general",
+      target_app: "tv",
+      is_published: input.is_published ?? true
+    })
+  }) as Record<string, unknown>[];
+  return json({ playlist: playlists[0] }, 201);
+}
+
+async function updatePlaylist(request: Request, env: Env, playlistId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.title) patch.title = requiredString(input.title, "title", 120);
+  if (input.category !== undefined) patch.category = requiredString(input.category, "category", 50);
+  if (input.description !== undefined) patch.description = optionalString(input.description, "description", 500);
+  if (input.artwork_url !== undefined || input.artworkUrl !== undefined) patch.artwork_url = optionalString(input.artwork_url || input.artworkUrl, "artwork URL");
+  if (input.epg_url !== undefined || input.epgUrl !== undefined) {
+    const epgUrl = optionalString(input.epg_url || input.epgUrl, "EPG URL");
+    if (epgUrl && !isHttpsUrl(epgUrl)) throw new Error("Invalid EPG URL");
+    patch.epg_url = epgUrl;
+  }
+  if (typeof input.is_published === "boolean") patch.is_published = input.is_published;
+
+  const playlists = await supabaseJson(
+    env,
+    `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=*`,
+    {
+      method: "PATCH",
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify(patch)
+    }
+  ) as Record<string, unknown>[];
+  if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+  return json({ playlist: playlists[0] });
+}
+
+async function deletePlaylist(request: Request, env: Env, playlistId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  await supabaseJson(
+    env,
+    `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}`,
+    { method: "DELETE" }
+  );
+  return json({ ok: true });
+}
+
+async function addPlaylistItem(request: Request, env: Env, playlistId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const playlists = await supabaseJson(
+    env,
+    `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id`
+  ) as Record<string, unknown>[];
+  if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+
+  const metadata = (input.metadata && typeof input.metadata === "object") ? input.metadata as Record<string, unknown> : {};
+  if (input.tvgId || input.tvg_id) metadata.tvg_id = input.tvgId || input.tvg_id;
+  if (input.tvgChno || input.tvg_chno) metadata.tvg_chno = input.tvgChno || input.tvg_chno;
+  if (input.tvgLogo || input.tvg_logo) metadata.tvg_logo = input.tvgLogo || input.tvg_logo;
+  if (input.isRadio || input.radio) metadata.radio = true;
+
+  const mediaUrl = requiredString(input.media_url || input.mediaUrl, "media URL", 2048);
+  if (!isHttpsUrl(mediaUrl)) throw new Error("Invalid media URL");
+  const items = await supabaseJson(env, "/rest/v1/playlist_items?select=*", {
+    method: "POST",
+    headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      playlist_id: playlistId,
+      title: requiredString(input.title, "item title", 120),
+      artist: optionalString(input.artist, "artist", 120),
+      media_url: mediaUrl,
+      duration_seconds: typeof input.duration_seconds === "number" ? input.duration_seconds : -1,
+      position: typeof input.position === "number" ? input.position : 0,
+      metadata
+    })
+  }) as Record<string, unknown>[];
+  return json({ item: items[0] }, 201);
+}
+
+async function updatePlaylistItem(
+  request: Request,
+  env: Env,
+  playlistId: string,
+  itemId: string
+): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  const playlists = await supabaseJson(
+    env,
+    `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id`
+  ) as Record<string, unknown>[];
+  if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+
+  const patch: Record<string, unknown> = {};
+  if (input.title !== undefined) patch.title = requiredString(input.title, "item title", 120);
+  if (input.media_url !== undefined || input.mediaUrl !== undefined) {
+    const mediaUrl = requiredString(input.media_url || input.mediaUrl, "media URL", 2048);
+    if (!isHttpsUrl(mediaUrl)) throw new Error("Invalid media URL");
+    patch.media_url = mediaUrl;
+  }
+  if (typeof input.position === "number") patch.position = Math.max(0, Math.trunc(input.position));
+  if (input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)) {
+    patch.metadata = input.metadata;
+  }
+  if (!Object.keys(patch).length) throw new Error("Invalid playlist item update");
+
+  const items = await supabaseJson(
+    env,
+    `/rest/v1/playlist_items?id=eq.${encodeURIComponent(itemId)}&playlist_id=eq.${encodeURIComponent(playlistId)}&select=*`,
+    { method: "PATCH", headers: { prefer: "return=representation" }, body: JSON.stringify(patch) }
+  ) as Record<string, unknown>[];
+  if (!items[0]) return json({ error: "Channel not found." }, 404);
+  return json({ item: items[0] });
+}
+
+type ImportedPlaylistItem = {
+  title: string;
+  media_url: string;
+  duration_seconds: number;
+  position: number;
+  metadata: Record<string, unknown>;
+};
+
+function importedPlaylistItem(value: unknown, position: number): ImportedPlaylistItem {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`Invalid channel ${position}`);
+  const item = value as Record<string, unknown>;
+  const mediaUrl = requiredString(item.media_url || item.mediaUrl, `channel ${position} URL`, 2048);
+  if (!isHttpsUrl(mediaUrl)) throw new Error(`Invalid channel ${position} URL`);
+  return {
+    title: requiredString(item.title, `channel ${position} title`, 120),
+    media_url: mediaUrl,
+    duration_seconds: typeof item.duration_seconds === "number" ? Math.trunc(item.duration_seconds) : -1,
+    position,
+    metadata: item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+      ? item.metadata as Record<string, unknown>
+      : {}
+  };
+}
+
+async function importPlaylistItems(request: Request, env: Env, playlistId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  if (!Array.isArray(input.items) || input.items.length === 0 || input.items.length > 2000) {
+    throw new Error("Invalid M3U channel list");
+  }
+  const playlists = await supabaseJson(
+    env,
+    `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id`
+  ) as Record<string, unknown>[];
+  if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+  const imported = input.items.map((item, index) => ({
+    playlist_id: playlistId,
+    ...importedPlaylistItem(item, index + 1)
+  }));
+
+  if (input.replace === true) {
+    const inserted = await supabaseJson(env, "/rest/v1/rpc/replace_playlist_items", {
+      method: "POST",
+      body: JSON.stringify({ p_owner_id: user.id, p_playlist_id: playlistId, p_items: imported })
+    }) as number;
+    return json({ imported: inserted }, 201);
+  }
+  const created = await supabaseJson(env, "/rest/v1/playlist_items?select=*", {
+    method: "POST",
+    headers: { prefer: "return=representation" },
+    body: JSON.stringify(imported)
+  }) as Record<string, unknown>[];
+  return json({ imported: created.length }, 201);
+}
+
+async function reorderPlaylistItems(request: Request, env: Env, playlistId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
+  if (!Array.isArray(input.itemIds) || input.itemIds.length > 2000) throw new Error("Invalid channel order");
+  const itemIds = input.itemIds.map((id, index) => requiredString(id, `channel ${index + 1} ID`, 64));
+  if (new Set(itemIds).size !== itemIds.length) throw new Error("Invalid channel order");
+  const playlists = await supabaseJson(
+    env,
+    `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id`
+  ) as Record<string, unknown>[];
+  if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+  const existing = await supabaseJson(
+    env,
+    `/rest/v1/playlist_items?playlist_id=eq.${encodeURIComponent(playlistId)}&select=id`
+  ) as Record<string, unknown>[];
+  const existingIds = new Set(existing.map((item) => String(item.id)));
+  if (itemIds.length !== existingIds.size || itemIds.some((id) => !existingIds.has(id))) {
+    throw new Error("Invalid channel order");
+  }
+  for (let start = 0; start < itemIds.length; start += 25) {
+    await Promise.all(itemIds.slice(start, start + 25).map((itemId, offset) => supabaseJson(
+      env,
+      `/rest/v1/playlist_items?id=eq.${encodeURIComponent(itemId)}&playlist_id=eq.${encodeURIComponent(playlistId)}`,
+      { method: "PATCH", body: JSON.stringify({ position: start + offset + 1 }) }
+    )));
+  }
+  return json({ ok: true });
+}
+
+async function deletePlaylistItem(request: Request, env: Env, playlistId: string, itemId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const playlists = await supabaseJson(
+    env,
+    `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}&select=id`
+  ) as Record<string, unknown>[];
+  if (!playlists[0]) return json({ error: "Playlist not found." }, 404);
+
+  await supabaseJson(
+    env,
+    `/rest/v1/playlist_items?id=eq.${encodeURIComponent(itemId)}&playlist_id=eq.${encodeURIComponent(playlistId)}`,
+    { method: "DELETE" }
+  );
+  return json({ ok: true });
+}
+
+async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Response> {
+  const device = await deviceForToken(request, env);
+
+  let playlistQuery = `/rest/v1/playlists?owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&is_published=eq.true&select=*,playlist_items(*)&order=created_at.asc`;
+  if (device.assigned_playlist_id) {
+    playlistQuery = `/rest/v1/playlists?id=eq.${encodeURIComponent(String(device.assigned_playlist_id))}&owner_id=eq.${device.owner_id}&select=*,playlist_items(*)`;
+  }
+
+  const playlists = await supabaseJson(env, playlistQuery) as Record<string, unknown>[];
+
+  let m3uContent = '#EXTM3U x-tvg-url="https://play.glztech.com/epg.xml.gz"\n\n';
+
+  const cleanText = (value: unknown): string => String(value ?? "").replace(/[\r\n]+/g, " ").trim();
+  const cleanAttribute = (value: unknown): string => cleanText(value).replace(/"/g, "'");
+
+  for (const pl of playlists) {
+    if (typeof pl.epg_url === "string" && pl.epg_url) {
+      m3uContent = `#EXTM3U x-tvg-url="${cleanAttribute(pl.epg_url)}"\n\n`;
+    }
+    const groupTitle = cleanAttribute(pl.title || "TV");
+    const items = (pl.playlist_items as Record<string, unknown>[]) || [];
+    items.sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+
+    for (const item of items) {
+      const title = cleanText(item.title || "Untitled Channel");
+      const duration = Number(item.duration_seconds || -1);
+      const mediaUrl = String(item.media_url || "");
+      const metadata = (item.metadata && typeof item.metadata === "object") ? item.metadata as Record<string, unknown> : {};
+      if (metadata.hidden === true || metadata.hidden === "true") continue;
+
+      const tvgId = metadata.tvg_id || metadata.tvgId ? ` tvg-id="${cleanAttribute(metadata.tvg_id || metadata.tvgId)}"` : "";
+      const tvgChno = metadata.tvg_chno || metadata.tvgChno ? ` tvg-chno="${cleanAttribute(metadata.tvg_chno || metadata.tvgChno)}"` : "";
+      const tvgLogo = metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url ? ` tvg-logo="${cleanAttribute(metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url)}"` : "";
+      const isRadio = metadata.radio === true || metadata.radio === "true" ? ' radio="true"' : "";
+
+      const channelGroup = cleanAttribute(metadata.group || groupTitle);
+      m3uContent += `#EXTINF:${duration}${tvgId}${tvgChno}${tvgLogo}${isRadio} group-title="${channelGroup}",${title}\n${mediaUrl}\n\n`;
+    }
+  }
+
+  return new Response(m3uContent, {
+    status: 200,
+    headers: {
+      "content-type": "audio/x-mpegurl; charset=utf-8",
+      "cache-control": "no-cache"
+    }
+  });
+}
+
+async function getDeviceRadioStreams(request: Request, env: Env): Promise<Response> {
+  const device = await deviceForToken(request, env);
+  const rows = await supabaseJson(
+    env,
+    `/rest/v1/radio_stations?owner_id=eq.${device.owner_id}&is_active=eq.true&select=station_code,name,genre,stream_url,logo_url,epg_channel_id,bitrate,request_headers&order=station_code.asc`
+  ) as Record<string, unknown>[];
+  return radioCatalogResponse(request, rows.map(publicRadioStation));
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
 
   if (path === "/api/health") return json({ ok: true, service: "glzhub" });
+  if (path === "/api/v1/radio/stations" && request.method === "GET") return publicRadioCatalog(request, env);
   if (path === "/api/v1/public-config") {
     return json({ supabaseUrl: env.SUPABASE_URL, publishableKey: env.SUPABASE_PUBLISHABLE_KEY });
   }
@@ -629,10 +1089,35 @@ async function route(request: Request, env: Env): Promise<Response> {
   const install = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/commands$/i);
   if (install && request.method === "POST") return queueInstall(request, env, install[1]);
   if (path === "/api/v1/devices/config" && request.method === "GET") return deviceConfig(request, env);
+  if (path === "/api/v1/devices/playlist.m3u" && request.method === "GET") return getDeviceM3UPlaylist(request, env);
+  if (path === "/api/v1/devices/radio-streams" && request.method === "GET") return getDeviceRadioStreams(request, env);
   if (path === "/api/v1/devices/commands" && request.method === "GET") return pendingCommands(request, env);
   const result = path.match(/^\/api\/v1\/devices\/commands\/([0-9a-f-]+)\/result$/i);
   if (result && request.method === "POST") return commandResult(request, env, result[1]);
   if (path === "/api/v1/devices/heartbeat" && request.method === "POST") return heartbeat(request, env);
+  // Radio Stations & Playlists API endpoints
+  if (path === "/api/v1/admin/radio-stations" && request.method === "GET") return listRadioStations(request, env);
+  if (path === "/api/v1/admin/radio-stations" && request.method === "POST") return createRadioStation(request, env);
+  const adminRadio = path.match(/^\/api\/v1\/admin\/radio-stations\/([0-9a-f-]+)$/i);
+  if (adminRadio && request.method === "PATCH") return updateRadioStation(request, env, adminRadio[1]);
+  if (adminRadio && request.method === "DELETE") return deleteRadioStation(request, env, adminRadio[1]);
+
+  if (path === "/api/v1/admin/playlists" && request.method === "GET") return listPlaylists(request, env);
+  if (path === "/api/v1/admin/playlists" && request.method === "POST") return createPlaylist(request, env);
+  const adminPlaylist = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)$/i);
+  if (adminPlaylist && request.method === "GET") return getPlaylist(request, env, adminPlaylist[1]);
+  if (adminPlaylist && request.method === "PATCH") return updatePlaylist(request, env, adminPlaylist[1]);
+  if (adminPlaylist && request.method === "DELETE") return deletePlaylist(request, env, adminPlaylist[1]);
+  const playlistItems = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/items$/i);
+  if (playlistItems && request.method === "POST") return addPlaylistItem(request, env, playlistItems[1]);
+  const playlistImport = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/import$/i);
+  if (playlistImport && request.method === "POST") return importPlaylistItems(request, env, playlistImport[1]);
+  const playlistReorder = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/reorder$/i);
+  if (playlistReorder && request.method === "PATCH") return reorderPlaylistItems(request, env, playlistReorder[1]);
+  const playlistItemDelete = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/items\/([0-9a-f-]+)$/i);
+  if (playlistItemDelete && request.method === "PATCH") return updatePlaylistItem(request, env, playlistItemDelete[1], playlistItemDelete[2]);
+  if (playlistItemDelete && request.method === "DELETE") return deletePlaylistItem(request, env, playlistItemDelete[1], playlistItemDelete[2]);
+
   if (path.startsWith("/api/")) return json({ error: "Not found." }, 404);
   return env.ASSETS.fetch(request);
 }

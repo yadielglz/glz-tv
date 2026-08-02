@@ -68,7 +68,8 @@ class GlzSyncWorker(
         val epgUrl = prefs.getString("epg_url", "https://play.glztech.com/epg.xml.gz")
             .orEmpty().ifBlank { "https://play.glztech.com/epg.xml.gz" }
         val headers = parseHeaders(prefs.getString("request_headers", "").orEmpty())
-        val channels = M3uParser.parse(fetch(client, playlistUrl, headers), playlistUrl, headers)
+        val sourceHeaders = GlzHubManager.sourceRequestHeaders(prefs, playlistUrl, headers)
+        val channels = M3uParser.parse(fetch(client, playlistUrl, sourceHeaders), playlistUrl, headers)
         check(channels.isNotEmpty()) { "Playlist did not contain channels" }
         ChannelCache.write(applicationContext, playlistUrl, channels)
         if (epgUrl.isNotBlank()) {
