@@ -23,7 +23,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -2453,7 +2455,7 @@ private fun ImmersivePlayerScreen(
         .firstOrNull { it.startMillis >= (currentProgramme?.endMillis ?: now) }
 
     LaunchedEffect(Unit) {
-        delay(5_000)
+        delay(3_000)
         showNavigationTip = false
     }
     LaunchedEffect(Unit) {
@@ -2560,26 +2562,34 @@ private fun ImmersivePlayerScreen(
             }
         )
 
-        if (drawer == PlayerDrawer.None && showOsd) {
+        AnimatedVisibility(
+            visible = drawer == PlayerDrawer.None && showOsd,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = fadeIn(animationSpec = tween(180)),
+            exit = fadeOut(animationSpec = tween(650))
+        ) {
             PlayerOsd(
                 channel = channel,
                 currentProgramme = currentProgramme,
                 nextProgramme = nextProgramme,
                 guide = guide,
-                now = now,
-                modifier = Modifier.align(Alignment.TopCenter)
+                now = now
             )
         }
 
-        if (drawer == PlayerDrawer.None && showNavigationTip) {
+        AnimatedVisibility(
+            visible = drawer == PlayerDrawer.None && showNavigationTip,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp),
+            enter = fadeIn(animationSpec = tween(180)),
+            exit = fadeOut(animationSpec = tween(650))
+        ) {
             Surface(
-                modifier = Modifier.align(Alignment.TopStart).padding(24.dp),
                 color = Color.Black.copy(alpha = .58f),
                 shape = RoundedCornerShape(14.dp)
             ) {
                 Text(
-                    "◀ Channels                         Services ▶",
-                    Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                    "◀  Channels                 Apps  ▶",
+                    Modifier.padding(horizontal = 22.dp, vertical = 11.dp),
                     color = Color.White.copy(alpha = .86f),
                     style = MaterialTheme.typography.labelLarge
                 )
