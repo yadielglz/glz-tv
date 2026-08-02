@@ -69,6 +69,21 @@ function isHttpsUrl(value: string | null): boolean {
   try { return new URL(value).protocol === "https:"; } catch { return false; }
 }
 
+function activeSchedule(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const schedule = value as Record<string, unknown>;
+  if (typeof schedule.start !== "string" || typeof schedule.end !== "string") return null;
+  const days = typeof schedule.days === "string" ? schedule.days.toLowerCase() : "";
+  const day = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date().getUTCDay()];
+  if (days && !days.includes(day)) return null;
+  const now = new Date();
+  const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const parse = (part: string) => { const [hours, mins] = part.split(":").map(Number); return hours * 60 + mins; };
+  const start = parse(schedule.start); const end = parse(schedule.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || (start <= end ? (minutes < start || minutes > end) : (minutes > end && minutes < start))) return null;
+  return schedule;
+}
+
 const MAX_XMLTV_BYTES = 40 * 1024 * 1024;
 
 function validateXmlTv(value: unknown): { xml: string; channelCount: number; programmeCount: number } {
@@ -280,7 +295,7 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     "visible_apps", "theme_mode", "weather_location", "start_destination",
     "captions_enabled", "captions_language", "auto_start", "resume_last_channel",
     "osd_timeout_seconds", "auto_update", "wifi_only",
-    "room_number", "arrival_date", "departure_date", "site_id", "assigned_playlist_id", "box_group_id"
+    "room_number", "arrival_date", "departure_date", "site_id", "assigned_playlist_id", "box_group_id", "schedule_rules", "home_preview_channel_id"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
   if ("site_id" in input) {
@@ -314,6 +329,20 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
       if (!groups[0]) return json({ error: "Box group not found." }, 404);
     }
     patch.box_group_id = groupId;
+  }
+  if ("schedule_rules" in input) {
+    if (!input.schedule_rules || typeof input.schedule_rules !== "object" || Array.isArray(input.schedule_rules)) throw new Error("Invalid schedule rules.");
+    const schedule = input.schedule_rules as Record<string, unknown>;
+    patch.schedule_rules = {
+      days: optionalString(schedule.days, "schedule days", 40),
+      start: optionalString(schedule.start, "schedule start", 5),
+      end: optionalString(schedule.end, "schedule end", 5),
+      theme: optionalString(schedule.theme, "schedule theme", 20),
+      playlistId: optionalString(schedule.playlistId, "schedule playlist", 64)
+    };
+  }
+  if ("home_preview_channel_id" in input) {
+    patch.home_preview_channel_id = optionalString(input.home_preview_channel_id, "home preview channel", 160);
   }
   patch.config_version = Number(currentRows[0].config_version || 0) + 1;
   patch.updated_at = new Date().toISOString();
@@ -394,7 +423,8 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     ) as Record<string, unknown>[];
     groupPlaylistId = groups[0]?.playlist_id ?? null;
   }
-  const effectivePlaylistId = device.assigned_playlist_id || groupPlaylistId;
+  const scheduled = activeSchedule(device.schedule_rules);
+  const effectivePlaylistId = (scheduled?.playlistId as string | undefined) || device.assigned_playlist_id || groupPlaylistId;
   const hasManagedAssignment = Boolean(effectivePlaylistId);
   const playlistUrl = hasManagedAssignment ? managedPlaylistUrl : (device.playlist_url || managedPlaylistUrl);
   if (hasManagedAssignment || !device.epg_url) {
@@ -417,7 +447,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     epgUrl: hasManagedAssignment ? managedEpgUrl : (device.epg_url || managedEpgUrl),
     requestHeaders: device.request_headers ?? {},
     visibleApps: device.visible_apps ?? [],
-    themeMode: device.theme_mode,
+    themeMode: (scheduled?.theme as string | undefined) || device.theme_mode,
     weatherLocation: device.weather_location,
     startDestination: device.start_destination,
     captionsEnabled: device.captions_enabled,
@@ -427,6 +457,8 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     osdTimeoutSeconds: device.osd_timeout_seconds ?? 8,
     autoUpdate: device.auto_update ?? true,
     wifiOnly: device.wifi_only ?? false,
+    scheduleRules: device.schedule_rules ?? {},
+    homePreviewChannelId: device.home_preview_channel_id ?? null,
     forceRefreshToken: device.force_refresh_token ?? null,
     guestExperience: {
       propertyName: profile.property_name ?? "",

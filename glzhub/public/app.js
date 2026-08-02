@@ -1,6 +1,6 @@
 const state = {
   config: null, session: null, devices: [], apps: [], sites: [],
-  experience: null, selectedSiteId: null, enrollments: [], stations: [], playlists: [], groups: []
+  experience: null, selectedSiteId: null, enrollments: [], stations: [], playlists: [], groups: [], selectedDevices: new Set(), previewChannelId: localStorage.getItem("glzhub_preview_channel") || ""
 };
 const epgState = { doc: null, playlistId: "", dirty: false, sourceUrl: "" };
 const inviteParams = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -139,11 +139,13 @@ function renderDevices() {
   $("#onlineCount").textContent = online;
   $("#attentionCount").textContent = state.devices.filter((device) => device.last_error).length;
   $("#emptyState").classList.toggle("hidden", state.devices.length > 0);
-  $("#deviceGrid").innerHTML = state.devices.length ? `<div class="list-head"><span>Device</span><span>Property</span><span>Status</span><span>Activity</span><span>App</span><span>Last contact</span></div>` +
+  state.selectedDevices = new Set([...state.selectedDevices].filter((id) => state.devices.some((device) => device.id === id)));
+  $("#deviceGrid").innerHTML = state.devices.length ? `<div class="list-head"><span></span><span>Device</span><span>Property</span><span>Status</span><span>Activity</span><span>App</span><span>Last contact</span></div>` +
     state.devices.map((device) => {
       const activity = deviceActivity(device);
       return `
     <button class="device-row" data-device-id="${device.id}">
+      <span class="row-check"><input type="checkbox" data-device-select="${device.id}" ${state.selectedDevices.has(device.id) ? "checked" : ""} aria-label="Select ${escapeHtml(device.name)}"></span>
       <span class="device-identity"><span class="screen-icon"></span><span><strong>${escapeHtml(device.name)}</strong><small>Welcome, ${escapeHtml(device.guest_name)}</small></span></span>
       <span data-label="Property">${escapeHtml(state.sites.find((site) => site.id === device.site_id)?.name || "Unassigned")}</span>
       <span><span class="status ${isOnline(device) ? "" : "offline"}">${isOnline(device) ? "ONLINE" : "OFFLINE"}</span></span>
@@ -153,6 +155,57 @@ function renderDevices() {
     </button>`;
     }).join("") : "";
   $$(".device-row").forEach((row) => row.addEventListener("click", () => openDevice(row.dataset.deviceId)));
+  $$('[data-device-select]').forEach((input) => input.addEventListener("click", (event) => event.stopPropagation()));
+  $$('[data-device-select]').forEach((input) => input.addEventListener("change", () => { input.checked ? state.selectedDevices.add(input.dataset.deviceSelect) : state.selectedDevices.delete(input.dataset.deviceSelect); updateBulkControls(); }));
+  updateBulkControls();
+  renderPreviewControls();
+}
+
+function updateBulkControls() {
+  const count = state.selectedDevices.size;
+  $("#bulkSelectionCount").textContent = `${count} selected`;
+  $$("#bulkRefresh, #bulkTheme, #bulkPlaylist").forEach((button) => button.disabled = !count);
+  $("#selectAllDevices").checked = Boolean(state.devices.length && count === state.devices.length);
+  const online = state.devices.filter(isOnline).length;
+  const attention = state.devices.filter((device) => device.last_error || !isOnline(device)).length;
+  $("#healthSummary").innerHTML = `<div><strong>${online}</strong><span>online now</span></div><div><strong>${state.devices.length - online}</strong><span>offline</span></div><div><strong>${attention}</strong><span>need attention</span></div>`;
+}
+
+function previewItems() {
+  return state.playlists.flatMap((playlist) => (playlist.playlist_items || []).map((item) => ({ ...item, playlistTitle: playlist.title })));
+}
+
+function renderPreviewControls() {
+  const select = $("#previewChannel");
+  if (!select) return;
+  const items = previewItems();
+  select.innerHTML = `<option value="">Select a channel…</option>` + items.map((item) => `<option value="${item.id}">${escapeHtml(item.title)} · ${escapeHtml(item.playlistTitle)}</option>`).join("");
+  if (items.some((item) => item.id === state.previewChannelId)) select.value = state.previewChannelId;
+  const item = items.find((entry) => entry.id === select.value);
+  $("#previewEmpty").classList.toggle("hidden", Boolean(item));
+  $("#previewVideo").classList.toggle("hidden", !item);
+}
+
+async function runBulk(action) {
+  const ids = [...state.selectedDevices];
+  if (!ids.length) return;
+  try {
+    if (action === "refresh") {
+      await Promise.all(ids.map((id) => api(`/api/v1/admin/devices/${id}/force-refresh`, { method: "POST" })));
+      toast(`Refresh queued for ${ids.length} screens.`);
+    } else {
+      const value = action === "theme" ? $("#bulkTheme").dataset.value : $("#bulkPlaylist").dataset.value;
+      const field = action === "theme" ? "theme_mode" : "assigned_playlist_id";
+      const previous = ids.map((id) => ({ id, value: state.devices.find((device) => device.id === id)?.[field] || null }));
+      await Promise.all(ids.map((id) => api(`/api/v1/admin/devices/${id}`, { method: "PATCH", body: JSON.stringify({ [field]: value || null }) })));
+      toast(`${action === "theme" ? "Theme" : "Playlist"} updated on ${ids.length} screens.`, async () => {
+        await Promise.all(previous.map((entry) => api(`/api/v1/admin/devices/${entry.id}`, { method: "PATCH", body: JSON.stringify({ [field]: entry.value }) })));
+        await loadDevices();
+        toast("Bulk change undone.");
+      });
+      await loadDevices();
+    }
+  } catch (error) { toast(error.message); }
 }
 
 let deviceActivityRefresh = false;
@@ -178,6 +231,7 @@ async function loadDevices() {
   state.apps = appResult.apps;
   state.sites = siteResult.sites;
   state.groups = groupResult.groups || [];
+  if (!state.playlists.length) await loadPlaylists();
   if (!state.sites.some((site) => site.id === state.selectedSiteId)) {
     state.selectedSiteId = state.sites[0]?.id || null;
   }
@@ -312,6 +366,19 @@ function openDevice(id) {
     `<option value="${pl.id}">${escapeHtml(pl.title)} (${(pl.playlist_items || []).length} channels)</option>`
   ).join("");
   $("#deviceAssignedPlaylist").value = device.assigned_playlist_id || "";
+  const previewItemsForDevice = state.playlists.flatMap((playlist) => (playlist.playlist_items || []).map((item) => ({ ...item, playlistTitle: playlist.title })));
+  $("#homePreviewChannel").innerHTML = `<option value="">No home preview</option>` + previewItemsForDevice.map((item) => {
+    const channelId = item.metadata?.tvg_id || item.title;
+    return `<option value="${escapeHtml(channelId)}">${escapeHtml(item.title)} · ${escapeHtml(item.playlistTitle)}</option>`;
+  }).join("");
+  $("#homePreviewChannel").value = device.home_preview_channel_id || "";
+  $("#schedulePlaylist").innerHTML = `<option value="">Keep current playlist</option>` + state.playlists.map((playlist) => `<option value="${playlist.id}">${escapeHtml(playlist.title)}</option>`).join("");
+  const schedule = device.schedule_rules || {};
+  $("#scheduleDays").value = schedule.days || "";
+  $("#scheduleStart").value = schedule.start || "";
+  $("#scheduleEnd").value = schedule.end || "";
+  $("#scheduleTheme").value = schedule.theme || "";
+  $("#schedulePlaylist").value = schedule.playlistId || "";
   $("#deviceBoxGroup").innerHTML = `<option value="">No box group</option>` + state.groups.map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`).join("");
   $("#deviceBoxGroup").value = device.box_group_id || "";
   $("#editDeviceChannelPolicy").disabled = !(device.assigned_playlist_id || state.groups.find((group) => group.id === device.box_group_id)?.playlist_id);
@@ -344,10 +411,18 @@ function openDevice(id) {
   $("#deviceDialog").showModal();
 }
 
-function toast(message) {
-  $("#toast").textContent = message;
-  $("#toast").classList.add("show");
-  setTimeout(() => $("#toast").classList.remove("show"), 2500);
+function toast(message, undo) {
+  const node = $("#toast");
+  node.textContent = message;
+  if (undo) {
+    const button = document.createElement("button");
+    button.type = "button"; button.className = "toast-undo"; button.textContent = "Undo";
+    button.addEventListener("click", async () => { button.disabled = true; try { await undo(); } catch (error) { toast(error.message); } });
+    node.append(" ", button);
+  }
+  node.classList.add("show");
+  clearTimeout(window.__glzToastTimer);
+  window.__glzToastTimer = setTimeout(() => node.classList.remove("show"), undo ? 6000 : 2500);
 }
 
 // Keep all management screens on the same notification path.
@@ -400,7 +475,15 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         guest_name: $("#guestName").value,
         site_id: $("#deviceSite").value || null,
         assigned_playlist_id: $("#deviceAssignedPlaylist").value || null,
+        home_preview_channel_id: $("#homePreviewChannel").value || null,
         box_group_id: $("#deviceBoxGroup").value || null,
+        schedule_rules: {
+          days: $("#scheduleDays").value.trim() || null,
+          start: $("#scheduleStart").value || null,
+          end: $("#scheduleEnd").value || null,
+          theme: $("#scheduleTheme").value || null,
+          playlistId: $("#schedulePlaylist").value || null
+        },
         room_number: $("#roomNumber").value || null,
         arrival_date: $("#arrivalDate").value || null,
         departure_date: $("#departureDate").value || null,
@@ -426,6 +509,32 @@ $("#deviceForm").addEventListener("submit", async (event) => {
     $("#deviceError").textContent = error.message;
   }
 });
+
+$("#selectAllDevices")?.addEventListener("change", (event) => {
+  state.selectedDevices = event.target.checked ? new Set(state.devices.map((device) => device.id)) : new Set();
+  renderDevices();
+});
+$("#bulkRefresh")?.addEventListener("click", () => runBulk("refresh"));
+$("#bulkTheme")?.addEventListener("click", () => {
+  const value = prompt("Theme for selected screens (adaptive, dark, light, ocean, sunset, emerald, cyberpunk, midnight):", "adaptive");
+  if (value && ["adaptive", "dark", "light", "ocean", "sunset", "emerald", "cyberpunk", "midnight"].includes(value)) { $("#bulkTheme").dataset.value = value; runBulk("theme"); }
+});
+$("#bulkPlaylist")?.addEventListener("click", () => {
+  const options = state.playlists.map((playlist) => `${playlist.id} = ${playlist.title}`).join("\n");
+  const value = prompt(`Playlist ID for selected screens:\n${options}`);
+  if (value !== null && state.playlists.some((playlist) => playlist.id === value)) { $("#bulkPlaylist").dataset.value = value; runBulk("playlist"); }
+});
+$("#previewChannel")?.addEventListener("change", (event) => {
+  const item = previewItems().find((entry) => entry.id === event.target.value);
+  state.previewChannelId = event.target.value;
+  localStorage.setItem("glzhub_preview_channel", state.previewChannelId);
+  const video = $("#previewVideo");
+  video.pause();
+  video.src = item?.media_url || item?.mediaUrl || "";
+  renderPreviewControls();
+});
+$("#previewPlay")?.addEventListener("click", () => $("#previewVideo").play().catch(() => toast("This stream cannot autoplay in the browser.")));
+$("#previewMute")?.addEventListener("click", () => { const video = $("#previewVideo"); video.muted = !video.muted; $("#previewMute").textContent = video.muted ? "🔇" : "🔊"; });
 
 $("#forceRefreshDevice").addEventListener("click", async () => {
   const id = $("#deviceId").value;

@@ -195,31 +195,31 @@ private data class WeatherInfo(
 
 private data class NetworkInfo(val connection: String, val isp: String)
 
-private val InterFontFamily = FontFamily(
-    Font(R.font.inter_variable, FontWeight.Normal),
-    Font(R.font.inter_variable, FontWeight.Medium),
-    Font(R.font.inter_variable, FontWeight.SemiBold),
-    Font(R.font.inter_variable, FontWeight.Bold),
-    Font(R.font.inter_variable, FontWeight.Black)
+private val RobotoFlexFontFamily = FontFamily(
+    Font(R.font.roboto_flex, FontWeight.Normal),
+    Font(R.font.roboto_flex, FontWeight.Medium),
+    Font(R.font.roboto_flex, FontWeight.SemiBold),
+    Font(R.font.roboto_flex, FontWeight.Bold),
+    Font(R.font.roboto_flex, FontWeight.Black)
 )
 
-private val InterTypography = Typography().run {
+private val RobotoFlexTypography = Typography().run {
     copy(
-        displayLarge = displayLarge.copy(fontFamily = InterFontFamily),
-        displayMedium = displayMedium.copy(fontFamily = InterFontFamily),
-        displaySmall = displaySmall.copy(fontFamily = InterFontFamily),
-        headlineLarge = headlineLarge.copy(fontFamily = InterFontFamily),
-        headlineMedium = headlineMedium.copy(fontFamily = InterFontFamily),
-        headlineSmall = headlineSmall.copy(fontFamily = InterFontFamily),
-        titleLarge = titleLarge.copy(fontFamily = InterFontFamily),
-        titleMedium = titleMedium.copy(fontFamily = InterFontFamily),
-        titleSmall = titleSmall.copy(fontFamily = InterFontFamily),
-        bodyLarge = bodyLarge.copy(fontFamily = InterFontFamily),
-        bodyMedium = bodyMedium.copy(fontFamily = InterFontFamily),
-        bodySmall = bodySmall.copy(fontFamily = InterFontFamily),
-        labelLarge = labelLarge.copy(fontFamily = InterFontFamily),
-        labelMedium = labelMedium.copy(fontFamily = InterFontFamily),
-        labelSmall = labelSmall.copy(fontFamily = InterFontFamily)
+        displayLarge = displayLarge.copy(fontFamily = RobotoFlexFontFamily),
+        displayMedium = displayMedium.copy(fontFamily = RobotoFlexFontFamily),
+        displaySmall = displaySmall.copy(fontFamily = RobotoFlexFontFamily),
+        headlineLarge = headlineLarge.copy(fontFamily = RobotoFlexFontFamily),
+        headlineMedium = headlineMedium.copy(fontFamily = RobotoFlexFontFamily),
+        headlineSmall = headlineSmall.copy(fontFamily = RobotoFlexFontFamily),
+        titleLarge = titleLarge.copy(fontFamily = RobotoFlexFontFamily),
+        titleMedium = titleMedium.copy(fontFamily = RobotoFlexFontFamily),
+        titleSmall = titleSmall.copy(fontFamily = RobotoFlexFontFamily),
+        bodyLarge = bodyLarge.copy(fontFamily = RobotoFlexFontFamily),
+        bodyMedium = bodyMedium.copy(fontFamily = RobotoFlexFontFamily),
+        bodySmall = bodySmall.copy(fontFamily = RobotoFlexFontFamily),
+        labelLarge = labelLarge.copy(fontFamily = RobotoFlexFontFamily),
+        labelMedium = labelMedium.copy(fontFamily = RobotoFlexFontFamily),
+        labelSmall = labelSmall.copy(fontFamily = RobotoFlexFontFamily)
     )
 }
 
@@ -417,7 +417,7 @@ private fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int)
     }
     MaterialTheme(
         colorScheme = colors,
-        typography = InterTypography,
+        typography = RobotoFlexTypography,
         shapes = MaterialTheme.shapes.copy(
             small = RoundedCornerShape(16.dp),
             medium = RoundedCornerShape(24.dp),
@@ -460,6 +460,9 @@ private fun TvScreen(
     }
     var guestName by remember {
         mutableStateOf(prefs.getString(GUEST_NAME, "Guest") ?: "Guest")
+    }
+    var homePreviewChannelId by remember {
+        mutableStateOf(prefs.getString(GlzHubManager.HOME_PREVIEW_CHANNEL_ID, null))
     }
     var guestExperience by remember { mutableStateOf(GuestExperience.from(prefs)) }
     var visibleAppPackages by remember {
@@ -579,6 +582,7 @@ private fun TvScreen(
             }
         }
         guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+        homePreviewChannelId = prefs.getString(GlzHubManager.HOME_PREVIEW_CHANNEL_ID, null)
         guestExperience = GuestExperience.from(prefs)
         weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
             ?: DEFAULT_WEATHER_LOCATION
@@ -618,6 +622,7 @@ private fun TvScreen(
         }
         if (initialSync?.changed == true) {
             guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+            homePreviewChannelId = prefs.getString(GlzHubManager.HOME_PREVIEW_CHANNEL_ID, null)
             guestExperience = GuestExperience.from(prefs)
             weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
                 ?: DEFAULT_WEATHER_LOCATION
@@ -645,6 +650,7 @@ private fun TvScreen(
                 }
                 if (result.changed || result.forceRefreshTriggered) {
                     guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+                    homePreviewChannelId = prefs.getString(GlzHubManager.HOME_PREVIEW_CHANNEL_ID, null)
                     guestExperience = GuestExperience.from(prefs)
                     weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
                         ?: DEFAULT_WEATHER_LOCATION
@@ -720,6 +726,7 @@ private fun TvScreen(
         if (!appVisibilityManaged) EntertainmentApps
         else EntertainmentApps.filter { it.packageName in visibleAppPackages }
     }
+    val homePreviewChannel = ordered.firstOrNull { it.id == homePreviewChannelId }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -780,7 +787,11 @@ private fun TvScreen(
                             AppSection.Home -> GuestHubHome(
                                 guestName = guestName,
                                 experience = guestExperience,
+                                previewChannel = homePreviewChannel,
+                                captionsEnabled = captionsEnabled,
+                                captionLanguage = captionLanguage,
                                 entertainmentApps = managedEntertainmentApps,
+                                onPreviewLive = { homePreviewChannel?.let(tuneChannel) },
                                 onLive = {
                                     playerActive = false
                                     GlzHubManager.reportActivity(prefs, "idle")
@@ -1125,8 +1136,12 @@ private fun RailDestination(
 private fun GuestHubHome(
     guestName: String,
     experience: GuestExperience,
+    previewChannel: Channel?,
+    captionsEnabled: Boolean,
+    captionLanguage: String,
     entertainmentApps: List<EntertainmentApp>,
     onLive: () -> Unit,
+    onPreviewLive: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
@@ -1168,10 +1183,14 @@ private fun GuestHubHome(
             Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(if (compactHeight) 6.dp else 10.dp)
         ) {
+            Row(
+                Modifier.fillMaxWidth().height(guestHeight),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
             Card(
                 Modifier
-                    .fillMaxWidth()
-                    .height(guestHeight),
+                    .weight(1f)
+                    .fillMaxHeight(),
                 shape = RoundedCornerShape(28.dp),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                 colors = CardDefaults.cardColors(
@@ -1258,6 +1277,16 @@ private fun GuestHubHome(
                     }
                 }
             }
+            previewChannel?.let { channel ->
+                HomeChannelPreview(
+                    channel = channel,
+                    captionsEnabled = captionsEnabled,
+                    captionLanguage = captionLanguage,
+                    onOpenLive = onPreviewLive,
+                    modifier = Modifier.width(if (compactHeight) 180.dp else 230.dp).fillMaxHeight()
+                )
+            }
+            }
             HubSectionTitle("ENTERTAINMENT", "Live TV, apps and streaming services")
             LazyRow(
                 Modifier
@@ -1270,6 +1299,48 @@ private fun GuestHubHome(
                 items(entertainmentApps, key = EntertainmentApp::packageName) { app ->
                     EntertainmentAppCard(app, appWidth, appHeight)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeChannelPreview(
+    channel: Channel,
+    captionsEnabled: Boolean,
+    captionLanguage: String,
+    onOpenLive: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier.clickable(onClick = onOpenLive),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Black),
+        elevation = CardDefaults.cardElevation(10.dp)
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                VideoPlayer(
+                    channel = channel,
+                    captionsEnabled = captionsEnabled,
+                    captionLanguage = captionLanguage,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Surface(
+                    Modifier.align(Alignment.TopStart).padding(12.dp),
+                    color = Color.Black.copy(alpha = .72f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("LIVE TV", Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        color = MaterialTheme.colorScheme.secondary,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black)
+                }
+            }
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 11.dp)) {
+                Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Black)
+                Text("Watch live  ›", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -2669,30 +2740,33 @@ private fun ImmersivePlayerScreen(
                                     .focusable(),
                                 shape = RoundedCornerShape(16.dp),
                                 border = BorderStroke(
-                                    if (isFocused) 5.dp else 1.dp,
-                                    if (isFocused) MaterialTheme.colorScheme.secondary
+                                    if (isFocused) 4.dp else if (isSelected) 1.dp else 0.dp,
+                                    if (isFocused || isSelected) MaterialTheme.colorScheme.secondary
                                     else Color.Transparent
                                 ),
-                                color = if (isFocused)
-                                    MaterialTheme.colorScheme.primary
-                                else if (isSelected)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = .35f)
-                                else Color.Transparent
+                                color = when {
+                                    isFocused -> MaterialTheme.colorScheme.secondary
+                                    isSelected -> MaterialTheme.colorScheme.surfaceVariant
+                                    else -> Color.Transparent
+                                }
                             ) {
                                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
                                     ChannelLogo(item, 42.dp, guide)
                                     Spacer(Modifier.width(12.dp))
                                     Text(item.number.ifBlank { "—" }, Modifier.width(45.dp),
-                                        color = if (isSelected) MaterialTheme.colorScheme.secondary
-                                        else Color.White.copy(alpha = .62f),
+                                        color = when {
+                                            isFocused -> MaterialTheme.colorScheme.onSecondary
+                                            isSelected -> MaterialTheme.colorScheme.secondary
+                                            else -> Color.White.copy(alpha = .62f)
+                                        },
                                         fontWeight = FontWeight.Black)
                                     Column(Modifier.weight(1f)) {
-                                        Text(item.name, color = Color.White,
+                                        Text(item.name, color = if (isFocused) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurface,
                                             fontWeight = FontWeight.Bold, maxLines = 1,
                                             overflow = TextOverflow.Ellipsis)
                                         Text(itemProgramme?.title ?: "Guide unavailable",
-                                            color = Color.White.copy(alpha = .58f),
+                                            color = if (isFocused) MaterialTheme.colorScheme.onSecondary.copy(alpha = .72f) else MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.bodySmall,
                                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
