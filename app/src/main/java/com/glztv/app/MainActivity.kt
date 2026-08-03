@@ -2203,17 +2203,95 @@ private fun GuideSection(
                     }
                 } else {
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ChannelPreviewCard(
+                        EpgPreviewHeader(
                             channel = previewChannel,
+                            guide = guide,
+                            now = now,
                             captionLanguage = captionLanguage,
-                            modifier = Modifier.width(if (guideWidth >= 700.dp) 230.dp else 190.dp)
-                                .align(Alignment.End),
-                            videoHeight = if (guideWidth >= 700.dp) 129.dp else 107.dp
+                            onWatch = { onWatch(previewChannel) },
+                            previewWidth = if (guideWidth >= 700.dp) 230.dp else 190.dp,
+                            videoHeight = if (guideWidth >= 700.dp) 129.dp else 107.dp,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         EpgGrid(channels, guide, now, onWatch, Modifier.weight(1f).fillMaxWidth())
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun EpgPreviewHeader(
+    channel: Channel,
+    guide: EpgGuide,
+    now: Long,
+    captionLanguage: String,
+    onWatch: () -> Unit,
+    previewWidth: androidx.compose.ui.unit.Dp,
+    videoHeight: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier
+) {
+    val programmes = guide.forChannel(channel)
+    val current = programmes.firstOrNull { it.startMillis <= now && it.endMillis > now }
+    val next = programmes.firstOrNull { it.startMillis >= (current?.endMillis ?: now) }
+    val progress = current?.let {
+        ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
+            .coerceIn(0f, 1f)
+    } ?: 0f
+    Surface(
+        modifier,
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ChannelLogo(channel, 42.dp, guide)
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            "${channel.number.ifBlank { "LIVE" }} · ${channel.name}",
+                            fontWeight = FontWeight.Black,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text("NOW", color = MaterialTheme.colorScheme.secondary,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black)
+                    }
+                }
+                Text(current?.title ?: "Live programming", fontWeight = FontWeight.Bold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (current != null) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color = MaterialTheme.colorScheme.secondary,
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .14f)
+                    )
+                }
+                next?.let {
+                    Text(
+                        "NEXT  ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.startMillis))} · ${it.title}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Button(onClick = onWatch) { Text("Watch full screen") }
+            }
+            ChannelPreviewCard(
+                channel = channel,
+                captionLanguage = captionLanguage,
+                modifier = Modifier.width(previewWidth),
+                videoHeight = videoHeight
+            )
         }
     }
 }
