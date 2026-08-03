@@ -841,6 +841,8 @@ private fun TvScreen(
                             AppSection.Live -> GuideSection(
                                 channels = ordered,
                                 guide = guide,
+                                previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
+                                captionLanguage = captionLanguage,
                                 onWatch = tuneChannel,
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -1308,35 +1310,14 @@ private fun GuestHubHome(
                                 }
                             }
                             previewChannel?.let { channel ->
-                                Column(
-                                    Modifier.width(if (compactHeight) 160.dp else 260.dp),
-                                    verticalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Surface(
-                                        Modifier.fillMaxWidth().aspectRatio(16f / 9f),
-                                        shape = RoundedCornerShape(18.dp),
-                                        color = Color.Black,
-                                        border = BorderStroke(1.dp, Color.White.copy(alpha = .22f))
-                                    ) {
-                                        VideoPlayer(
-                                            channel = channel,
-                                            captionsEnabled = false,
-                                            captionLanguage = captionLanguage,
-                                            modifier = Modifier.fillMaxSize(),
-                                            muted = true,
-                                            keepScreenOn = false,
-                                            cropVideo = true
-                                        )
-                                    }
-                                    Text(
-                                        "${channel.number.ifBlank { "LIVE" }}  ${channel.name}",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                val videoHeight = if (compactHeight) 72.dp
+                                else (guestHeight - 58.dp).coerceIn(100.dp, 145.dp)
+                                ChannelPreviewCard(
+                                    channel = channel,
+                                    captionLanguage = captionLanguage,
+                                    modifier = Modifier.width(videoHeight * (16f / 9f)),
+                                    videoHeight = videoHeight
+                                )
                             }
                         }
                     }
@@ -2177,6 +2158,8 @@ private fun findAppLaunchIntent(context: Context, packageName: String): Intent? 
 private fun GuideSection(
     channels: List<Channel>,
     guide: EpgGuide,
+    previewChannel: Channel?,
+    captionLanguage: String,
     onWatch: (Channel) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -2186,7 +2169,7 @@ private fun GuideSection(
         shape = RoundedCornerShape(30.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(16.dp)) {
             if (guide.programmeCount == 0) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2204,9 +2187,69 @@ private fun GuideSection(
                     }
                 }
             } else {
-                EpgGrid(channels, guide, now, onWatch, Modifier.fillMaxSize())
+                val wideGuide = maxWidth >= 1100.dp
+                val guideWidth = maxWidth
+                if (previewChannel == null) {
+                    EpgGrid(channels, guide, now, onWatch, Modifier.fillMaxSize())
+                } else if (wideGuide) {
+                    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        EpgGrid(channels, guide, now, onWatch, Modifier.weight(1f).fillMaxHeight())
+                        ChannelPreviewCard(
+                            channel = previewChannel,
+                            captionLanguage = captionLanguage,
+                            modifier = Modifier.width(280.dp),
+                            videoHeight = 157.5.dp
+                        )
+                    }
+                } else {
+                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ChannelPreviewCard(
+                            channel = previewChannel,
+                            captionLanguage = captionLanguage,
+                            modifier = Modifier.width(if (guideWidth >= 700.dp) 230.dp else 190.dp)
+                                .align(Alignment.End),
+                            videoHeight = if (guideWidth >= 700.dp) 129.dp else 107.dp
+                        )
+                        EpgGrid(channels, guide, now, onWatch, Modifier.weight(1f).fillMaxWidth())
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun ChannelPreviewCard(
+    channel: Channel,
+    captionLanguage: String,
+    modifier: Modifier = Modifier,
+    videoHeight: androidx.compose.ui.unit.Dp
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Surface(
+            Modifier.fillMaxWidth().height(videoHeight),
+            shape = RoundedCornerShape(18.dp),
+            color = Color.Black,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = .22f))
+        ) {
+            VideoPlayer(
+                channel = channel,
+                captionsEnabled = false,
+                captionLanguage = captionLanguage,
+                modifier = Modifier.fillMaxSize(),
+                muted = true,
+                keepScreenOn = false,
+                cropVideo = true
+            )
+        }
+        Text(
+            "${channel.number.ifBlank { "LIVE" }}  ${channel.name}",
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
