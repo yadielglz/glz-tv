@@ -188,7 +188,7 @@ private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
 
 private enum class AppSection { Home, Live, Radio, You }
-private enum class PlayerDrawer { None, Channels, Services }
+private enum class PlayerDrawer { None, Channels, Services, Options }
 
 private data class WeatherInfo(
     val temperature: Int,
@@ -789,6 +789,14 @@ private fun TvScreen(
                     guide = guide,
                     captionsEnabled = captionsEnabled,
                     captionLanguage = captionLanguage,
+                    onCaptionsChanged = { enabled, language ->
+                        captionsEnabled = enabled
+                        captionLanguage = language
+                        prefs.edit()
+                            .putBoolean(CAPTIONS_ENABLED, enabled)
+                            .putString(CAPTION_LANGUAGE, language)
+                            .apply()
+                    },
                     osdTimeoutSeconds = osdTimeoutSeconds,
                     entertainmentApps = managedEntertainmentApps,
                     onTune = tuneChannel,
@@ -2511,6 +2519,7 @@ private fun ImmersivePlayerScreen(
     guide: EpgGuide,
     captionsEnabled: Boolean,
     captionLanguage: String,
+    onCaptionsChanged: (Boolean, String) -> Unit,
     osdTimeoutSeconds: Int = 8,
     entertainmentApps: List<EntertainmentApp>,
     onTune: (Channel) -> Unit,
@@ -2528,6 +2537,7 @@ private fun ImmersivePlayerScreen(
     val playerFocus = remember { FocusRequester() }
     val selectedChannelFocus = remember { FocusRequester() }
     val firstServiceFocus = remember { FocusRequester() }
+    val optionsFocus = remember { FocusRequester() }
     val selectedIndex = channels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
     val channelListState = rememberLazyListState(
         initialFirstVisibleItemIndex = (selectedIndex - 2).coerceAtLeast(0)
@@ -2582,6 +2592,10 @@ private fun ImmersivePlayerScreen(
                 delay(60)
                 firstServiceFocus.requestFocus()
             }
+            PlayerDrawer.Options -> {
+                delay(60)
+                optionsFocus.requestFocus()
+            }
         }
     }
 
@@ -2632,7 +2646,7 @@ private fun ImmersivePlayerScreen(
                         if (drawer == PlayerDrawer.None) {
                             showNavigationTip = false
                             showOsd = false
-                            drawer = PlayerDrawer.Services
+                            drawer = PlayerDrawer.Options
                             true
                         } else false
                     }
@@ -2676,7 +2690,7 @@ private fun ImmersivePlayerScreen(
                 shape = RoundedCornerShape(14.dp)
             ) {
                 Text(
-                    "◀  Channels                 Apps  ▶",
+                    "◀ Channels      ↑ Info  ·  ↓ Options      Apps ▶",
                     Modifier.padding(horizontal = 22.dp, vertical = 11.dp),
                     color = Color.White.copy(alpha = .86f),
                     style = MaterialTheme.typography.labelLarge
@@ -2865,6 +2879,50 @@ private fun ImmersivePlayerScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        if (drawer == PlayerDrawer.Options) {
+            Surface(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 48.dp, vertical = 30.dp),
+                color = Color(0xF20B1114),
+                contentColor = Color.White,
+                shape = RoundedCornerShape(24.dp),
+                tonalElevation = 18.dp,
+                shadowElevation = 24.dp
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text("OPTIONS", fontWeight = FontWeight.Black, color = Color(0xFFC4FF4D))
+                    Button(
+                        onClick = { onCaptionsChanged(!captionsEnabled, captionLanguage) },
+                        modifier = Modifier.focusRequester(optionsFocus)
+                    ) {
+                        Text(if (captionsEnabled) "CC On" else "CC Off")
+                    }
+                    Button(
+                        enabled = captionsEnabled,
+                        onClick = { onCaptionsChanged(true, "en") }
+                    ) {
+                        Text(if (captionLanguage == "en") "✓ English" else "English")
+                    }
+                    Button(
+                        enabled = captionsEnabled,
+                        onClick = { onCaptionsChanged(true, "es") }
+                    ) {
+                        Text(if (captionLanguage == "es") "✓ Español" else "Español")
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text("↑ Programme info  ·  ← Channels  ·  → Apps",
+                        color = Color.White.copy(alpha = .68f),
+                        style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
