@@ -143,6 +143,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.session.MediaSession
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -829,7 +830,6 @@ private fun TvScreen(
                                 experience = guestExperience,
                                 entertainmentApps = managedEntertainmentApps,
                                 previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
-                                captionsEnabled = captionsEnabled,
                                 captionLanguage = captionLanguage,
                                 onLive = {
                                     playerActive = false
@@ -1178,7 +1178,6 @@ private fun GuestHubHome(
     experience: GuestExperience,
     entertainmentApps: List<EntertainmentApp>,
     previewChannel: Channel?,
-    captionsEnabled: Boolean,
     captionLanguage: String,
     onLive: () -> Unit,
     modifier: Modifier = Modifier
@@ -1309,38 +1308,34 @@ private fun GuestHubHome(
                                 }
                             }
                             previewChannel?.let { channel ->
-                                Surface(
-                                    Modifier
-                                        .weight(.92f)
-                                        .fillMaxHeight(),
-                                    shape = RoundedCornerShape(20.dp),
-                                    color = Color.Black,
-                                    border = BorderStroke(1.dp, Color.White.copy(alpha = .22f))
+                                Column(
+                                    Modifier.width(if (compactHeight) 160.dp else 260.dp),
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    Box(Modifier.fillMaxSize()) {
+                                    Surface(
+                                        Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+                                        shape = RoundedCornerShape(18.dp),
+                                        color = Color.Black,
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = .22f))
+                                    ) {
                                         VideoPlayer(
                                             channel = channel,
-                                            captionsEnabled = captionsEnabled,
+                                            captionsEnabled = false,
                                             captionLanguage = captionLanguage,
                                             modifier = Modifier.fillMaxSize(),
                                             muted = true,
-                                            keepScreenOn = false
+                                            keepScreenOn = false,
+                                            cropVideo = true
                                         )
-                                        Surface(
-                                            Modifier.align(Alignment.BottomStart).padding(10.dp),
-                                            color = Color.Black.copy(alpha = .68f),
-                                            shape = RoundedCornerShape(9.dp)
-                                        ) {
-                                            Text(
-                                                "${channel.number.ifBlank { "LIVE" }}  ${channel.name}",
-                                                Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
                                     }
+                                    Text(
+                                        "${channel.number.ifBlank { "LIVE" }}  ${channel.name}",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                         }
@@ -3188,6 +3183,7 @@ private fun VideoPlayer(
     modifier: Modifier = Modifier,
     muted: Boolean = false,
     keepScreenOn: Boolean = true,
+    cropVideo: Boolean = false,
     onPlaybackReady: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -3266,6 +3262,8 @@ private fun VideoPlayer(
                 PlayerView(it).apply {
                     this.player = player
                     this.keepScreenOn = keepScreenOn
+                    resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    else AspectRatioFrameLayout.RESIZE_MODE_FIT
                     useController = false
                     controllerAutoShow = false
                     isFocusable = false
@@ -3275,6 +3273,8 @@ private fun VideoPlayer(
             update = {
                 it.player = player
                 it.keepScreenOn = keepScreenOn
+                it.resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                else AspectRatioFrameLayout.RESIZE_MODE_FIT
             },
             modifier = Modifier.fillMaxSize()
         )
