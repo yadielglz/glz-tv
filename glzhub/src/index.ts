@@ -279,7 +279,7 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     "name", "guest_name", "playlist_url", "epg_url", "request_headers",
     "visible_apps", "theme_mode", "weather_location", "start_destination",
     "captions_enabled", "captions_language", "auto_start", "resume_last_channel",
-    "osd_timeout_seconds", "auto_update", "wifi_only", "keep_awake_home",
+    "osd_timeout_seconds", "auto_update", "wifi_only", "keep_awake_home", "home_preview_channel_id",
     "room_number", "arrival_date", "departure_date", "site_id", "assigned_playlist_id", "box_group_id"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
@@ -425,6 +425,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     autoStart: device.auto_start,
     resumeLastChannel: device.resume_last_channel,
     keepAwakeHome: device.keep_awake_home ?? false,
+    homePreviewChannelId: device.home_preview_channel_id ?? null,
     osdTimeoutSeconds: device.osd_timeout_seconds ?? 8,
     autoUpdate: device.auto_update ?? true,
     wifiOnly: device.wifi_only ?? false,

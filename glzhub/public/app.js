@@ -312,6 +312,18 @@ function openDevice(id) {
     `<option value="${pl.id}">${escapeHtml(pl.title)} (${(pl.playlist_items || []).length} channels)</option>`
   ).join("");
   $("#deviceAssignedPlaylist").value = device.assigned_playlist_id || "";
+  const assignedPlaylistId = device.assigned_playlist_id || state.groups.find((group) => group.id === device.box_group_id)?.playlist_id;
+  const previewPlaylists = assignedPlaylistId
+    ? state.playlists.filter((playlist) => playlist.id === assignedPlaylistId)
+    : state.playlists;
+  const previewChannels = previewPlaylists.flatMap((playlist) => (playlist.playlist_items || []).map((item) => {
+    const metadata = item.metadata || {};
+    const channelId = metadata.tvg_id || item.title;
+    const label = `${metadata.tvg_chno ? `${metadata.tvg_chno} · ` : ""}${item.title}`;
+    return `<option value="${escapeHtml(channelId)}">${escapeHtml(label)}</option>`;
+  }));
+  $("#homePreviewChannel").innerHTML = `<option value="">No live preview</option>${previewChannels.join("")}`;
+  $("#homePreviewChannel").value = device.home_preview_channel_id || "";
   $("#deviceBoxGroup").innerHTML = `<option value="">No box group</option>` + state.groups.map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`).join("");
   $("#deviceBoxGroup").value = device.box_group_id || "";
   $("#editDeviceChannelPolicy").disabled = !(device.assigned_playlist_id || state.groups.find((group) => group.id === device.box_group_id)?.playlist_id);
@@ -407,6 +419,7 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         departure_date: $("#departureDate").value || null,
         playlist_url: $("#playlistUrl").value || null,
         epg_url: $("#epgUrl").value || null,
+        home_preview_channel_id: $("#homePreviewChannel").value || null,
         weather_location: $("#weatherLocation").value,
         start_destination: $("#startDestination").value,
         theme_mode: $("#themeMode").value,

@@ -204,6 +204,10 @@ object GlzHubManager {
         if (config.has("captionsEnabled")) editor.putBoolean("captions_enabled", config.optBoolean("captionsEnabled"))
         config.stringOrNull("captionsLanguage")?.let { editor.putString("captions_language", it) }
         if (config.has("keepAwakeHome")) editor.putBoolean("keep_awake_home", config.optBoolean("keepAwakeHome"))
+        if (config.has("homePreviewChannelId")) {
+            if (config.isNull("homePreviewChannelId")) editor.remove("home_preview_channel_id")
+            else editor.putString("home_preview_channel_id", config.optString("homePreviewChannelId"))
+        }
         if (config.has("autoStart")) editor.putBoolean("auto_start", config.optBoolean("autoStart"))
         if (config.has("resumeLastChannel")) {
             editor.putBoolean("resume_last_channel", config.optBoolean("resumeLastChannel", true))

@@ -173,6 +173,7 @@ private const val CAPTIONS_ENABLED = "captions_enabled"
 private const val CAPTION_LANGUAGE = "captions_language"
 private const val LEGACY_CAPTION_LANGUAGE = "caption_language"
 private const val KEEP_AWAKE_HOME = "keep_awake_home"
+private const val HOME_PREVIEW_CHANNEL_ID = "home_preview_channel_id"
 private const val AUTO_UPDATE_CHECK = "auto_update_check"
 private const val WIFI_ONLY_UPDATES = "wifi_only_updates"
 private const val AUTO_START = "auto_start"
@@ -492,6 +493,9 @@ private fun TvScreen(
         )
     }
     var keepAwakeAtHome by remember { mutableStateOf(prefs.getBoolean(KEEP_AWAKE_HOME, false)) }
+    var homePreviewChannelId by remember {
+        mutableStateOf(prefs.getString(HOME_PREVIEW_CHANNEL_ID, null))
+    }
     var radioPlaying by remember { mutableStateOf(false) }
     var osdTimeoutSeconds by remember {
         mutableStateOf(prefs.getInt(OSD_TIMEOUT_SECONDS, 8))
@@ -609,6 +613,7 @@ private fun TvScreen(
         captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
         captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
         keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
+        homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
         osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
         loadSources(forceRefresh = true)
         return "Synced now · ${channels.size} TV channels · $radioCount radio stations · ${guide.programmeCount} guide entries"
@@ -677,6 +682,7 @@ private fun TvScreen(
                     captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
                     captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
                     keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
+                    homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
                     loadSources(forceRefresh = true)
                 }
                 hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
@@ -814,6 +820,9 @@ private fun TvScreen(
                                 guestName = guestName,
                                 experience = guestExperience,
                                 entertainmentApps = managedEntertainmentApps,
+                                previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
+                                captionsEnabled = captionsEnabled,
+                                captionLanguage = captionLanguage,
                                 onLive = {
                                     playerActive = false
                                     GlzHubManager.reportActivity(prefs, "idle")
@@ -1104,7 +1113,7 @@ private fun ExpressiveNavigationRail(
             }
             Spacer(Modifier.weight(1f))
             Text(
-                "GLZ",
+                "v${BuildConfig.VERSION_NAME}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Black
@@ -1160,6 +1169,9 @@ private fun GuestHubHome(
     guestName: String,
     experience: GuestExperience,
     entertainmentApps: List<EntertainmentApp>,
+    previewChannel: Channel?,
+    captionsEnabled: Boolean,
+    captionLanguage: String,
     onLive: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1256,7 +1268,7 @@ private fun GuestHubHome(
                             Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(Modifier.weight(1f)) {
+                            Column(Modifier.weight(1f).padding(end = if (previewChannel != null) 18.dp else 0.dp)) {
                                 Text(
                                     "$timeGreeting, ${guestName.ifBlank { "Guest" }}",
                                     fontSize = if (compactHeight) 24.sp else 30.sp,
@@ -1286,6 +1298,41 @@ private fun GuestHubHome(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                }
+                            }
+                            previewChannel?.let { channel ->
+                                Surface(
+                                    Modifier
+                                        .weight(.92f)
+                                        .fillMaxHeight(),
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = Color.Black,
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = .22f))
+                                ) {
+                                    Box(Modifier.fillMaxSize()) {
+                                        VideoPlayer(
+                                            channel = channel,
+                                            captionsEnabled = captionsEnabled,
+                                            captionLanguage = captionLanguage,
+                                            modifier = Modifier.fillMaxSize(),
+                                            muted = true,
+                                            keepScreenOn = false
+                                        )
+                                        Surface(
+                                            Modifier.align(Alignment.BottomStart).padding(10.dp),
+                                            color = Color.Black.copy(alpha = .68f),
+                                            shape = RoundedCornerShape(9.dp)
+                                        ) {
+                                            Text(
+                                                "${channel.number.ifBlank { "LIVE" }}  ${channel.name}",
+                                                Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2576,13 +2623,16 @@ private fun ImmersivePlayerScreen(
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
                         if (drawer == PlayerDrawer.None) {
-                            stepChannel(-1)
+                            showNavigationTip = false
+                            showOsd = true
                             true
                         } else false
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (drawer == PlayerDrawer.None) {
-                            stepChannel(1)
+                            showNavigationTip = false
+                            showOsd = false
+                            drawer = PlayerDrawer.Services
                             true
                         } else false
                     }
@@ -3078,6 +3128,8 @@ private fun VideoPlayer(
     captionsEnabled: Boolean,
     captionLanguage: String,
     modifier: Modifier = Modifier,
+    muted: Boolean = false,
+    keepScreenOn: Boolean = true,
     onPlaybackReady: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -3125,6 +3177,7 @@ private fun VideoPlayer(
             .setPreferredTextLanguage(captionLanguage.ifBlank { null })
             .setSelectUndeterminedTextLanguage(captionsEnabled)
             .build()
+        player.volume = if (muted) 0f else 1f
         player.stop()
         player.setMediaItem(
             MediaItem.Builder()
@@ -3154,14 +3207,17 @@ private fun VideoPlayer(
             factory = {
                 PlayerView(it).apply {
                     this.player = player
-                    keepScreenOn = true
+                    this.keepScreenOn = keepScreenOn
                     useController = false
                     controllerAutoShow = false
                     isFocusable = false
                     isFocusableInTouchMode = false
                 }
             },
-            update = { it.player = player },
+            update = {
+                it.player = player
+                it.keepScreenOn = keepScreenOn
+            },
             modifier = Modifier.fillMaxSize()
         )
         playbackMessage?.let { message ->
