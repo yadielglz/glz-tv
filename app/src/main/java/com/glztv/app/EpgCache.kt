@@ -7,8 +7,6 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 
 private const val EPG_CACHE_FILE = "epg-v1.bin"
-private const val EPG_CACHE_MAX_AGE_MS = 6L * 60L * 60L * 1000L
-
 object EpgCache {
     fun read(context: Context, sourceUrl: String): EpgGuide? = runCatching {
         val file = context.filesDir.resolve(EPG_CACHE_FILE)
@@ -16,8 +14,7 @@ object EpgCache {
         DataInputStream(BufferedInputStream(file.inputStream())).use { input ->
             val version = input.readInt()
             if ((version != 1 && version != 2) || input.readString() != sourceUrl) return null
-            val savedAt = input.readLong()
-            if (System.currentTimeMillis() - savedAt > EPG_CACHE_MAX_AGE_MS) return null
+            input.readLong() // Saved timestamp is informational; retain last-known-good data.
             val names = buildMap {
                 repeat(input.readInt()) { put(input.readString(), input.readString()) }
             }
@@ -49,6 +46,7 @@ object EpgCache {
     }.getOrNull()
 
     fun write(context: Context, sourceUrl: String, guide: EpgGuide) {
+        if (sourceUrl.isBlank() || guide.programmeCount <= 0) return
         runCatching {
             val target = context.filesDir.resolve(EPG_CACHE_FILE)
             val temporary = context.filesDir.resolve("$EPG_CACHE_FILE.tmp")

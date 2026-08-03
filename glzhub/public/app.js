@@ -328,6 +328,7 @@ function openDevice(id) {
   $("#captionsLanguage").value = device.captions_language || "en";
   $("#autoStart").checked = Boolean(device.auto_start);
   $("#resumeLastChannel").checked = device.resume_last_channel !== false;
+  $("#keepAwakeHome").checked = Boolean(device.keep_awake_home);
   $("#autoUpdate").checked = device.auto_update !== false;
   $("#wifiOnly").checked = Boolean(device.wifi_only);
   const enabledApps = new Set(
@@ -414,6 +415,7 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         captions_language: $("#captionsLanguage").value || "en",
         auto_start: $("#autoStart").checked,
         resume_last_channel: $("#resumeLastChannel").checked,
+        keep_awake_home: $("#keepAwakeHome").checked,
         auto_update: $("#autoUpdate").checked,
         wifi_only: $("#wifiOnly").checked,
         visible_apps: $$("#visibleApps input:checked").map((input) => input.value)

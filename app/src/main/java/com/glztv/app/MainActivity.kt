@@ -3,6 +3,7 @@
 package com.glztv.app
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -16,6 +17,7 @@ import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.view.KeyEvent
+import android.view.WindowManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -24,11 +26,9 @@ import androidx.activity.compose.BackHandler
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
@@ -170,7 +170,9 @@ private const val REQUEST_HEADERS = "request_headers"
 private const val FAVORITES = "favorites"
 private const val THEME_MODE = "theme_mode"
 private const val CAPTIONS_ENABLED = "captions_enabled"
-private const val CAPTION_LANGUAGE = "caption_language"
+private const val CAPTION_LANGUAGE = "captions_language"
+private const val LEGACY_CAPTION_LANGUAGE = "caption_language"
+private const val KEEP_AWAKE_HOME = "keep_awake_home"
 private const val AUTO_UPDATE_CHECK = "auto_update_check"
 private const val WIFI_ONLY_UPDATES = "wifi_only_updates"
 private const val AUTO_START = "auto_start"
@@ -195,31 +197,31 @@ private data class WeatherInfo(
 
 private data class NetworkInfo(val connection: String, val isp: String)
 
-private val InterFontFamily = FontFamily(
-    Font(R.font.inter_variable, FontWeight.Normal),
-    Font(R.font.inter_variable, FontWeight.Medium),
-    Font(R.font.inter_variable, FontWeight.SemiBold),
-    Font(R.font.inter_variable, FontWeight.Bold),
-    Font(R.font.inter_variable, FontWeight.Black)
+private val RobotoFlexFontFamily = FontFamily(
+    Font(R.font.roboto_flex, FontWeight.Normal),
+    Font(R.font.roboto_flex, FontWeight.Medium),
+    Font(R.font.roboto_flex, FontWeight.SemiBold),
+    Font(R.font.roboto_flex, FontWeight.Bold),
+    Font(R.font.roboto_flex, FontWeight.Black)
 )
 
-private val InterTypography = Typography().run {
+private val RobotoFlexTypography = Typography().run {
     copy(
-        displayLarge = displayLarge.copy(fontFamily = InterFontFamily),
-        displayMedium = displayMedium.copy(fontFamily = InterFontFamily),
-        displaySmall = displaySmall.copy(fontFamily = InterFontFamily),
-        headlineLarge = headlineLarge.copy(fontFamily = InterFontFamily),
-        headlineMedium = headlineMedium.copy(fontFamily = InterFontFamily),
-        headlineSmall = headlineSmall.copy(fontFamily = InterFontFamily),
-        titleLarge = titleLarge.copy(fontFamily = InterFontFamily),
-        titleMedium = titleMedium.copy(fontFamily = InterFontFamily),
-        titleSmall = titleSmall.copy(fontFamily = InterFontFamily),
-        bodyLarge = bodyLarge.copy(fontFamily = InterFontFamily),
-        bodyMedium = bodyMedium.copy(fontFamily = InterFontFamily),
-        bodySmall = bodySmall.copy(fontFamily = InterFontFamily),
-        labelLarge = labelLarge.copy(fontFamily = InterFontFamily),
-        labelMedium = labelMedium.copy(fontFamily = InterFontFamily),
-        labelSmall = labelSmall.copy(fontFamily = InterFontFamily)
+        displayLarge = displayLarge.copy(fontFamily = RobotoFlexFontFamily),
+        displayMedium = displayMedium.copy(fontFamily = RobotoFlexFontFamily),
+        displaySmall = displaySmall.copy(fontFamily = RobotoFlexFontFamily),
+        headlineLarge = headlineLarge.copy(fontFamily = RobotoFlexFontFamily),
+        headlineMedium = headlineMedium.copy(fontFamily = RobotoFlexFontFamily),
+        headlineSmall = headlineSmall.copy(fontFamily = RobotoFlexFontFamily),
+        titleLarge = titleLarge.copy(fontFamily = RobotoFlexFontFamily),
+        titleMedium = titleMedium.copy(fontFamily = RobotoFlexFontFamily),
+        titleSmall = titleSmall.copy(fontFamily = RobotoFlexFontFamily),
+        bodyLarge = bodyLarge.copy(fontFamily = RobotoFlexFontFamily),
+        bodyMedium = bodyMedium.copy(fontFamily = RobotoFlexFontFamily),
+        bodySmall = bodySmall.copy(fontFamily = RobotoFlexFontFamily),
+        labelLarge = labelLarge.copy(fontFamily = RobotoFlexFontFamily),
+        labelMedium = labelMedium.copy(fontFamily = RobotoFlexFontFamily),
+        labelSmall = labelSmall.copy(fontFamily = RobotoFlexFontFamily)
     )
 }
 
@@ -417,7 +419,7 @@ private fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int)
     }
     MaterialTheme(
         colorScheme = colors,
-        typography = InterTypography,
+        typography = RobotoFlexTypography,
         shapes = MaterialTheme.shapes.copy(
             small = RoundedCornerShape(16.dp),
             medium = RoundedCornerShape(24.dp),
@@ -483,8 +485,14 @@ private fun TvScreen(
         mutableStateOf(prefs.getBoolean(CAPTIONS_ENABLED, false))
     }
     var captionLanguage by remember {
-        mutableStateOf(prefs.getString(CAPTION_LANGUAGE, "en") ?: "en")
+        mutableStateOf(
+            prefs.getString(CAPTION_LANGUAGE, null)
+                ?: prefs.getString(LEGACY_CAPTION_LANGUAGE, "en")
+                ?: "en"
+        )
     }
+    var keepAwakeAtHome by remember { mutableStateOf(prefs.getBoolean(KEEP_AWAKE_HOME, false)) }
+    var radioPlaying by remember { mutableStateOf(false) }
     var osdTimeoutSeconds by remember {
         mutableStateOf(prefs.getInt(OSD_TIMEOUT_SECONDS, 8))
     }
@@ -501,6 +509,16 @@ private fun TvScreen(
         mutableStateOf(prefs.getStringSet(FAVORITES, emptySet()).orEmpty().toSet())
     }
 
+    val keepScreenAwake = radioPlaying || (section == AppSection.Home && keepAwakeAtHome)
+    DisposableEffect(keepScreenAwake) {
+        val window = (context as? Activity)?.window
+        if (keepScreenAwake) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            if (keepScreenAwake) window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     suspend fun loadSources(forceRefresh: Boolean = false) {
         val playlistUrl = prefs.getString(PLAYLIST_URL, DEFAULT_PLAYLIST_URL)
             .orEmpty().ifBlank { DEFAULT_PLAYLIST_URL }
@@ -515,10 +533,8 @@ private fun TvScreen(
         val epgUrl = prefs.getString(EPG_URL, DEFAULT_EPG_URL)
             .orEmpty().ifBlank { DEFAULT_EPG_URL }
         val cached = withContext(Dispatchers.IO) {
-            if (forceRefresh) null to null else {
-                ChannelCache.read(context, playlistUrl) to
-                    epgUrl.takeIf(String::isNotBlank)?.let { EpgCache.read(context, it) }
-            }
+            ChannelCache.read(context, playlistUrl) to
+                epgUrl.takeIf(String::isNotBlank)?.let { EpgCache.read(context, it) }
         }
         cached.first?.let { cachedChannels ->
             channels.clear()
@@ -533,13 +549,18 @@ private fun TvScreen(
         }
         runCatching {
             withContext(Dispatchers.IO) {
-                val parsed = cached.first ?: M3uParser.parse(
+                val parsed = cached.first.takeUnless { forceRefresh } ?: M3uParser.parse(
                     fetchText(client, playlistUrl, sourceHeaders),
                     playlistUrl,
                     headers
                 ).also { ChannelCache.write(context, playlistUrl, it) }
-                val parsedGuide = cached.second ?: if (epgUrl.isNotBlank()) {
-                    EpgParser.parse(fetchText(client, epgUrl, headers))
+                val parsedGuide = cached.second.takeUnless { forceRefresh } ?: if (epgUrl.isNotBlank()) {
+                    runCatching {
+                        EpgParser.parse(fetchText(client, epgUrl, headers)).also {
+                            require(it.programmeCount > 0) { "EPG did not contain programmes" }
+                        }
+                    }
+                        .getOrElse { cached.second ?: throw it }
                         .also { EpgCache.write(context, epgUrl, it) }
                 } else EpgGuide.Empty
                 Triple(parsed, parsedGuide, cached.first != null && cached.second != null)
@@ -587,6 +608,7 @@ private fun TvScreen(
         onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
         captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
         captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
+        keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
         osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
         loadSources(forceRefresh = true)
         return "Synced now · ${channels.size} TV channels · $radioCount radio stations · ${guide.programmeCount} guide entries"
@@ -652,6 +674,9 @@ private fun TvScreen(
                     appVisibilityManaged =
                         prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
                     onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
+                    captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
+                    captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
+                    keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
                     loadSources(forceRefresh = true)
                 }
                 hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
@@ -719,6 +744,14 @@ private fun TvScreen(
     val managedEntertainmentApps = remember(visibleAppPackages, appVisibilityManaged) {
         if (!appVisibilityManaged) EntertainmentApps
         else EntertainmentApps.filter { it.packageName in visibleAppPackages }
+    }
+
+    BackHandler(enabled = !showSettings && !immersive) {
+        if (section != AppSection.Home) {
+            section = AppSection.Home
+        } else {
+            (context as? Activity)?.finishAndRemoveTask()
+        }
     }
 
     Scaffold(
@@ -797,6 +830,7 @@ private fun TvScreen(
                             AppSection.Radio -> RadioSection(
                                 prefs = prefs,
                                 client = client,
+                                onPlayingChanged = { radioPlaying = it },
                                 modifier = Modifier.fillMaxSize()
                             )
                             AppSection.You -> GuestYouSection(
@@ -1352,6 +1386,7 @@ private fun GuestYouSection(
 private fun RadioSection(
     prefs: SharedPreferences,
     client: OkHttpClient,
+    onPlayingChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1373,6 +1408,7 @@ private fun RadioSection(
                     true
                 )
                 setHandleAudioBecomingNoisy(true)
+                setWakeMode(C.WAKE_MODE_LOCAL)
             }
     }
 
@@ -1403,6 +1439,7 @@ private fun RadioSection(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
+                onPlayingChanged(isPlaying)
                 if (isPlaying) status = "Live"
                 else if (player.playbackState == Player.STATE_READY && selected != null) status = "Paused"
             }
@@ -1414,6 +1451,7 @@ private fun RadioSection(
         }
         player.addListener(listener)
         onDispose {
+            onPlayingChanged(false)
             player.removeListener(listener)
             player.stop()
             player.release()
@@ -2601,6 +2639,7 @@ private fun ImmersivePlayerScreen(
             Surface(
                 Modifier.width(drawerWidth).fillMaxHeight(),
                 color = Color(0xF20B1114),
+                contentColor = Color.White,
                 tonalElevation = 18.dp,
                 shadowElevation = 24.dp
             ) {
@@ -2613,7 +2652,7 @@ private fun ImmersivePlayerScreen(
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
                             Text(channel.number.ifBlank { "LIVE" },
-                                color = MaterialTheme.colorScheme.secondary,
+                                color = Color(0xFFC4FF4D),
                                 fontWeight = FontWeight.Black)
                             Text(channel.name, color = Color.White, fontSize = 24.sp,
                                 fontWeight = FontWeight.Black, maxLines = 1,
@@ -2670,11 +2709,11 @@ private fun ImmersivePlayerScreen(
                                 shape = RoundedCornerShape(16.dp),
                                 border = BorderStroke(
                                     if (isFocused) 5.dp else 1.dp,
-                                    if (isFocused) MaterialTheme.colorScheme.secondary
+                                    if (isFocused) Color(0xFFC4FF4D)
                                     else Color.Transparent
                                 ),
                                 color = if (isFocused)
-                                    MaterialTheme.colorScheme.primary
+                                    Color(0xFF23405F)
                                 else if (isSelected)
                                     MaterialTheme.colorScheme.primary.copy(alpha = .35f)
                                 else Color.Transparent
@@ -2684,7 +2723,7 @@ private fun ImmersivePlayerScreen(
                                     ChannelLogo(item, 42.dp, guide)
                                     Spacer(Modifier.width(12.dp))
                                     Text(item.number.ifBlank { "—" }, Modifier.width(45.dp),
-                                        color = if (isSelected) MaterialTheme.colorScheme.secondary
+                                        color = if (isSelected) Color(0xFFC4FF4D)
                                         else Color.White.copy(alpha = .62f),
                                         fontWeight = FontWeight.Black)
                                     Column(Modifier.weight(1f)) {
@@ -2972,7 +3011,7 @@ private fun PlayerAndGuide(
     val upcoming = programmes.filter { it.endMillis > now }.take(6)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         AnimatedContent(channel, transitionSpec = {
-            (fadeIn(spring()) + scaleIn(initialScale = .96f)).togetherWith(fadeOut())
+            fadeIn(tween(180)).togetherWith(fadeOut(tween(140)))
         }, label = "channel") { animatedChannel ->
             VideoPlayer(
                 animatedChannel,
@@ -3084,6 +3123,7 @@ private fun VideoPlayer(
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !captionsEnabled)
             .setPreferredTextLanguage(captionLanguage.ifBlank { null })
+            .setSelectUndeterminedTextLanguage(captionsEnabled)
             .build()
         player.stop()
         player.setMediaItem(

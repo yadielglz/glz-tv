@@ -195,14 +195,15 @@ object GlzHubManager {
             else editor.putString("playlist_url", config.optString("playlistUrl"))
         }
         if (config.has("epgUrl")) {
-            if (config.isNull("epgUrl")) editor.remove("epg_url")
-            else editor.putString("epg_url", config.optString("epgUrl"))
+            config.stringOrNull("epgUrl")?.takeIf(String::isNotBlank)
+                ?.let { editor.putString("epg_url", it) }
         }
         config.stringOrNull("themeMode")?.let { editor.putString("theme_mode", it) }
         config.stringOrNull("weatherLocation")?.let { editor.putString("weather_location", it) }
         config.stringOrNull("startDestination")?.let { editor.putString("start_destination", it) }
         if (config.has("captionsEnabled")) editor.putBoolean("captions_enabled", config.optBoolean("captionsEnabled"))
         config.stringOrNull("captionsLanguage")?.let { editor.putString("captions_language", it) }
+        if (config.has("keepAwakeHome")) editor.putBoolean("keep_awake_home", config.optBoolean("keepAwakeHome"))
         if (config.has("autoStart")) editor.putBoolean("auto_start", config.optBoolean("autoStart"))
         if (config.has("resumeLastChannel")) {
             editor.putBoolean("resume_last_channel", config.optBoolean("resumeLastChannel", true))
