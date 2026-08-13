@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,24 +50,29 @@ fun ExpressiveNavigationRail(
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .92f),
         tonalElevation = 6.dp
     ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val compactHeight = maxHeight < 600.dp
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxSize().padding(
+                horizontal = 10.dp,
+                vertical = if (compactHeight) 10.dp else 18.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            RailDestination("Home", section == AppSection.Home, Icons.Default.Home) {
+            RailDestination("Home", section == AppSection.Home, Icons.Default.Home, compactHeight) {
                 onSection(AppSection.Home)
             }
-            RailDestination("Live TV", section == AppSection.Live, Icons.Default.LiveTv) {
+            RailDestination("Live TV", section == AppSection.Live, Icons.Default.LiveTv, compactHeight) {
                 onSection(AppSection.Live)
             }
-            RailDestination("Radio", section == AppSection.Radio, Icons.Default.Radio) {
+            RailDestination("Radio", section == AppSection.Radio, Icons.Default.Radio, compactHeight) {
                 onSection(AppSection.Radio)
             }
-            RailDestination("Weather", section == AppSection.Weather, Icons.Default.WbSunny) {
+            RailDestination("Weather", section == AppSection.Weather, Icons.Default.WbSunny, compactHeight) {
                 onSection(AppSection.Weather)
             }
-            RailDestination("You", section == AppSection.You, Icons.Default.Person) {
+            RailDestination("You", section == AppSection.You, Icons.Default.Person, compactHeight) {
                 onSection(AppSection.You)
             }
             Spacer(Modifier.weight(1f))
@@ -77,6 +83,7 @@ fun ExpressiveNavigationRail(
                 fontWeight = FontWeight.Black
             )
         }
+        }
     }
 }
 
@@ -85,6 +92,7 @@ private fun RailDestination(
     label: String,
     selected: Boolean,
     icon: ImageVector,
+    compactHeight: Boolean,
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -111,12 +119,20 @@ private fun RailDestination(
         }
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 13.dp),
+            Modifier.fillMaxWidth().padding(
+                horizontal = 8.dp,
+                vertical = if (compactHeight) 8.dp else 13.dp
+            ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(icon, label, Modifier.size(25.dp))
-            Text(label, fontWeight = FontWeight.Black, fontSize = 12.sp, maxLines = 1)
+            Icon(icon, label, Modifier.size(if (compactHeight) 22.dp else 25.dp))
+            Text(
+                label,
+                fontWeight = FontWeight.Black,
+                fontSize = if (compactHeight) 11.sp else 12.sp,
+                maxLines = 1
+            )
         }
     }
 }

@@ -59,14 +59,17 @@ fun WeatherScreen(
             )
         ).padding(18.dp)
     ) {
-        val compact = maxWidth < 700.dp || maxHeight < 450.dp
+        // Android TV devices commonly expose a 960x540 logical viewport even on a 4K panel.
+        // At TV widths, retain the vertical composition so forecast cards are not height-starved.
+        val narrow = maxWidth < 700.dp
+        val shortTv = maxHeight < 500.dp
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Weather", fontSize = if (compact) 28.sp else 38.sp,
+                    Text("Weather", fontSize = if (shortTv) 28.sp else 38.sp,
                         fontWeight = FontWeight.Black)
                     Text(
                         weather?.location ?: location,
@@ -92,14 +95,22 @@ fun WeatherScreen(
                     }
                 }
             } else {
-                if (compact) {
+                if (narrow) {
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         CurrentWeatherCard(weather, Modifier.weight(.8f).fillMaxHeight())
                         ForecastRow(weather.forecast, Modifier.weight(1.2f).fillMaxHeight(), stacked = true)
                     }
                 } else {
-                    CurrentWeatherCard(weather, Modifier.fillMaxWidth().weight(.9f))
-                    ForecastRow(weather.forecast, Modifier.fillMaxWidth().weight(1.1f), stacked = false)
+                    CurrentWeatherCard(
+                        weather,
+                        Modifier.fillMaxWidth().weight(if (shortTv) .72f else .9f)
+                    )
+                    ForecastRow(
+                        weather.forecast,
+                        Modifier.fillMaxWidth().weight(if (shortTv) 1.28f else 1.1f),
+                        stacked = false,
+                        compact = shortTv
+                    )
                 }
             }
         }
@@ -131,23 +142,35 @@ private fun CurrentWeatherCard(weather: WeatherInfo, modifier: Modifier) {
 }
 
 @Composable
-private fun ForecastRow(days: List<ForecastDay>, modifier: Modifier, stacked: Boolean) {
+private fun ForecastRow(
+    days: List<ForecastDay>,
+    modifier: Modifier,
+    stacked: Boolean,
+    compact: Boolean = false
+) {
     if (days.isEmpty()) return
     if (stacked) {
         Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            days.forEachIndexed { index, day -> ForecastCard(day, index, Modifier.weight(1f)) }
+            days.forEachIndexed { index, day ->
+                ForecastCard(day, index, Modifier.weight(1f), compact = true)
+            }
         }
     } else {
         Row(modifier, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             days.forEachIndexed { index, day ->
-                ForecastCard(day, index, Modifier.weight(1f).fillMaxHeight())
+                ForecastCard(day, index, Modifier.weight(1f).fillMaxHeight(), compact)
             }
         }
     }
 }
 
 @Composable
-private fun ForecastCard(day: ForecastDay, index: Int, modifier: Modifier) {
+private fun ForecastCard(
+    day: ForecastDay,
+    index: Int,
+    modifier: Modifier,
+    compact: Boolean
+) {
     Surface(
         modifier,
         shape = RoundedCornerShape(24.dp),
@@ -155,14 +178,18 @@ private fun ForecastCard(day: ForecastDay, index: Int, modifier: Modifier) {
         contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         Column(
-            Modifier.fillMaxSize().padding(16.dp),
+            Modifier.fillMaxSize().padding(if (compact) 10.dp else 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Text(if (index == 0) "TODAY" else dayLabel(day.date),
                 fontSize = 13.sp, fontWeight = FontWeight.Black)
-            Text(weatherSymbol(day.weatherCode), fontSize = 42.sp)
-            Text("${day.high}°  /  ${day.low}°", fontSize = 22.sp, fontWeight = FontWeight.Black)
+            Text(weatherSymbol(day.weatherCode), fontSize = if (compact) 34.sp else 42.sp)
+            Text(
+                "${day.high}°  /  ${day.low}°",
+                fontSize = if (compact) 19.sp else 22.sp,
+                fontWeight = FontWeight.Black
+            )
             Text(weatherDescription(day.weatherCode), maxLines = 1,
                 overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
