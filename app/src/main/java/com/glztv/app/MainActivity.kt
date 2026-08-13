@@ -149,6 +149,17 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
+import com.glztv.app.data.EpgRepository
+import com.glztv.app.data.PlaylistRepository
+import com.glztv.app.data.PreferencesRepository
+import com.glztv.app.ui.theme.GlzTheme
+import com.glztv.app.ui.navigation.AppSection
+import com.glztv.app.ui.navigation.ExpressiveNavigationRail
+import com.glztv.app.ui.components.SlimHeader
+import com.glztv.app.model.NetworkInfo
+import com.glztv.app.model.WeatherInfo
+import com.glztv.app.ui.GlzTvApp
+import com.glztv.app.ui.screens.RadioScreen
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
@@ -188,44 +199,7 @@ private const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
 private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
 
-private enum class AppSection { Home, Live, Radio, You }
 private enum class PlayerDrawer { None, Channels, Services, Options }
-
-private data class WeatherInfo(
-    val temperature: Int,
-    val weatherCode: Int,
-    val location: String
-)
-
-private data class NetworkInfo(val connection: String, val isp: String)
-
-private val RobotoFlexFontFamily = FontFamily(
-    Font(R.font.roboto_flex, FontWeight.Normal),
-    Font(R.font.roboto_flex, FontWeight.Medium),
-    Font(R.font.roboto_flex, FontWeight.SemiBold),
-    Font(R.font.roboto_flex, FontWeight.Bold),
-    Font(R.font.roboto_flex, FontWeight.Black)
-)
-
-private val RobotoFlexTypography = Typography().run {
-    copy(
-        displayLarge = displayLarge.copy(fontFamily = RobotoFlexFontFamily),
-        displayMedium = displayMedium.copy(fontFamily = RobotoFlexFontFamily),
-        displaySmall = displaySmall.copy(fontFamily = RobotoFlexFontFamily),
-        headlineLarge = headlineLarge.copy(fontFamily = RobotoFlexFontFamily),
-        headlineMedium = headlineMedium.copy(fontFamily = RobotoFlexFontFamily),
-        headlineSmall = headlineSmall.copy(fontFamily = RobotoFlexFontFamily),
-        titleLarge = titleLarge.copy(fontFamily = RobotoFlexFontFamily),
-        titleMedium = titleMedium.copy(fontFamily = RobotoFlexFontFamily),
-        titleSmall = titleSmall.copy(fontFamily = RobotoFlexFontFamily),
-        bodyLarge = bodyLarge.copy(fontFamily = RobotoFlexFontFamily),
-        bodyMedium = bodyMedium.copy(fontFamily = RobotoFlexFontFamily),
-        bodySmall = bodySmall.copy(fontFamily = RobotoFlexFontFamily),
-        labelLarge = labelLarge.copy(fontFamily = RobotoFlexFontFamily),
-        labelMedium = labelMedium.copy(fontFamily = RobotoFlexFontFamily),
-        labelSmall = labelSmall.copy(fontFamily = RobotoFlexFontFamily)
-    )
-}
 
 private data class EntertainmentApp(
     val name: String,
@@ -396,50 +370,9 @@ private val GlzMidnightColors = darkColorScheme(
     onSurfaceVariant = Color(0xFFCCCCCC)
 )
 
-@Composable
-private fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int) {
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
-    var themeMode by remember { mutableStateOf(prefs.getString(THEME_MODE, "adaptive") ?: "adaptive") }
-    val systemDark = isSystemInDarkTheme()
-    val dark = when (themeMode) {
-        "dark" -> true
-        "light" -> false
-        "ocean", "sunset", "emerald", "cyberpunk", "midnight" -> true
-        else -> systemDark
-    }
-    val colors = when {
-        themeMode == "ocean" -> GlzOceanColors
-        themeMode == "sunset" -> GlzSunsetColors
-        themeMode == "emerald" -> GlzEmeraldColors
-        themeMode == "cyberpunk" -> GlzCyberpunkColors
-        themeMode == "midnight" -> GlzMidnightColors
-        themeMode == "adaptive" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> GlzColors
-        else -> GlzLightColors
-    }
-    MaterialTheme(
-        colorScheme = colors,
-        typography = RobotoFlexTypography,
-        shapes = MaterialTheme.shapes.copy(
-            small = RoundedCornerShape(16.dp),
-            medium = RoundedCornerShape(24.dp),
-            large = RoundedCornerShape(32.dp)
-        )
-    ) {
-        Surface(Modifier.fillMaxSize()) {
-            TvScreen(themeMode, deepLinkChannelId, networkPermissionRevision) {
-                themeMode = it
-                prefs.edit().putString(THEME_MODE, it).apply()
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TvScreen(
+internal fun TvScreen(
     themeMode: String,
     deepLinkChannelId: String?,
     networkPermissionRevision: Int,
@@ -449,6 +382,9 @@ private fun TvScreen(
     val safeHorizontalPadding = if (LocalConfiguration.current.screenWidthDp >= 600) 40.dp else 12.dp
     val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
     val client = remember { OkHttpClient() }
+    val sourcePreferences = remember { PreferencesRepository(context) }
+    val playlistRepository = remember { PlaylistRepository(context, sourcePreferences, client) }
+    val epgRepository = remember { EpgRepository(context, sourcePreferences, client) }
     val scope = rememberCoroutineScope()
     val channels = remember { mutableStateListOf<Channel>() }
     var guide by remember { mutableStateOf(EpgGuide.Empty) }
@@ -458,6 +394,7 @@ private fun TvScreen(
     var loading by remember { mutableStateOf(false) }
     var weather by remember { mutableStateOf<WeatherInfo?>(null) }
     var networkInfo by remember { mutableStateOf<NetworkInfo?>(null) }
+    var networkOverrideRevision by remember { mutableStateOf(0) }
     var weatherLocation by remember {
         mutableStateOf(prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
             ?: DEFAULT_WEATHER_LOCATION)
@@ -525,21 +462,15 @@ private fun TvScreen(
     }
 
     suspend fun loadSources(forceRefresh: Boolean = false) {
-        val playlistUrl = prefs.getString(PLAYLIST_URL, DEFAULT_PLAYLIST_URL)
-            .orEmpty().ifBlank { DEFAULT_PLAYLIST_URL }
+        val playlistUrl = sourcePreferences.playlistUrl
         if (playlistUrl.isBlank()) {
             showSettings = true
             return
         }
         loading = true
         status = "Loading your lineup…"
-        val headers = parseHeaders(prefs.getString(REQUEST_HEADERS, "").orEmpty())
-        val sourceHeaders = GlzHubManager.sourceRequestHeaders(prefs, playlistUrl, headers)
-        val epgUrl = prefs.getString(EPG_URL, DEFAULT_EPG_URL)
-            .orEmpty().ifBlank { DEFAULT_EPG_URL }
         val cached = withContext(Dispatchers.IO) {
-            ChannelCache.read(context, playlistUrl) to
-                epgUrl.takeIf(String::isNotBlank)?.let { EpgCache.read(context, it) }
+            playlistRepository.cached() to epgRepository.cached()
         }
         cached.first?.let { cachedChannels ->
             channels.clear()
@@ -554,20 +485,8 @@ private fun TvScreen(
         }
         runCatching {
             withContext(Dispatchers.IO) {
-                val parsed = cached.first.takeUnless { forceRefresh } ?: M3uParser.parse(
-                    fetchText(client, playlistUrl, sourceHeaders),
-                    playlistUrl,
-                    headers
-                ).also { ChannelCache.write(context, playlistUrl, it) }
-                val parsedGuide = cached.second.takeUnless { forceRefresh } ?: if (epgUrl.isNotBlank()) {
-                    runCatching {
-                        EpgParser.parse(fetchText(client, epgUrl, headers)).also {
-                            require(it.programmeCount > 0) { "EPG did not contain programmes" }
-                        }
-                    }
-                        .getOrElse { cached.second ?: throw it }
-                        .also { EpgCache.write(context, epgUrl, it) }
-                } else EpgGuide.Empty
+                val parsed = playlistRepository.load(forceRefresh)
+                val parsedGuide = epgRepository.load(forceRefresh)
                 Triple(parsed, parsedGuide, cached.first != null && cached.second != null)
             }
         }.onSuccess { (parsed, parsedGuide, fromCache) ->
@@ -610,6 +529,7 @@ private fun TvScreen(
             ?: DEFAULT_WEATHER_LOCATION
         visibleAppPackages = GlzHubManager.visibleApps(prefs)
         appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
+        networkOverrideRevision++
         onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
         captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
         captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
@@ -651,6 +571,7 @@ private fun TvScreen(
                 ?: DEFAULT_WEATHER_LOCATION
             visibleAppPackages = GlzHubManager.visibleApps(prefs)
             appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
+            networkOverrideRevision++
             onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
             hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
                 ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
@@ -679,6 +600,7 @@ private fun TvScreen(
                     visibleAppPackages = GlzHubManager.visibleApps(prefs)
                     appVisibilityManaged =
                         prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
+                    networkOverrideRevision++
                     onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
                     captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
                     captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
@@ -710,10 +632,10 @@ private fun TvScreen(
             delay(30 * 60 * 1000L)
         }
     }
-    LaunchedEffect(networkPermissionRevision) {
+    LaunchedEffect(networkPermissionRevision, networkOverrideRevision) {
         while (true) {
             networkInfo = withContext(Dispatchers.IO) {
-                fetchNetworkInfo(context, client)
+                fetchNetworkInfo(context, prefs, client)
             }
             delay(30 * 60 * 1000L)
         }
@@ -846,7 +768,7 @@ private fun TvScreen(
                                 onWatch = tuneChannel,
                                 modifier = Modifier.fillMaxSize()
                             )
-                            AppSection.Radio -> RadioSection(
+                            AppSection.Radio -> RadioScreen(
                                 prefs = prefs,
                                 client = client,
                                 onPlayingChanged = { radioPlaying = it },
@@ -985,192 +907,6 @@ private fun TvScreen(
                 ) { Text("Later") }
             }
         )
-    }
-}
-
-@Composable
-private fun SlimHeader(
-    loading: Boolean,
-    contentLoaded: Boolean,
-    weather: WeatherInfo?,
-    networkInfo: NetworkInfo?,
-    onWeatherClick: (() -> Unit)?,
-    onRefresh: () -> Unit,
-    onSettings: () -> Unit
-) {
-    val compactHeader = LocalConfiguration.current.screenWidthDp < 700
-    val headerHorizontalPadding = if (compactHeader) 12.dp else 40.dp
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000)
-            now = System.currentTimeMillis()
-        }
-    }
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 10.dp,
-        tonalElevation = 4.dp
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = headerHorizontalPadding, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.LiveTv,
-                "Glz TV",
-                Modifier.size(32.dp),
-                tint = MaterialTheme.colorScheme.secondary
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "Glz TV",
-                Modifier.weight(1f),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Black
-            )
-            if (contentLoaded) {
-                if (!compactHeader) networkInfo?.let {
-                    Column(
-                        Modifier.width(190.dp).padding(horizontal = 12.dp),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        Text(it.connection, fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.labelMedium, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis)
-                        Text(it.isp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelSmall, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                if (!compactHeader) weather?.let {
-                    Column(
-                        Modifier
-                            .clickable(
-                                enabled = onWeatherClick != null,
-                                onClick = { onWeatherClick?.invoke() }
-                            )
-                            .padding(horizontal = 20.dp, vertical = 4.dp),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        Text(
-                            "${weatherSymbol(it.weatherCode)}  ${it.temperature}°",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                        Text(
-                            it.location,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                }
-                Column(
-                    Modifier.padding(horizontal = 14.dp),
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(now)),
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    if (!compactHeader) {
-                        Text(
-                            DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(now)),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                }
-            }
-            IconButton(onClick = onRefresh, enabled = !loading) {
-                Icon(Icons.Default.Refresh, "Refresh")
-            }
-            FilledIconButton(onClick = onSettings) {
-                Icon(Icons.Default.Settings, "Settings")
-            }
-        }
-    }
-}
-
-@Composable
-private fun ExpressiveNavigationRail(
-    section: AppSection,
-    onSection: (AppSection) -> Unit
-) {
-    Surface(
-        modifier = Modifier.width(116.dp).fillMaxHeight(),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .92f),
-        tonalElevation = 6.dp
-    ) {
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            RailDestination("Home", section == AppSection.Home, Icons.Default.Home) {
-                onSection(AppSection.Home)
-            }
-            RailDestination("Live TV", section == AppSection.Live, Icons.Default.LiveTv) {
-                onSection(AppSection.Live)
-            }
-            RailDestination("Radio", section == AppSection.Radio, Icons.Default.Radio) {
-                onSection(AppSection.Radio)
-            }
-            RailDestination("You", section == AppSection.You, Icons.Default.Person) {
-                onSection(AppSection.You)
-            }
-            Spacer(Modifier.weight(1f))
-            Text(
-                "v${BuildConfig.VERSION_NAME}",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Black
-            )
-        }
-    }
-}
-
-@Composable
-private fun RailDestination(
-    label: String,
-    selected: Boolean,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit
-) {
-    var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(22.dp)
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused }
-            .clickable(onClick = onClick)
-            .focusable(),
-        shape = shape,
-        border = BorderStroke(
-            if (focused) 3.dp else 0.dp,
-            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
-        ),
-        color = when {
-            focused -> MaterialTheme.colorScheme.primary
-            selected -> MaterialTheme.colorScheme.secondaryContainer
-            else -> Color.Transparent
-        },
-        contentColor = when {
-            focused -> MaterialTheme.colorScheme.onPrimary
-            selected -> MaterialTheme.colorScheme.onSecondaryContainer
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
-        }
-    ) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 13.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Icon(icon, label, Modifier.size(25.dp))
-            Text(label, fontWeight = FontWeight.Black, fontSize = 12.sp, maxLines = 1)
-        }
     }
 }
 
@@ -1414,210 +1150,6 @@ private fun GuestYouSection(
 }
 
 @Composable
-private fun RadioSection(
-    prefs: SharedPreferences,
-    client: OkHttpClient,
-    onPlayingChanged: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    var stations by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
-    var selected by remember { mutableStateOf<RadioStation?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var status by remember { mutableStateOf("Loading stations from GLZ Hub…") }
-    var playing by remember { mutableStateOf(false) }
-    val dataSourceFactory = remember { DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}") }
-    val player = remember {
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-            .build().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                        .setUsage(C.USAGE_MEDIA)
-                        .build(),
-                    true
-                )
-                setHandleAudioBecomingNoisy(true)
-                setWakeMode(C.WAKE_MODE_LOCAL)
-            }
-    }
-
-    fun stopRadio() {
-        player.stop()
-        player.clearMediaItems()
-        playing = false
-        status = "Stopped"
-        GlzHubManager.reportActivity(prefs, "idle")
-    }
-
-    fun playStation(station: RadioStation) {
-        selected = station
-        dataSourceFactory.setDefaultRequestProperties(station.requestHeaders)
-        val metadata = MediaMetadata.Builder()
-            .setTitle(station.name)
-            .setArtist(station.genre)
-            .apply { station.logoUrl?.let { setArtworkUri(Uri.parse(it)) } }
-            .build()
-        player.setMediaItem(MediaItem.Builder().setUri(station.streamUrl).setMediaMetadata(metadata).build())
-        player.prepare()
-        player.play()
-        status = "Connecting…"
-        GlzHubManager.reportActivity(prefs, "radio", station.name)
-    }
-
-    DisposableEffect(player) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                playing = isPlaying
-                onPlayingChanged(isPlaying)
-                if (isPlaying) status = "Live"
-                else if (player.playbackState == Player.STATE_READY && selected != null) status = "Paused"
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                playing = false
-                status = "Station unavailable · choose another station"
-            }
-        }
-        player.addListener(listener)
-        onDispose {
-            onPlayingChanged(false)
-            player.removeListener(listener)
-            player.stop()
-            player.release()
-            GlzHubManager.reportActivity(prefs, "idle")
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        runCatching { withContext(Dispatchers.IO) { RadioCatalogManager.load(prefs, client) } }
-            .onSuccess { result ->
-                stations = result.stations
-                loading = false
-                status = if (result.fromCache) "Saved station list · Hub temporarily unavailable" else "Choose a station"
-            }
-            .onFailure {
-                loading = false
-                status = "Radio stations unavailable"
-            }
-    }
-
-    Column(modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text("GLZ Radio", fontSize = 34.sp, fontWeight = FontWeight.Black)
-                Text("Live stations managed by GLZ Hub", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Surface(shape = RoundedCornerShape(999.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                Text("${stations.size} STATIONS", Modifier.padding(horizontal = 16.dp, vertical = 9.dp), fontWeight = FontWeight.Black, fontSize = 12.sp)
-            }
-        }
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Surface(
-                modifier = Modifier.weight(1.15f).fillMaxHeight(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .9f)
-            ) {
-                if (loading) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LinearProgressIndicator(Modifier.width(220.dp)) }
-                } else if (stations.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(status, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-                } else {
-                    LazyColumn(
-                        Modifier.fillMaxSize().padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(stations, key = { it.code }) { station ->
-                            RadioStationRow(station, selected?.code == station.code) { playStation(station) }
-                        }
-                    }
-                }
-            }
-            Surface(
-                modifier = Modifier.weight(.85f).fillMaxHeight(),
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Column(
-                    Modifier.fillMaxSize().padding(30.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    AsyncImage(
-                        model = selected?.logoUrl ?: R.drawable.ic_launcher,
-                        contentDescription = selected?.name,
-                        modifier = Modifier.size(150.dp).clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = .08f)),
-                        contentScale = ContentScale.Fit
-                    )
-                    Text(
-                        selected?.name ?: "Choose a station",
-                        Modifier.padding(top = 24.dp),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(selected?.genre ?: "Browse the live station list", color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .7f))
-                    Text(status.uppercase(Locale.ROOT), Modifier.padding(top = 16.dp), color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Black, fontSize = 12.sp)
-                    Row(Modifier.padding(top = 28.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Button(
-                            enabled = selected != null,
-                            onClick = {
-                                if (playing) player.pause()
-                                else if (player.mediaItemCount > 0) player.play()
-                                else selected?.let(::playStation)
-                            }
-                        ) {
-                            Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null)
-                            Text(if (playing) "Pause" else "Play", Modifier.padding(start = 8.dp))
-                        }
-                        Button(enabled = selected != null || player.mediaItemCount > 0, onClick = ::stopRadio) {
-                            Icon(Icons.Default.Stop, null)
-                            Text("Stop", Modifier.padding(start = 8.dp))
-                        }
-                    }
-                    Text("Stop ends playback completely.", Modifier.padding(top = 18.dp), color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .6f), fontSize = 12.sp)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RadioStationRow(station: RadioStation, selected: Boolean, onPlay: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val parts = station.name.split("|").map(String::trim)
-    val title = parts.lastOrNull().orEmpty().ifBlank { station.name }
-    val frequency = parts.takeIf { it.size > 1 }?.firstOrNull().orEmpty()
-    Surface(
-        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }.clickable(onClick = onPlay).focusable(),
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(if (focused) 4.dp else 1.dp, if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent),
-        color = when {
-            focused -> MaterialTheme.colorScheme.primary
-            selected -> MaterialTheme.colorScheme.secondaryContainer
-            else -> MaterialTheme.colorScheme.surfaceContainerHigh
-        },
-        contentColor = if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-    ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            AsyncImage(
-                model = station.logoUrl ?: R.drawable.ic_launcher,
-                contentDescription = null,
-                modifier = Modifier.size(54.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = .08f)),
-                contentScale = ContentScale.Fit
-            )
-            Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Black, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(listOf(frequency, station.genre).filter(String::isNotBlank).joinToString(" · "), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (selected) Icon(Icons.Default.Radio, "Playing station", tint = MaterialTheme.colorScheme.secondary)
-        }
-    }
-}
-
-@Composable
 private fun StaySummaryCard(
     guestName: String,
     experience: GuestExperience,
@@ -1780,7 +1312,13 @@ private fun PremiumHero(
     onGuide: () -> Unit,
     onFocused: () -> Unit
 ) {
-    val now = System.currentTimeMillis()
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            now = System.currentTimeMillis()
+        }
+    }
     val progress = programme?.let {
         ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
             .coerceIn(0f, 1f)
@@ -2163,7 +1701,13 @@ private fun GuideSection(
     onWatch: (Channel) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val now = System.currentTimeMillis()
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            now = System.currentTimeMillis()
+        }
+    }
     Card(
         modifier,
         shape = RoundedCornerShape(30.dp),
@@ -4073,16 +3617,24 @@ private fun parseHeaders(source: String): Map<String, String> = buildMap {
     }
 }
 
-private fun fetchNetworkInfo(context: Context, client: OkHttpClient): NetworkInfo {
+private fun fetchNetworkInfo(
+    context: Context,
+    prefs: SharedPreferences,
+    client: OkHttpClient
+): NetworkInfo {
     val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     val capabilities = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
-    val connection = when {
+    val detectedConnection = when {
         capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "Wi-Fi: Connected"
         capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true ->
             "Ethernet: Connected"
         else -> "Network: Connected"
     }
-    val rawIsp = runCatching {
+    val connection = prefs.getString("custom_connection_label", null)
+        ?.trim()?.takeIf(String::isNotBlank) ?: detectedConnection
+    val configuredIsp = prefs.getString("custom_isp_name", null)
+        ?.trim()?.takeIf(String::isNotBlank)
+    val rawIsp = configuredIsp ?: runCatching {
         JSONObject(fetchText(client, "https://ipwho.is/", emptyMap()))
             .optJSONObject("connection")
             ?.optString("isp")
@@ -4125,17 +3677,6 @@ private fun fetchWeather(client: OkHttpClient, location: String): WeatherInfo? =
         location = displayName
     )
 }.getOrNull()
-
-private fun weatherSymbol(code: Int): String = when (code) {
-    0 -> "☀"
-    1, 2 -> "⛅"
-    3 -> "☁"
-    45, 48 -> "≋"
-    in 51..67, in 80..82 -> "☂"
-    in 71..77, 85, 86 -> "❄"
-    in 95..99 -> "ϟ"
-    else -> "°"
-}
 
 private fun fetchText(client: OkHttpClient, url: String, headers: Map<String, String>): String {
     val request = Request.Builder().url(url).apply {
