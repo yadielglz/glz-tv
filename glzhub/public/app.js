@@ -333,6 +333,8 @@ function openDevice(id) {
   $("#playlistUrl").value = device.playlist_url || "";
   $("#epgUrl").value = device.epg_url || "";
   $("#weatherLocation").value = device.weather_location || "";
+  $("#customConnectionLabel").value = device.custom_connection_label || "";
+  $("#customIspName").value = device.custom_isp_name || "";
   $("#startDestination").value = device.start_destination || "Home";
   $("#themeMode").value = device.theme_mode || "adaptive";
   $("#osdTimeoutSeconds").value = String(device.osd_timeout_seconds || 8);
@@ -421,6 +423,8 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         epg_url: $("#epgUrl").value || null,
         home_preview_channel_id: $("#homePreviewChannel").value || null,
         weather_location: $("#weatherLocation").value,
+        custom_connection_label: $("#customConnectionLabel").value || null,
+        custom_isp_name: $("#customIspName").value || null,
         start_destination: $("#startDestination").value,
         theme_mode: $("#themeMode").value,
         osd_timeout_seconds: Number($("#osdTimeoutSeconds").value || 8),

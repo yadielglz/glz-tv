@@ -280,6 +280,7 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     "visible_apps", "theme_mode", "weather_location", "start_destination",
     "captions_enabled", "captions_language", "auto_start", "resume_last_channel",
     "osd_timeout_seconds", "auto_update", "wifi_only", "keep_awake_home", "home_preview_channel_id",
+    "custom_connection_label", "custom_isp_name",
     "room_number", "arrival_date", "departure_date", "site_id", "assigned_playlist_id", "box_group_id"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
@@ -419,6 +420,8 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     visibleApps: device.visible_apps ?? [],
     themeMode: device.theme_mode,
     weatherLocation: device.weather_location,
+    customConnectionLabel: device.custom_connection_label ?? null,
+    customIspName: device.custom_isp_name ?? null,
     startDestination: device.start_destination,
     captionsEnabled: device.captions_enabled,
     captionsLanguage: device.captions_language,

@@ -200,6 +200,14 @@ object GlzHubManager {
         }
         config.stringOrNull("themeMode")?.let { editor.putString("theme_mode", it) }
         config.stringOrNull("weatherLocation")?.let { editor.putString("weather_location", it) }
+        if (config.has("customConnectionLabel")) {
+            if (config.isNull("customConnectionLabel")) editor.remove("custom_connection_label")
+            else editor.putString("custom_connection_label", config.optString("customConnectionLabel"))
+        }
+        if (config.has("customIspName")) {
+            if (config.isNull("customIspName")) editor.remove("custom_isp_name")
+            else editor.putString("custom_isp_name", config.optString("customIspName"))
+        }
         config.stringOrNull("startDestination")?.let { editor.putString("start_destination", it) }
         if (config.has("captionsEnabled")) editor.putBoolean("captions_enabled", config.optBoolean("captionsEnabled"))
         config.stringOrNull("captionsLanguage")?.let { editor.putString("captions_language", it) }
