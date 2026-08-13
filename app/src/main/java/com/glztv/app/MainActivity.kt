@@ -152,6 +152,7 @@ import coil3.network.httpHeaders
 import com.glztv.app.data.EpgRepository
 import com.glztv.app.data.PlaylistRepository
 import com.glztv.app.data.PreferencesRepository
+import com.glztv.app.data.WeatherRepository
 import com.glztv.app.ui.theme.GlzTheme
 import com.glztv.app.ui.navigation.AppSection
 import com.glztv.app.ui.navigation.ExpressiveNavigationRail
@@ -160,6 +161,7 @@ import com.glztv.app.model.NetworkInfo
 import com.glztv.app.model.WeatherInfo
 import com.glztv.app.ui.GlzTvApp
 import com.glztv.app.ui.screens.RadioScreen
+import com.glztv.app.ui.screens.WeatherScreen
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
@@ -385,6 +387,7 @@ internal fun TvScreen(
     val sourcePreferences = remember { PreferencesRepository(context) }
     val playlistRepository = remember { PlaylistRepository(context, sourcePreferences, client) }
     val epgRepository = remember { EpgRepository(context, sourcePreferences, client) }
+    val weatherRepository = remember { WeatherRepository(client) }
     val scope = rememberCoroutineScope()
     val channels = remember { mutableStateListOf<Channel>() }
     var guide by remember { mutableStateOf(EpgGuide.Empty) }
@@ -393,6 +396,8 @@ internal fun TvScreen(
     var status by remember { mutableStateOf("Add an M3U playlist to start watching.") }
     var loading by remember { mutableStateOf(false) }
     var weather by remember { mutableStateOf<WeatherInfo?>(null) }
+    var weatherLoading by remember { mutableStateOf(false) }
+    var weatherError by remember { mutableStateOf<String?>(null) }
     var networkInfo by remember { mutableStateOf<NetworkInfo?>(null) }
     var networkOverrideRevision by remember { mutableStateOf(0) }
     var weatherLocation by remember {
@@ -626,9 +631,14 @@ internal fun TvScreen(
     }
     LaunchedEffect(weatherLocation) {
         while (true) {
-            weather = withContext(Dispatchers.IO) {
-                fetchWeather(client, weatherLocation)
-            }
+            weatherLoading = true
+            runCatching { withContext(Dispatchers.IO) { weatherRepository.load(weatherLocation) } }
+                .onSuccess {
+                    weather = it
+                    weatherError = null
+                }
+                .onFailure { weatherError = it.message ?: "Weather service unavailable" }
+            weatherLoading = false
             delay(30 * 60 * 1000L)
         }
     }
@@ -664,11 +674,6 @@ internal fun TvScreen(
         GlzHubManager.reportActivity(prefs, "channel", it.name)
         prefs.edit().putString(LAST_CHANNEL_ID, it.id).apply()
     }
-    val weatherChannel = ordered.firstOrNull {
-        it.name.lowercase(Locale.ROOT).contains("weather channel")
-    } ?: ordered.firstOrNull {
-        it.name.lowercase(Locale.ROOT).contains("weather")
-    }
     val immersive = section == AppSection.Live && selected != null && playerActive
     val managedEntertainmentApps = remember(visibleAppPackages, appVisibilityManaged) {
         if (!appVisibilityManaged) EntertainmentApps
@@ -692,12 +697,7 @@ internal fun TvScreen(
                     contentLoaded = channels.isNotEmpty(),
                     weather = weather,
                     networkInfo = networkInfo,
-                    onWeatherClick = weatherChannel?.takeIf { section == AppSection.Home }?.let { channel ->
-                        {
-                            tuneChannel(channel)
-                            section = AppSection.Live
-                        }
-                    },
+                    onWeatherClick = { section = AppSection.Weather },
                     onRefresh = { scope.launch { loadSources(forceRefresh = true) } },
                     onSettings = { showSettings = true }
                 )
@@ -774,6 +774,29 @@ internal fun TvScreen(
                                 onPlayingChanged = { radioPlaying = it },
                                 modifier = Modifier.fillMaxSize()
                             )
+                            AppSection.Weather -> WeatherScreen(
+                                weather = weather,
+                                location = weatherLocation,
+                                loading = weatherLoading,
+                                error = weatherError,
+                                onRefresh = {
+                                    scope.launch {
+                                        weatherLoading = true
+                                        runCatching {
+                                            withContext(Dispatchers.IO) {
+                                                weatherRepository.load(weatherLocation)
+                                            }
+                                        }.onSuccess {
+                                            weather = it
+                                            weatherError = null
+                                        }.onFailure {
+                                            weatherError = it.message ?: "Weather service unavailable"
+                                        }
+                                        weatherLoading = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
                             AppSection.You -> GuestYouSection(
                                 guestName = guestName,
                                 experience = guestExperience,
@@ -795,6 +818,8 @@ internal fun TvScreen(
             headers = prefs.getString(REQUEST_HEADERS, "").orEmpty(),
             weatherLocation = weatherLocation,
             guestName = guestName,
+            customConnectionLabel = prefs.getString("custom_connection_label", "").orEmpty(),
+            customIspName = prefs.getString("custom_isp_name", "").orEmpty(),
             themeMode = themeMode,
             captionsEnabled = captionsEnabled,
             captionLanguage = captionLanguage,
@@ -817,12 +842,15 @@ internal fun TvScreen(
                 }
             },
             onDismiss = { showSettings = false },
-            onSave = { playlist, epg, headers, location, name, theme, captions, language, osdTimeout, autoUpdate,
-                       wifiOnly, autoStart, resumeLast, startDestination ->
+            onSave = { playlist, epg, headers, location, name, connectionLabel, ispName, theme,
+                       captions, language, osdTimeout, autoUpdate, wifiOnly, autoStart, resumeLast,
+                       startDestination ->
                 prefs.edit().putString(PLAYLIST_URL, playlist).putString(EPG_URL, epg)
                     .putString(REQUEST_HEADERS, headers)
                     .putString(WEATHER_LOCATION, location)
                     .putString(GUEST_NAME, name)
+                    .putString("custom_connection_label", connectionLabel)
+                    .putString("custom_isp_name", ispName)
                     .putBoolean(CAPTIONS_ENABLED, captions)
                     .putString(CAPTION_LANGUAGE, language)
                     .putInt(OSD_TIMEOUT_SECONDS, osdTimeout)
@@ -837,6 +865,7 @@ internal fun TvScreen(
                 osdTimeoutSeconds = osdTimeout
                 weatherLocation = location
                 guestName = name
+                networkOverrideRevision++
                 showSettings = false
                 scope.launch { loadSources() }
             }
@@ -3029,6 +3058,8 @@ private fun SettingsDialog(
     headers: String,
     weatherLocation: String,
     guestName: String,
+    customConnectionLabel: String,
+    customIspName: String,
     themeMode: String,
     captionsEnabled: Boolean,
     captionLanguage: String,
@@ -3045,8 +3076,8 @@ private fun SettingsDialog(
     onBeginHubEnrollment: suspend () -> String,
     onDismiss: () -> Unit,
     onSave: (
-        String, String, String, String, String, String, Boolean, String, Int, Boolean, Boolean,
-        Boolean, Boolean, String
+        String, String, String, String, String, String, String, String, Boolean, String, Int,
+        Boolean, Boolean, Boolean, Boolean, String
     ) -> Unit
 ) {
     var activeTab by remember { mutableStateOf(SettingsTab.Sources) }
@@ -3055,6 +3086,8 @@ private fun SettingsDialog(
     var headerValue by remember { mutableStateOf(headers) }
     var weatherLocationValue by remember { mutableStateOf(weatherLocation) }
     var guestNameValue by remember { mutableStateOf(guestName) }
+    var connectionLabelValue by remember { mutableStateOf(customConnectionLabel) }
+    var ispNameValue by remember { mutableStateOf(customIspName) }
     var themeValue by remember { mutableStateOf(themeMode) }
     var captionsValue by remember { mutableStateOf(captionsEnabled) }
     var languageValue by remember { mutableStateOf(captionLanguage) }
@@ -3107,6 +3140,7 @@ private fun SettingsDialog(
                             playlistValue.trim(), epgValue.trim(), headerValue.trim(),
                             weatherLocationValue.trim().ifBlank { DEFAULT_WEATHER_LOCATION },
                             guestNameValue.trim().ifBlank { "Guest" },
+                            connectionLabelValue.trim(), ispNameValue.trim(),
                             themeValue, captionsValue, languageValue.trim(), osdTimeoutValue,
                             autoUpdateValue, wifiOnlyValue, autoStartValue, resumeLastValue,
                             startDestinationValue
@@ -3317,7 +3351,7 @@ private fun SettingsDialog(
                             SettingsLabel("START DESTINATION")
                             Text("Screen shown when GLZ TV launches", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                listOf(AppSection.Home to "Home Screen", AppSection.Live to "Live TV Direct", AppSection.Radio to "Radio", AppSection.You to "You & Apps")
+                                listOf(AppSection.Home to "Home Screen", AppSection.Live to "Live TV Direct", AppSection.Radio to "Radio", AppSection.Weather to "Weather", AppSection.You to "You & Apps")
                                     .forEach { (destination, label) ->
                                         var focused by remember(destination) { mutableStateOf(false) }
                                         Surface(
@@ -3421,6 +3455,19 @@ private fun SettingsDialog(
                             ProtectedSourceField(
                                 weatherLocationValue, { weatherLocationValue = it },
                                 "Weather location", "City or municipality used by Open-Meteo"
+                            )
+                            SettingsLabel("NETWORK DISPLAY")
+                            Text(
+                                "Optional labels shown in the top status bar. Leave blank to use automatic detection.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            ProtectedSourceField(
+                                connectionLabelValue, { connectionLabelValue = it },
+                                "Connection label", "Example: Resort Ethernet or Guest Wi-Fi"
+                            )
+                            ProtectedSourceField(
+                                ispNameValue, { ispNameValue = it },
+                                "ISP or network name", "Example: GLZ Fiber or Charter Spectrum"
                             )
                         }
                     }
@@ -3649,34 +3696,6 @@ private fun fetchNetworkInfo(
     }
     return NetworkInfo(connection, isp)
 }
-
-private fun fetchWeather(client: OkHttpClient, location: String): WeatherInfo? = runCatching {
-    val geocoding = JSONObject(
-        fetchText(
-            client,
-            "https://geocoding-api.open-meteo.com/v1/search" +
-                "?name=${Uri.encode(location)}&count=1&language=en&format=json",
-            emptyMap()
-        )
-    )
-    val place = geocoding.getJSONArray("results").getJSONObject(0)
-    val latitude = place.getDouble("latitude")
-    val longitude = place.getDouble("longitude")
-    val displayName = place.optString("name", location)
-    val forecast = JSONObject(
-        fetchText(
-            client,
-            "https://api.open-meteo.com/v1/forecast?latitude=$latitude&longitude=$longitude" +
-                "&current=temperature_2m,weather_code&temperature_unit=fahrenheit",
-            emptyMap()
-        )
-    ).getJSONObject("current")
-    WeatherInfo(
-        temperature = forecast.getDouble("temperature_2m").toInt(),
-        weatherCode = forecast.getInt("weather_code"),
-        location = displayName
-    )
-}.getOrNull()
 
 private fun fetchText(client: OkHttpClient, url: String, headers: Map<String, String>): String {
     val request = Request.Builder().url(url).apply {

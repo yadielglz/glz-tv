@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -61,6 +62,9 @@ fun ExpressiveNavigationRail(
             }
             RailDestination("Radio", section == AppSection.Radio, Icons.Default.Radio) {
                 onSection(AppSection.Radio)
+            }
+            RailDestination("Weather", section == AppSection.Weather, Icons.Default.WbSunny) {
+                onSection(AppSection.Weather)
             }
             RailDestination("You", section == AppSection.You, Icons.Default.Person) {
                 onSection(AppSection.You)
