@@ -141,7 +141,8 @@ p { color: var(--muted); line-height: 1.65; }
 .channel-visibility:disabled { cursor: wait; opacity: .55; }
 .studio-badge.published { color: var(--lime); border-color: #6d9138; }
 .studio-badge.hidden-channel { color: #ffaca9; border-color: #7a3b42; }
-.app-row { display: grid; grid-template-columns: 42px minmax(240px, 1fr) 130px 100px; gap: 16px; align-items: center; padding: 16px 18px; border-top: 1px solid var(--line); }
+.app-row { display: grid; grid-template-columns: 42px minmax(240px, 1fr) 130px 100px auto; gap: 16px; align-items: center; padding: 16px 18px; border-top: 1px solid var(--line); }
+.app-row .edit-app { padding: 8px 12px; }
 .app-row:first-child { border-top: 0; }
 .pairing-requests { margin-top: 24px; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--panel-2); }
 .pairing-heading, .pairing-request { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 14px 16px; }

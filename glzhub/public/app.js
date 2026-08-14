@@ -298,12 +298,31 @@ function serviceRows() {
 
 function renderApps() {
   $("#appEmpty").classList.toggle("hidden", state.apps.length > 0);
-  $("#appList").innerHTML = state.apps.map((app) => `<article class="app-row">
+  $("#appList").innerHTML = state.apps.map((app) => `<article class="app-row" data-app-id="${app.id}">
     <span class="app-glyph">${escapeHtml(app.name.slice(0, 1).toUpperCase())}</span>
     <span><strong>${escapeHtml(app.name)}</strong><small>${escapeHtml(app.package_name)}</small></span>
     <span class="source-badge">${app.source_type === "play_store" ? "PLAY STORE" : "REPOSITORY"}</span>
     <span>${escapeHtml(app.version_name || "Latest")}</span>
+    <button type="button" class="secondary edit-app" data-app-id="${app.id}">Edit</button>
   </article>`).join("");
+  $$(".edit-app").forEach((button) => button.addEventListener("click", () => openApp(button.dataset.appId)));
+}
+
+function openApp(id = "") {
+  const app = state.apps.find((item) => item.id === id);
+  $("#appForm").reset();
+  $("#appId").value = app?.id || "";
+  $("#appDialogTitle").textContent = app ? "Edit managed app" : "Add a managed app";
+  $("#appName").value = app?.name || "";
+  $("#appPackage").value = app?.package_name || "";
+  $("#appSource").value = app?.source_type || "play_store";
+  $("#appVersion").value = app?.version_name || "";
+  $("#appUrl").value = app?.source_url || "";
+  $("#appSha").value = app?.sha256 || "";
+  $("#deleteApp").classList.toggle("hidden", !app);
+  $("#saveApp").textContent = app ? "Save changes" : "Add to library";
+  $("#appError").textContent = "";
+  $("#appDialog").showModal();
 }
 
 function openDevice(id) {
@@ -546,18 +565,15 @@ $("#unpairDevice").addEventListener("click", async () => {
   }
 });
 
-$("#addAppButton").addEventListener("click", () => {
-  $("#appForm").reset();
-  $("#appError").textContent = "";
-  $("#appDialog").showModal();
-});
+$("#addAppButton").addEventListener("click", () => openApp());
 $$("[data-close-app]").forEach((button) => button.addEventListener("click", () => $("#appDialog").close()));
 $("#appForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   $("#appError").textContent = "";
   try {
-    await api("/api/v1/admin/apps", {
-      method: "POST", body: JSON.stringify({
+    const id = $("#appId").value;
+    await api(id ? `/api/v1/admin/apps/${id}` : "/api/v1/admin/apps", {
+      method: id ? "PATCH" : "POST", body: JSON.stringify({
         name: $("#appName").value, package_name: $("#appPackage").value,
         source_type: $("#appSource").value, source_url: $("#appUrl").value || null,
         version_name: $("#appVersion").value || null, sha256: $("#appSha").value || null
@@ -565,7 +581,19 @@ $("#appForm").addEventListener("submit", async (event) => {
     });
     $("#appDialog").close();
     await loadDevices();
-    toast("App added to library");
+    toast(id ? "App entry updated" : "App added to library");
+  } catch (error) { $("#appError").textContent = error.message; }
+});
+$("#deleteApp").addEventListener("click", async () => {
+  const id = $("#appId").value;
+  const app = state.apps.find((item) => item.id === id);
+  if (!app || !confirm(`Delete ${app.name} from the app library? Existing install requests are not affected.`)) return;
+  $("#appError").textContent = "";
+  try {
+    await api(`/api/v1/admin/apps/${id}`, { method: "DELETE" });
+    $("#appDialog").close();
+    await loadDevices();
+    toast("App removed from library");
   } catch (error) { $("#appError").textContent = error.message; }
 });
 $("#deployButton").addEventListener("click", async () => {

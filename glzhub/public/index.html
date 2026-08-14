@@ -405,9 +405,10 @@
       <div class="dialog-head">
         <div>
           <div class="eyebrow">APP LIBRARY</div>
-          <h3>Add a managed app</h3>
+          <h3 id="appDialogTitle">Add a managed app</h3>
         </div><button class="icon-button" type="button" data-close-app>×</button>
       </div>
+      <input id="appId" type="hidden">
       <div class="form-grid">
         <label>Display name<input id="appName" required maxlength="100"></label>
         <label>Android package<input id="appPackage" required placeholder="com.example.tv"></label>
@@ -421,8 +422,8 @@
         <label class="wide">SHA-256 checksum (recommended)<input id="appSha" maxlength="64"></label>
       </div>
       <p id="appError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-app>Cancel</button><button
-          class="primary" type="submit">Add to library</button></div>
+      <div class="form-actions"><button id="deleteApp" type="button" class="danger-button hidden">Delete app</button><button type="button" class="secondary" data-close-app>Cancel</button><button
+          id="saveApp" class="primary" type="submit">Add to library</button></div>
     </form>
   </dialog>
   <dialog id="radioDialog">

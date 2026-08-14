@@ -658,9 +658,7 @@ async function listApps(request: Request, env: Env): Promise<Response> {
   return json({ apps });
 }
 
-async function createApp(request: Request, env: Env): Promise<Response> {
-  const user = await adminUser(request, env);
-  const input = await body(request);
+function appInput(input: Record<string, unknown>): Record<string, unknown> {
   const sourceType = requiredString(input.source_type, "source type", 20);
   if (!["play_store", "repository"].includes(sourceType)) throw new Error("Invalid source type");
   const sourceUrl = optionalString(input.source_url, "source URL");
@@ -669,19 +667,54 @@ async function createApp(request: Request, env: Env): Promise<Response> {
   }
   const checksum = optionalString(input.sha256, "SHA-256", 64);
   if (checksum && !/^[a-f0-9]{64}$/i.test(checksum)) throw new Error("Invalid SHA-256");
+  return {
+    name: requiredString(input.name, "name", 100),
+    package_name: requiredString(input.package_name, "package name", 180),
+    source_type: sourceType,
+    source_url: sourceUrl,
+    version_name: optionalString(input.version_name, "version", 40),
+    sha256: checksum?.toLowerCase() ?? null,
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function createApp(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request);
   const apps = await supabaseJson(env, "/rest/v1/app_catalog?select=*", {
     method: "POST", headers: { prefer: "return=representation" },
     body: JSON.stringify({
       owner_id: user.id,
-      name: requiredString(input.name, "name", 100),
-      package_name: requiredString(input.package_name, "package name", 180),
-      source_type: sourceType,
-      source_url: sourceUrl,
-      version_name: optionalString(input.version_name, "version", 40),
-      sha256: checksum?.toLowerCase() ?? null
+      ...appInput(input)
     })
   }) as Record<string, unknown>[];
   return json({ app: apps[0] }, 201);
+}
+
+async function updateApp(request: Request, env: Env, appId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const apps = await supabaseJson(
+    env,
+    `/rest/v1/app_catalog?id=eq.${encodeURIComponent(appId)}&owner_id=eq.${user.id}&select=*`,
+    {
+      method: "PATCH",
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify(appInput(await body(request)))
+    }
+  ) as Record<string, unknown>[];
+  if (!apps[0]) return json({ error: "App not found." }, 404);
+  return json({ app: apps[0] });
+}
+
+async function deleteApp(request: Request, env: Env, appId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const apps = await supabaseJson(
+    env,
+    `/rest/v1/app_catalog?id=eq.${encodeURIComponent(appId)}&owner_id=eq.${user.id}&select=id`,
+    { method: "DELETE", headers: { prefer: "return=representation" } }
+  ) as Record<string, unknown>[];
+  if (!apps[0]) return json({ error: "App not found." }, 404);
+  return json({ ok: true });
 }
 
 async function queueInstall(request: Request, env: Env, deviceId: string): Promise<Response> {
@@ -1385,6 +1418,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/v1/admin/sites" && request.method === "POST") return createSite(request, env);
   if (path === "/api/v1/admin/apps" && request.method === "GET") return listApps(request, env);
   if (path === "/api/v1/admin/apps" && request.method === "POST") return createApp(request, env);
+  const adminApp = path.match(/^\/api\/v1\/admin\/apps\/([0-9a-f-]+)$/i);
+  if (adminApp && request.method === "PATCH") return updateApp(request, env, adminApp[1]);
+  if (adminApp && request.method === "DELETE") return deleteApp(request, env, adminApp[1]);
   if (path === "/api/v1/admin/guest-experience" && request.method === "GET") return getGuestExperience(request, env);
   if (path === "/api/v1/admin/guest-experience" && request.method === "PATCH") return updateGuestExperience(request, env);
   const adminDevice = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)$/i);
