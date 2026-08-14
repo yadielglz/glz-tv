@@ -59,6 +59,7 @@ p { color: var(--muted); line-height: 1.65; }
 .status.offline { background: #3d292c; color: #ffaca9; }
 .activity { display: inline-block; max-width: 100%; padding: 6px 9px; border-radius: 9px; color: var(--muted); background: var(--panel-2); font-size: 11px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activity.watching { color: #dfff94; background: #26391e; }
+.activity.listening { color: #d7c8ff; background: #30245a; }
 .activity.app-active { color: #b9deff; background: #193653; }
 .activity.offline { color: #ffaca9; background: #3d292c; }
 .activity.syncing { color: #ffe0cc; background: #4a2c1c; }

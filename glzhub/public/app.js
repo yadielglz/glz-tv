@@ -130,6 +130,11 @@ function deviceActivity(device) {
       ? { label: `Watching · ${device.activity_label}`, className: "watching" }
       : { label: `Last watched · ${device.activity_label}`, className: "offline" };
   }
+  if (device.activity_type === "radio" && device.activity_label) {
+    return isOnline(device)
+      ? { label: `Listening · ${device.activity_label}`, className: "listening" }
+      : { label: `Last listened · ${device.activity_label}`, className: "offline" };
+  }
   if (device.activity_type === "app" && device.activity_label) {
     return { label: `App launched · ${device.activity_label}`, className: "app-active" };
   }

@@ -778,7 +778,7 @@ async function heartbeat(request: Request, env: Env): Promise<Response> {
   const activityType = activity
     ? requiredString(activity.type, "activity type", 20)
     : null;
-  if (activityType && !["idle", "channel", "app"].includes(activityType)) {
+  if (activityType && !["idle", "channel", "radio", "app"].includes(activityType)) {
     throw new Error("Invalid activity type");
   }
   const patch: Record<string, unknown> = {
