@@ -2427,14 +2427,18 @@ private fun ImmersivePlayerScreen(
                 if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
                 when (event.nativeKeyEvent.keyCode) {
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        showNavigationTip = false
-                        drawer = PlayerDrawer.Channels
-                        true
+                        if (drawer == PlayerDrawer.None) {
+                            showNavigationTip = false
+                            drawer = PlayerDrawer.Channels
+                            true
+                        } else false
                     }
                     KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        showNavigationTip = false
-                        drawer = PlayerDrawer.Services
-                        true
+                        if (drawer == PlayerDrawer.None) {
+                            showNavigationTip = false
+                            drawer = PlayerDrawer.Services
+                            true
+                        } else false
                     }
                     KeyEvent.KEYCODE_DPAD_CENTER,
                     KeyEvent.KEYCODE_ENTER,
