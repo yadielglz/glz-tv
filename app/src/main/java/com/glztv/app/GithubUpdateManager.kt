@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
+import java.net.URLDecoder
 
 object GithubUpdateManager {
     private const val LATEST_RELEASE =
@@ -65,26 +66,48 @@ object GithubUpdateManager {
     }
 
     fun download(context: Context, client: OkHttpClient, update: UpdateInfo): File {
-        val response = client.newCall(
-            Request.Builder()
-                .url(update.downloadUrl)
-                .header("User-Agent", "GLZ-TV/${BuildConfig.VERSION_NAME}")
-                .build()
-        ).execute()
+        return downloadApk(context, client, update.downloadUrl, context.packageName,
+            "Glz-TV-${update.version}.apk")
+    }
+
+    fun downloadApk(
+        context: Context,
+        client: OkHttpClient,
+        downloadUrl: String,
+        expectedPackageName: String,
+        suggestedName: String? = null,
+        requestHeaders: Map<String, String> = emptyMap()
+    ): File {
+        val request = Request.Builder()
+            .url(downloadUrl)
+            .header("User-Agent", "GLZ-TV/${BuildConfig.VERSION_NAME}")
+            .apply { requestHeaders.forEach { (name, value) -> header(name, value) } }
+            .build()
+        val response = client.newCall(request).execute()
         check(response.isSuccessful) { "Download failed (${response.code})" }
         val directory = File(context.cacheDir, "updates").apply {
             deleteRecursively()
             mkdirs()
         }
-        val apk = File(directory, "Glz-TV-${update.version}.apk")
+        val remoteName = response.header("Content-Disposition")
+            ?.substringAfter("filename=", "")
+            ?.trim(' ', '"')
+            ?.takeIf(String::isNotBlank)
+            ?: runCatching {
+                URLDecoder.decode(response.request.url.pathSegments.lastOrNull(), "UTF-8")
+            }.getOrNull()
+        val safeName = (suggestedName ?: remoteName ?: "managed-app.apk")
+            .replace(Regex("[^A-Za-z0-9._-]"), "_")
+            .let { if (it.endsWith(".apk", true)) it else "$it.apk" }
+        val apk = File(directory, safeName)
         response.body?.byteStream()?.use { input ->
             apk.outputStream().use { output -> input.copyTo(output) }
         } ?: error("GitHub returned an empty APK")
         check(apk.length() > 1_000_000) { "Downloaded APK is incomplete" }
         val packageInfo = context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
             ?: error("Downloaded file is not a valid APK")
-        check(packageInfo.packageName == context.packageName) {
-            "Downloaded APK has the wrong package name"
+        check(packageInfo.packageName == expectedPackageName) {
+            "Downloaded APK is ${packageInfo.packageName}, expected $expectedPackageName"
         }
         return apk
     }

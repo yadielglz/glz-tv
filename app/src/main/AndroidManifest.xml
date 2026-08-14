@@ -67,6 +67,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ManagedInstallActivity"
+            android:exported="false"
+            android:theme="@style/Theme.GlzTv" />
+
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"

@@ -1692,18 +1692,28 @@ private suspend fun handleManagedHubCommand(
         }
         is GlzHubManager.AppCommand -> {
             val result = runCatching {
-                val uri = if (command.sourceType == "repository") {
-                    Uri.parse(requireNotNull(command.sourceUrl) { "Repository URL is missing" })
+                if (command.sourceType == "repository") {
+                    val url = requireNotNull(command.sourceUrl) { "Repository URL is missing" }
+                    context.startActivity(
+                        ManagedInstallActivity.intent(
+                            context = context,
+                            sourceUrl = url,
+                            packageName = command.packageName,
+                            commandId = command.id
+                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
                 } else {
-                    Uri.parse("market://details?id=${command.packageName}")
+                    val uri = Uri.parse("market://details?id=${command.packageName}")
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
                 }
-                context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
             withContext(Dispatchers.IO) {
                 runCatching {
                     GlzHubManager.completeCommand(
                         prefs, client, command.id, result.isSuccess,
-                        if (result.isSuccess) "Installer opened on TV" else (result.exceptionOrNull()?.message ?: "Could not open installer")
+                        if (result.isSuccess) "In-app installer opened on TV" else (result.exceptionOrNull()?.message ?: "Could not open installer")
                     )
                 }
             }

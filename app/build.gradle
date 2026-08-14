@@ -12,8 +12,8 @@ android {
         applicationId "com.glztv.app"
         minSdk 24
         targetSdk 36
-        versionCode providers.gradleProperty("releaseVersionCode").map { it.toInteger() }.getOrElse(3003039)
-        versionName providers.gradleProperty("releaseVersionName").getOrElse("3.3.39")
+        versionCode providers.gradleProperty("releaseVersionCode").map { it.toInteger() }.getOrElse(3004001)
+        versionName providers.gradleProperty("releaseVersionName").getOrElse("3.4.01")
     }
 
     signingConfigs {
