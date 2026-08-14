@@ -500,18 +500,24 @@ internal fun TvScreen(
                 selected = cachedChannels.firstOrNull { it.id == lastId }
             }
         }
-        runCatching {
+        val refreshResult = runCatching {
             onProgress(55, "Downloading TV playlist")
             val parsed = withContext(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
             onProgress(72, "Downloading programme guide")
             val parsedGuide = withContext(Dispatchers.IO) { epgRepository.load(forceRefresh) }
-            Triple(parsed, parsedGuide, cached.first != null && cached.second != null)
-        }.onSuccess { (parsed, parsedGuide, fromCache) ->
+            val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
+            check(parsedGuide.programmeCount == 0 || matchedChannels > 0) {
+                "EPG downloaded ${parsedGuide.programmeCount} programmes but matched 0 of ${parsed.size} channels"
+            }
+            Triple(parsed, parsedGuide, Pair(cached.first != null && cached.second != null, matchedChannels))
+        }
+        refreshResult.onSuccess { (parsed, parsedGuide, refreshInfo) ->
+            val (fromCache, matchedChannels) = refreshInfo
             channels.clear()
             channels.addAll(parsed)
             guide = parsedGuide
             status = "${parsed.size} channels${if (fromCache) " · restored from storage" else ""} · " +
-                "${parsedGuide.programmeCount} guide entries"
+                "${parsedGuide.programmeCount} guide entries · $matchedChannels EPG matches"
             if (selected == null && prefs.getBoolean(RESUME_LAST_CHANNEL, true)) {
                 val lastId = prefs.getString(LAST_CHANNEL_ID, null)
                 selected = parsed.firstOrNull { it.id == lastId }
@@ -520,12 +526,14 @@ internal fun TvScreen(
             withContext(Dispatchers.IO) {
                 TvHomePublisher.publish(context.applicationContext, parsed, parsedGuide)
             }
-        }.onFailure {
+        }.onFailure { error ->
+            if (forceRefresh) guide = EpgGuide.Empty
             status = if (channels.isNotEmpty()) {
-                "${channels.size} saved channels · refresh unavailable"
-            } else "Could not load sources: ${it.message}"
+                "${channels.size} saved channels · refresh failed: ${error.message}"
+            } else "Could not load sources: ${error.message}"
         }
         loading = false
+        if (forceRefresh) refreshResult.exceptionOrNull()?.let { throw it }
     }
 
     suspend fun syncEverythingNow(onProgress: (Int, String) -> Unit): String {
@@ -561,7 +569,9 @@ internal fun TvScreen(
         homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
         osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
         loadSources(forceRefresh = true) { percent, message -> report(percent, message) }
-        val result = "Synced now · ${channels.size} TV channels · $radioCount radio stations · ${guide.programmeCount} guide entries"
+        val matchedChannels = channels.count { guide.forChannel(it).isNotEmpty() }
+        val result = "Synced now · ${channels.size} TV channels · $radioCount radio stations · " +
+            "${guide.programmeCount} guide entries · $matchedChannels EPG matches"
         report(100, result, "complete")
         result
         } catch (error: Throwable) {

@@ -21,11 +21,26 @@ class EpgRepository(
         val sourceUrl = preferences.epgUrl
         if (sourceUrl.isBlank()) return EpgGuide.Empty
         if (!forceRefresh) cached()?.let { return it }
-        return runCatching {
-            EpgParser.parse(sourceClient.fetchText(sourceUrl, preferences.requestHeaders)).also {
-                check(it.programmeCount > 0) { "EPG did not contain programmes" }
+        val requestUrl = if (forceRefresh) {
+            "$sourceUrl${if ('?' in sourceUrl) '&' else '?'}glz_refresh=${System.currentTimeMillis()}"
+        } else sourceUrl
+        var lastError: Throwable? = null
+        repeat(if (forceRefresh) 3 else 1) { attempt ->
+            runCatching {
+                EpgParser.parse(
+                    sourceClient.fetchText(requestUrl, preferences.requestHeaders)
+                ).also {
+                    check(it.programmeCount > 0) { "EPG did not contain programmes" }
+                }
+            }.onSuccess { guide ->
+                EpgCache.write(appContext, sourceUrl, guide)
+                return guide
+            }.onFailure { error ->
+                lastError = error
+                if (attempt < 2) Thread.sleep(350L * (attempt + 1))
             }
-        }.getOrElse { cached() ?: throw it }
-            .also { EpgCache.write(appContext, sourceUrl, it) }
+        }
+        if (!forceRefresh) cached()?.let { return it }
+        throw checkNotNull(lastError) { "EPG refresh failed" }
     }
 }
