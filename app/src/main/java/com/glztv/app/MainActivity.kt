@@ -139,6 +139,8 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -153,6 +155,15 @@ import com.glztv.app.data.EpgRepository
 import com.glztv.app.data.PlaylistRepository
 import com.glztv.app.data.PreferencesRepository
 import com.glztv.app.data.WeatherRepository
+import com.glztv.app.player.RecentChannelManager
+import com.glztv.app.player.PlaybackControlState
+import com.glztv.app.player.PlaybackDiagnostics
+import com.glztv.app.player.PlaybackErrorCategorizer
+import com.glztv.app.player.PlaybackErrorCategory
+import com.glztv.app.player.TrackOption
+import com.glztv.app.player.TrackPreferenceManager
+import com.glztv.app.player.PlaybackPerformance
+import com.glztv.app.player.PlaybackDiagnosticsPanel
 import com.glztv.app.ui.theme.GlzTheme
 import com.glztv.app.ui.navigation.AppSection
 import com.glztv.app.ui.navigation.ExpressiveNavigationRail
@@ -201,7 +212,7 @@ private const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
 private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
 
-private enum class PlayerDrawer { None, Channels, Services, Options }
+private enum class PlayerDrawer { None, Channels, Services, Options, Recent }
 
 private data class EntertainmentApp(
     val name: String,
@@ -392,6 +403,7 @@ internal fun TvScreen(
     val channels = remember { mutableStateListOf<Channel>() }
     var guide by remember { mutableStateOf(EpgGuide.Empty) }
     var selected by remember { mutableStateOf<Channel?>(null) }
+    var multiViewSecondary by remember { mutableStateOf<Channel?>(null) }
     var playerActive by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Add an M3U playlist to start watching.") }
     var loading by remember { mutableStateOf(false) }
@@ -455,6 +467,8 @@ internal fun TvScreen(
     var favorites by remember {
         mutableStateOf(prefs.getStringSet(FAVORITES, emptySet()).orEmpty().toSet())
     }
+    val recentChannelManager = remember { RecentChannelManager(prefs) }
+    var recentRevision by remember { mutableStateOf(0) }
 
     val keepScreenAwake = radioPlaying || (section == AppSection.Home && keepAwakeAtHome)
     DisposableEffect(keepScreenAwake) {
@@ -716,6 +730,11 @@ internal fun TvScreen(
         )
     }
     val tuneChannel: (Channel) -> Unit = {
+        if (selected?.id != it.id) {
+            PlaybackPerformance.channelSelected(it.id)
+            recentChannelManager.record(it.id)
+            recentRevision++
+        }
         selected = it
         playerActive = true
         GlzHubManager.reportActivity(prefs, "channel", it.name)
@@ -753,7 +772,18 @@ internal fun TvScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(if (immersive) PaddingValues(0.dp) else padding)) {
             if (immersive) {
-                ImmersivePlayerScreen(
+                if (multiViewSecondary != null) MultiViewScreen(
+                    primary = selected!!,
+                    secondary = multiViewSecondary!!,
+                    guide = guide,
+                    captionsEnabled = captionsEnabled,
+                    captionLanguage = captionLanguage,
+                    onExpand = {
+                        multiViewSecondary = null
+                        tuneChannel(it)
+                    },
+                    onExit = { multiViewSecondary = null }
+                ) else ImmersivePlayerScreen(
                     channel = selected!!,
                     channels = ordered,
                     guide = guide,
@@ -769,6 +799,17 @@ internal fun TvScreen(
                     },
                     osdTimeoutSeconds = osdTimeoutSeconds,
                     entertainmentApps = managedEntertainmentApps,
+                    recentChannels = remember(recentRevision, channels.toList()) {
+                        recentChannelManager.recentIds().mapNotNull { id ->
+                            channels.firstOrNull { it.id == id }
+                        }
+                    },
+                    onPreviousChannel = {
+                        recentChannelManager.previousId(selected!!.id)
+                            ?.let { id -> channels.firstOrNull { it.id == id } }
+                            ?.let(tuneChannel)
+                    },
+                    onAddToMultiView = { multiViewSecondary = it },
                     onTune = tuneChannel,
                     onExit = {
                         playerActive = false
@@ -2291,6 +2332,9 @@ private fun ImmersivePlayerScreen(
     onCaptionsChanged: (Boolean, String) -> Unit,
     osdTimeoutSeconds: Int = 8,
     entertainmentApps: List<EntertainmentApp>,
+    recentChannels: List<Channel>,
+    onPreviousChannel: () -> Unit,
+    onAddToMultiView: (Channel) -> Unit,
     onTune: (Channel) -> Unit,
     onExit: () -> Unit
 ) {
@@ -2299,10 +2343,14 @@ private fun ImmersivePlayerScreen(
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     }
     val client = remember { OkHttpClient() }
+    val trackPreferences = remember { TrackPreferenceManager(prefs) }
+    val playbackControls = remember { PlaybackControlState() }
     val scope = rememberCoroutineScope()
     var drawer by remember { mutableStateOf(PlayerDrawer.None) }
     var showNavigationTip by remember { mutableStateOf(true) }
     var showOsd by remember { mutableStateOf(false) }
+    var selectingMultiViewChannel by remember { mutableStateOf(false) }
+    var showDiagnostics by remember { mutableStateOf(false) }
     val playerFocus = remember { FocusRequester() }
     val selectedChannelFocus = remember { FocusRequester() }
     val firstServiceFocus = remember { FocusRequester() }
@@ -2365,6 +2413,7 @@ private fun ImmersivePlayerScreen(
                 delay(60)
                 optionsFocus.requestFocus()
             }
+            PlayerDrawer.Recent -> Unit
         }
     }
 
@@ -2428,6 +2477,22 @@ private fun ImmersivePlayerScreen(
             captionsEnabled,
             captionLanguage,
             Modifier.fillMaxSize(),
+            controlState = playbackControls,
+            preferredAudioLanguage = trackPreferences.audioLanguage,
+            onAudioLanguageChanged = { trackPreferences.audioLanguage = it },
+            onSubtitleChanged = { enabled, language ->
+                trackPreferences.subtitlesEnabled = enabled
+                trackPreferences.subtitleLanguage = language
+                onCaptionsChanged(enabled, language ?: captionLanguage)
+            },
+            onPlaybackError = { category ->
+                val report = PlaybackErrorCategorizer.sanitizedReport(
+                    category, channel.name, System.currentTimeMillis()
+                )
+                scope.launch(Dispatchers.IO) {
+                    runCatching { GlzHubManager.heartbeat(prefs, client, lastError = report) }
+                }
+            },
             onPlaybackReady = { readyChannelId ->
                 if (readyChannelId == channel.id) showOsd = true
             }
@@ -2514,7 +2579,8 @@ private fun ImmersivePlayerScreen(
                             }
                         }
                     }
-                    Text("CHANNELS", Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
+                    Text(if (selectingMultiViewChannel) "SELECT SECOND CHANNEL" else "CHANNELS",
+                        Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
                         color = Color.White.copy(alpha = .56f),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Black)
@@ -2535,7 +2601,12 @@ private fun ImmersivePlayerScreen(
                                     else Modifier)
                                     .onFocusChanged { isFocused = it.isFocused }
                                     .clickable {
-                                        onTune(item)
+                                        if (selectingMultiViewChannel) {
+                                            if (item.id != channel.id) onAddToMultiView(item)
+                                            selectingMultiViewChannel = false
+                                        } else {
+                                            onTune(item)
+                                        }
                                         drawer = PlayerDrawer.None
                                     }
                                     .focusable(),
@@ -2664,34 +2735,163 @@ private fun ImmersivePlayerScreen(
                 tonalElevation = 18.dp,
                 shadowElevation = 24.dp
             ) {
-                Row(
+                Column(
                     Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text("OPTIONS", fontWeight = FontWeight.Black, color = Color(0xFFC4FF4D))
-                    Button(
-                        onClick = { onCaptionsChanged(!captionsEnabled, captionLanguage) },
-                        modifier = Modifier.focusRequester(optionsFocus)
-                    ) {
-                        Text(if (captionsEnabled) "CC On" else "CC Off")
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("OPTIONS", fontWeight = FontWeight.Black, color = Color(0xFFC4FF4D))
+                        Button(onClick = { onPreviousChannel(); drawer = PlayerDrawer.None },
+                            modifier = Modifier.focusRequester(optionsFocus)) { Text("Previous") }
+                        Button(onClick = { drawer = PlayerDrawer.Recent }) { Text("Recent") }
+                        Button(onClick = { selectingMultiViewChannel = true; drawer = PlayerDrawer.Channels }) {
+                            Text("Add to MultiView")
+                        }
+                        Button(onClick = { showDiagnostics = !showDiagnostics }) { Text("Stream info") }
                     }
-                    Button(
-                        enabled = captionsEnabled,
-                        onClick = { onCaptionsChanged(true, "en") }
-                    ) {
-                        Text(if (captionLanguage == "en") "✓ English" else "English")
+                    if (playbackControls.audioTracks.isNotEmpty()) {
+                        Text("AUDIO", color = Color.White.copy(alpha = .6f),
+                            style = MaterialTheme.typography.labelSmall)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(playbackControls.audioTracks, key = { it.id }) { track ->
+                                Button(onClick = { playbackControls.chooseAudio(track.id) }) {
+                                    Text(if (track.selected) "✓ ${track.label}" else track.label)
+                                }
+                            }
+                        }
                     }
-                    Button(
-                        enabled = captionsEnabled,
-                        onClick = { onCaptionsChanged(true, "es") }
-                    ) {
-                        Text(if (captionLanguage == "es") "✓ Español" else "Español")
+                    Text("SUBTITLES", color = Color.White.copy(alpha = .6f),
+                        style = MaterialTheme.typography.labelSmall)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            Button(onClick = { playbackControls.chooseSubtitle(null) }) {
+                                Text(if (!captionsEnabled) "✓ Off" else "Off")
+                            }
+                        }
+                        items(playbackControls.subtitleTracks, key = { it.id }) { track ->
+                            Button(onClick = { playbackControls.chooseSubtitle(track.id) }) {
+                                Text(if (track.selected && captionsEnabled) "✓ ${track.label}" else track.label)
+                            }
+                        }
                     }
-                    Spacer(Modifier.weight(1f))
-                    Text("↑ Programme info  ·  ← Channels  ·  → Apps",
-                        color = Color.White.copy(alpha = .68f),
-                        style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
+        if (showDiagnostics && drawer == PlayerDrawer.Options) {
+            PlaybackDiagnosticsPanel(
+                diagnostics = playbackControls.diagnostics,
+                modifier = Modifier.align(Alignment.TopEnd).padding(30.dp)
+            )
+        }
+
+        if (drawer == PlayerDrawer.Recent) {
+            Surface(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .padding(horizontal = 48.dp, vertical = 30.dp),
+                color = Color(0xF20B1114), contentColor = Color.White,
+                shape = RoundedCornerShape(24.dp), tonalElevation = 18.dp
+            ) {
+                Column(Modifier.padding(22.dp)) {
+                    Text("RECENT CHANNELS", color = Color(0xFFC4FF4D),
+                        fontWeight = FontWeight.Black)
+                    Spacer(Modifier.height(12.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(recentChannels, key = { "recent-${it.id}" }) { recent ->
+                            val programme = guide.forChannel(recent)
+                                .firstOrNull { it.startMillis <= now && it.endMillis > now }
+                            Button(onClick = {
+                                onTune(recent)
+                                drawer = PlayerDrawer.None
+                            }) {
+                                Column(Modifier.width(150.dp)) {
+                                    Text(recent.name, maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        fontWeight = FontWeight.Bold)
+                                    Text(programme?.title ?: "Live programming", maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MultiViewScreen(
+    primary: Channel,
+    secondary: Channel,
+    guide: EpgGuide,
+    captionsEnabled: Boolean,
+    captionLanguage: String,
+    onExpand: (Channel) -> Unit,
+    onExit: () -> Unit
+) {
+    var activePane by remember { mutableStateOf(0) }
+    val focusRequester = remember { FocusRequester() }
+    BackHandler(onBack = onExit)
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    Row(
+        Modifier.fillMaxSize().background(Color.Black).focusRequester(focusRequester).focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+                when (event.nativeKeyEvent.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> { activePane = 0; true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> { activePane = 1; true }
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+                    KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                        onExpand(if (activePane == 0) primary else secondary)
+                        true
+                    }
+                    else -> false
+                }
+            }
+    ) {
+        listOf(primary, secondary).forEachIndexed { index, paneChannel ->
+            val programme = guide.forChannel(paneChannel).firstOrNull {
+                it.startMillis <= System.currentTimeMillis() && it.endMillis > System.currentTimeMillis()
+            }
+            Box(
+                Modifier.weight(1f).fillMaxHeight().padding(4.dp)
+                    .border(
+                        if (activePane == index) 5.dp else 1.dp,
+                        if (activePane == index) MaterialTheme.colorScheme.secondary
+                        else Color.White.copy(alpha = .18f),
+                        RoundedCornerShape(18.dp)
+                    ).clip(RoundedCornerShape(18.dp))
+            ) {
+                VideoPlayer(
+                    paneChannel, captionsEnabled, captionLanguage,
+                    Modifier.fillMaxSize(), muted = activePane != index,
+                    createMediaSession = activePane == index
+                )
+                Surface(
+                    Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+                    color = Color.Black.copy(alpha = .72f)
+                ) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ChannelLogo(paneChannel, 42.dp, guide)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(paneChannel.name, color = Color.White,
+                                fontWeight = FontWeight.Black, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                            Text(programme?.title ?: "Live programming",
+                                color = Color.White.copy(alpha = .7f), maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(if (activePane == index) "AUDIO" else "MUTED",
+                            color = if (activePane == index) MaterialTheme.colorScheme.secondary
+                            else Color.White.copy(alpha = .55f),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black)
+                    }
                 }
             }
         }
@@ -2956,8 +3156,14 @@ private fun VideoPlayer(
     captionLanguage: String,
     modifier: Modifier = Modifier,
     muted: Boolean = false,
+    createMediaSession: Boolean = true,
     keepScreenOn: Boolean = true,
     cropVideo: Boolean = false,
+    controlState: PlaybackControlState? = null,
+    preferredAudioLanguage: String? = null,
+    onAudioLanguageChanged: (String?) -> Unit = {},
+    onSubtitleChanged: (Boolean, String?) -> Unit = { _, _ -> },
+    onPlaybackError: (PlaybackErrorCategory) -> Unit = {},
     onPlaybackReady: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -2969,33 +3175,102 @@ private fun VideoPlayer(
             .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
             .build()
     }
-    val mediaSession = remember {
-        MediaSession.Builder(context, player).build()
+    val mediaSession = remember(createMediaSession) {
+        if (createMediaSession) MediaSession.Builder(context, player).build() else null
     }
     var retryAttempt by remember(channel.id) { mutableStateOf(0) }
-    var playbackMessage by remember(channel.id) { mutableStateOf<String?>(null) }
+    var playbackMessage by remember(channel.id) { mutableStateOf<String?>("Connecting…") }
+    var lastPlaybackError by remember(channel.id) { mutableStateOf<PlaybackErrorCategory?>(null) }
     DisposableEffect(player, channel.id) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
+                val category = PlaybackErrorCategorizer.categorize(error)
+                lastPlaybackError = category
+                onPlaybackError(category)
                 if (retryAttempt < 3) {
                     retryAttempt += 1
-                    playbackMessage = "Reconnecting… attempt $retryAttempt of 3"
+                    playbackMessage = if (retryAttempt >= 2) "Trying compatibility mode…"
+                    else "Retrying stream…"
                 } else {
-                    playbackMessage = "This channel is temporarily unavailable"
+                    playbackMessage = "Stream unavailable"
                 }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) {
                     playbackMessage = null
-                    onPlaybackReady(channel.id)
+                } else if (playbackState == Player.STATE_BUFFERING && retryAttempt == 0) {
+                    playbackMessage = "Connecting…"
+                }
+            }
+
+            override fun onRenderedFirstFrame() {
+                PlaybackPerformance.firstFrameRendered(channel.id)
+                onPlaybackReady(channel.id)
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                val audioSelections = mutableMapOf<String, Pair<Tracks.Group, Int>>()
+                val subtitleSelections = mutableMapOf<String, Pair<Tracks.Group, Int>>()
+                val audio = mutableListOf<TrackOption>()
+                val subtitles = mutableListOf<TrackOption>()
+                tracks.groups.forEachIndexed { groupIndex, group ->
+                    for (trackIndex in 0 until group.length) {
+                        if (!group.isTrackSupported(trackIndex)) continue
+                        val format = group.getTrackFormat(trackIndex)
+                        val id = "$groupIndex:$trackIndex"
+                        val option = TrackOption(
+                            id = id,
+                            label = trackLabel(format.label, format.language, format.channelCount),
+                            language = format.language,
+                            selected = group.isTrackSelected(trackIndex)
+                        )
+                        when (group.type) {
+                            C.TRACK_TYPE_AUDIO -> {
+                                audio += option
+                                audioSelections[id] = group to trackIndex
+                            }
+                            C.TRACK_TYPE_TEXT -> {
+                                subtitles += option
+                                subtitleSelections[id] = group to trackIndex
+                            }
+                        }
+                    }
+                }
+                controlState?.audioTracks = audio
+                controlState?.subtitleTracks = subtitles
+                controlState?.selectAudio = { id ->
+                    audioSelections[id]?.let { (group, index) ->
+                        val language = group.getTrackFormat(index).language
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                            .addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(index)))
+                            .build()
+                        onAudioLanguageChanged(language)
+                    }
+                }
+                controlState?.selectSubtitle = { id ->
+                    if (id == null) {
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+                        onSubtitleChanged(false, null)
+                    } else subtitleSelections[id]?.let { (group, index) ->
+                        val language = group.getTrackFormat(index).language
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                            .addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(index)))
+                            .build()
+                        onSubtitleChanged(true, language)
+                    }
                 }
             }
         }
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    LaunchedEffect(channel.streamUrl, captionsEnabled, captionLanguage, retryAttempt) {
+    LaunchedEffect(channel.streamUrl, captionsEnabled, captionLanguage, preferredAudioLanguage, retryAttempt) {
         if (retryAttempt > 0) delay((1L shl (retryAttempt - 1)) * 1_000L)
         httpFactory
             .setDefaultRequestProperties(channel.headers)
@@ -3003,9 +3278,9 @@ private fun VideoPlayer(
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !captionsEnabled)
             .setPreferredTextLanguage(captionLanguage.ifBlank { null })
+            .setPreferredAudioLanguage(preferredAudioLanguage)
             .setSelectUndeterminedTextLanguage(captionsEnabled)
             .build()
-        player.volume = if (muted) 0f else 1f
         player.stop()
         player.setMediaItem(
             MediaItem.Builder()
@@ -3024,12 +3299,32 @@ private fun VideoPlayer(
         player.prepare()
         player.playWhenReady = true
     }
-    DisposableEffect(player, mediaSession) {
-        onDispose {
-            mediaSession.release()
-            player.release()
+    LaunchedEffect(player, channel.id, controlState) {
+        if (controlState == null) return@LaunchedEffect
+        while (true) {
+            val video = player.videoFormat
+            val audio = player.audioFormat
+            controlState.diagnostics = PlaybackDiagnostics(
+                channelName = channel.name,
+                protocol = PlaybackErrorCategorizer.protocol(channel.streamUrl),
+                resolution = if (video != null && video.width > 0 && video.height > 0)
+                    "${video.width} × ${video.height}" else null,
+                videoCodec = video?.codecs ?: video?.sampleMimeType,
+                audioCodec = audio?.codecs ?: audio?.sampleMimeType,
+                bitrate = listOfNotNull(video?.bitrate, audio?.bitrate)
+                    .filter { it > 0 }.takeIf { it.isNotEmpty() }?.sum(),
+                bufferDurationMs = player.totalBufferedDuration.coerceAtLeast(0),
+                droppedFrames = player.videoDecoderCounters?.droppedBufferCount?.toLong() ?: 0,
+                networkTransport = currentNetworkTransport(context),
+                playbackState = playbackStateLabel(player.playbackState),
+                lastError = lastPlaybackError
+            )
+            delay(1_000)
         }
     }
+    LaunchedEffect(muted) { player.volume = if (muted) 0f else 1f }
+    DisposableEffect(mediaSession) { onDispose { mediaSession?.release() } }
+    DisposableEffect(player) { onDispose { player.release() } }
     Box(modifier.background(Color.Black, RoundedCornerShape(24.dp))) {
         AndroidView(
             factory = {
@@ -3067,6 +3362,42 @@ private fun VideoPlayer(
                 }
             }
         }
+    }
+}
+
+private fun trackLabel(label: String?, language: String?, channelCount: Int): String {
+    val languageLabel = language?.let { code ->
+        runCatching { Locale.forLanguageTag(code).getDisplayLanguage(Locale.getDefault()) }
+            .getOrNull()?.takeIf(String::isNotBlank)
+    }
+    val base = label?.takeIf(String::isNotBlank) ?: languageLabel ?: "Original"
+    val layout = when {
+        channelCount >= 6 -> "5.1"
+        channelCount == 2 -> "Stereo"
+        channelCount == 1 -> "Mono"
+        else -> null
+    }
+    return listOfNotNull(base, layout).distinct().joinToString(" · ")
+}
+
+private fun playbackStateLabel(state: Int) = when (state) {
+    Player.STATE_IDLE -> "Idle"
+    Player.STATE_BUFFERING -> "Buffering"
+    Player.STATE_READY -> "Playing"
+    Player.STATE_ENDED -> "Ended"
+    else -> "Unavailable"
+}
+
+private fun currentNetworkTransport(context: Context): String? {
+    val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        ?: return null
+    val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return null
+    return when {
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Cellular"
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "VPN"
+        else -> "Other"
     }
 }
 

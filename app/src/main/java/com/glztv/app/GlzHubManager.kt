@@ -312,7 +312,8 @@ object GlzHubManager {
     fun heartbeat(
         prefs: SharedPreferences,
         client: OkHttpClient,
-        syncProgress: SyncProgress? = null
+        syncProgress: SyncProgress? = null,
+        lastError: String? = null
     ) {
         if (!prefs.getString(PAIRING_CODE, null).isNullOrBlank()) return
         val token = prefs.getString(DEVICE_TOKEN, null) ?: return
@@ -323,6 +324,7 @@ object GlzHubManager {
                 .put("label", prefs.getString(ACTIVITY_LABEL, null))
                 .put("packageName", prefs.getString(ACTIVITY_PACKAGE, null))
             )
+        lastError?.take(200)?.let { payload.put("lastError", it) }
         syncProgress?.let { sync ->
             payload.put("sync", JSONObject()
                 .put("status", sync.status)

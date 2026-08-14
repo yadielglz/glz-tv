@@ -2,6 +2,9 @@ package com.glztv.benchmark
 
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.StartupMode
+import androidx.benchmark.macro.FrameTimingMetric
+import androidx.benchmark.macro.TraceSectionMetric
+import androidx.benchmark.macro.ExperimentalMetricApi
 import androidx.benchmark.macro.junit4.BaselineProfileRule
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -27,6 +30,28 @@ class StartupBenchmark {
         setupBlock = { pressHome() }
     ) {
         startActivityAndWait()
+        device.waitForIdle()
+    }
+
+    @OptIn(ExperimentalMetricApi::class)
+    @Test
+    fun channelSwitchToFirstFrame() = benchmark.measureRepeated(
+        packageName = PACKAGE_NAME,
+        metrics = listOf(
+            TraceSectionMetric("channelSwitch", TraceSectionMetric.Mode.First),
+            FrameTimingMetric()
+        ),
+        compilationMode = CompilationMode.Partial(
+            baselineProfileMode = androidx.benchmark.macro.BaselineProfileMode.Require
+        ),
+        iterations = 5,
+        setupBlock = {
+            pressHome()
+            startActivityAndWait()
+            device.waitForIdle()
+        }
+    ) {
+        device.pressKeyCode(android.view.KeyEvent.KEYCODE_CHANNEL_UP)
         device.waitForIdle()
     }
 }
