@@ -76,33 +76,48 @@ object GithubUpdateManager {
         downloadUrl: String,
         expectedPackageName: String,
         suggestedName: String? = null,
-        requestHeaders: Map<String, String> = emptyMap()
+        requestHeaders: Map<String, String> = emptyMap(),
+        onProgress: (bytesRead: Long, totalBytes: Long) -> Unit = { _, _ -> }
     ): File {
         val request = Request.Builder()
             .url(downloadUrl)
             .header("User-Agent", "GLZ-TV/${BuildConfig.VERSION_NAME}")
             .apply { requestHeaders.forEach { (name, value) -> header(name, value) } }
             .build()
-        val response = client.newCall(request).execute()
-        check(response.isSuccessful) { "Download failed (${response.code})" }
-        val directory = File(context.cacheDir, "updates").apply {
-            deleteRecursively()
-            mkdirs()
+        val apk = client.newCall(request).execute().use { response ->
+            check(response.isSuccessful) { "Download failed (${response.code})" }
+            val directory = File(context.cacheDir, "updates").apply {
+                deleteRecursively()
+                mkdirs()
+            }
+            val remoteName = response.header("Content-Disposition")
+                ?.substringAfter("filename=", "")
+                ?.trim(' ', '"')
+                ?.takeIf(String::isNotBlank)
+                ?: runCatching {
+                    URLDecoder.decode(response.request.url.pathSegments.lastOrNull(), "UTF-8")
+                }.getOrNull()
+            val safeName = (suggestedName ?: remoteName ?: "managed-app.apk")
+                .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                .let { if (it.endsWith(".apk", true)) it else "$it.apk" }
+            val target = File(directory, safeName)
+            val body = response.body ?: error("Server returned an empty APK")
+            val totalBytes = body.contentLength()
+            body.byteStream().use { input ->
+                target.outputStream().use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var bytesRead = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        output.write(buffer, 0, count)
+                        bytesRead += count
+                        onProgress(bytesRead, totalBytes)
+                    }
+                }
+            }
+            target
         }
-        val remoteName = response.header("Content-Disposition")
-            ?.substringAfter("filename=", "")
-            ?.trim(' ', '"')
-            ?.takeIf(String::isNotBlank)
-            ?: runCatching {
-                URLDecoder.decode(response.request.url.pathSegments.lastOrNull(), "UTF-8")
-            }.getOrNull()
-        val safeName = (suggestedName ?: remoteName ?: "managed-app.apk")
-            .replace(Regex("[^A-Za-z0-9._-]"), "_")
-            .let { if (it.endsWith(".apk", true)) it else "$it.apk" }
-        val apk = File(directory, safeName)
-        response.body?.byteStream()?.use { input ->
-            apk.outputStream().use { output -> input.copyTo(output) }
-        } ?: error("GitHub returned an empty APK")
         check(apk.length() > 1_000_000) { "Downloaded APK is incomplete" }
         val packageInfo = context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
             ?: error("Downloaded file is not a valid APK")

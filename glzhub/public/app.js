@@ -115,6 +115,16 @@ function isOnline(device) {
 }
 
 function deviceActivity(device) {
+  if (["queued", "syncing"].includes(device.sync_status)) {
+    return {
+      label: device.sync_message || (device.sync_status === "queued" ? "Waiting for TV" : "Syncing"),
+      className: "syncing",
+      progress: Math.max(0, Math.min(100, Number(device.sync_progress) || 0))
+    };
+  }
+  if (device.sync_status === "failed") {
+    return { label: device.sync_message || "Sync failed", className: "sync-failed" };
+  }
   if (device.activity_type === "channel" && device.activity_label) {
     return isOnline(device)
       ? { label: `Watching · ${device.activity_label}`, className: "watching" }
@@ -147,7 +157,7 @@ function renderDevices() {
       <span class="device-identity"><span class="screen-icon"></span><span><strong>${escapeHtml(device.name)}</strong><small>Welcome, ${escapeHtml(device.guest_name)}</small></span></span>
       <span data-label="Property">${escapeHtml(state.sites.find((site) => site.id === device.site_id)?.name || "Unassigned")}</span>
       <span><span class="status ${isOnline(device) ? "" : "offline"}">${isOnline(device) ? "ONLINE" : "OFFLINE"}</span></span>
-      <span data-label="Activity"><span class="activity ${activity.className}">${escapeHtml(activity.label)}</span></span>
+      <span data-label="Activity"><span class="activity ${activity.className}">${escapeHtml(activity.label)}${activity.progress == null ? "" : ` · ${activity.progress}%`}</span>${activity.progress == null ? "" : `<span class="sync-track"><span style="width:${activity.progress}%"></span></span>`}</span>
       <span data-label="App">v${escapeHtml(device.app_version)}</span>
       <span data-label="Last contact">${device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}${device.last_error ? `<small class="attention">${escapeHtml(device.last_error)}</small>` : ""}</span>
     </button>`;

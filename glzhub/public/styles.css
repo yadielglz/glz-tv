@@ -61,6 +61,10 @@ p { color: var(--muted); line-height: 1.65; }
 .activity.watching { color: #dfff94; background: #26391e; }
 .activity.app-active { color: #b9deff; background: #193653; }
 .activity.offline { color: #ffaca9; background: #3d292c; }
+.activity.syncing { color: #ffe0cc; background: #4a2c1c; }
+.activity.sync-failed { color: #ffaca9; background: #3d292c; }
+.sync-track { display: block; width: 100%; height: 5px; margin-top: 7px; overflow: hidden; border-radius: 99px; background: #263a52; }
+.sync-track > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--orange), var(--lime)); transition: width .35s ease; }
 .attention { color: var(--danger); margin-top: 3px; }
 .section-toolbar { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-bottom: 20px; }
 .section-toolbar h3, .section-toolbar p { margin: 0; }

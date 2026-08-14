@@ -37,6 +37,12 @@ object GlzHubManager {
         val forceRefreshTriggered: Boolean = false
     )
 
+    data class SyncProgress(
+        val progress: Int,
+        val message: String,
+        val status: String = "syncing"
+    )
+
     sealed interface HubCommand {
         val id: String
     }
@@ -180,8 +186,15 @@ object GlzHubManager {
         val previousVersion = prefs.all[CONFIG_VERSION]?.toString()
         val experienceVersion = config.optString("experienceVersion", "default")
         val previousExperienceVersion = prefs.getString(EXPERIENCE_VERSION, null)
+        val forceRefreshToken = config.stringOrNull("forceRefreshToken")
+        val previousForceRefreshToken = prefs.getString("last_force_refresh_token", null)
+        val forceRefreshTriggered =
+            forceRefreshToken != null && forceRefreshToken != previousForceRefreshToken
         val appPackages = config.optJSONArray("visibleApps").toPackageSet()
-        if (version == previousVersion && experienceVersion == previousExperienceVersion) {
+        if (version == previousVersion &&
+            experienceVersion == previousExperienceVersion &&
+            !forceRefreshTriggered
+        ) {
             return SyncResult(false, null, visibleApps(prefs), commands(prefs, client))
         }
 
@@ -229,12 +242,8 @@ object GlzHubManager {
         if (config.has("wifiOnly")) {
             editor.putBoolean("wifi_only", config.optBoolean("wifiOnly", false))
         }
-        val forceRefreshToken = config.stringOrNull("forceRefreshToken")
-        val previousForceRefreshToken = prefs.getString("last_force_refresh_token", null)
-        var forceRefreshTriggered = false
-        if (forceRefreshToken != null && forceRefreshToken != previousForceRefreshToken) {
+        if (forceRefreshTriggered) {
             editor.putString("last_force_refresh_token", forceRefreshToken)
-            forceRefreshTriggered = true
         }
         config.optJSONObject("guestExperience")?.let {
             editor.putString(GUEST_EXPERIENCE, it.toString())
@@ -300,7 +309,11 @@ object GlzHubManager {
             .post(payload.toString().toRequestBody(jsonMediaType)).build()).execute().close()
     }
 
-    fun heartbeat(prefs: SharedPreferences, client: OkHttpClient) {
+    fun heartbeat(
+        prefs: SharedPreferences,
+        client: OkHttpClient,
+        syncProgress: SyncProgress? = null
+    ) {
         if (!prefs.getString(PAIRING_CODE, null).isNullOrBlank()) return
         val token = prefs.getString(DEVICE_TOKEN, null) ?: return
         val payload = JSONObject()
@@ -310,6 +323,13 @@ object GlzHubManager {
                 .put("label", prefs.getString(ACTIVITY_LABEL, null))
                 .put("packageName", prefs.getString(ACTIVITY_PACKAGE, null))
             )
+        syncProgress?.let { sync ->
+            payload.put("sync", JSONObject()
+                .put("status", sync.status)
+                .put("progress", sync.progress.coerceIn(0, 100))
+                .put("message", sync.message.take(160))
+            )
+        }
         client.newCall(
             Request.Builder()
                 .url("$HUB_URL/api/v1/devices/heartbeat")

@@ -466,7 +466,18 @@ internal fun TvScreen(
         }
     }
 
-    suspend fun loadSources(forceRefresh: Boolean = false) {
+    suspend fun reportHubSync(percent: Int, message: String, syncStatus: String = "syncing") {
+        withContext(Dispatchers.IO) {
+            GlzHubManager.heartbeat(
+                prefs, client, GlzHubManager.SyncProgress(percent, message, syncStatus)
+            )
+        }
+    }
+
+    suspend fun loadSources(
+        forceRefresh: Boolean = false,
+        onProgress: suspend (Int, String) -> Unit = { _, _ -> }
+    ) {
         val playlistUrl = sourcePreferences.playlistUrl
         if (playlistUrl.isBlank()) {
             showSettings = true
@@ -474,6 +485,7 @@ internal fun TvScreen(
         }
         loading = true
         status = "Loading your lineup…"
+        onProgress(45, "Restoring saved channel data")
         val cached = withContext(Dispatchers.IO) {
             playlistRepository.cached() to epgRepository.cached()
         }
@@ -489,11 +501,11 @@ internal fun TvScreen(
             }
         }
         runCatching {
-            withContext(Dispatchers.IO) {
-                val parsed = playlistRepository.load(forceRefresh)
-                val parsedGuide = epgRepository.load(forceRefresh)
-                Triple(parsed, parsedGuide, cached.first != null && cached.second != null)
-            }
+            onProgress(55, "Downloading TV playlist")
+            val parsed = withContext(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
+            onProgress(72, "Downloading programme guide")
+            val parsedGuide = withContext(Dispatchers.IO) { epgRepository.load(forceRefresh) }
+            Triple(parsed, parsedGuide, cached.first != null && cached.second != null)
         }.onSuccess { (parsed, parsedGuide, fromCache) ->
             channels.clear()
             channels.addAll(parsed)
@@ -504,6 +516,7 @@ internal fun TvScreen(
                 val lastId = prefs.getString(LAST_CHANNEL_ID, null)
                 selected = parsed.firstOrNull { it.id == lastId }
             }
+            onProgress(90, "Publishing Android TV home channels")
             withContext(Dispatchers.IO) {
                 TvHomePublisher.publish(context.applicationContext, parsed, parsedGuide)
             }
@@ -515,14 +528,20 @@ internal fun TvScreen(
         loading = false
     }
 
-    suspend fun syncEverythingNow(): String {
-        status = "Syncing everything from GLZ Hub…"
-        val (syncResult, radioCount) = withContext(Dispatchers.IO) {
-            val result = GlzHubManager.sync(prefs, client)
-            GlzHubManager.heartbeat(prefs, client)
-            val radio = RadioCatalogManager.load(prefs, client)
-            result to radio.stations.size
+    suspend fun syncEverythingNow(onProgress: (Int, String) -> Unit): String {
+        suspend fun report(percent: Int, message: String, syncStatus: String = "syncing") {
+            status = message
+            onProgress(percent, message)
+            reportHubSync(percent, message, syncStatus)
         }
+        return try {
+        report(5, "Contacting GLZ Hub")
+        val syncResult = withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
+        report(20, "Configuration received")
+        val radioCount = withContext(Dispatchers.IO) {
+            RadioCatalogManager.load(prefs, client).stations.size
+        }
+        report(35, "Radio stations updated")
         for (command in syncResult.commands) {
             handleManagedHubCommand(context, prefs, client, command) {
                 loadSources(forceRefresh = true)
@@ -541,8 +560,14 @@ internal fun TvScreen(
         keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
         homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
         osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
-        loadSources(forceRefresh = true)
-        return "Synced now · ${channels.size} TV channels · $radioCount radio stations · ${guide.programmeCount} guide entries"
+        loadSources(forceRefresh = true) { percent, message -> report(percent, message) }
+        val result = "Synced now · ${channels.size} TV channels · $radioCount radio stations · ${guide.programmeCount} guide entries"
+        report(100, result, "complete")
+        result
+        } catch (error: Throwable) {
+            runCatching { report(100, "Sync failed · ${error.message}", "failed") }
+            throw error
+        }
     }
 
     suspend fun checkForAppUpdate(): String {
@@ -582,7 +607,15 @@ internal fun TvScreen(
                 ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
                 else "Not connected"
         }
-        loadSources(forceRefresh = initialSync?.changed == true)
+        if (initialSync?.changed == true || initialSync?.forceRefreshTriggered == true) {
+            reportHubSync(35, "Configuration received")
+            loadSources(forceRefresh = true) { percent, message ->
+                reportHubSync(percent, message)
+            }
+            reportHubSync(100, "Sync complete", "complete")
+        } else {
+            loadSources()
+        }
         while (true) {
             delay(if (GlzHubManager.pairingCode(prefs) != null) 3_000L else 5_000L)
             runCatching {
@@ -611,7 +644,11 @@ internal fun TvScreen(
                     captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
                     keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
                     homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
-                    loadSources(forceRefresh = true)
+                    reportHubSync(35, "Configuration received")
+                    loadSources(forceRefresh = true) { percent, message ->
+                        reportHubSync(percent, message)
+                    }
+                    reportHubSync(100, "Sync complete", "complete")
                 }
                 hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
                     ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
@@ -832,7 +869,7 @@ internal fun TvScreen(
                 ?: AppSection.Home.name,
             sourceStatus = status,
             hubStatus = hubStatus,
-            onSyncNow = { syncEverythingNow() },
+            onSyncNow = { progress -> syncEverythingNow(progress) },
             onCheckForUpdate = { checkForAppUpdate() },
             onBeginHubEnrollment = {
                 withContext(Dispatchers.IO) {
@@ -3081,7 +3118,7 @@ private fun SettingsDialog(
     startDestination: String,
     sourceStatus: String,
     hubStatus: String,
-    onSyncNow: suspend () -> String,
+    onSyncNow: suspend ((Int, String) -> Unit) -> String,
     onCheckForUpdate: suspend () -> String,
     onBeginHubEnrollment: suspend () -> String,
     onDismiss: () -> Unit,
@@ -3111,6 +3148,7 @@ private fun SettingsDialog(
     var hubMessage by remember(hubStatus) { mutableStateOf(hubStatus) }
     var hubLoading by remember { mutableStateOf(false) }
     var syncLoading by remember { mutableStateOf(false) }
+    var syncProgress by remember { mutableStateOf(0) }
     var syncMessage by remember(sourceStatus) { mutableStateOf(sourceStatus) }
     val settingsScope = rememberCoroutineScope()
     val initialFocus = remember { FocusRequester() }
@@ -3210,15 +3248,34 @@ private fun SettingsDialog(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 15.sp
                                     )
+                                    if (syncLoading) {
+                                        Spacer(Modifier.height(12.dp))
+                                        LinearProgressIndicator(
+                                            progress = { syncProgress / 100f },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        Text(
+                                            "$syncProgress%",
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                     Spacer(Modifier.height(14.dp))
                                     TvSettingsButton(
                                         label = if (syncLoading) "Syncing everything…" else "↻ Sync Now",
                                         enabled = !syncLoading,
                                         onClick = {
                                             syncLoading = true
+                                            syncProgress = 0
                                             syncMessage = "Contacting GLZ Hub and refreshing all managed data…"
                                             settingsScope.launch {
-                                                syncMessage = runCatching { onSyncNow() }
+                                                syncMessage = runCatching {
+                                                    onSyncNow { percent, message ->
+                                                        syncProgress = percent
+                                                        syncMessage = message
+                                                    }
+                                                }
                                                     .getOrElse { "Sync failed · ${it.message}" }
                                                 syncLoading = false
                                             }

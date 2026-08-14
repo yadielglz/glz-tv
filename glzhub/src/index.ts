@@ -318,6 +318,10 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
   }
   patch.config_version = Number(currentRows[0].config_version || 0) + 1;
   patch.updated_at = new Date().toISOString();
+  patch.sync_status = "queued";
+  patch.sync_progress = 0;
+  patch.sync_message = "Waiting for TV";
+  patch.sync_updated_at = patch.updated_at;
   const devices = await supabaseJson(
     env,
     `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=*`,
@@ -342,7 +346,11 @@ async function forceRefreshDevice(request: Request, env: Env, deviceId: string):
   const patch = {
     force_refresh_token: token,
     config_version: Number(currentRows[0].config_version || 0) + 1,
-    updated_at: token
+    updated_at: token,
+    sync_status: "queued",
+    sync_progress: 0,
+    sync_message: "Waiting for TV",
+    sync_updated_at: token
   };
   const devices = await supabaseJson(
     env,
@@ -529,7 +537,11 @@ async function channelPolicy(request: Request, env: Env, targetType: string, tar
   const refreshFilter = targetType === 'device' ? `id=eq.${encodeURIComponent(targetId)}` : `box_group_id=eq.${encodeURIComponent(targetId)}`;
   const affectedDevices = await supabaseJson(env, `/rest/v1/devices?owner_id=eq.${user.id}&${refreshFilter}&select=id,config_version`) as Record<string, unknown>[];
   await Promise.all(affectedDevices.map((device) => supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}&owner_id=eq.${user.id}`, {
-    method: "PATCH", body: JSON.stringify({ config_version: Number(device.config_version || 0) + 1, force_refresh_token: crypto.randomUUID() })
+    method: "PATCH", body: JSON.stringify({
+      config_version: Number(device.config_version || 0) + 1,
+      force_refresh_token: crypto.randomUUID(),
+      sync_status: "queued", sync_progress: 0, sync_message: "Waiting for TV", sync_updated_at: new Date().toISOString()
+    })
   })));
   return json({ ok: true, rules: rules.length });
 }
@@ -741,6 +753,23 @@ async function heartbeat(request: Request, env: Env): Promise<Response> {
     app_version: typeof input.appVersion === "string" ? input.appVersion.slice(0, 40) : device.app_version,
     last_error: typeof input.lastError === "string" ? input.lastError.slice(0, 500) : null
   };
+  const sync = input.sync && typeof input.sync === "object" && !Array.isArray(input.sync)
+    ? input.sync as Record<string, unknown>
+    : null;
+  if (sync) {
+    const syncStatus = requiredString(sync.status, "sync status", 20);
+    if (!["syncing", "complete", "failed"].includes(syncStatus)) {
+      throw new Error("Invalid sync status");
+    }
+    const syncProgress = Number(sync.progress);
+    if (!Number.isInteger(syncProgress) || syncProgress < 0 || syncProgress > 100) {
+      throw new Error("Invalid sync progress");
+    }
+    patch.sync_status = syncStatus;
+    patch.sync_progress = syncProgress;
+    patch.sync_message = optionalString(sync.message, "sync message", 160);
+    patch.sync_updated_at = new Date().toISOString();
+  }
   if (activityType) {
     patch.activity_type = activityType;
     patch.activity_label = optionalString(activity?.label, "activity label", 160);
@@ -1243,12 +1272,17 @@ async function pushPlaylist(request: Request, env: Env, playlistId: string): Pro
   const { user } = await ownedPlaylist(request, env, playlistId);
   const token = crypto.randomUUID();
   const devices = await supabaseJson(env,
-    `/rest/v1/devices?owner_id=eq.${user.id}&or=(assigned_playlist_id.eq.${encodeURIComponent(playlistId)},assigned_playlist_id.is.null)&select=id`
+    `/rest/v1/devices?owner_id=eq.${user.id}&or=(assigned_playlist_id.eq.${encodeURIComponent(playlistId)},assigned_playlist_id.is.null)&select=id,config_version`
   ) as Record<string, unknown>[];
-  await supabaseJson(env,
-    `/rest/v1/devices?owner_id=eq.${user.id}&or=(assigned_playlist_id.eq.${encodeURIComponent(playlistId)},assigned_playlist_id.is.null)`,
-    { method: "PATCH", body: JSON.stringify({ force_refresh_token: token }) }
-  );
+  const pushedAt = new Date().toISOString();
+  await Promise.all(devices.map((device) => supabaseJson(env,
+    `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}&owner_id=eq.${user.id}`,
+    { method: "PATCH", body: JSON.stringify({
+      config_version: Number(device.config_version || 0) + 1,
+      force_refresh_token: token,
+      sync_status: "queued", sync_progress: 0, sync_message: "Waiting for TV", sync_updated_at: pushedAt
+    }) }
+  )));
   return json({ ok: true, devices: devices.length });
 }
 
