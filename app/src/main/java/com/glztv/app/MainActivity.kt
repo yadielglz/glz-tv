@@ -2157,23 +2157,46 @@ private fun ChannelLogo(
             ImageRequest.Builder(context)
                 .data(logoUrl)
                 .httpHeaders(headersBuilder.build())
-                .build()
+            .build()
         }
+    }
+    var logoLoaded by remember(model) { mutableStateOf(false) }
+    val initials = remember(channel.name) {
+        channel.name.split(Regex("\\s+"))
+            .mapNotNull { word -> word.firstOrNull(Char::isLetterOrDigit) }
+            .take(2)
+            .joinToString("")
+            .uppercase()
+            .ifBlank { "TV" }
     }
     Surface(
         modifier = modifier.then(Modifier.size(size)),
         shape = CircleShape,
-        color = Color.White
+        color = Color(0xFFF7F7F4),
+        border = BorderStroke(1.dp, Color.Black.copy(alpha = .12f)),
+        shadowElevation = 3.dp
     ) {
-        AsyncImage(
-            model = model,
-            contentDescription = "${channel.name} logo",
-            modifier = Modifier.fillMaxSize().clip(CircleShape),
-            contentScale = ContentScale.Crop,
-            placeholder = painterResource(R.drawable.ic_launcher),
-            error = painterResource(R.drawable.ic_launcher),
-            fallback = painterResource(R.drawable.ic_launcher)
-        )
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (!logoLoaded) {
+                Text(
+                    text = initials,
+                    color = Color(0xFF243447),
+                    fontSize = (size.value * .27f).sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1
+                )
+            }
+            if (model != null) {
+                AsyncImage(
+                    model = model,
+                    contentDescription = "${channel.name} logo",
+                    modifier = Modifier.fillMaxSize().padding(size * .14f),
+                    contentScale = ContentScale.Fit,
+                    onSuccess = { logoLoaded = true },
+                    onError = { logoLoaded = false }
+                )
+            }
+        }
     }
 }
 
