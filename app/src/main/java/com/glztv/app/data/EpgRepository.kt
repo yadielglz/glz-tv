@@ -21,15 +21,18 @@ class EpgRepository(
         val sourceUrl = preferences.epgUrl
         if (sourceUrl.isBlank()) return EpgGuide.Empty
         if (!forceRefresh) cached()?.let { return it }
-        val requestUrl = if (forceRefresh) {
-            "$sourceUrl${if ('?' in sourceUrl) '&' else '?'}glz_refresh=${System.currentTimeMillis()}"
-        } else sourceUrl
         var lastError: Throwable? = null
         repeat(if (forceRefresh) 3 else 1) { attempt ->
             runCatching {
-                EpgParser.parse(
-                    sourceClient.fetchText(requestUrl, preferences.requestHeaders)
-                ).also {
+                val xml = sourceClient.fetchText(
+                    sourceUrl,
+                    preferences.requestHeaders,
+                    bypassCache = forceRefresh
+                )
+                check(xml.trimStart().startsWith("<")) {
+                    "EPG server returned a non-XML response"
+                }
+                EpgParser.parse(xml).also {
                     check(it.programmeCount > 0) { "EPG did not contain programmes" }
                 }
             }.onSuccess { guide ->
