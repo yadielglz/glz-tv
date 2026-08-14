@@ -26,8 +26,7 @@ class EpgRepository(
             runCatching {
                 val xml = sourceClient.fetchText(
                     sourceUrl,
-                    preferences.requestHeaders,
-                    bypassCache = forceRefresh
+                    preferences.requestHeaders
                 )
                 check(xml.trimStart().startsWith("<")) {
                     "EPG server returned a non-XML response"
