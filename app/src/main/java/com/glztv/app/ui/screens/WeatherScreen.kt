@@ -1,6 +1,8 @@
 package com.glztv.app.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import com.glztv.app.ui.components.tvFocusableWithPhysics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -49,18 +51,10 @@ fun WeatherScreen(
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(
-        modifier.background(
-            Brush.verticalGradient(
-                listOf(
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = .6f),
-                    MaterialTheme.colorScheme.surface,
-                    MaterialTheme.colorScheme.background
-                )
-            )
-        ).padding(18.dp)
+        modifier
+            .background(Color.Transparent)
+            .padding(14.dp)
     ) {
-        // Android TV devices commonly expose a 960x540 logical viewport even on a 4K panel.
-        // At TV widths, retain the vertical composition so forecast cards are not height-starved.
         val narrow = maxWidth < 700.dp
         val shortTv = maxHeight < 500.dp
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -69,29 +63,51 @@ fun WeatherScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Weather", fontSize = if (shortTv) 28.sp else 38.sp,
-                        fontWeight = FontWeight.Black)
+                    Text(
+                        "Weather",
+                        fontSize = if (shortTv) 28.sp else 36.sp,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        letterSpacing = (-0.5).sp,
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            shadow = androidx.compose.ui.graphics.Shadow(
+                                color = Color.Black.copy(alpha = 0.5f),
+                                offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                                blurRadius = 6f
+                            )
+                        )
+                    )
                     Text(
                         weather?.location ?: location,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 16.sp
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.95f),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
-                Button(onClick = onRefresh, enabled = !loading) {
+                Button(
+                    onClick = onRefresh,
+                    enabled = !loading,
+                    modifier = Modifier.tvFocusableWithPhysics(
+                        shape = RoundedCornerShape(20.dp),
+                        focusedScale = 1.08f
+                    )
+                ) {
                     Icon(Icons.Default.Refresh, null)
-                    Text(if (loading) "Updating…" else "Refresh", Modifier.padding(start = 8.dp))
+                    Text(if (loading) "Updating…" else "Refresh", Modifier.padding(start = 8.dp), fontWeight = FontWeight.Bold)
                 }
             }
             if (loading && weather == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth(.45f))
+                    LinearProgressIndicator(Modifier.fillMaxWidth(.45f), color = MaterialTheme.colorScheme.primary)
                 }
             } else if (weather == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Weather unavailable", fontSize = 24.sp, fontWeight = FontWeight.Black)
-                        Text(error ?: "Check the configured weather location.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Weather unavailable", fontSize = 24.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            error ?: "Check the configured weather location.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             } else {
@@ -121,21 +137,53 @@ fun WeatherScreen(
 private fun CurrentWeatherCard(weather: WeatherInfo, modifier: Modifier) {
     Card(
         modifier,
-        shape = RoundedCornerShape(30.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        shape = RoundedCornerShape(32.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f)
+        ),
+        elevation = CardDefaults.cardElevation(10.dp)
     ) {
-        Row(
-            Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        )
+                    )
+                )
         ) {
-            Text(weatherSymbol(weather.weatherCode), fontSize = 72.sp)
-            Column(Modifier.padding(start = 24.dp)) {
-                Text("${weather.temperature}°", fontSize = 64.sp, fontWeight = FontWeight.Black)
-                Text(weatherDescription(weather.weatherCode), fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("CURRENT CONDITIONS", color = MaterialTheme.colorScheme.secondary,
-                    fontSize = 12.sp, fontWeight = FontWeight.Black)
+            Row(
+                Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(weatherSymbol(weather.weatherCode), fontSize = 76.sp)
+                Column(Modifier.padding(start = 24.dp)) {
+                    Text(
+                        "${weather.temperature}°",
+                        fontSize = 66.sp,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        weatherDescription(weather.weatherCode),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "CURRENT CONDITIONS",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
         }
     }
@@ -150,7 +198,7 @@ private fun ForecastRow(
 ) {
     if (days.isEmpty()) return
     if (stacked) {
-        Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             days.forEachIndexed { index, day ->
                 ForecastCard(day, index, Modifier.weight(1f), compact = true)
             }
@@ -173,28 +221,48 @@ private fun ForecastCard(
 ) {
     Surface(
         modifier,
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 6.dp
     ) {
         Column(
             Modifier.fillMaxSize().padding(if (compact) 10.dp else 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(if (index == 0) "TODAY" else dayLabel(day.date),
-                fontSize = 13.sp, fontWeight = FontWeight.Black)
-            Text(weatherSymbol(day.weatherCode), fontSize = if (compact) 34.sp else 42.sp)
+            Text(
+                if (index == 0) "TODAY" else dayLabel(day.date),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 0.5.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(weatherSymbol(day.weatherCode), fontSize = if (compact) 34.sp else 44.sp)
+            Spacer(Modifier.height(4.dp))
             Text(
                 "${day.high}°  /  ${day.low}°",
                 fontSize = if (compact) 19.sp else 22.sp,
-                fontWeight = FontWeight.Black
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurface
             )
-            Text(weatherDescription(day.weatherCode), maxLines = 1,
-                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            Text(
+                weatherDescription(day.weatherCode),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(4.dp))
-            Text("☂ ${day.precipitationChance}%", fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "☂ ${day.precipitationChance}%",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.secondary
+            )
         }
     }
 }

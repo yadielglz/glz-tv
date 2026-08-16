@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.glztv.app.TvScreen
 import com.glztv.app.data.PreferencesRepository
+import com.glztv.app.ui.theme.AmbientBackground
 import com.glztv.app.ui.theme.GlzTheme
 
 @Composable
@@ -24,7 +25,7 @@ fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int) {
         mutableStateOf(prefs.getString(THEME_MODE, "adaptive") ?: "adaptive")
     }
     GlzTheme(themeMode) {
-        Surface(Modifier.fillMaxSize()) {
+        AmbientBackground {
             TvScreen(themeMode, deepLinkChannelId, networkPermissionRevision) {
                 themeMode = it
                 prefs.edit().putString(THEME_MODE, it).apply()

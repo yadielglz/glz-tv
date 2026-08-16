@@ -18,6 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,26 +58,39 @@ fun SlimHeader(
         }
     }
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 10.dp,
-        tonalElevation = 4.dp
+        color = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = headerHorizontalPadding, vertical = 10.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = headerHorizontalPadding, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.LiveTv,
-                "Glz TV",
-                Modifier.size(32.dp),
-                tint = MaterialTheme.colorScheme.secondary
-            )
-            Spacer(Modifier.width(10.dp))
-            Text("Glz TV", Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
+                Icon(
+                    Icons.Default.LiveTv,
+                    "Glz TV",
+                    Modifier.size(34.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Glz TV",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.weight(1f))
             if (contentLoaded) {
                 if (!compactHeader) networkInfo?.let {
                     Column(
-                        Modifier.width(190.dp).padding(horizontal = 12.dp),
+                        Modifier.padding(horizontal = 14.dp),
                         horizontalAlignment = Alignment.End
                     ) {
                         Text(
@@ -98,13 +112,14 @@ fun SlimHeader(
                                 enabled = onWeatherClick != null,
                                 onClick = { onWeatherClick?.invoke() }
                             )
-                            .padding(horizontal = 20.dp, vertical = 4.dp),
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
                         horizontalAlignment = Alignment.End
                     ) {
                         Text(
                             "${weatherSymbol(it.weatherCode)}  ${it.temperature}°",
                             fontSize = 18.sp,
-                            fontWeight = FontWeight.Black
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Text(
                             it.location,
@@ -131,10 +146,25 @@ fun SlimHeader(
                     }
                 }
             }
-            IconButton(onClick = onRefresh, enabled = !loading) {
-                Icon(Icons.Default.Refresh, "Refresh")
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = onRefresh,
+                enabled = !loading,
+                modifier = Modifier.tvFocusableWithPhysics(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    focusedScale = 1.15f
+                )
+            ) {
+                Icon(Icons.Default.Refresh, "Refresh", tint = MaterialTheme.colorScheme.onSurface)
             }
-            FilledIconButton(onClick = onSettings) {
+            Spacer(Modifier.width(6.dp))
+            FilledIconButton(
+                onClick = onSettings,
+                modifier = Modifier.tvFocusableWithPhysics(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    focusedScale = 1.15f
+                )
+            ) {
                 Icon(Icons.Default.Settings, "Settings")
             }
         }

@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.glztv.app.BuildConfig
+import com.glztv.app.ui.components.tvFocusableWithPhysics
 
 @Composable
 fun ExpressiveNavigationRail(
@@ -45,44 +46,49 @@ fun ExpressiveNavigationRail(
     onSection: (AppSection) -> Unit
 ) {
     Surface(
-        modifier = Modifier.width(116.dp).fillMaxHeight(),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .92f),
-        tonalElevation = 6.dp
+        modifier = Modifier
+            .width(112.dp)
+            .fillMaxHeight(),
+        shape = RoundedCornerShape(32.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+        tonalElevation = 8.dp
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-        val compactHeight = maxHeight < 600.dp
-        Column(
-            Modifier.fillMaxSize().padding(
-                horizontal = 10.dp,
-                vertical = if (compactHeight) 10.dp else 18.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            RailDestination("Home", section == AppSection.Home, Icons.Default.Home, compactHeight) {
-                onSection(AppSection.Home)
+            val compactHeight = maxHeight < 600.dp
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(
+                        horizontal = 8.dp,
+                        vertical = if (compactHeight) 12.dp else 20.dp
+                    ),
+                verticalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                RailDestination("Home", section == AppSection.Home, Icons.Default.Home, compactHeight) {
+                    onSection(AppSection.Home)
+                }
+                RailDestination("Live TV", section == AppSection.Live, Icons.Default.LiveTv, compactHeight) {
+                    onSection(AppSection.Live)
+                }
+                RailDestination("Radio", section == AppSection.Radio, Icons.Default.Radio, compactHeight) {
+                    onSection(AppSection.Radio)
+                }
+                RailDestination("Weather", section == AppSection.Weather, Icons.Default.WbSunny, compactHeight) {
+                    onSection(AppSection.Weather)
+                }
+                RailDestination("You", section == AppSection.You, Icons.Default.Person, compactHeight) {
+                    onSection(AppSection.You)
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "v${BuildConfig.VERSION_NAME}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
+                )
             }
-            RailDestination("Live TV", section == AppSection.Live, Icons.Default.LiveTv, compactHeight) {
-                onSection(AppSection.Live)
-            }
-            RailDestination("Radio", section == AppSection.Radio, Icons.Default.Radio, compactHeight) {
-                onSection(AppSection.Radio)
-            }
-            RailDestination("Weather", section == AppSection.Weather, Icons.Default.WbSunny, compactHeight) {
-                onSection(AppSection.Weather)
-            }
-            RailDestination("You", section == AppSection.You, Icons.Default.Person, compactHeight) {
-                onSection(AppSection.You)
-            }
-            Spacer(Modifier.weight(1f))
-            Text(
-                "v${BuildConfig.VERSION_NAME}",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Black
-            )
-        }
         }
     }
 }
@@ -96,40 +102,49 @@ private fun RailDestination(
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
+    val activeColor = MaterialTheme.colorScheme.primary
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick)
-            .focusable(),
-        shape = RoundedCornerShape(22.dp),
-        border = BorderStroke(
-            if (focused) 3.dp else 0.dp,
-            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
-        ),
+            .tvFocusableWithPhysics(
+                shape = RoundedCornerShape(24.dp),
+                focusedScale = 1.08f,
+                glowColor = activeColor,
+                onFocusChange = { focused = it }
+            ),
+        shape = RoundedCornerShape(24.dp),
         color = when {
-            focused -> MaterialTheme.colorScheme.primary
-            selected -> MaterialTheme.colorScheme.secondaryContainer
+            focused -> activeColor
+            selected -> activeColor.copy(alpha = 0.20f)
             else -> Color.Transparent
         },
+        border = if (selected && !focused) BorderStroke(1.dp, activeColor.copy(alpha = 0.5f)) else null,
         contentColor = when {
             focused -> MaterialTheme.colorScheme.onPrimary
-            selected -> MaterialTheme.colorScheme.onSecondaryContainer
+            selected -> activeColor
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(
-                horizontal = 8.dp,
-                vertical = if (compactHeight) 8.dp else 13.dp
-            ),
+            Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 6.dp,
+                    vertical = if (compactHeight) 10.dp else 14.dp
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Icon(icon, label, Modifier.size(if (compactHeight) 22.dp else 25.dp))
+            Icon(
+                icon,
+                label,
+                Modifier.size(if (compactHeight) 22.dp else 26.dp)
+            )
             Text(
                 label,
-                fontWeight = FontWeight.Black,
+                fontWeight = if (selected || focused) FontWeight.ExtraBold else FontWeight.Medium,
                 fontSize = if (compactHeight) 11.sp else 12.sp,
                 maxLines = 1
             )

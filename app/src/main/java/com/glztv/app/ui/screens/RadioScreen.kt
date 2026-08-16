@@ -8,11 +8,13 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import com.glztv.app.ui.components.tvFocusableWithPhysics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -202,52 +204,75 @@ fun RadioScreen(
             } else false
         }
     ) {
-    Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text("GLZ Radio", fontSize = 34.sp, fontWeight = FontWeight.Black)
                 Text(
-                    "Live stations managed by GLZ Hub",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "GLZ Radio",
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-0.5).sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black.copy(alpha = 0.5f),
+                            offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                            blurRadius = 6f
+                        )
+                    )
+                )
+                Text(
+                    "Live audio streams managed by GLZ Hub",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.95f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
                 )
             }
             Surface(
                 shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
             ) {
                 Text(
                     "${stations.size} STATIONS",
-                    Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     fontWeight = FontWeight.Black,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Surface(
                 modifier = Modifier.weight(1.15f).fillMaxHeight(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .9f)
+                shape = RoundedCornerShape(30.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                tonalElevation = 8.dp
             ) {
                 if (loading) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        LinearProgressIndicator(Modifier.width(220.dp))
+                        LinearProgressIndicator(Modifier.width(220.dp), color = MaterialTheme.colorScheme.primary)
                     }
                 } else if (stations.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(status, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(status, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                 } else {
                     LazyColumn(
-                        Modifier.fillMaxSize().padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        Modifier.fillMaxSize().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(stations, key = { it.code }) { station ->
-                            RadioStationRow(station, selected?.code == station.code) {
+                            RadioStationRow(
+                                station = station,
+                                selected = selected?.code == station.code,
+                                isPlaying = playing && selected?.code == station.code
+                            ) {
                                 playStation(station)
                             }
                         }
@@ -256,72 +281,148 @@ fun RadioScreen(
             }
             Surface(
                 modifier = Modifier.weight(.85f).fillMaxHeight(),
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
+                shape = RoundedCornerShape(30.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                tonalElevation = 10.dp
             ) {
-                Column(
-                    Modifier.fillMaxSize().padding(30.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    AsyncImage(
-                        model = selected?.logoUrl ?: R.drawable.ic_launcher,
-                        contentDescription = selected?.name,
-                        modifier = Modifier.size(150.dp).clip(RoundedCornerShape(28.dp))
-                            .background(Color.White.copy(alpha = .08f)),
-                        contentScale = ContentScale.Fit
-                    )
-                    Text(
-                        selected?.name ?: "Choose a station",
-                        Modifier.padding(top = 24.dp),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        selected?.genre ?: "Browse the live station list",
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .7f)
-                    )
-                    Text(
-                        status.uppercase(Locale.ROOT),
-                        Modifier.padding(top = 16.dp),
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 12.sp
-                    )
-                    Row(
-                        Modifier.padding(top = 28.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Button(
-                            enabled = selected != null,
-                            onClick = {
-                                if (playing) player.pause()
-                                else if (player.mediaItemCount > 0) player.play()
-                                else selected?.let(::playStation)
-                            }
-                        ) {
-                            Icon(
-                                if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                null
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.90f)
+                                )
                             )
-                            Text(if (playing) "Pause" else "Play", Modifier.padding(start = 8.dp))
-                        }
-                        Button(
-                            enabled = selected != null || player.mediaItemCount > 0,
-                            onClick = ::stopRadio
+                        )
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        val parts = (selected?.name ?: "").split("|").map(String::trim).filter(String::isNotBlank)
+                        val displayTitle = if (parts.size > 1) parts.last() else (selected?.name ?: "Choose a station")
+                        val displayTag = if (parts.size > 1) parts.first() else ""
+
+                        Surface(
+                            shape = RoundedCornerShape(32.dp),
+                            color = Color.White.copy(alpha = 0.08f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.20f)),
+                            shadowElevation = 16.dp
                         ) {
-                            Icon(Icons.Default.Stop, null)
-                            Text("Stop", Modifier.padding(start = 8.dp))
+                            AsyncImage(
+                                model = selected?.logoUrl ?: R.drawable.ic_launcher,
+                                contentDescription = selected?.name,
+                                modifier = Modifier
+                                    .size(160.dp)
+                                    .padding(12.dp)
+                                    .clip(RoundedCornerShape(24.dp)),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+
+                        if (displayTag.isNotBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)),
+                                modifier = Modifier.padding(top = 18.dp)
+                            ) {
+                                Text(
+                                    displayTag,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        Text(
+                            displayTitle,
+                            Modifier.padding(top = if (displayTag.isNotBlank()) 8.dp else 20.dp),
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            selected?.genre ?: "Browse the live station list",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+
+                        if (playing && selected != null) {
+                            AudioSpectrumVisualizer(
+                                isPlaying = true,
+                                modifier = Modifier
+                                    .padding(top = 16.dp)
+                                    .width(60.dp)
+                                    .height(24.dp),
+                                barColor = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (playing) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, if (playing) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color.Transparent),
+                            modifier = Modifier.padding(top = 14.dp)
+                        ) {
+                            Text(
+                                status.uppercase(Locale.ROOT),
+                                Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                color = if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        Row(
+                            Modifier.padding(top = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Button(
+                                enabled = selected != null,
+                                onClick = {
+                                    if (playing) player.pause()
+                                    else if (player.mediaItemCount > 0) player.play()
+                                    else selected?.let(::playStation)
+                                },
+                                modifier = Modifier.tvFocusableWithPhysics(
+                                    shape = RoundedCornerShape(20.dp),
+                                    focusedScale = 1.08f
+                                )
+                            ) {
+                                Icon(
+                                    if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    null
+                                )
+                                Text(if (playing) "Pause" else "Play", Modifier.padding(start = 8.dp), fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                enabled = selected != null || player.mediaItemCount > 0,
+                                onClick = ::stopRadio,
+                                modifier = Modifier.tvFocusableWithPhysics(
+                                    shape = RoundedCornerShape(20.dp),
+                                    focusedScale = 1.08f
+                                )
+                            ) {
+                                Icon(Icons.Default.Stop, null)
+                                Text("Stop", Modifier.padding(start = 8.dp), fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
-                    Text(
-                        "Stop ends playback completely.",
-                        Modifier.padding(top = 18.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .6f),
-                        fontSize = 12.sp
-                    )
                 }
             }
         }
@@ -336,6 +437,44 @@ fun RadioScreen(
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun AudioSpectrumVisualizer(
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier,
+    barCount: Int = 12,
+    barColor: Color = MaterialTheme.colorScheme.secondary
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "audio-spectrum")
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        repeat(barCount) { index ->
+            val duration = remember(index) { 320 + (index * 65) % 400 }
+            val heightPercent by if (isPlaying) {
+                infiniteTransition.animateFloat(
+                    initialValue = 0.18f,
+                    targetValue = 0.95f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = duration, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "bar-$index"
+                )
+            } else {
+                remember { mutableStateOf(0.18f) }
+            }
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight(heightPercent)
+                    .background(barColor, RoundedCornerShape(2.dp))
+            )
         }
     }
 }
@@ -371,7 +510,7 @@ private fun RadioNowPlayingScreensaver(
             contentScale = ContentScale.Fit
         )
         Surface(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(58.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(64.dp),
             color = Color.Black.copy(alpha = .78f),
             contentColor = Color.White
         ) {
@@ -379,8 +518,9 @@ private fun RadioNowPlayingScreensaver(
                 Modifier.fillMaxSize().padding(horizontal = 28.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.size(8.dp).background(MaterialTheme.colorScheme.secondary, CircleShape)
+                AudioSpectrumVisualizer(
+                    isPlaying = true,
+                    modifier = Modifier.width(36.dp).height(24.dp)
                 )
                 Text(
                     "GLZ RADIO",
@@ -406,57 +546,117 @@ private fun RadioNowPlayingScreensaver(
 private fun RadioStationRow(
     station: RadioStation,
     selected: Boolean,
+    isPlaying: Boolean,
     onPlay: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
-    val parts = station.name.split("|").map(String::trim)
-    val title = parts.lastOrNull().orEmpty().ifBlank { station.name }
-    val frequency = parts.takeIf { it.size > 1 }?.firstOrNull().orEmpty()
+    val rawName = station.name.trim()
+    val parts = rawName.split("|").map(String::trim).filter(String::isNotBlank)
+    val title = if (parts.size > 1) parts.last() else rawName
+    val tag = if (parts.size > 1) parts.first() else ""
+    val activeColor = MaterialTheme.colorScheme.primary
+
     Surface(
-        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
-            .clickable(onClick = onPlay).focusable(),
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(
-            if (focused) 4.dp else 1.dp,
-            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
-        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onPlay)
+            .tvFocusableWithPhysics(
+                shape = RoundedCornerShape(22.dp),
+                focusedScale = 1.04f,
+                glowColor = activeColor,
+                onFocusChange = { focused = it }
+            ),
+        shape = RoundedCornerShape(22.dp),
         color = when {
-            focused -> MaterialTheme.colorScheme.primary
-            selected -> MaterialTheme.colorScheme.secondaryContainer
-            else -> MaterialTheme.colorScheme.surfaceContainerHigh
+            focused -> activeColor
+            selected -> activeColor.copy(alpha = 0.20f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f)
         },
-        contentColor = if (focused) {
-            MaterialTheme.colorScheme.onPrimary
-        } else MaterialTheme.colorScheme.onSurface
+        border = BorderStroke(
+            1.dp,
+            when {
+                focused -> activeColor
+                selected -> activeColor.copy(alpha = 0.60f)
+                else -> Color.White.copy(alpha = 0.10f)
+            }
+        ),
+        contentColor = when {
+            focused -> MaterialTheme.colorScheme.onPrimary
+            selected -> activeColor
+            else -> MaterialTheme.colorScheme.onSurface
+        }
     ) {
         Row(
-            Modifier.padding(12.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            AsyncImage(
-                model = station.logoUrl ?: R.drawable.ic_launcher,
-                contentDescription = null,
-                modifier = Modifier.size(54.dp).clip(RoundedCornerShape(13.dp))
-                    .background(Color.White.copy(alpha = .08f)),
-                contentScale = ContentScale.Fit
-            )
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White.copy(alpha = 0.10f),
+                modifier = Modifier.size(56.dp)
+            ) {
+                AsyncImage(
+                    model = station.logoUrl ?: R.drawable.ic_launcher,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Fit
+                )
+            }
             Column(Modifier.weight(1f)) {
+                if (tag.isNotBlank()) {
+                    Text(
+                        tag.uppercase(Locale.ROOT),
+                        color = if (focused) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                        else if (selected) activeColor
+                        else MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 10.sp,
+                        letterSpacing = 0.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Text(
-                    title, fontWeight = FontWeight.Black, fontSize = 17.sp, maxLines = 1,
+                    title,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 17.sp,
+                    maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    listOf(frequency, station.genre).filter(String::isNotBlank).joinToString(" · "),
-                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                    station.genre.ifBlank { "Radio Stream" },
+                    color = if (focused) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.80f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (selected) {
-                Icon(
-                    Icons.Default.Radio,
-                    "Playing station",
-                    tint = MaterialTheme.colorScheme.secondary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (isPlaying) {
+                        AudioSpectrumVisualizer(
+                            isPlaying = true,
+                            modifier = Modifier
+                                .width(22.dp)
+                                .height(16.dp),
+                            barColor = if (focused) MaterialTheme.colorScheme.onPrimary else activeColor
+                        )
+                    }
+                    Icon(
+                        Icons.Default.Radio,
+                        "Playing station",
+                        tint = if (focused) MaterialTheme.colorScheme.onPrimary else activeColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

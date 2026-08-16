@@ -165,6 +165,8 @@ import com.glztv.app.player.TrackPreferenceManager
 import com.glztv.app.player.PlaybackPerformance
 import com.glztv.app.player.PlaybackDiagnosticsPanel
 import com.glztv.app.ui.theme.GlzTheme
+import com.glztv.app.ui.theme.AmbientBackground
+import com.glztv.app.ui.components.tvFocusableWithPhysics
 import com.glztv.app.ui.navigation.AppSection
 import com.glztv.app.ui.navigation.ExpressiveNavigationRail
 import com.glztv.app.ui.components.SlimHeader
@@ -755,7 +757,7 @@ internal fun TvScreen(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         topBar = {
             if (!immersive) {
             SlimHeader(
@@ -1046,56 +1048,48 @@ private fun GuestHubHome(
 
     BoxWithConstraints(
         modifier
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = .35f),
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            )
-            .padding(horizontal = 6.dp, vertical = 6.dp)
+            .background(Color.Transparent)
+            .padding(horizontal = 4.dp, vertical = 4.dp)
     ) {
         val compactHeight = maxHeight < 420.dp
-        val guestHeight = if (compactHeight) 120.dp else (maxHeight * .38f).coerceIn(170.dp, 210.dp)
-        val appHeight = if (compactHeight) 84.dp else (maxHeight * .21f).coerceIn(88.dp, 106.dp)
+        val guestHeight = if (compactHeight) 130.dp else (maxHeight * .40f).coerceIn(180.dp, 220.dp)
+        val appHeight = if (compactHeight) 90.dp else (maxHeight * .23f).coerceIn(96.dp, 114.dp)
         val visibleCards = when {
             maxWidth >= 840.dp -> 5
             maxWidth >= 640.dp -> 4
             maxWidth >= 460.dp -> 3
             else -> 2
         }
-        val cardSpacing = 12.dp
+        val cardSpacing = 14.dp
         val rowEdgePadding = 4.dp
         val appWidth = (
             (maxWidth - rowEdgePadding * 2 - cardSpacing * (visibleCards - 1)) / visibleCards
-        ).coerceAtLeast(132.dp)
+        ).coerceAtLeast(140.dp)
 
         Column(
             Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(if (compactHeight) 6.dp else 10.dp)
+            verticalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 14.dp)
         ) {
             Card(
                 Modifier
                     .fillMaxWidth()
                     .height(guestHeight),
-                shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(32.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ),
-                elevation = CardDefaults.cardElevation(10.dp)
+                elevation = CardDefaults.cardElevation(12.dp)
             ) {
                 Box(
                     Modifier
                         .fillMaxSize()
                         .background(
-                            Brush.horizontalGradient(
+                            Brush.linearGradient(
                                 listOf(
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    MaterialTheme.colorScheme.surface
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                                 )
                             )
                         )
@@ -1113,8 +1107,8 @@ private fun GuestHubHome(
                                 .background(
                                     Brush.verticalGradient(
                                         listOf(
-                                            Color.Black.copy(alpha = 0.35f),
-                                            Color.Black.copy(alpha = 0.70f)
+                                            Color.Black.copy(alpha = 0.25f),
+                                            Color.Black.copy(alpha = 0.75f)
                                         )
                                     )
                                 )
@@ -1123,7 +1117,7 @@ private fun GuestHubHome(
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 24.dp, vertical = if (compactHeight) 10.dp else 16.dp),
+                            .padding(horizontal = 28.dp, vertical = if (compactHeight) 12.dp else 18.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Row(
@@ -1133,15 +1127,25 @@ private fun GuestHubHome(
                             Column(Modifier.weight(1f).padding(end = if (previewChannel != null) 18.dp else 0.dp)) {
                                 Text(
                                     "$timeGreeting, ${guestName.ifBlank { "Guest" }}",
-                                    fontSize = if (compactHeight) 24.sp else 30.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = if (compactHeight) 26.sp else 34.sp,
                                     fontWeight = FontWeight.Black,
+                                    letterSpacing = (-0.5).sp,
+                                    style = MaterialTheme.typography.headlineLarge.copy(
+                                        shadow = androidx.compose.ui.graphics.Shadow(
+                                            color = Color.Black.copy(alpha = 0.5f),
+                                            offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                                            blurRadius = 6f
+                                        )
+                                    ),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     experience.welcomeMessage,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.95f),
                                     fontSize = if (compactHeight) 14.sp else 16.sp,
+                                    fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -1154,17 +1158,17 @@ private fun GuestHubHome(
                                     Text(
                                         stayLine,
                                         fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.secondary,
+                                        color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(top = 4.dp),
+                                        modifier = Modifier.padding(top = 6.dp),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
                             previewChannel?.let { channel ->
-                                val videoHeight = if (compactHeight) 72.dp
-                                else (guestHeight - 58.dp).coerceIn(100.dp, 145.dp)
+                                val videoHeight = if (compactHeight) 76.dp
+                                else (guestHeight - 58.dp).coerceIn(104.dp, 150.dp)
                                 ChannelPreviewCard(
                                     channel = channel,
                                     captionLanguage = captionLanguage,
@@ -1584,23 +1588,35 @@ private fun LiveTvHubCard(
         accent = MaterialTheme.colorScheme.primary
     ) {
         Box(
-            Modifier.fillMaxSize().background(
-                Brush.linearGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.primaryContainer
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
                     )
-                )
-            ),
+                ),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.LiveTv, "Live TV", Modifier.size(28.dp), tint = Color.White)
-                Spacer(Modifier.height(2.dp))
-                Text("Live TV", color = Color.White, fontSize = 16.sp,
-                    fontWeight = FontWeight.Black)
-                Text("Channels & guide", color = Color.White.copy(alpha = .72f),
-                    fontSize = 11.sp, maxLines = 1)
+                Icon(Icons.Default.LiveTv, "Live TV", Modifier.size(30.dp), tint = Color.White)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Live TV",
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    "Channels & guide",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -1644,32 +1660,61 @@ private fun EntertainmentAppCard(
         },
         accent = app.accent
     ) {
-        Row(
-            Modifier.fillMaxSize().padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            app.accent.copy(alpha = 0.25f),
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        )
+                    )
+                )
         ) {
-            AdaptiveAppIcon(
-                icon = installedIcon,
-                appName = app.name,
-                accent = app.accent,
-                size = 46.dp
-            )
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    app.name,
-                    fontSize = appNameSize,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AdaptiveAppIcon(
+                    icon = installedIcon,
+                    appName = app.name,
+                    accent = app.accent,
+                    size = 44.dp
                 )
-                Text(
-                    if (launchIntent != null) "Open" else "Install",
-                    color = if (launchIntent != null) MaterialTheme.colorScheme.secondary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium
-                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        app.name,
+                        fontSize = appNameSize,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (launchIntent != null) app.accent.copy(alpha = 0.20f)
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (launchIntent != null) app.accent.copy(alpha = 0.40f)
+                            else Color.Transparent
+                        )
+                    ) {
+                        Text(
+                            if (launchIntent != null) "Open" else "Install",
+                            color = if (launchIntent != null) app.accent
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -1700,7 +1745,9 @@ private fun AdaptiveAppIcon(
                 contentScale = if (isAdaptive) ContentScale.Crop else ContentScale.Fit
             )
             else -> Box(
-                Modifier.fillMaxSize().background(accent),
+                Modifier.fillMaxSize().background(
+                    Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.7f)))
+                ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(appName.take(2).uppercase(), color = Color.White,
@@ -1718,21 +1765,25 @@ private fun PremiumFocusCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(24.dp)
     Card(
         onClick = onClick,
-        modifier = modifier.onFocusChanged { focused = it.isFocused },
+        modifier = modifier.tvFocusableWithPhysics(
+            shape = shape,
+            focusedScale = 1.07f,
+            glowColor = accent,
+            onFocusChange = { focused = it }
+        ),
         shape = shape,
         border = BorderStroke(
-            if (focused) 5.dp else 1.dp,
-            if (focused) MaterialTheme.colorScheme.secondary
-            else Color.White.copy(alpha = .08f)
+            1.dp,
+            if (focused) accent.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.12f)
         ),
         colors = CardDefaults.cardColors(
             containerColor = if (focused) MaterialTheme.colorScheme.surfaceContainerHighest
-            else MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
         ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(if (focused) 16.dp else 2.dp)
     ) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize(), content = content)
@@ -2167,7 +2218,13 @@ private fun EpgGridRow(
                 val width = slotWidth * ((clippedEnd - clippedStart) / halfHour)
                 Surface(
                     modifier = Modifier.offset(x = x).width(maxOf(width, 52.dp))
-                        .fillMaxHeight().padding(3.dp).clickable(onClick = onWatch),
+                        .fillMaxHeight().padding(3.dp)
+                        .clickable(onClick = onWatch)
+                        .tvFocusableWithPhysics(
+                            shape = RoundedCornerShape(13.dp),
+                            focusedScale = 1.04f,
+                            glowColor = MaterialTheme.colorScheme.secondary
+                        ),
                     shape = RoundedCornerShape(13.dp),
                     color = if (programme.startMillis <= System.currentTimeMillis() &&
                         programme.endMillis > System.currentTimeMillis()
@@ -2292,16 +2349,16 @@ private fun ChannelCard(
     else MaterialTheme.colorScheme.surfaceVariant
     Card(
         Modifier.fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick)
-            .focusable(),
+            .tvFocusableWithPhysics(
+                shape = RoundedCornerShape(20.dp),
+                focusedScale = 1.03f,
+                glowColor = MaterialTheme.colorScheme.secondary,
+                onFocusChange = { focused = it }
+            ),
         shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(
-            if (focused) 5.dp else 1.dp,
-            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
-        ),
         colors = CardDefaults.cardColors(containerColor = container),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(if (focused) 8.dp else 0.dp)
     ) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             ChannelLogo(channel, 48.dp, guide)
