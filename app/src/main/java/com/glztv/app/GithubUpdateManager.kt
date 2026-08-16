@@ -118,7 +118,7 @@ object GithubUpdateManager {
             }
             target
         }
-        check(apk.length() > 1_000_000) { "Downloaded APK is incomplete" }
+        check(apk.length() > 0) { "Downloaded APK is empty" }
         val packageInfo = context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
             ?: error("Downloaded file is not a valid APK")
         check(packageInfo.packageName == expectedPackageName) {

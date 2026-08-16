@@ -4,8 +4,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#08111f">
-  <title>GLZ Hub</title>
+  <meta name="theme-color" content="#050a12">
+  <title>GLZ Hub | Device Management & TV Studio Control Center</title>
+  <meta name="description" content="Centralized device management, box groups, playlist studio, guest experiences, and XMLTV EPG schedule editor for GLZ TV displays.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@500;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
 
@@ -14,7 +18,7 @@
     <aside class="rail">
       <a class="brand" href="/">
         <span class="brand-mark">G</span>
-        <span><strong>GLZ Hub</strong><small>Device management</small></span>
+        <span><strong>GLZ Hub</strong><small>Control Center</small></span>
       </a>
       <nav>
         <button class="nav active" data-view="devices">▣ <span>Devices</span></button>
@@ -36,13 +40,13 @@
     <main>
       <section id="authView" class="auth-wrap">
         <div class="auth-card">
-          <div class="eyebrow">FAMILY ENTERTAINMENT, ORGANIZED</div>
+          <div class="eyebrow">FAMILY ENTERTAINMENT & CONTROL</div>
           <h1>Every screen.<br><em>One calm place.</em></h1>
-          <p>Manage guest names, channels, guides, and entertainment apps across every GLZ TV.</p>
+          <p>Manage guest names, channels, guides, and entertainment apps across every GLZ TV display.</p>
           <form id="authForm">
-            <label>Email<input id="email" type="email" autocomplete="email" required></label>
-            <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
-            <button class="primary" type="submit">Sign in</button>
+            <label>Email<input id="email" type="email" autocomplete="email" required placeholder="admin@example.com"></label>
+            <label>Password<input id="password" type="password" autocomplete="current-password" required placeholder="••••••••••••"></label>
+            <button class="primary" type="submit">Sign in to GLZ Hub</button>
             <p id="authError" class="error"></p>
           </form>
         </div>
@@ -54,10 +58,8 @@
           <h1>Choose your<br><em>admin password.</em></h1>
           <p>Your email has been verified. Create the password you’ll use to manage your televisions.</p>
           <form id="inviteForm">
-            <label>New password<input id="invitePassword" type="password" autocomplete="new-password" minlength="10"
-                required></label>
-            <label>Confirm password<input id="invitePasswordConfirm" type="password" autocomplete="new-password"
-                minlength="10" required></label>
+            <label>New password<input id="invitePassword" type="password" autocomplete="new-password" minlength="10" required placeholder="At least 10 characters"></label>
+            <label>Confirm password<input id="invitePasswordConfirm" type="password" autocomplete="new-password" minlength="10" required placeholder="Repeat new password"></label>
             <button class="primary" type="submit">Activate administrator account</button>
             <p id="inviteError" class="error"></p>
           </form>
@@ -71,8 +73,7 @@
             <h2 id="pageTitle">Your TVs</h2>
           </div>
           <div class="header-actions">
-            <button id="refreshDashboardButton" type="button" class="secondary" title="Refresh all device status">🔄
-              Refresh</button>
+            <button id="refreshDashboardButton" type="button" class="secondary" title="Refresh all device status">🔄 Refresh</button>
             <button id="pairButton" class="primary">＋ Pair a TV</button>
           </div>
         </header>
@@ -94,7 +95,11 @@
 
         <section id="epgView" class="hidden">
           <div class="epg-toolbar">
-            <div><div class="eyebrow">XMLTV PROGRAMME GUIDE</div><h3>EPG Studio</h3><p>Load, inspect, edit and publish complete television schedules.</p></div>
+            <div>
+              <div class="eyebrow">XMLTV PROGRAMME GUIDE</div>
+              <h3>EPG Studio</h3>
+              <p>Load, inspect, edit and publish complete television schedules.</p>
+            </div>
             <div class="epg-toolbar-actions">
               <button id="epgExportXml" class="secondary" disabled>⇩ Export XMLTV</button>
               <button id="epgExportGz" class="secondary" disabled>⇩ Export XML.GZ</button>
@@ -111,7 +116,7 @@
           <div id="epgNotice" class="epg-notice">Select a playlist, then load its managed guide or open an XMLTV source.</div>
           <div class="epg-workspace">
             <div class="epg-workspace-tools">
-              <input id="epgChannelFilter" placeholder="⌕  Filter channels…">
+              <input id="epgChannelFilter" placeholder="⌕ Filter channels…">
               <label>Schedule date<input id="epgScheduleDate" type="date"></label>
               <button id="epgAddChannel" class="secondary" disabled>＋ Add channel</button>
               <button id="epgAddProgramme" class="primary" disabled>＋ Add programme</button>
@@ -121,9 +126,20 @@
         </section>
 
         <section id="groupsView" class="hidden">
-          <div class="section-toolbar"><div><div class="eyebrow">CHANNEL ACCESS CONTROL</div><h3>Box Groups</h3><p>Assign a shared lineup and channel policy to multiple GLZ TV boxes.</p></div><button id="addBoxGroup" class="primary">＋ Add box group</button></div>
+          <div class="section-toolbar">
+            <div>
+              <div class="eyebrow">CHANNEL ACCESS CONTROL</div>
+              <h3>Box Groups</h3>
+              <p>Assign a shared lineup and channel policy to multiple GLZ TV boxes.</p>
+            </div>
+            <button id="addBoxGroup" class="primary">＋ Add box group</button>
+          </div>
           <div id="boxGroupList" class="management-list"></div>
-          <div id="boxGroupEmpty" class="empty"><h3>No box groups yet</h3><p>Create a group such as Puerto Rico Rooms, Lobby TVs, or Sports Bar.</p></div>
+          <div id="boxGroupEmpty" class="empty">
+            <div class="empty-icon">▦</div>
+            <h3>No box groups yet</h3>
+            <p>Create a group such as Puerto Rico Rooms, Lobby TVs, or Sports Bar.</p>
+          </div>
         </section>
 
         <section id="appsView" class="hidden">
@@ -136,6 +152,7 @@
           </div>
           <div id="appList" class="management-list"></div>
           <div id="appEmpty" class="empty hidden">
+            <div class="empty-icon">⬡</div>
             <h3>No managed apps yet</h3>
             <p>Add an app once, then deploy it to any paired television.</p>
           </div>
@@ -151,6 +168,7 @@
           </div>
           <div id="radioList" class="management-list"></div>
           <div id="radioEmpty" class="empty hidden">
+            <div class="empty-icon">🎙️</div>
             <h3>No radio streams configured</h3>
             <p>Create live audio stations to broadcast across GLZ Radio app.</p>
           </div>
@@ -173,6 +191,7 @@
           <input id="m3uFileInput" class="hidden" type="file" accept=".m3u,.m3u8,audio/x-mpegurl">
           <div id="playlistList" class="management-list"></div>
           <div id="studioEmpty" class="empty hidden">
+            <div class="empty-icon">🎬</div>
             <h3>No TV playlists yet</h3>
             <p>Create a channel lineup, then assign it to a television.</p>
           </div>
@@ -188,6 +207,7 @@
           </div>
           <div id="siteList" class="management-list"></div>
           <div id="siteEmpty" class="empty hidden">
+            <div class="empty-icon">⌂</div>
             <h3>No properties yet</h3>
             <p>Create a property before assigning televisions.</p>
           </div>
@@ -245,7 +265,7 @@
             </div>
             <div id="pairingRequestList"></div>
           </div>
-          <p class="field-help">Pairing remotely? Enter the code shown on the television instead.</p>
+          <p class="field-help" style="margin-top: 18px;">Pairing remotely? Enter the code shown on the television instead.</p>
           <form id="pairForm" class="form-grid">
             <label>Pairing code<input id="pairingCode" placeholder="GLZ-ABC123" maxlength="10" required></label>
             <label>Device name<input id="pairDeviceName" placeholder="Living Room"></label>
@@ -283,7 +303,10 @@
           </select>
         </label>
         <label class="wide">Box group<select id="deviceBoxGroup"><option value="">No box group</option></select></label>
-        <div class="wide channel-policy-launch"><span><strong>Channel access</strong><small>Individual box rules override its group.</small></span><button id="editDeviceChannelPolicy" type="button" class="secondary">Set channel policy</button></div>
+        <div class="wide channel-policy-launch">
+          <span><strong>Channel access</strong><small>Individual box rules override its group.</small></span>
+          <button id="editDeviceChannelPolicy" type="button" class="secondary">Set channel policy</button>
+        </div>
         <label>Room number<input id="roomNumber" maxlength="30"></label>
         <label>Arrival date<input id="arrivalDate" type="date"></label>
         <label>Departure date<input id="departureDate" type="date"></label>
@@ -333,22 +356,20 @@
           <div id="visibleApps" class="app-checklist"></div>
         </fieldset>
         <label class="wide">Deploy a managed app
-          <div class="inline-action"><select id="deployApp"></select><button id="deployButton" type="button"
-              class="secondary">Send to TV</button></div>
-          <small>The TV will open the Play Store or secure repository installer. Android may require guest
-            confirmation.</small>
+          <div class="inline-action"><select id="deployApp"></select><button id="deployButton" type="button" class="secondary">Send to TV</button></div>
+          <small>The TV will open the Play Store or secure repository installer.</small>
         </label>
       </div>
       <p id="deviceError" class="error"></p>
       <div class="form-actions">
-        <button id="forceRefreshDevice" type="button" class="secondary" style="margin-right: auto;">⚡ Force Refresh EPG
-          &amp; M3U</button>
+        <button id="forceRefreshDevice" type="button" class="secondary" style="margin-right: auto;">⚡ Force Refresh EPG &amp; M3U</button>
         <button id="unpairDevice" type="button" class="danger-button">Remove pairing</button>
         <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button type="submit" class="primary">Save &amp; sync</button>
       </div>
     </form>
   </dialog>
+
   <dialog id="boxGroupDialog">
     <form id="boxGroupForm">
       <div class="dialog-head"><div><div class="eyebrow">BOX GROUP</div><h3 id="boxGroupDialogTitle">Add box group</h3></div><button class="icon-button" type="button" data-close-box-group>×</button></div>
@@ -396,10 +417,10 @@
         <label>Address or location<input id="siteAddress" maxlength="240" placeholder="Orlando, Florida"></label>
       </div>
       <p id="siteError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-site>Cancel</button><button
-          class="primary" type="submit">Save property</button></div>
+      <div class="form-actions"><button type="button" class="secondary" data-close-site>Cancel</button><button class="primary" type="submit">Save property</button></div>
     </form>
   </dialog>
+
   <dialog id="appDialog">
     <form id="appForm">
       <div class="dialog-head">
@@ -417,15 +438,14 @@
             <option value="repository">My HTTPS repository</option>
           </select></label>
         <label>Version (optional)<input id="appVersion" maxlength="40"></label>
-        <label class="wide">APK URL for repository apps<input id="appUrl" type="url"
-            placeholder="https://repo.example.com/app.apk"></label>
+        <label class="wide">APK URL for repository apps<input id="appUrl" type="url" placeholder="https://repo.example.com/app.apk"></label>
         <label class="wide">SHA-256 checksum (recommended)<input id="appSha" maxlength="64"></label>
       </div>
       <p id="appError" class="error"></p>
-      <div class="form-actions"><button id="deleteApp" type="button" class="danger-button hidden">Delete app</button><button type="button" class="secondary" data-close-app>Cancel</button><button
-          id="saveApp" class="primary" type="submit">Add to library</button></div>
+      <div class="form-actions"><button id="deleteApp" type="button" class="danger-button hidden">Delete app</button><button type="button" class="secondary" data-close-app>Cancel</button><button id="saveApp" class="primary" type="submit">Add to library</button></div>
     </form>
   </dialog>
+
   <dialog id="radioDialog">
     <form id="radioForm">
       <div class="dialog-head">
@@ -440,16 +460,14 @@
         <label>Station code<input id="radioCode" required maxlength="40" placeholder="GLZ-LOUNGE"></label>
         <label>Genre<input id="radioGenre" required maxlength="60" placeholder="Chillout / Lounge"></label>
         <label>Bitrate (kbps)<input id="radioBitrate" type="number" value="128" min="32" max="320"></label>
-        <label class="wide">Audio stream URL<input id="radioStreamUrl" type="url" required
-            placeholder="https://stream.glztech.com/lounge"></label>
-        <label class="wide">Logo URL (optional)<input id="radioLogoUrl" type="url"
-            placeholder="https://…/logo.png"></label>
+        <label class="wide">Audio stream URL<input id="radioStreamUrl" type="url" required placeholder="https://stream.glztech.com/lounge"></label>
+        <label class="wide">Logo URL (optional)<input id="radioLogoUrl" type="url" placeholder="https://…/logo.png"></label>
       </div>
       <p id="radioError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-radio>Cancel</button><button
-          class="primary" type="submit">Save radio station</button></div>
+      <div class="form-actions"><button type="button" class="secondary" data-close-radio>Cancel</button><button class="primary" type="submit">Save radio station</button></div>
     </form>
   </dialog>
+
   <dialog id="playlistDialog" style="max-width: 680px; width: 90vw;">
     <form id="playlistForm">
       <div class="dialog-head">
@@ -463,32 +481,22 @@
         <label>Title<input id="playlistTitle" required maxlength="120" placeholder="Main TV Lineup"></label>
         <label>Category<input id="playlistCategory" required maxlength="60" placeholder="Live TV"></label>
         <input id="playlistTargetApp" type="hidden" value="tv">
-        <label class="wide">Description<textarea id="playlistDescription" rows="2" maxlength="500"
-            placeholder="Primary M3U channel stream lineup for television screens."></textarea></label>
-        <label class="wide">Artwork / Group Logo URL<input id="playlistArtworkUrl" type="url"
-            placeholder="https://…/logo.png"></label>
-        <label class="wide">XMLTV EPG URL<input id="playlistEpgUrl" type="url"
-            placeholder="https://play.glztech.com/epg.xml.gz"></label>
+        <label class="wide">Description<textarea id="playlistDescription" rows="2" maxlength="500" placeholder="Primary M3U channel stream lineup for television screens."></textarea></label>
+        <label class="wide">Artwork / Group Logo URL<input id="playlistArtworkUrl" type="url" placeholder="https://…/logo.png"></label>
+        <label class="wide">XMLTV EPG URL<input id="playlistEpgUrl" type="url" placeholder="https://play.glztech.com/epg.xml.gz"></label>
         <label class="check wide"><input id="playlistPublished" type="checkbox" checked> Publish this lineup to assigned televisions</label>
       </div>
 
-      <!-- Channel & Track Items Section -->
-      <div id="playlistItemsSection"
-        style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+      <div id="playlistItemsSection" style="margin-top: 1.5rem; border-top: 1px solid var(--line); padding-top: 1rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-          <h4 style="margin: 0; font-size: 0.95rem; text-transform: uppercase; tracking: 0.05em;">Channels / Media Items
-          </h4>
-          <button type="button" id="addPlaylistItemButton" class="secondary"
-            style="font-size: 0.8rem; padding: 0.25rem 0.6rem;">＋ Add Channel</button>
+          <h4 style="margin: 0; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-main);">Channels / Media Items</h4>
+          <button type="button" id="addPlaylistItemButton" class="secondary" style="font-size: 0.8rem; padding: 0.25rem 0.6rem;">＋ Add Channel</button>
         </div>
-        <div id="playlistItemsList"
-          style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 220px; overflow-y: auto; padding-right: 4px;">
-        </div>
+        <div id="playlistItemsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 220px; overflow-y: auto; padding-right: 4px;"></div>
       </div>
 
       <p id="playlistError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-playlist>Close</button><button
-          class="primary" type="submit">Save playlist</button></div>
+      <div class="form-actions"><button type="button" class="secondary" data-close-playlist>Close</button><button class="primary" type="submit">Save playlist</button></div>
     </form>
   </dialog>
 
@@ -552,7 +560,6 @@
     </form>
   </dialog>
 
-  <!-- Add/Edit Playlist Item Sub-Dialog -->
   <dialog id="playlistItemDialog">
     <form id="playlistItemForm">
       <div class="dialog-head">
@@ -569,15 +576,12 @@
         <label>Channel Number (tvg-chno)<input id="itemTvgChno" maxlength="20" placeholder="2"></label>
         <label>Group<input id="itemGroup" maxlength="100" placeholder="Local / News / Sports"></label>
         <label>Position / Order<input id="itemPosition" type="number" value="0"></label>
-        <label class="wide">Stream URL<input id="itemMediaUrl" type="url" required
-            placeholder="https://nbculocallive.akamaized.net/…/master.m3u8"></label>
-        <label class="wide">Channel Logo URL (tvg-logo)<input id="itemTvgLogo" type="url"
-            placeholder="https://static.epg.best/us/WKAQ.us.png"></label>
+        <label class="wide">Stream URL<input id="itemMediaUrl" type="url" required placeholder="https://nbculocallive.akamaized.net/…/master.m3u8"></label>
+        <label class="wide">Channel Logo URL (tvg-logo)<input id="itemTvgLogo" type="url" placeholder="https://static.epg.best/us/WKAQ.us.png"></label>
         <label class="check wide"><input id="itemHidden" type="checkbox"> Hide this channel from the published lineup</label>
       </div>
       <p id="itemError" class="error"></p>
-      <div class="form-actions"><button id="deleteCurrentChannel" type="button" class="danger-button hidden">Delete channel</button><button type="button" class="secondary" data-close-playlist-item>Cancel</button><button
-          class="primary" type="submit">Save item</button></div>
+      <div class="form-actions"><button id="deleteCurrentChannel" type="button" class="danger-button hidden">Delete channel</button><button type="button" class="secondary" data-close-playlist-item>Cancel</button><button class="primary" type="submit">Save item</button></div>
     </form>
   </dialog>
   <div id="toast" role="status"></div>

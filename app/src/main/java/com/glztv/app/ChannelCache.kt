@@ -61,8 +61,11 @@ object ChannelCache {
             val target = context.filesDir.resolve(CHANNEL_CACHE_FILE)
             val temporary = context.filesDir.resolve("$CHANNEL_CACHE_FILE.tmp")
             temporary.writeText(root.toString())
-            target.delete()
-            temporary.renameTo(target)
+            if (target.exists()) target.delete()
+            if (!temporary.renameTo(target)) {
+                temporary.copyTo(target, overwrite = true)
+                temporary.delete()
+            }
         }
     }
 }

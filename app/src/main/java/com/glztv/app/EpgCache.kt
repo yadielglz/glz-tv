@@ -76,8 +76,11 @@ object EpgCache {
                     }
                 }
             }
-            target.delete()
-            temporary.renameTo(target)
+            if (target.exists()) target.delete()
+            if (!temporary.renameTo(target)) {
+                temporary.copyTo(target, overwrite = true)
+                temporary.delete()
+            }
         }
     }
 

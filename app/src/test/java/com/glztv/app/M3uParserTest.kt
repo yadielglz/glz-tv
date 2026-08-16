@@ -64,4 +64,23 @@ class M3uParserTest {
         assertEquals(2, channels.size)
         assertTrue(channels.all { it.id == "same" })
     }
+
+    @Test
+    fun parsesUnquotedAttributesInHeader() {
+        val channels = M3uParser.parse(
+            """
+                #EXTM3U
+                #EXTINF:-1 tvg-id=wkaq tvg-name=Telemundo group-title=Local tvg-chno=2.1,Telemundo PR
+                streams/wkaq.m3u8
+            """.trimIndent(),
+            "https://example.com/list.m3u",
+            emptyMap()
+        )
+
+        val channel = channels.single()
+        assertEquals("wkaq", channel.id)
+        assertEquals("Telemundo PR", channel.name)
+        assertEquals("Local", channel.group)
+        assertEquals("2.1", channel.number)
+    }
 }

@@ -54,4 +54,47 @@ class EpgParserTest {
 
         assertEquals("https://example.com/epg_logo.png", guide.logoForChannel(channelWithoutLogo))
     }
+
+    @Test
+    fun prefersExactChannelNameMatchOverPrefixMatch() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tv>
+              <channel id="hbo2">
+                <display-name>HBO 2</display-name>
+              </channel>
+              <channel id="hbo">
+                <display-name>HBO</display-name>
+              </channel>
+              <programme channel="hbo" start="20260729180000 +0000" stop="20260729190000 +0000">
+                <title>HBO Movie</title>
+                <desc>Movie</desc>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        val guide = EpgParser.parse(xml)
+        val channel = Channel("", "HBO", "Movies", "1", "", "https://example.com/hbo.m3u8", emptyMap())
+        assertEquals("HBO Movie", guide.forChannel(channel).single().title)
+    }
+
+    @Test
+    fun parsesIsoTimezoneWithColon() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tv>
+              <channel id="test">
+                <display-name>Test</display-name>
+              </channel>
+              <programme channel="test" start="20260729180000 +02:00" stop="20260729190000 +02:00">
+                <title>Iso Program</title>
+                <desc>Desc</desc>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        val guide = EpgParser.parse(xml)
+        val channel = Channel("test", "Test", "TV", "1", "", "https://example.com/live.m3u8", emptyMap())
+        assertEquals("Iso Program", guide.forChannel(channel).single().title)
+    }
 }

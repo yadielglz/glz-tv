@@ -11,8 +11,8 @@ internal class SourceClient(private val client: OkHttpClient) {
             headers.forEach { (name, value) -> header(name, value) }
         }.build()
         client.newCall(request).execute().use { response ->
-            val bytes = response.body?.bytes() ?: ByteArray(0)
             check(response.isSuccessful) { "Source returned ${response.code}" }
+            val bytes = response.body?.bytes() ?: ByteArray(0)
             check(bytes.isNotEmpty()) { "Source returned no data" }
             return decodeText(bytes)
         }

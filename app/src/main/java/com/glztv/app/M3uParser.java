@@ -9,7 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class M3uParser {
-    private static final Pattern ATTRIBUTE = Pattern.compile("([\\w-]+)=\"([^\"]*)\"");
+    private static final Pattern ATTRIBUTE = Pattern.compile("([\\w-]+)=\"([^\"]*)\"|([\\w-]+)=([^\\s,\"]+)");
 
     private M3uParser() {}
 
@@ -58,7 +58,13 @@ public final class M3uParser {
     private static Map<String, String> attributes(String line) {
         Map<String, String> values = new HashMap<>();
         Matcher matcher = ATTRIBUTE.matcher(line);
-        while (matcher.find()) values.put(matcher.group(1), matcher.group(2));
+        while (matcher.find()) {
+            if (matcher.group(1) != null) {
+                values.put(matcher.group(1), matcher.group(2));
+            } else if (matcher.group(3) != null) {
+                values.put(matcher.group(3), matcher.group(4));
+            }
+        }
         return values;
     }
 

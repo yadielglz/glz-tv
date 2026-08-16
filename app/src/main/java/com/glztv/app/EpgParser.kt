@@ -33,9 +33,12 @@ data class EpgGuide(
         }
         val normalizedName = normalize(channel.name)
         if (normalizedName.isBlank()) return null
+        channelNames.entries.firstOrNull { entry ->
+            normalize(entry.value) == normalizedName
+        }?.key?.let { return it }
         return channelNames.entries.firstOrNull { entry ->
             val norm = normalize(entry.value)
-            norm == normalizedName || (norm.isNotEmpty() && (normalizedName.startsWith(norm) || norm.startsWith(normalizedName)))
+            norm.isNotEmpty() && (normalizedName.startsWith(norm) || norm.startsWith(normalizedName))
         }?.key
     }
 
@@ -131,7 +134,7 @@ object EpgParser {
         return runCatching {
             val parts = value.trim().split(Regex("\\s+"))
             val local = parts[0].take(14).padEnd(14, '0')
-            val offset = parts.getOrNull(1) ?: "+0000"
+            val offset = (parts.getOrNull(1) ?: "+0000").replace(":", "")
             SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US).apply {
                 isLenient = false
             }.parse("$local $offset")!!.time
