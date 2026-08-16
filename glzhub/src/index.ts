@@ -1257,7 +1257,66 @@ async function fetchGuidePreview(request: Request, env: Env): Promise<Response> 
   return new Response(guide.xml, { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" } });
 }
 
-async function exportManagedGuide(request: Request, env: Env, playlistId: string, gzip: boolean, requireAdmin = false): Promise<Response> {
+async function refreshManagedGuideSource(env: Env, row: Record<string, unknown>): Promise<void> {
+  try {
+    const source = await fetch(String(row.source_url), {
+      headers: {
+        "user-agent": "GLZ-Hub-EPG/1.0",
+        accept: "application/xml,text/xml,application/gzip,*/*"
+      }
+    });
+    if (!source.ok) throw new Error(`EPG source returned ${source.status}`);
+    const refreshed = validateXmlTv(await xmlTextFromResponse(source));
+    await supabaseJson(env, `/rest/v1/epg_guides?id=eq.${encodeURIComponent(String(row.id))}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        xml_content: refreshed.xml,
+        channel_count: refreshed.channelCount,
+        programme_count: refreshed.programmeCount,
+        updated_at: new Date().toISOString()
+      })
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: "managed_epg_background_refresh_failed",
+      guideId: String(row.id),
+      error: error instanceof Error ? error.message : String(error)
+    }));
+  }
+}
+
+function managedGuideResponse(xml: string, playlistId: string, gzip: boolean): Response {
+  const headers = new Headers({
+    "content-type": "application/xml; charset=utf-8",
+    "cache-control": "public, max-age=300",
+    "content-disposition": `attachment; filename="guide-${playlistId}.xml${gzip ? ".gz" : ""}"`
+  });
+  let responseBody: BodyInit = xml;
+  if (gzip) {
+    headers.set("content-encoding", "gzip");
+    responseBody = new Blob([xml]).stream().pipeThrough(new CompressionStream("gzip"));
+  }
+  return new Response(responseBody, { headers });
+}
+
+async function exportManagedGuide(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  playlistId: string,
+  gzip: boolean,
+  requireAdmin = false
+): Promise<Response> {
+  const cacheKey = new Request(request.url, { method: "GET" });
+  if (!requireAdmin) {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set("x-glzhub-cache", "HIT");
+      return new Response(cached.body, { status: cached.status, headers });
+    }
+  }
+
   let ownerFilter = "";
   if (requireAdmin) {
     const { user } = await ownedPlaylist(request, env, playlistId);
@@ -1273,32 +1332,23 @@ async function exportManagedGuide(request: Request, env: Env, playlistId: string
   ) as Record<string, unknown>[];
   if (!rows[0]) return json({ error: "Guide not found." }, 404);
   const row = rows[0];
-  let xmlContent = String(row.xml_content);
   const stale = row.source_url && Date.now() - new Date(String(row.updated_at)).getTime() >= 6 * 60 * 60_000;
-  if (stale) {
-    try {
-      const source = await fetch(String(row.source_url), { headers: { "user-agent": "GLZ-Hub-EPG/1.0", accept: "application/xml,text/xml,application/gzip,*/*" } });
-      if (source.ok) {
-        const refreshed = validateXmlTv(await xmlTextFromResponse(source));
-        xmlContent = refreshed.xml;
-        await supabaseJson(env, `/rest/v1/epg_guides?id=eq.${encodeURIComponent(String(row.id))}`, {
-          method: "PATCH",
-          body: JSON.stringify({ xml_content: refreshed.xml, channel_count: refreshed.channelCount, programme_count: refreshed.programmeCount, updated_at: new Date().toISOString() })
-        });
-      }
-    } catch (error) { console.error("On-demand EPG refresh failed", row.id, error); }
+  if (stale) ctx.waitUntil(refreshManagedGuideSource(env, row));
+
+  const response = managedGuideResponse(String(row.xml_content), playlistId, gzip);
+  if (!requireAdmin) {
+    const cacheResponse = response.clone();
+    cacheResponse.headers.set("x-glzhub-cache", "MISS");
+    ctx.waitUntil(caches.default.put(cacheKey, cacheResponse).catch((error) => {
+      console.error(JSON.stringify({
+        event: "managed_epg_cache_write_failed",
+        playlistId,
+        error: error instanceof Error ? error.message : String(error)
+      }));
+    }));
   }
-  const headers = new Headers({
-    "content-type": "application/xml; charset=utf-8",
-    "cache-control": "public, max-age=300",
-    "content-disposition": `attachment; filename="guide-${playlistId}.xml${gzip ? ".gz" : ""}"`
-  });
-  let body: BodyInit = xmlContent;
-  if (gzip) {
-    headers.set("content-encoding", "gzip");
-    body = new Blob([body]).stream().pipeThrough(new CompressionStream("gzip"));
-  }
-  return new Response(body, { headers });
+  response.headers.set("x-glzhub-cache", requireAdmin ? "BYPASS" : "MISS");
+  return response;
 }
 
 async function pushPlaylist(request: Request, env: Env, playlistId: string): Promise<Response> {
@@ -1397,14 +1447,14 @@ async function getDeviceRadioStreams(request: Request, env: Env): Promise<Respon
   return radioCatalogResponse(request, rows.map(publicRadioStation));
 }
 
-async function route(request: Request, env: Env): Promise<Response> {
+async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
 
   if (path === "/api/health") return json({ ok: true, service: "glzhub" });
   if (path === "/api/v1/radio/stations" && request.method === "GET") return publicRadioCatalog(request, env);
   const publicGuide = path.match(/^\/api\/v1\/guides\/([0-9a-f-]+)\.xml(\.gz)?$/i);
-  if (publicGuide && request.method === "GET") return exportManagedGuide(request, env, publicGuide[1], Boolean(publicGuide[2]));
+  if (publicGuide && request.method === "GET") return exportManagedGuide(request, env, ctx, publicGuide[1], Boolean(publicGuide[2]));
   if (path === "/api/v1/public-config") {
     return json({ supabaseUrl: env.SUPABASE_URL, publishableKey: env.SUPABASE_PUBLISHABLE_KEY });
   }
@@ -1468,7 +1518,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (playlistGuide && request.method === "GET") return getManagedGuide(request, env, playlistGuide[1]);
   if (playlistGuide && request.method === "PUT") return saveManagedGuide(request, env, playlistGuide[1]);
   const playlistGuideExport = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/guide\.xml(\.gz)?$/i);
-  if (playlistGuideExport && request.method === "GET") return exportManagedGuide(request, env, playlistGuideExport[1], Boolean(playlistGuideExport[2]), true);
+  if (playlistGuideExport && request.method === "GET") return exportManagedGuide(request, env, ctx, playlistGuideExport[1], Boolean(playlistGuideExport[2]), true);
   const playlistPush = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/push$/i);
   if (playlistPush && request.method === "POST") return pushPlaylist(request, env, playlistPush[1]);
   const playlistItemDelete = path.match(/^\/api\/v1\/admin\/playlists\/([0-9a-f-]+)\/items\/([0-9a-f-]+)$/i);
@@ -1480,9 +1530,9 @@ async function route(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
-      return await route(request, env);
+      return await route(request, env, ctx);
     } catch (error) {
       if (error instanceof Response) return error;
       console.error(error);
