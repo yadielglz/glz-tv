@@ -36,6 +36,7 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.glztv.app.data.createPermissiveOkHttpClient
 import okhttp3.OkHttpClient
 
 class ManagedInstallActivity : ComponentActivity() {
@@ -55,7 +56,7 @@ class ManagedInstallActivity : ComponentActivity() {
             .putExtra(EXTRA_COMMAND_ID, commandId)
     }
 
-    private val client = OkHttpClient.Builder().followRedirects(true).build()
+    private val client = createPermissiveOkHttpClient()
     private var status by mutableStateOf("Preparing download…")
     private var progress by mutableStateOf<Float?>(null)
     private var downloading by mutableStateOf(false)

@@ -55,6 +55,8 @@ fun Modifier.tvFocusableWithPhysics(
         .graphicsLayer {
             scaleX = scale
             scaleY = scale
+            this.shape = shape
+            this.clip = true
         }
         .then(
             if (isFocused) {
@@ -73,5 +75,4 @@ fun Modifier.tvFocusableWithPhysics(
                 Modifier
             }
         )
-        .focusable()
 }

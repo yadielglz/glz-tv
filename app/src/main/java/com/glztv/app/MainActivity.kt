@@ -66,8 +66,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
@@ -79,6 +80,7 @@ import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -155,6 +157,7 @@ import com.glztv.app.data.EpgRepository
 import com.glztv.app.data.PlaylistRepository
 import com.glztv.app.data.PreferencesRepository
 import com.glztv.app.data.WeatherRepository
+import com.glztv.app.data.createPermissiveOkHttpClient
 import com.glztv.app.player.RecentChannelManager
 import com.glztv.app.player.PlaybackControlState
 import com.glztv.app.player.PlaybackDiagnostics
@@ -260,7 +263,7 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (GlzHubManager.restoreActivityAfterApp(prefs)) {
             lifecycleScope.launch(Dispatchers.IO) {
-                GlzHubManager.heartbeat(prefs, OkHttpClient())
+                GlzHubManager.heartbeat(prefs, createPermissiveOkHttpClient())
             }
         }
     }
@@ -396,7 +399,7 @@ internal fun TvScreen(
     val context = LocalContext.current
     val safeHorizontalPadding = if (LocalConfiguration.current.screenWidthDp >= 600) 40.dp else 12.dp
     val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
-    val client = remember { OkHttpClient() }
+    val client = remember { createPermissiveOkHttpClient() }
     val sourcePreferences = remember { PreferencesRepository(context) }
     val playlistRepository = remember { PlaylistRepository(context, sourcePreferences, client) }
     val epgRepository = remember { EpgRepository(context, sourcePreferences, client) }
@@ -1167,13 +1170,14 @@ private fun GuestHubHome(
                                 }
                             }
                             previewChannel?.let { channel ->
-                                val videoHeight = if (compactHeight) 76.dp
-                                else (guestHeight - 58.dp).coerceIn(104.dp, 150.dp)
+                                val videoHeight = if (compactHeight) 80.dp
+                                else (guestHeight - 36.dp).coerceIn(110.dp, 160.dp)
                                 ChannelPreviewCard(
                                     channel = channel,
                                     captionLanguage = captionLanguage,
                                     modifier = Modifier.width(videoHeight * (16f / 9f)),
-                                    videoHeight = videoHeight
+                                    videoHeight = videoHeight,
+                                    showChannelName = false
                                 )
                             }
                         }
@@ -1213,47 +1217,74 @@ private fun GuestYouSection(
         addAll(experience.services)
     }
     BoxWithConstraints(
-        modifier.background(
-            Brush.radialGradient(
-                listOf(
-                    MaterialTheme.colorScheme.primary.copy(alpha = .14f),
-                    MaterialTheme.colorScheme.background,
-                    MaterialTheme.colorScheme.background
+        modifier
+            .background(
+                Brush.radialGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f),
+                        MaterialTheme.colorScheme.background
+                    )
                 )
             )
-        ).padding(horizontal = 4.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         val compact = maxWidth < 700.dp
         LazyColumn(
             Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 18.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
-                Column(Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
-                    Text(
-                        "YOU",
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        "Your stay at a glance, ${guestName.ifBlank { "Guest" }}",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 16.sp
-                    )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.60f)),
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            "YOU",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            "Your stay at a glance, ${guestName.ifBlank { "Guest" }}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
             item {
                 if (compact) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         StaySummaryCard(guestName, experience, Modifier.fillMaxWidth())
                         WifiInformationCard(experience, Modifier.fillMaxWidth())
                     }
                 } else {
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         StaySummaryCard(guestName, experience, Modifier.weight(1f))
                         WifiInformationCard(experience, Modifier.weight(1f))
@@ -1261,7 +1292,9 @@ private fun GuestYouSection(
                 }
             }
             if (services.isNotEmpty()) {
-                item { HubSectionTitle("VISIT INFORMATION", "Helpful details for your stay") }
+                item {
+                    HubSectionTitle("VISIT INFORMATION", "Helpful details & services for your stay")
+                }
             }
             items(services, key = { "${it.title}-${it.actionUrl}" }) { service ->
                 GuestServiceCard(service)
@@ -1276,36 +1309,128 @@ private fun StaySummaryCard(
     experience: GuestExperience,
     modifier: Modifier = Modifier
 ) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(28.dp)
     Card(
-        modifier.heightIn(min = 190.dp),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        modifier = modifier
+            .heightIn(min = 200.dp)
+            .tvFocusableWithPhysics(
+                shape = shape,
+                focusedScale = 1.03f,
+                glowColor = MaterialTheme.colorScheme.primary,
+                onFocusChange = { focused = it }
+            ),
+        shape = shape,
+        border = BorderStroke(
+            1.dp,
+            if (focused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.15f)
         ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f)
+        )
     ) {
-        Column(
-            Modifier.fillMaxSize().padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.90f)
+                        )
+                    )
+                )
         ) {
-            Text("YOUR STAY", color = MaterialTheme.colorScheme.secondary,
-                fontSize = 13.sp, fontWeight = FontWeight.Black)
-            Text(experience.propertyName, fontSize = 24.sp, fontWeight = FontWeight.Black,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(guestName.ifBlank { "Guest" }, fontSize = 17.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            val stayDetails = listOfNotNull(
-                experience.roomNumber?.let { "Room $it" },
-                experience.arrivalDate?.let { "Arrival $it" },
-                experience.departureDate?.let { "Departure $it" },
-                experience.checkoutTime?.let { "Checkout $it" }
-            )
-            Text(
-                stayDetails.ifEmpty { listOf("Guest information") }.joinToString("  •  "),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(22.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Home,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "YOUR STAY",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                    experience.roomNumber?.let { room ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.50f))
+                        ) {
+                            Text(
+                                "ROOM $room",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        experience.propertyName.ifBlank { "Guest Suite" },
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        guestName.ifBlank { "Guest" },
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                val stayPills = buildList {
+                    experience.arrivalDate?.let { add("Arrival: $it") }
+                    experience.departureDate?.let { add("Departure: $it") }
+                    experience.checkoutTime?.let { add("Checkout: $it") }
+                }
+                if (stayPills.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        stayPills.take(2).forEach { info ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color.White.copy(alpha = 0.08f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                            ) {
+                                Text(
+                                    info,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White.copy(alpha = 0.90f),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1316,49 +1441,126 @@ private fun WifiInformationCard(
     modifier: Modifier = Modifier
 ) {
     val wifiName = experience.wifiName.orEmpty()
+    val wifiPass = experience.wifiInstructions.orEmpty()
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(28.dp)
+
     Card(
-        modifier.heightIn(min = 190.dp),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+        modifier = modifier
+            .heightIn(min = 200.dp)
+            .tvFocusableWithPhysics(
+                shape = shape,
+                focusedScale = 1.03f,
+                glowColor = MaterialTheme.colorScheme.secondary,
+                onFocusChange = { focused = it }
+            ),
+        shape = shape,
+        border = BorderStroke(
+            1.dp,
+            if (focused) MaterialTheme.colorScheme.secondary else Color.White.copy(alpha = 0.15f)
         ),
-        elevation = CardDefaults.cardElevation(0.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f)
+        )
     ) {
-        Row(
-            Modifier.fillMaxSize().padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            if (wifiName.isNotBlank()) {
-                WifiQrCode(wifiName, experience.wifiInstructions, 138.dp)
-            } else {
-                Box(
-                    Modifier.size(138.dp).clip(RoundedCornerShape(18.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = .5f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("QR", fontSize = 28.sp, fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("WI-FI ACCESS", color = MaterialTheme.colorScheme.secondary,
-                    fontSize = 13.sp, fontWeight = FontWeight.Black)
-                Text(
-                    wifiName.ifBlank { "Wi-Fi details unavailable" },
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.20f),
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.90f)
+                        )
+                    )
                 )
-                experience.wifiInstructions?.takeIf(String::isNotBlank)?.let {
-                    Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
+        ) {
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
                 if (wifiName.isNotBlank()) {
-                    Text("Scan with your phone to connect",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    WifiQrCode(wifiName, wifiPass, 130.dp)
+                } else {
+                    Box(
+                        Modifier
+                            .size(130.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(20.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Wifi,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.40f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
+                }
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Wifi,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "WI-FI ACCESS",
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                    Text(
+                        wifiName.ifBlank { "Wi-Fi Details Unavailable" },
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (wifiPass.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.20f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f))
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Pass: ",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Text(
+                                    wifiPass,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        "Scan QR with phone camera to connect",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                    )
                 }
             }
         }
@@ -1385,18 +1587,34 @@ private fun WifiQrCode(ssid: String, password: String?, size: androidx.compose.u
             setPixels(pixels, 0, matrix.width, 0, 0, matrix.width, matrix.height)
         }
     }
-    Image(
-        bitmap.asImageBitmap(),
-        contentDescription = "Wi-Fi QR code for $ssid",
-        modifier = Modifier.size(size).clip(RoundedCornerShape(18.dp))
-            .background(Color.White).padding(8.dp)
-    )
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White,
+        border = BorderStroke(2.dp, Color.White.copy(alpha = 0.80f)),
+        shadowElevation = 8.dp,
+        modifier = Modifier.size(size)
+    ) {
+        Image(
+            bitmap.asImageBitmap(),
+            contentDescription = "Wi-Fi QR code for $ssid",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp)
+        )
+    }
 }
 
 @Composable
 private fun GuestServiceCard(service: GuestService) {
     val context = LocalContext.current
     var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(20.dp)
+    val serviceIcon = when {
+        service.title.contains("Front Desk", ignoreCase = true) -> Icons.Default.Person
+        service.title.contains("Notice", ignoreCase = true) || service.title.contains("Thank", ignoreCase = true) -> Icons.Default.Home
+        else -> Icons.Default.LiveTv
+    }
+
     Card(
         onClick = {
             service.actionUrl?.let { url ->
@@ -1405,20 +1623,81 @@ private fun GuestServiceCard(service: GuestService) {
                 }
             }
         },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp)
-            .onFocusChanged { focused = it.isFocused },
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(if (focused) 4.dp else 1.dp,
-            if (focused) MaterialTheme.colorScheme.secondary else Color.White.copy(alpha = .08f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 74.dp)
+            .tvFocusableWithPhysics(
+                shape = shape,
+                focusedScale = 1.04f,
+                glowColor = MaterialTheme.colorScheme.primary,
+                onFocusChange = { focused = it }
+            ),
+        shape = shape,
+        border = BorderStroke(
+            1.dp,
+            if (focused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (focused) MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+        ),
+        elevation = CardDefaults.cardElevation(if (focused) 12.dp else 2.dp)
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.Center) {
-            Text(service.title, fontWeight = FontWeight.Black, fontSize = 16.sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            service.subtitle?.let {
-                Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                    else Color.White.copy(alpha = 0.08f),
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            serviceIcon,
+                            contentDescription = null,
+                            tint = if (focused) MaterialTheme.colorScheme.primary else Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(
+                        service.title,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    service.subtitle?.let {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            it,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+            if (service.actionUrl != null) {
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }
@@ -1576,16 +1855,36 @@ private fun LiveHubCard(
     }
 }
 
+private fun Color.toLuminousAccent(): Color {
+    val r = red
+    val g = green
+    val b = blue
+    val luminance = 0.2126f * r + 0.7152f * g + 0.0722f * b
+    return if (luminance < 0.38f) {
+        val factor = 0.50f / (luminance + 0.05f)
+        Color(
+            (r * factor).coerceAtMost(1f),
+            (g * factor).coerceAtMost(1f),
+            (b * factor).coerceAtMost(1f),
+            alpha
+        )
+    } else {
+        this
+    }
+}
+
 @Composable
 private fun LiveTvHubCard(
     onClick: () -> Unit,
     width: androidx.compose.ui.unit.Dp = 190.dp,
     height: androidx.compose.ui.unit.Dp = 100.dp
 ) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
     PremiumFocusCard(
         modifier = Modifier.width(width).height(height),
         onClick = onClick,
-        accent = MaterialTheme.colorScheme.primary
+        accent = primaryColor
     ) {
         Box(
             Modifier
@@ -1593,29 +1892,33 @@ private fun LiveTvHubCard(
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
+                            primaryColor,
+                            secondaryColor
                         )
                     )
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.LiveTv, "Live TV", Modifier.size(30.dp), tint = Color.White)
-                Spacer(Modifier.height(4.dp))
+            Row(
+                Modifier.padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Default.LiveTv,
+                    contentDescription = "Live TV",
+                    modifier = Modifier.size(34.dp),
+                    tint = Color.White
+                )
+                Spacer(Modifier.width(10.dp))
                 Text(
                     "Live TV",
                     color = Color.White,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Black,
-                    letterSpacing = 0.5.sp
-                )
-                Text(
-                    "Channels & guide",
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -1632,7 +1935,7 @@ private fun EntertainmentAppCard(
     val prefs = remember {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     }
-    val client = remember { OkHttpClient() }
+    val client = remember { createPermissiveOkHttpClient() }
     val scope = rememberCoroutineScope()
     val packageManager = context.packageManager
     val launchIntent = remember(app.packageName) {
@@ -1643,12 +1946,11 @@ private fun EntertainmentAppCard(
             packageManager.getApplicationIcon(app.packageName)
         }.getOrNull() else null
     }
-    val appNameSize = when {
-        app.name.length <= 7 -> 15.sp
-        app.name.length <= 10 -> 13.sp
-        app.name.length <= 13 -> 11.sp
-        else -> 10.sp
-    }
+
+    val isLightApp = app.name.equals("YouTube", ignoreCase = true) ||
+        app.name.equals("YouTube Music", ignoreCase = true)
+    val cardBackground = if (isLightApp) Color(0xFFF6F8FA) else Color.White
+
     PremiumFocusCard(
         modifier = Modifier.width(width).height(height),
         onClick = {
@@ -1664,57 +1966,42 @@ private fun EntertainmentAppCard(
             Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            app.accent.copy(alpha = 0.25f),
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    if (installedIcon != null || isLightApp) {
+                        Brush.linearGradient(listOf(cardBackground, cardBackground))
+                    } else {
+                        Brush.linearGradient(
+                            listOf(
+                                app.accent.copy(alpha = 0.95f),
+                                app.accent.copy(alpha = 0.70f),
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+                            )
                         )
-                    )
-                )
+                    }
+                ),
+            contentAlignment = Alignment.Center
         ) {
             Row(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
                 AdaptiveAppIcon(
                     icon = installedIcon,
                     appName = app.name,
                     accent = app.accent,
-                    size = 44.dp
+                    size = 42.dp
                 )
                 Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        app.name,
-                        fontSize = appNameSize,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Clip
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (launchIntent != null) app.accent.copy(alpha = 0.20f)
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (launchIntent != null) app.accent.copy(alpha = 0.40f)
-                            else Color.Transparent
-                        )
-                    ) {
-                        Text(
-                            if (launchIntent != null) "Open" else "Install",
-                            color = if (launchIntent != null) app.accent
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
+                Text(
+                    app.name,
+                    color = if (installedIcon != null || isLightApp) Color(0xFF1E2229) else Color.White,
+                    fontSize = if (app.name.length > 10) 14.sp else 16.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-0.3).sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -1729,29 +2016,34 @@ private fun AdaptiveAppIcon(
 ) {
     val isAdaptive = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
         icon is AdaptiveIconDrawable
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(12.dp)
     Surface(
         Modifier.size(size),
         shape = shape,
-        color = if (isAdaptive) Color.Transparent else Color.White
+        color = Color.Transparent
     ) {
         when {
             icon != null -> AsyncImage(
                 model = icon,
                 contentDescription = appName,
-                modifier = Modifier.fillMaxSize()
-                    .clip(shape)
-                    .then(if (isAdaptive) Modifier else Modifier.padding(8.dp)),
-                contentScale = if (isAdaptive) ContentScale.Crop else ContentScale.Fit
+                modifier = Modifier.fillMaxSize().clip(shape),
+                contentScale = ContentScale.Fit
             )
             else -> Box(
-                Modifier.fillMaxSize().background(
-                    Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.7f)))
-                ),
+                Modifier
+                    .fillMaxSize()
+                    .clip(shape)
+                    .background(
+                        Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.8f)))
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(appName.take(2).uppercase(), color = Color.White,
-                    fontWeight = FontWeight.Black)
+                Text(
+                    appName.take(2).uppercase(),
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 16.sp
+                )
             }
         }
     }
@@ -1762,28 +2054,32 @@ private fun PremiumFocusCard(
     modifier: Modifier,
     onClick: () -> Unit,
     accent: Color,
+    onFocusChange: ((Boolean) -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(20.dp)
     Card(
         onClick = onClick,
         modifier = modifier.tvFocusableWithPhysics(
             shape = shape,
             focusedScale = 1.07f,
             glowColor = accent,
-            onFocusChange = { focused = it }
+            onFocusChange = {
+                focused = it
+                onFocusChange?.invoke(it)
+            }
         ),
         shape = shape,
         border = BorderStroke(
             1.dp,
-            if (focused) accent.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.12f)
+            if (focused) accent.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.15f)
         ),
         colors = CardDefaults.cardColors(
-            containerColor = if (focused) MaterialTheme.colorScheme.surfaceContainerHighest
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+            containerColor = if (focused) MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
         ),
-        elevation = CardDefaults.cardElevation(if (focused) 16.dp else 2.dp)
+        elevation = CardDefaults.cardElevation(if (focused) 16.dp else 3.dp)
     ) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize(), content = content)
@@ -2023,7 +2319,8 @@ private fun ChannelPreviewCard(
     channel: Channel,
     captionLanguage: String,
     modifier: Modifier = Modifier,
-    videoHeight: androidx.compose.ui.unit.Dp
+    videoHeight: androidx.compose.ui.unit.Dp,
+    showChannelName: Boolean = false
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Surface(
@@ -2042,14 +2339,16 @@ private fun ChannelPreviewCard(
                 cropVideo = true
             )
         }
-        Text(
-            "${channel.number.ifBlank { "LIVE" }}  ${channel.name}",
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (showChannelName) {
+            Text(
+                "${channel.number.ifBlank { "LIVE" }}  ${channel.name}",
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -2399,7 +2698,7 @@ private fun ImmersivePlayerScreen(
     val prefs = remember {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     }
-    val client = remember { OkHttpClient() }
+    val client = remember { createPermissiveOkHttpClient() }
     val trackPreferences = remember { TrackPreferenceManager(prefs) }
     val playbackControls = remember { PlaybackControlState() }
     val scope = rememberCoroutineScope()
@@ -3979,7 +4278,9 @@ private fun TvSettingsButton(
 ) {
     var focused by remember { mutableStateOf(false) }
     Surface(
-        modifier
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
             .onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (enabled && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
@@ -3992,8 +4293,7 @@ private fun TvSettingsButton(
                     onClick()
                     true
                 } else false
-            }
-            .clickable(enabled = enabled, onClick = onClick),
+            },
         shape = RoundedCornerShape(16.dp),
         color = if (focused) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.surfaceVariant,

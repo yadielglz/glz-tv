@@ -9,27 +9,36 @@ import org.json.JSONObject
 class WeatherRepository(client: OkHttpClient) {
     private val sourceClient = SourceClient(client)
 
+    private fun fetchTextWithFallback(url: String): String {
+        return try {
+            sourceClient.fetchText(url, emptyMap())
+        } catch (e: Exception) {
+            if (url.startsWith("https://")) {
+                val httpUrl = url.replaceFirst("https://", "http://")
+                sourceClient.fetchText(httpUrl, emptyMap())
+            } else {
+                throw e
+            }
+        }
+    }
+
     fun load(location: String): WeatherInfo {
-        val geocoding = JSONObject(
-            sourceClient.fetchText(
-                "https://geocoding-api.open-meteo.com/v1/search" +
-                    "?name=${Uri.encode(location)}&count=1&language=en&format=json",
-                emptyMap()
-            )
+        val geocodingJson = fetchTextWithFallback(
+            "https://geocoding-api.open-meteo.com/v1/search" +
+                "?name=${Uri.encode(location)}&count=1&language=en&format=json"
         )
+        val geocoding = JSONObject(geocodingJson)
         val place = geocoding.getJSONArray("results").getJSONObject(0)
         val latitude = place.getDouble("latitude")
         val longitude = place.getDouble("longitude")
         val displayName = place.optString("name", location)
-        val forecast = JSONObject(
-            sourceClient.fetchText(
-                "https://api.open-meteo.com/v1/forecast?latitude=$latitude&longitude=$longitude" +
-                    "&current=temperature_2m,weather_code" +
-                    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
-                    "&temperature_unit=fahrenheit&forecast_days=3&timezone=auto",
-                emptyMap()
-            )
+        val forecastJson = fetchTextWithFallback(
+            "https://api.open-meteo.com/v1/forecast?latitude=$latitude&longitude=$longitude" +
+                "&current=temperature_2m,weather_code" +
+                "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
+                "&temperature_unit=fahrenheit&forecast_days=3&timezone=auto"
         )
+        val forecast = JSONObject(forecastJson)
         val current = forecast.getJSONObject("current")
         val daily = forecast.getJSONObject("daily")
         val dates = daily.getJSONArray("time")

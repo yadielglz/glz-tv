@@ -103,18 +103,19 @@ private fun RailDestination(
 ) {
     var focused by remember { mutableStateOf(false) }
     val activeColor = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(24.dp)
 
     Surface(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
             .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(24.dp),
+                shape = shape,
                 focusedScale = 1.08f,
                 glowColor = activeColor,
                 onFocusChange = { focused = it }
             ),
-        shape = RoundedCornerShape(24.dp),
+        shape = shape,
         color = when {
             focused -> activeColor
             selected -> activeColor.copy(alpha = 0.20f)

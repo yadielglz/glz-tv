@@ -13,6 +13,7 @@ import com.glztv.app.data.PlaylistRepository
 import com.glztv.app.data.PreferencesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.glztv.app.data.createPermissiveOkHttpClient
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -43,7 +44,7 @@ class GlzSyncWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val preferences = PreferencesRepository(applicationContext)
         val prefs = preferences.sharedPreferences
-        val client = OkHttpClient()
+        val client = createPermissiveOkHttpClient()
         runCatching {
             GlzHubManager.sync(prefs, client)
             GlzHubManager.heartbeat(prefs, client)
