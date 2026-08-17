@@ -9,7 +9,7 @@ on:
         type: string
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+*"
 
 permissions:
   contents: write
@@ -45,11 +45,19 @@ jobs:
         run: |
           set -euo pipefail
           version="${MANUAL_VERSION:-${GITHUB_REF_NAME#v}}"
-          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "Version must use major.minor.patch format." >&2
+          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Version must use major.minor.patch[-suffix] format." >&2
             exit 1
           fi
-          version_code=$((10#${BASH_REMATCH[1]} * 1000000 + 10#${BASH_REMATCH[2]} * 1000 + 10#${BASH_REMATCH[3]}))
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          suffix="${BASH_REMATCH[4]:-}"
+          subpatch=0
+          if [[ "$suffix" =~ ^-([0-9]+)$ ]]; then
+            subpatch="${BASH_REMATCH[1]}"
+          fi
+          version_code=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch + 10#$subpatch))
           echo "name=$version" >> "$GITHUB_OUTPUT"
           echo "code=$version_code" >> "$GITHUB_OUTPUT"
 
