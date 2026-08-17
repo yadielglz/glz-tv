@@ -88,7 +88,10 @@ $("#inviteForm").addEventListener("submit", async (event) => {
 });
 
 function showView(name) {
+  toggleMobileNav(false);
+  $("#mainAppHeader").classList.toggle("hidden", name === "device-editor");
   $("#devicesView").classList.toggle("hidden", name !== "devices");
+  $("#deviceEditorView").classList.toggle("hidden", name !== "device-editor");
   $("#groupsView").classList.toggle("hidden", name !== "groups");
   $("#sitesView").classList.toggle("hidden", name !== "sites");
   $("#appsView").classList.toggle("hidden", name !== "apps");
@@ -97,12 +100,12 @@ function showView(name) {
   $("#studioView").classList.toggle("hidden", name !== "studio");
   $("#epgView").classList.toggle("hidden", name !== "epg");
   $("#pairView").classList.toggle("hidden", name !== "pair");
-  $("#pairButton").classList.toggle("hidden", name === "pair");
+  $("#pairButton").classList.toggle("hidden", name === "pair" || name === "device-editor");
   $("#pageTitle").textContent = name === "pair" ? "Pair a television" :
     name === "apps" ? "App management" : name === "groups" ? "Box Groups" : name === "sites" ? "Properties" :
       name === "experience" ? "Guest experience" : name === "radio" ? "Radio Streams" :
         name === "studio" ? "Playlist Studio" : name === "epg" ? "EPG Studio" : "Your TVs";
-  $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+  $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === (name === "device-editor" ? "devices" : name)));
   if (name === "pair") loadPairingRequests();
   if (name === "radio") loadRadioStations();
   if (name === "studio") loadPlaylists();
@@ -115,6 +118,7 @@ function isOnline(device) {
 }
 
 function deviceActivity(device) {
+  if (!isOnline(device)) return { label: "Offline", className: "offline" };
   if (["queued", "syncing"].includes(device.sync_status)) {
     return {
       label: device.sync_message || (device.sync_status === "queued" ? "Waiting for TV" : "Syncing"),
@@ -126,19 +130,14 @@ function deviceActivity(device) {
     return { label: device.sync_message || "Sync failed", className: "sync-failed" };
   }
   if (device.activity_type === "channel" && device.activity_label) {
-    return isOnline(device)
-      ? { label: `Watching · ${device.activity_label}`, className: "watching" }
-      : { label: `Last watched · ${device.activity_label}`, className: "offline" };
+    return { label: `Watching · ${device.activity_label}`, className: "watching" };
   }
   if (device.activity_type === "radio" && device.activity_label) {
-    return isOnline(device)
-      ? { label: `Listening · ${device.activity_label}`, className: "listening" }
-      : { label: `Last listened · ${device.activity_label}`, className: "offline" };
+    return { label: `Listening · ${device.activity_label}`, className: "listening" };
   }
   if (device.activity_type === "app" && device.activity_label) {
     return { label: `App launched · ${device.activity_label}`, className: "app-active" };
   }
-  if (!isOnline(device)) return { label: "Offline", className: "offline" };
   return { label: "Home screen", className: "idle" };
 }
 
@@ -148,25 +147,78 @@ function escapeHtml(value = "") {
   return div.innerHTML;
 }
 
+let activeDeviceFilter = "all";
+let deviceSearchQuery = "";
+
 function renderDevices() {
-  $("#deviceCount").textContent = state.devices.length;
-  const online = state.devices.filter(isOnline).length;
-  $("#onlineCount").textContent = online;
-  $("#attentionCount").textContent = state.devices.filter((device) => device.last_error).length;
-  $("#emptyState").classList.toggle("hidden", state.devices.length > 0);
-  $("#deviceGrid").innerHTML = state.devices.length ? `<div class="list-head"><span>Device</span><span>Property</span><span>Status</span><span>Activity</span><span>App</span><span>Last contact</span></div>` +
-    state.devices.map((device) => {
+  const total = state.devices.length;
+  const onlineCount = state.devices.filter(isOnline).length;
+  const syncingCount = state.devices.filter((d) => isOnline(d) && ["queued", "syncing"].includes(d.sync_status)).length;
+  const attentionCount = state.devices.filter((d) => Boolean(d.last_error)).length;
+
+  $("#deviceCount").textContent = total;
+  $("#onlineCount").textContent = onlineCount;
+  $("#attentionCount").textContent = attentionCount;
+
+  const fleetScore = total > 0 ? Math.round((onlineCount / total) * 100) : 100;
+  const badge = $("#fleetScoreBadge");
+  if (badge) {
+    badge.textContent = `${fleetScore}% HEALTH`;
+    badge.style.color = fleetScore >= 80 ? "var(--accent-cyan)" : (fleetScore >= 50 ? "var(--amber)" : "var(--danger)");
+  }
+
+  const query = deviceSearchQuery.trim().toLowerCase();
+  const filtered = state.devices.filter((device) => {
+    const isDevOnline = isOnline(device);
+    const isDevSyncing = isDevOnline && ["queued", "syncing"].includes(device.sync_status);
+
+    if (activeDeviceFilter === "online" && !isDevOnline) return false;
+    if (activeDeviceFilter === "syncing" && !isDevSyncing) return false;
+    if (activeDeviceFilter === "offline" && isDevOnline) return false;
+    if (activeDeviceFilter === "attention" && !device.last_error) return false;
+
+    if (!query) return true;
+    const siteName = state.sites.find((s) => s.id === device.site_id)?.name || "";
+    const text = [device.name, device.guest_name, device.room_number, device.model, siteName, device.platform].filter(Boolean).join(" ").toLowerCase();
+    return text.includes(query);
+  });
+
+  $("#emptyState").classList.toggle("hidden", total > 0);
+
+  if (total === 0) {
+    $("#deviceGrid").innerHTML = "";
+    return;
+  }
+
+  if (filtered.length === 0) {
+    $("#deviceGrid").innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:14px;">No screens match the current filter.</div>`;
+    return;
+  }
+
+  $("#deviceGrid").innerHTML = `<div class="list-head"><span>Device</span><span>Property</span><span>Status</span><span>Activity</span><span>App</span><span>Last contact</span></div>` +
+    filtered.map((device) => {
       const activity = deviceActivity(device);
+      const isDevOnline = isOnline(device);
+      const statusClass = isDevOnline ? (device.sync_status === "syncing" ? "syncing" : "") : "offline";
+      const statusLabel = isDevOnline ? (device.sync_status === "syncing" ? "SYNCING" : "ONLINE") : "OFFLINE";
+
       return `
     <button class="device-row" data-device-id="${device.id}">
-      <span class="device-identity"><span class="screen-icon"></span><span><strong>${escapeHtml(device.name)}</strong><small>Welcome, ${escapeHtml(device.guest_name)}</small></span></span>
+      <span class="device-identity">
+        <span class="screen-icon"></span>
+        <span>
+          <strong>${escapeHtml(device.name)}</strong>
+          <small>Welcome, ${escapeHtml(device.guest_name)}${device.room_number ? ` · Rm ${escapeHtml(device.room_number)}` : ""}</small>
+        </span>
+      </span>
       <span data-label="Property">${escapeHtml(state.sites.find((site) => site.id === device.site_id)?.name || "Unassigned")}</span>
-      <span><span class="status ${isOnline(device) ? "" : "offline"}">${isOnline(device) ? "ONLINE" : "OFFLINE"}</span></span>
+      <span><span class="status ${statusClass}">${statusLabel}</span></span>
       <span data-label="Activity"><span class="activity ${activity.className}">${escapeHtml(activity.label)}${activity.progress == null ? "" : ` · ${activity.progress}%`}</span>${activity.progress == null ? "" : `<span class="sync-track"><span style="width:${activity.progress}%"></span></span>`}</span>
-      <span data-label="App">v${escapeHtml(device.app_version)}</span>
-      <span data-label="Last contact">${device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}${device.last_error ? `<small class="attention">${escapeHtml(device.last_error)}</small>` : ""}</span>
+      <span data-label="App">v${escapeHtml(device.app_version || "1.0")}</span>
+      <span data-label="Last contact">${device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}${device.last_error ? `<small class="attention" style="color:var(--danger);display:block;margin-top:2px;">${escapeHtml(device.last_error)}</small>` : ""}</span>
     </button>`;
-    }).join("") : "";
+    }).join("");
+
   $$(".device-row").forEach((row) => row.addEventListener("click", () => openDevice(row.dataset.deviceId)));
 }
 
@@ -253,23 +305,169 @@ function renderSiteSelectors() {
   $("#pairSite").innerHTML = `<option value="">Unassigned</option>${options}`;
 }
 
+let siteSearchQuery = "";
+$("#siteSearchInput")?.addEventListener("input", (e) => {
+  siteSearchQuery = e.target.value.trim().toLowerCase();
+  renderSites();
+});
+
 function renderSites() {
+  const container = $("#siteList");
+  if (!container) return;
+  const filtered = state.sites.filter((site) => {
+    if (!siteSearchQuery) return true;
+    return [site.name, site.address].filter(Boolean).join(" ").toLowerCase().includes(siteSearchQuery);
+  });
+
   $("#siteEmpty").classList.toggle("hidden", state.sites.length > 0);
-  $("#siteList").innerHTML = state.sites.map((site) => {
-    const count = state.devices.filter((device) => device.site_id === site.id).length;
-    return `<button class="site-row" data-site-id="${site.id}">
-      <span class="site-glyph">⌂</span>
-      <span><strong>${escapeHtml(site.name)}</strong><small>${escapeHtml(site.address || "No location entered")}</small></span>
-      <span>${count} ${count === 1 ? "device" : "devices"}</span>
-      <span>Edit</span>
-    </button>`;
+  if (!filtered.length && state.sites.length > 0) {
+    container.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:30px;">No properties match "${escapeHtml(siteSearchQuery)}".</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map((site) => {
+    const devices = state.devices.filter((device) => device.site_id === site.id);
+    const onlineCount = devices.filter(isOnline).length;
+    return `
+      <article class="site-card" data-site-id="${site.id}">
+        <div class="card-main-info">
+          <div class="site-glyph-lg">⌂</div>
+          <div class="card-details">
+            <h4>${escapeHtml(site.name)}</h4>
+            <p>${escapeHtml(site.address || "No address entered")}</p>
+            <div class="card-meta-pills">
+              <span class="meta-pill">${devices.length} Screen${devices.length === 1 ? "" : "s"}</span>
+              <span class="status ${onlineCount > 0 ? "" : "offline"}">${onlineCount} ONLINE</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-action-bar">
+          <button type="button" class="secondary open-site-experience" data-site-id="${site.id}" title="Open guest portal & branding">✦ Guest Portal</button>
+          <button type="button" class="secondary filter-site-tvs" data-site-id="${site.id}" title="View screens for this property">📺 Screens</button>
+          <button type="button" class="secondary edit-site-btn" data-site-id="${site.id}">Edit</button>
+        </div>
+      </article>
+    `;
   }).join("");
-  $$(".site-row").forEach((row) => row.addEventListener("click", () => openSite(row.dataset.siteId)));
+
+  $$(".open-site-experience").forEach((btn) => btn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    state.selectedSiteId = btn.dataset.siteId;
+    $("#experienceSite").value = state.selectedSiteId;
+    await loadExperience();
+    renderExperience();
+    showView("experience");
+  }));
+
+  $$(".filter-site-tvs").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const site = state.sites.find((s) => s.id === btn.dataset.siteId);
+    if (site) {
+      deviceSearchQuery = site.name;
+      const devSearchInput = $("#deviceSearch");
+      if (devSearchInput) devSearchInput.value = site.name;
+      renderDevices();
+      showView("devices");
+    }
+  }));
+
+  $$(".edit-site-btn").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openSite(btn.dataset.siteId);
+  }));
+}
+
+function updateBrandingPreview() {
+  const name = $("#propertyName").value.trim() || "GLZ Hotel & Resort";
+  const msg = $("#welcomeMessage").value.trim() || "Relax, explore, and enjoy your stay.";
+  const logo = $("#logoUrl").value.trim();
+  const hero = $("#heroImageUrl").value.trim();
+
+  $("#previewPropertyName").textContent = name;
+  $("#previewWelcomeMsg").textContent = msg;
+
+  const logoImg = $("#logoPreviewImg");
+  if (logoImg) {
+    if (logo) {
+      logoImg.src = logo;
+      logoImg.classList.remove("hidden");
+    } else {
+      logoImg.classList.add("hidden");
+    }
+  }
+
+  const heroBackdrop = $("#heroPreviewBackdrop");
+  if (heroBackdrop) {
+    if (hero) {
+      heroBackdrop.style.backgroundImage = `linear-gradient(135deg, rgba(15,32,56,0.6) 0%, rgba(6,12,22,0.9) 100%), url('${hero}')`;
+    } else {
+      heroBackdrop.style.backgroundImage = "";
+    }
+  }
+}
+
+function renderServiceTiles(services = []) {
+  const container = $("#serviceTilesList");
+  if (!container) return;
+  if (!services.length) {
+    container.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px;border:1px dashed var(--line);border-radius:var(--radius-md);font-size:13px;">No interactive guest service tiles configured. Click "＋ Add Service Tile" above to create amenities, spa, dining, or room service cards.</div>`;
+    return;
+  }
+  container.innerHTML = services.map((s, idx) => `
+    <div class="service-tile-card" data-index="${idx}">
+      <div class="service-tile-header">
+        <input class="service-tile-title-input service-input-title" value="${escapeHtml(s.title || "")}" placeholder="Service Name (e.g. Room Service)" maxlength="100">
+        <button type="button" class="danger-button delete-service-tile small-btn" data-index="${idx}">Delete</button>
+      </div>
+      <div class="service-tile-field">
+        <label>Short Description</label>
+        <input class="service-input-subtitle" value="${escapeHtml(s.subtitle || "")}" placeholder="e.g. View dining menu & order" maxlength="180">
+      </div>
+      <div class="service-tile-field">
+        <label>Action Link (HTTPS / Internal)</label>
+        <div style="display:flex;gap:8px;">
+          <input class="service-input-url" value="${escapeHtml(s.actionUrl || "")}" placeholder="https://hotel.example/menu" style="flex:1;">
+          ${s.actionUrl ? `<button type="button" class="secondary test-service-url small-btn" data-url="${escapeHtml(s.actionUrl)}">↗ Test</button>` : ""}
+        </div>
+      </div>
+    </div>
+  `).join("");
+
+  $$(".delete-service-tile").forEach((btn) => btn.addEventListener("click", () => {
+    const current = getServiceTilesFromUI();
+    current.splice(Number(btn.dataset.index), 1);
+    renderServiceTiles(current);
+  }));
+
+  $$(".test-service-url").forEach((btn) => btn.addEventListener("click", () => {
+    if (btn.dataset.url) window.open(btn.dataset.url, "_blank", "noopener,noreferrer");
+  }));
+}
+
+function getServiceTilesFromUI() {
+  return $$(".service-tile-card").map((card) => ({
+    title: card.querySelector(".service-input-title")?.value.trim() || "Service",
+    subtitle: card.querySelector(".service-input-subtitle")?.value.trim() || null,
+    actionUrl: card.querySelector(".service-input-url")?.value.trim() || null
+  })).filter((s) => s.title);
 }
 
 function renderExperience() {
   const profile = state.experience || {};
-  $("#propertyName").value = profile.property_name || "GLZ Hotel";
+  const currentSite = state.sites.find((s) => s.id === state.selectedSiteId);
+  const assignedDevices = state.devices.filter((d) => d.site_id === state.selectedSiteId);
+  const onlineAssigned = assignedDevices.filter(isOnline).length;
+
+  $("#experiencePropertyTitle").textContent = currentSite ? `${currentSite.name} Experience` : "Property Guest Experience";
+  const screensCountEl = $("#experienceScreensCount");
+  if (screensCountEl) screensCountEl.textContent = `${assignedDevices.length} Screen${assignedDevices.length === 1 ? "" : "s"} Assigned`;
+  const onlineCountEl = $("#experienceOnlineCount");
+  if (onlineCountEl) {
+    onlineCountEl.textContent = `${onlineAssigned} ONLINE`;
+    onlineCountEl.className = `status ${onlineAssigned > 0 ? "" : "offline"}`;
+  }
+
+  $("#propertyName").value = profile.property_name || (currentSite ? currentSite.name : "GLZ Hotel");
   $("#welcomeMessage").value = profile.welcome_message || "Relax, explore, and enjoy your stay.";
   $("#logoUrl").value = profile.logo_url || "";
   $("#heroImageUrl").value = profile.hero_image_url || "";
@@ -279,26 +477,9 @@ function renderExperience() {
   $("#frontDesk").value = profile.front_desk || "";
   $("#noticeTitle").value = profile.notice_title || "";
   $("#noticeBody").value = profile.notice_body || "";
-  $("#guestServices").value = (profile.services || [])
-    .map((service) => [service.title, service.subtitle || "", service.actionUrl || ""].join(" | "))
-    .join("\n");
-}
-
-function openSite(id = "") {
-  const site = state.sites.find((item) => item.id === id);
-  $("#siteId").value = site?.id || "";
-  $("#siteDialogTitle").textContent = site ? "Edit property" : "Add property";
-  $("#siteName").value = site?.name || "";
-  $("#siteAddress").value = site?.address || "";
-  $("#siteError").textContent = "";
-  $("#siteDialog").showModal();
-}
-
-function serviceRows() {
-  return $("#guestServices").value.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
-    const [title, subtitle = "", actionUrl = ""] = line.split("|").map((part) => part.trim());
-    return { title, subtitle: subtitle || null, actionUrl: actionUrl || null };
-  });
+  
+  updateBrandingPreview();
+  renderServiceTiles(profile.services || []);
 }
 
 function renderApps() {
@@ -335,7 +516,22 @@ function openDevice(id) {
   if (!device) return;
   $("#deviceId").value = device.id;
   $("#configVersion").value = device.config_version;
-  $("#dialogTitle").textContent = device.name;
+
+  $("#editorDeviceTitle").textContent = device.name || "Untitled Screen";
+  const isDevOnline = isOnline(device);
+  const statusEl = $("#editorDeviceStatus");
+  if (statusEl) {
+    statusEl.className = `status ${isDevOnline ? (device.sync_status === "syncing" ? "syncing" : "") : "offline"}`;
+    statusEl.textContent = isDevOnline ? (device.sync_status === "syncing" ? "SYNCING" : "ONLINE") : "OFFLINE";
+  }
+  const modelEl = $("#editorDeviceModel");
+  if (modelEl) modelEl.textContent = device.model || "Android TV";
+  const siteEl = $("#editorDeviceSite");
+  const siteObj = state.sites.find((s) => s.id === device.site_id);
+  if (siteEl) siteEl.textContent = siteObj?.name || "Unassigned Property";
+  const versionEl = $("#editorDeviceVersion");
+  if (versionEl) versionEl.textContent = `App v${device.app_version || "1.0"}`;
+
   $("#deviceName").value = device.name || "";
   $("#guestName").value = device.guest_name || "";
   $("#deviceSite").innerHTML = `<option value="">Unassigned</option>` + state.sites.map((site) =>
@@ -390,17 +586,196 @@ function openDevice(id) {
     : `<option value="">Add an app to the library first</option>`;
   $("#deployButton").disabled = !state.apps.length;
   $("#deviceError").textContent = "";
-  $("#deviceDialog").showModal();
+
+  const refreshBtn = $("#forceRefreshDevice");
+  if (refreshBtn) {
+    refreshBtn.disabled = !isDevOnline;
+    refreshBtn.title = isDevOnline ? "Trigger an instant EPG & M3U reload on the TV" : "Device is offline (Power on TV to sync)";
+    refreshBtn.style.opacity = isDevOnline ? "1" : "0.5";
+  }
+
+  // Reset to first tab
+  $$(".editor-tab").forEach((t) => t.classList.remove("active"));
+  $$(".tab-pane").forEach((pane) => pane.classList.remove("active"));
+  const firstTab = $(".editor-tab[data-tab='tab-general']");
+  if (firstTab) firstTab.classList.add("active");
+  const firstPane = $("#tab-general");
+  if (firstPane) firstPane.classList.add("active");
+
+  showView("device-editor");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function toast(message) {
-  $("#toast").textContent = message;
-  $("#toast").classList.add("show");
-  setTimeout(() => $("#toast").classList.remove("show"), 2500);
+function showToast(message, type = "info", duration = 3000) {
+  const toastEl = $("#toast");
+  const msgEl = $("#toastMessage");
+  const iconEl = $("#toastIcon");
+  if (!toastEl) return;
+
+  if (msgEl) msgEl.textContent = message;
+  else toastEl.textContent = message;
+
+  if (iconEl) {
+    iconEl.textContent = type === "success" ? "✓" : (type === "error" ? "✕" : (type === "warning" ? "⚠" : "ℹ"));
+  }
+
+  toastEl.className = `toast toast-${type} show`;
+  clearTimeout(toastEl._timer);
+  toastEl._timer = setTimeout(() => {
+    toastEl.classList.remove("show");
+  }, duration);
+}
+const toast = (msg) => showToast(msg, "info");
+
+let currentHls = null;
+function stopStreamPreview() {
+  const video = $("#previewVideo");
+  const audio = $("#previewAudio");
+  if (currentHls) {
+    currentHls.destroy();
+    currentHls = null;
+  }
+  if (video) {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  }
+  if (audio) {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+  }
+  const dialog = $("#streamPreviewDialog");
+  if (dialog?.open) dialog.close();
 }
 
-// Keep all management screens on the same notification path.
-const showToast = toast;
+function previewStream(url, title = "Live Stream Preview", isAudio = false) {
+  if (!url) {
+    showToast("No stream URL provided.", "error");
+    return;
+  }
+  stopStreamPreview();
+  const dialog = $("#streamPreviewDialog");
+  if (!dialog) return;
+
+  $("#streamPreviewTitle").textContent = title;
+  $("#streamPreviewSubtitle").textContent = isAudio ? "GLZ Audio Stream" : "Live Video Stream";
+  $("#streamPreviewUrl").value = url;
+  $("#statFormat").textContent = url.includes(".m3u8") ? "HLS (.m3u8)" : (isAudio ? "Audio Feed" : "Direct Stream");
+  $("#statResolution").textContent = isAudio ? "Audio Only" : "Detecting…";
+  $("#statStatus").textContent = "Connecting…";
+  $("#statStatus").className = "text-emerald";
+  $("#statBuffer").textContent = "0.0s";
+
+  const video = $("#previewVideo");
+  const audio = $("#previewAudio");
+
+  video.classList.toggle("hidden", isAudio);
+  audio.classList.toggle("hidden", !isAudio);
+
+  const targetMedia = isAudio ? audio : video;
+
+  if (url.includes(".m3u8") && window.Hls && window.Hls.isSupported()) {
+    currentHls = new window.Hls({ enableWorker: true, lowLatencyMode: true });
+    currentHls.loadSource(url);
+    currentHls.attachMedia(targetMedia);
+    currentHls.on(window.Hls.Events.MANIFEST_PARSED, (_, data) => {
+      $("#statStatus").textContent = "Streaming";
+      if (!isAudio && data.levels && data.levels[0]) {
+        const level = data.levels[0];
+        $("#statResolution").textContent = `${level.width || 1920}×${level.height || 1080}`;
+      }
+      targetMedia.play().catch(() => {});
+    });
+    currentHls.on(window.Hls.Events.ERROR, (_, data) => {
+      if (data.fatal) {
+        $("#statStatus").textContent = "Stream Error";
+        $("#statStatus").className = "text-amber";
+      }
+    });
+  } else {
+    targetMedia.src = url;
+    targetMedia.addEventListener("loadedmetadata", () => {
+      $("#statStatus").textContent = "Streaming";
+      if (!isAudio && video.videoWidth) {
+        $("#statResolution").textContent = `${video.videoWidth}×${video.videoHeight}`;
+      }
+    }, { once: true });
+    targetMedia.play().catch(() => {});
+  }
+
+  // Update buffer monitor
+  const bufferInterval = setInterval(() => {
+    if (!dialog.open) {
+      clearInterval(bufferInterval);
+      return;
+    }
+    if (targetMedia.buffered.length > 0) {
+      const bufferedEnd = targetMedia.buffered.end(targetMedia.buffered.length - 1);
+      const remaining = Math.max(0, bufferedEnd - targetMedia.currentTime);
+      $("#statBuffer").textContent = `${remaining.toFixed(1)}s`;
+    }
+  }, 1000);
+
+  dialog.showModal();
+}
+
+$("#copyStreamUrlBtn")?.addEventListener("click", () => {
+  const url = $("#streamPreviewUrl").value;
+  if (url) {
+    navigator.clipboard?.writeText(url).then(() => showToast("Stream URL copied to clipboard", "success"));
+  }
+});
+
+$("#openExternalStreamBtn")?.addEventListener("click", () => {
+  const url = $("#streamPreviewUrl").value;
+  if (url) window.open(url, "_blank");
+});
+
+$("#closeStreamPreview")?.addEventListener("click", stopStreamPreview);
+$("#stopAndCloseStreamBtn")?.addEventListener("click", stopStreamPreview);
+
+function toggleMobileNav(open) {
+  const rail = $("#mainRail");
+  const backdrop = $("#railBackdrop");
+  if (!rail || !backdrop) return;
+  const shouldOpen = open ?? !rail.classList.contains("open");
+  rail.classList.toggle("open", shouldOpen);
+  backdrop.classList.toggle("hidden", !shouldOpen);
+}
+
+$("#mobileNavToggle")?.addEventListener("click", () => toggleMobileNav(true));
+$("#closeRailButton")?.addEventListener("click", () => toggleMobileNav(false));
+$("#railBackdrop")?.addEventListener("click", () => toggleMobileNav(false));
+$("#mobileRefreshBtn")?.addEventListener("click", () => {
+  refreshDeviceActivity();
+  showToast("Refreshing status…", "info");
+});
+
+$("#deviceSearchInput")?.addEventListener("input", (event) => {
+  deviceSearchQuery = event.target.value;
+  renderDevices();
+});
+
+$$("#deviceFilterPills .filter-pill").forEach((pill) => {
+  pill.addEventListener("click", () => {
+    $$("#deviceFilterPills .filter-pill").forEach((p) => p.classList.remove("active"));
+    pill.classList.add("active");
+    activeDeviceFilter = pill.dataset.filter || "all";
+    renderDevices();
+  });
+});
+
+$("#refreshDashboardButton")?.addEventListener("click", () => {
+  refreshDeviceActivity();
+  showToast("Dashboard refreshed", "info");
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
 
 $("#authForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -436,8 +811,7 @@ $("#pairForm").addEventListener("submit", async (event) => {
   }
 });
 
-$("#deviceForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
+async function saveDeviceSettings(syncToTv = true) {
   $("#deviceError").textContent = "";
   try {
     const id = $("#deviceId").value;
@@ -469,16 +843,35 @@ $("#deviceForm").addEventListener("submit", async (event) => {
         keep_awake_home: $("#keepAwakeHome").checked,
         auto_update: $("#autoUpdate").checked,
         wifi_only: $("#wifiOnly").checked,
-        visible_apps: $$("#visibleApps input:checked").map((input) => input.value)
+        visible_apps: $$("#visibleApps input:checked").map((input) => input.value),
+        queue_sync: syncToTv
       })
     });
-    $("#deviceDialog").close();
+    showToast(syncToTv ? "Configuration saved & queued for TV sync" : "Configuration saved (TV sync postponed)", "success");
     await loadDevices();
-    toast("Configuration queued for sync");
+    showView("devices");
   } catch (error) {
     $("#deviceError").textContent = error.message;
+    showToast(error.message, "error");
   }
+}
+
+$("#deviceForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveDeviceSettings(true);
 });
+
+$("#saveDeviceNoSyncBtn")?.addEventListener("click", (event) => {
+  event.preventDefault();
+  saveDeviceSettings(false);
+});
+
+$("#saveDeviceNoSyncTopBtn")?.addEventListener("click", (event) => {
+  event.preventDefault();
+  saveDeviceSettings(false);
+});
+
+$("#saveDeviceTopBtn")?.addEventListener("click", () => saveDeviceSettings(true));
 
 $("#forceRefreshDevice").addEventListener("click", async () => {
   const id = $("#deviceId").value;
@@ -486,15 +879,183 @@ $("#forceRefreshDevice").addEventListener("click", async () => {
   $("#deviceError").textContent = "";
   try {
     await api(`/api/v1/admin/devices/${id}/force-refresh`, { method: "POST" });
-    toast("⚡ Force refresh signal sent to TV");
+    showToast("⚡ Force refresh signal sent to TV", "success");
   } catch (error) {
     $("#deviceError").textContent = error.message;
+    showToast(error.message, "error");
   }
 });
 
-$("#experienceForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
+$("#backToDevicesBtn")?.addEventListener("click", () => showView("devices"));
+$("#cancelDeviceEditorBtn")?.addEventListener("click", () => showView("devices"));
+
+$$(".editor-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    $$(".editor-tab").forEach((t) => t.classList.remove("active"));
+    $$(".tab-pane").forEach((pane) => pane.classList.remove("active"));
+    tab.classList.add("active");
+    const target = $(`#${tab.dataset.tab}`);
+    if (target) target.classList.add("active");
+  });
+});
+
+function openSite(id = "") {
+  const site = state.sites.find((item) => item.id === id);
+  $("#siteId").value = site?.id || "";
+  $("#siteDialogTitle").textContent = site ? `Edit Property · ${site.name}` : "Add New Property";
+  $("#siteName").value = site?.name || "";
+  $("#siteAddress").value = site?.address || "";
+  $("#siteError").textContent = "";
+
+  const deleteBtn = $("#deleteSiteBtn");
+  if (deleteBtn) deleteBtn.classList.toggle("hidden", !site);
+
+  const devicesContainer = $("#siteDevicesList");
+  if (devicesContainer) {
+    devicesContainer.innerHTML = state.devices.map((device) => {
+      const isChecked = device.site_id === id;
+      const isDevOnline = isOnline(device);
+      return `
+        <label class="site-device-option" data-search="${escapeHtml([device.name, device.room_number].filter(Boolean).join(' ').toLowerCase())}">
+          <input type="checkbox" value="${device.id}" ${isChecked ? "checked" : ""}>
+          <span><strong>${escapeHtml(device.name || "Untitled")}</strong> <small>${escapeHtml(device.room_number ? `Room ${device.room_number}` : "No room")} · <span style="color:${isDevOnline ? "var(--accent-cyan)" : "var(--text-muted)"}">${isDevOnline ? "ONLINE" : "OFFLINE"}</span></small></span>
+        </label>
+      `;
+    }).join("");
+  }
+
+  $("#siteDialog").showModal();
+}
+
+$("#siteDeviceSearch")?.addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  $$("#siteDevicesList .site-device-option").forEach((opt) => {
+    opt.classList.toggle("hidden", q && !opt.dataset.search.includes(q));
+  });
+});
+
+$("#selectAllSiteBoxesBtn")?.addEventListener("click", () => {
+  $$("#siteDevicesList input[type='checkbox']").forEach((cb) => {
+    if (!cb.closest(".site-device-option")?.classList.contains("hidden")) cb.checked = true;
+  });
+});
+
+$("#clearAllSiteBoxesBtn")?.addEventListener("click", () => {
+  $$("#siteDevicesList input[type='checkbox']").forEach((cb) => {
+    if (!cb.closest(".site-device-option")?.classList.contains("hidden")) cb.checked = false;
+  });
+});
+
+$("#deleteSiteBtn")?.addEventListener("click", async () => {
+  const id = $("#siteId").value;
+  if (!id || !confirm("Delete this property? Assigned screens will be set to Unassigned.")) return;
+  try {
+    await api(`/api/v1/admin/sites/${id}`, { method: "DELETE" });
+    $("#siteDialog").close();
+    await loadDevices();
+    showToast("Property deleted.", "success");
+  } catch (err) {
+    $("#siteError").textContent = err.message;
+  }
+});
+
+["propertyName", "welcomeMessage", "logoUrl", "heroImageUrl"].forEach((id) => {
+  $(`#${id}`)?.addEventListener("input", updateBrandingPreview);
+});
+
+$("#addServiceTileBtn")?.addEventListener("click", () => {
+  const current = getServiceTilesFromUI();
+  current.push({ title: "New Service", subtitle: "Hours & details", actionUrl: "https://" });
+  renderServiceTiles(current);
+});
+
+$$(".exp-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    $$(".exp-tab").forEach((t) => t.classList.remove("active"));
+    $$(".exp-pane").forEach((pane) => pane.classList.remove("active"));
+    tab.classList.add("active");
+    const target = $(`#${tab.dataset.tab}`);
+    if (target) target.classList.add("active");
+  });
+});
+
+function openExperienceSimulator() {
+  const propName = $("#propertyName").value || "GLZ Hotel & Resort";
+  const welcomeMsg = $("#welcomeMessage").value || "Relax, explore, and enjoy your stay.";
+  const logo = $("#logoUrl").value.trim();
+  const hero = $("#heroImageUrl").value.trim();
+  const wifi = $("#wifiName").value.trim();
+  const wifiInfo = $("#wifiInstructions").value.trim();
+  const frontDesk = $("#frontDesk").value.trim();
+  const checkout = $("#checkoutTime").value.trim();
+  const noticeTitle = $("#noticeTitle").value.trim();
+  const noticeBody = $("#noticeBody").value.trim();
+  const services = getServiceTilesFromUI();
+
+  $("#simPropertyName").textContent = propName;
+  $("#simWelcomeMsg").textContent = welcomeMsg;
+  const simLogo = $("#simLogo");
+  if (simLogo) {
+    if (logo) {
+      simLogo.src = logo;
+      simLogo.classList.remove("hidden");
+    } else {
+      simLogo.classList.add("hidden");
+    }
+  }
+
+  const heroBg = $("#simHeroBg");
+  if (heroBg) {
+    if (hero) {
+      heroBg.style.backgroundImage = `linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(5,10,18,0.95) 100%), url('${hero}')`;
+    } else {
+      heroBg.style.backgroundImage = "";
+    }
+  }
+
+  $("#simWifiName").textContent = wifi || "GLZ-Resort-Guest";
+  $("#simWifiInfo").textContent = wifiInfo || "Connect with your room number";
+  $("#simFrontDesk").textContent = frontDesk || "Dial 0";
+  $("#simCheckout").textContent = checkout ? `Checkout: ${checkout}` : "Checkout: 11:00 AM";
+
+  const noticeCard = $("#simNoticeCard");
+  if (noticeCard) {
+    if (noticeTitle || noticeBody) {
+      noticeCard.style.display = "flex";
+      $("#simNoticeTitle").textContent = noticeTitle || "Guest Notice";
+      $("#simNoticeBody").textContent = noticeBody || "";
+    } else {
+      noticeCard.style.display = "none";
+    }
+  }
+
+  const servicesGrid = $("#simServicesGrid");
+  if (servicesGrid) {
+    if (services.length) {
+      servicesGrid.innerHTML = services.map((s) => `
+        <div class="tv-sim-tile">
+          <strong>${escapeHtml(s.title)}</strong>
+          <span>${escapeHtml(s.subtitle || "Service")}</span>
+        </div>
+      `).join("");
+    } else {
+      servicesGrid.innerHTML = `<span style="font-size:10px;opacity:0.6;">No service tiles added yet</span>`;
+    }
+  }
+
+  $("#experienceSimulatorDialog").showModal();
+}
+
+$("#previewExperienceBtn")?.addEventListener("click", openExperienceSimulator);
+$("#closeSimDialogBtn")?.addEventListener("click", () => $("#experienceSimulatorDialog").close());
+$("#closeSimDialogBtnBottom")?.addEventListener("click", () => $("#experienceSimulatorDialog").close());
+
+async function saveGuestExperience(syncToTvs = true) {
   $("#experienceError").textContent = "";
+  if (!state.selectedSiteId) {
+    showToast("Please select a property first.", "warning");
+    return;
+  }
   try {
     const result = await api("/api/v1/admin/guest-experience", {
       method: "PATCH",
@@ -510,13 +1071,31 @@ $("#experienceForm").addEventListener("submit", async (event) => {
         front_desk: $("#frontDesk").value || null,
         notice_title: $("#noticeTitle").value || null,
         notice_body: $("#noticeBody").value || null,
-        services: serviceRows()
+        services: getServiceTilesFromUI(),
+        queue_sync: syncToTvs
       })
     });
     state.experience = result.profile;
-    toast("Guest experience published to this property");
-  } catch (error) { $("#experienceError").textContent = error.message; }
+    if (syncToTvs) {
+      const count = result.pushedDevices || 0;
+      showToast(count > 0 ? `Guest experience published & queued on ${count} online TV${count === 1 ? "" : "s"}.` : `Guest experience saved (no online TVs currently assigned to property).`, "success");
+    } else {
+      showToast("Guest experience saved as draft (TV sync postponed)", "success");
+    }
+  } catch (error) {
+    $("#experienceError").textContent = error.message;
+    showToast(error.message, "error");
+  }
+}
+
+$("#experienceForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveGuestExperience(true);
 });
+
+$("#saveExperienceTopBtn")?.addEventListener("click", () => saveGuestExperience(true));
+$("#saveExperienceDraftTopBtn")?.addEventListener("click", () => saveGuestExperience(false));
+$("#saveExperienceDraftBtn")?.addEventListener("click", () => saveGuestExperience(false));
 
 $("#experienceSite").addEventListener("change", async (event) => {
   state.selectedSiteId = event.target.value || null;
@@ -526,6 +1105,7 @@ $("#experienceSite").addEventListener("change", async (event) => {
     renderExperience();
   } catch (error) {
     $("#experienceError").textContent = error.message;
+    showToast(error.message, "error");
   }
 });
 
@@ -545,11 +1125,31 @@ $("#siteForm").addEventListener("submit", async (event) => {
         address: $("#siteAddress").value || null
       })
     });
-    if (!id) state.selectedSiteId = result.site.id;
+    const targetSiteId = id || result.site?.id;
+    if (!id) state.selectedSiteId = targetSiteId;
+
+    // Update screen assignments
+    const selectedBoxes = new Set($$("#siteDevicesList input:checked").map((input) => input.value));
+    const devicesToUpdate = state.devices.filter((device) => {
+      const isSelected = selectedBoxes.has(device.id);
+      const isCurrentSite = device.site_id === targetSiteId;
+      return (isSelected && !isCurrentSite) || (!isSelected && isCurrentSite && id);
+    });
+
+    if (devicesToUpdate.length) {
+      await Promise.all(devicesToUpdate.map((device) => api(`/api/v1/admin/devices/${device.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          site_id: selectedBoxes.has(device.id) ? targetSiteId : null,
+          queue_sync: false
+        })
+      })));
+    }
+
     $("#siteDialog").close();
     await loadDevices();
     showView("sites");
-    toast(id ? "Property updated" : "Property created");
+    showToast(id ? "Property & screen assignments updated." : "Property created.", "success");
   } catch (error) {
     $("#siteError").textContent = error.message;
   }
@@ -562,11 +1162,12 @@ $("#unpairDevice").addEventListener("click", async () => {
   $("#deviceError").textContent = "";
   try {
     await api(`/api/v1/admin/devices/${id}`, { method: "DELETE" });
-    $("#deviceDialog").close();
+    showToast("Device pairing removed", "success");
     await loadDevices();
-    toast("Device pairing removed");
+    showView("devices");
   } catch (error) {
     $("#deviceError").textContent = error.message;
+    showToast(error.message, "error");
   }
 });
 
@@ -631,7 +1232,6 @@ $("#pairButton").addEventListener("click", () => showView("pair"));
 $$("[data-open-pair]").forEach((button) => button.addEventListener("click", () => showView("pair")));
 $$("[data-view-button]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.viewButton)));
 $$(".nav").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
-$("[data-close-dialog]").addEventListener("click", () => $("#deviceDialog").close());
 
 $("#visibleApps").innerHTML = APP_CATALOG.map(([name, packageName]) => `
   <label class="app-option">
@@ -704,7 +1304,8 @@ function renderRadioStations() {
                   <a href="${escapeHtml(station.stream_url)}" target="_blank" style="color: #60a5fa; text-decoration: none;">${escapeHtml(station.stream_url)}</a>
                 </td>
                 <td style="padding: 12px 18px; text-align: right;">
-                  <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                  <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
+                    <button type="button" class="secondary preview-radio-stream" data-url="${escapeHtml(station.stream_url)}" data-name="${escapeHtml(station.name)}" style="padding: 4px 10px; font-size: 11px;">▶ Listen</button>
                     <button type="button" class="secondary edit-radio" data-id="${station.id}" style="padding: 4px 10px; font-size: 11px;">Edit</button>
                     <button type="button" class="danger-button delete-radio" data-id="${station.id}" style="padding: 4px 10px; font-size: 11px; margin: 0;">Delete</button>
                   </div>
@@ -718,6 +1319,7 @@ function renderRadioStations() {
     container.appendChild(card);
   }
 
+  $$(".preview-radio-stream").forEach((btn) => btn.addEventListener("click", () => previewStream(btn.dataset.url, btn.dataset.name, true)));
   $$(".edit-radio").forEach((btn) => btn.addEventListener("click", () => openRadioDialog(btn.dataset.id)));
   $$(".delete-radio").forEach((btn) => btn.addEventListener("click", () => deleteRadioStation(btn.dataset.id)));
 }
@@ -837,7 +1439,7 @@ function renderPlaylists() {
           <div class="studio-table-wrap">
             <table class="studio-table">
               <thead>
-                <tr><th>Order</th><th>CH #</th><th>Channel name</th><th>Group</th><th>EPG ID</th><th>Stream URL</th><th>Status</th><th></th></tr>
+                <tr><th>Order</th><th>CH #</th><th>Channel name</th><th>Group</th><th>EPG ID</th><th>Stream URL</th><th>Status</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 ${items.map((item) => {
@@ -851,7 +1453,12 @@ function renderPlaylists() {
                     <td><input class="studio-inline-field inline-channel-epg" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.tvg_id || "")}" aria-label="EPG ID" placeholder="—" maxlength="120"></td>
                     <td><input class="studio-inline-field inline-channel-url" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(item.media_url)}" aria-label="Stream URL" maxlength="2048"></td>
                     <td><button type="button" class="studio-badge channel-visibility ${meta.hidden ? "hidden-channel" : "published"}" data-playlist-id="${pl.id}" data-item-id="${item.id}" data-hidden="${meta.hidden === true}">${meta.hidden ? "HIDDEN" : "VISIBLE"}</button></td>
-                    <td><button type="button" class="secondary edit-playlist-item" data-item-id="${item.id}" data-playlist-id="${pl.id}" style="padding:5px 8px;">Edit logo &amp; details</button></td>
+                    <td>
+                      <div style="display:flex;gap:6px;align-items:center;">
+                        <button type="button" class="secondary preview-channel-stream" data-url="${escapeHtml(item.media_url)}" data-title="${escapeHtml(item.title)}" style="padding:5px 8px;" title="Test Stream">▶ Test</button>
+                        <button type="button" class="secondary edit-playlist-item" data-item-id="${item.id}" data-playlist-id="${pl.id}" style="padding:5px 8px;">Edit</button>
+                      </div>
+                    </td>
                   </tr>`;
                 }).join("")}
               </tbody>
@@ -869,6 +1476,10 @@ function renderPlaylists() {
   });
   requestAnimationFrame(() => window.scrollTo(pageScroll.x, pageScroll.y));
 
+  $$(".preview-channel-stream").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    previewStream(btn.dataset.url, btn.dataset.title, false);
+  }));
   $$(".edit-playlist").forEach((btn) => btn.addEventListener("click", () => openPlaylistDialog(btn.dataset.id)));
   $$(".add-channel-item").forEach((btn) => btn.addEventListener("click", () => {
     $("#playlistId").value = btn.dataset.id;
@@ -914,8 +1525,9 @@ function renderPlaylists() {
     btn.disabled = true;
     try {
       const result = await api(`/api/v1/admin/playlists/${btn.dataset.id}/push`, { method: "POST" });
-      toast(`Playlist and guide pushed to ${result.devices} TV${result.devices === 1 ? "" : "s"}.`);
-    } catch (error) { toast(error.message); }
+      const count = result.pushedDevices || 0;
+      showToast(count > 0 ? `Lineup queued for sync on ${count} online TV${count === 1 ? "" : "s"}.` : `No online TVs assigned to this lineup to sync.`, count > 0 ? "success" : "warning");
+    } catch (error) { showToast(error.message, "error"); }
     finally { btn.disabled = false; }
   }));
   $$(".toggle-playlist").forEach((btn) => btn.addEventListener("click", async () => {
@@ -1175,23 +1787,49 @@ function wirePlaylistDragging() {
 
 function renderPlaylistItems(playlist) {
   const container = $("#playlistItemsList");
-  if (!playlist || !playlist.playlist_items || !playlist.playlist_items.length) {
-    container.innerHTML = `<div style="color: var(--text-dim, #888); font-size: 0.85rem; text-align: center; padding: 0.8rem 0;">No channels added to this playlist yet.</div>`;
+  const countEl = $("#playlistItemCount");
+  if (!playlist || !playlist.playlist_items) {
+    if (countEl) countEl.textContent = "0";
+    if (container) container.innerHTML = `<div style="color: var(--text-dim, #888); font-size: 0.85rem; text-align: center; padding: 0.8rem 0;">No channels added to this playlist yet.</div>`;
     return;
   }
-  const items = [...playlist.playlist_items].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
-  container.innerHTML = items.map((item) => `
-    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.85rem;">
-      <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%;">
-        <strong>#${item.position || 0} ${escapeHtml(item.title)}</strong>
-        <small style="display: block; opacity: 0.7; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.media_url)}</small>
-      </div>
-      <button type="button" class="danger-button delete-playlist-item" data-item-id="${item.id}" data-playlist-id="${playlist.id}" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">Delete</button>
-    </div>
-  `).join("");
+  const query = $("#playlistItemFilter")?.value.trim().toLowerCase() || "";
+  const allItems = [...playlist.playlist_items].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+  if (countEl) countEl.textContent = String(allItems.length);
 
+  const items = query ? allItems.filter((it) => {
+    const meta = it.metadata || {};
+    return [it.title, it.media_url, meta.group, meta.tvg_id, meta.tvg_chno].filter(Boolean).join(" ").toLowerCase().includes(query);
+  }) : allItems;
+
+  if (!items.length) {
+    container.innerHTML = `<div style="color: var(--text-dim, #888); font-size: 0.85rem; text-align: center; padding: 0.8rem 0;">${query ? "No channels match filter." : "No channels added to this playlist yet."}</div>`;
+    return;
+  }
+
+  container.innerHTML = items.map((item) => {
+    const meta = item.metadata || {};
+    return `
+    <div class="channel-item-row">
+      ${meta.tvg_logo ? `<img class="channel-logo-thumb" src="${escapeHtml(meta.tvg_logo)}" alt="">` : `<span class="channel-logo-thumb" style="display:grid;place-items:center;font-size:11px;">📺</span>`}
+      <div class="channel-info-meta">
+        <strong>#${item.position || 0} ${escapeHtml(item.title)}</strong>
+        <small><span>${escapeHtml(meta.group || "Ungrouped")}</span>${meta.tvg_id ? `<span>EPG: ${escapeHtml(meta.tvg_id)}</span>` : ""}</small>
+      </div>
+      <button type="button" class="secondary preview-item-stream small-btn" data-url="${escapeHtml(item.media_url)}" data-title="${escapeHtml(item.title)}">▶ Test</button>
+      <button type="button" class="danger-button delete-playlist-item small-btn" data-item-id="${item.id}" data-playlist-id="${playlist.id}">Delete</button>
+    </div>
+  `;
+  }).join("");
+
+  $$(".preview-item-stream").forEach((btn) => btn.addEventListener("click", () => previewStream(btn.dataset.url, btn.dataset.title, false)));
   $$(".delete-playlist-item").forEach((btn) => btn.addEventListener("click", () => deletePlaylistItem(btn.dataset.playlistId, btn.dataset.itemId)));
 }
+
+$("#playlistItemFilter")?.addEventListener("input", () => {
+  const currentPl = state.playlists.find((p) => p.id === $("#playlistId").value);
+  if (currentPl) renderPlaylistItems(currentPl);
+});
 
 function openPlaylistDialog(id = null) {
   const dialog = $("#playlistDialog");
@@ -1281,6 +1919,11 @@ function openPlaylistItemDialog(playlistId = $("#playlistId").value, itemId = nu
 
 $("#addPlaylistItemButton")?.addEventListener("click", () => openPlaylistItemDialog());
 $("[data-close-playlist-item]")?.addEventListener("click", () => $("#playlistItemDialog").close());
+$("#previewCurrentItemBtn")?.addEventListener("click", () => {
+  const url = $("#itemMediaUrl").value;
+  const title = $("#itemTitle").value || "Channel Preview";
+  previewStream(url, title, false);
+});
 
 $("#playlistItemForm")?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1336,46 +1979,203 @@ async function deletePlaylistItem(playlistId, itemId) {
   }
 }
 
-async function loadBoxGroups() {
-  if (!state.playlists.length) await loadPlaylists();
-  const result = await api("/api/v1/admin/box-groups");
-  state.groups = result.groups || [];
+let groupSearchQuery = "";
+$("#groupSearchInput")?.addEventListener("input", (e) => {
+  groupSearchQuery = e.target.value.trim().toLowerCase();
   renderBoxGroups();
-}
+});
 
 function renderBoxGroups() {
-  const container = $("#boxGroupList"); if (!container) return;
+  const container = $("#boxGroupList");
+  if (!container) return;
+  const filtered = state.groups.filter((group) => {
+    if (!groupSearchQuery) return true;
+    const pl = state.playlists.find((item) => item.id === group.playlist_id);
+    return [group.name, pl?.title].filter(Boolean).join(" ").toLowerCase().includes(groupSearchQuery);
+  });
+
   $("#boxGroupEmpty").classList.toggle("hidden", state.groups.length > 0);
-  container.innerHTML = state.groups.map((group) => {
+  if (!filtered.length && state.groups.length > 0) {
+    container.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:30px;">No box groups match "${escapeHtml(groupSearchQuery)}".</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map((group) => {
     const playlist = state.playlists.find((item) => item.id === group.playlist_id);
-    const devices = group.devices || state.devices.filter((device) => device.box_group_id === group.id);
-    return `<article class="group-card"><span class="site-glyph">▦</span><span><h4>${escapeHtml(group.name)}</h4><p>${devices.length} box${devices.length === 1 ? "" : "es"} · ${escapeHtml(playlist?.title || "No playlist")}</p></span><span class="activity">${group.default_channel_policy === "block" ? "ONLY EXPLICITLY ALLOWED" : "ALL EXCEPT BLOCKED"}</span><span class="group-actions"><button class="secondary edit-group-policy" data-id="${group.id}">Channel policy</button><button class="secondary edit-box-group" data-id="${group.id}">Edit group</button></span></article>`;
+    const devices = state.devices.filter((device) => device.box_group_id === group.id);
+    const onlineCount = devices.filter(isOnline).length;
+    const isBlockPolicy = group.default_channel_policy === "block";
+
+    return `
+      <article class="group-card" data-id="${group.id}">
+        <div class="card-main-info">
+          <div class="group-glyph">▦</div>
+          <div class="card-details">
+            <h4>${escapeHtml(group.name)}</h4>
+            <p>${escapeHtml(playlist ? `${playlist.title} (${(playlist.playlist_items || []).length} channels)` : "No master playlist")}</p>
+            <div class="card-meta-pills">
+              <span class="meta-pill">${devices.length} Box${devices.length === 1 ? "" : "es"}</span>
+              <span class="status ${onlineCount > 0 ? "" : "offline"}">${onlineCount} ONLINE</span>
+              <span class="policy-badge ${isBlockPolicy ? "block" : "allow"}">${isBlockPolicy ? "ONLY EXPLICITLY ALLOWED" : "ALL CHANNELS UNLESS BLOCKED"}</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-action-bar">
+          <button type="button" class="secondary edit-group-policy" data-id="${group.id}">🔒 Channel Policy</button>
+          <button type="button" class="secondary push-group-boxes" data-id="${group.id}" ${onlineCount === 0 ? "disabled title='No online boxes to sync'" : ""}>↻ Push to TVs</button>
+          <button type="button" class="secondary edit-box-group" data-id="${group.id}">Edit</button>
+        </div>
+      </article>
+    `;
   }).join("");
+
   $$(".edit-box-group").forEach((button) => button.addEventListener("click", () => openBoxGroup(button.dataset.id)));
   $$(".edit-group-policy").forEach((button) => button.addEventListener("click", () => openChannelPolicy("group", button.dataset.id)));
+  $$(".push-group-boxes").forEach((btn) => btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      const group = state.groups.find((g) => g.id === btn.dataset.id);
+      if (!group) return;
+      const groupOnlineBoxes = state.devices.filter((d) => d.box_group_id === group.id && isOnline(d));
+      if (!groupOnlineBoxes.length) {
+        showToast("No online boxes in this group to sync.", "warning");
+        return;
+      }
+      const token = new Date().toISOString();
+      await Promise.all(groupOnlineBoxes.map((d) => api(`/api/v1/admin/devices/${d.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          force_refresh_token: token,
+          sync_status: "queued",
+          sync_message: "Updating lineup",
+          queue_sync: true
+        })
+      })));
+      showToast(`Lineup refresh pushed to ${groupOnlineBoxes.length} online TV${groupOnlineBoxes.length === 1 ? "" : "s"}.`, "success");
+      await loadDevices();
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }));
 }
 
 function openBoxGroup(id = "") {
   const group = state.groups.find((item) => item.id === id);
-  $("#boxGroupId").value = group?.id || ""; $("#boxGroupName").value = group?.name || "";
-  $("#boxGroupPlaylist").innerHTML = state.playlists.map((playlist) => `<option value="${playlist.id}">${escapeHtml(playlist.title)} · ${(playlist.playlist_items || []).length} channels</option>`).join("");
+  $("#boxGroupId").value = group?.id || "";
+  $("#boxGroupName").value = group?.name || "";
+  $("#boxGroupPlaylist").innerHTML = state.playlists.map((playlist) =>
+    `<option value="${playlist.id}">${escapeHtml(playlist.title)} · ${(playlist.playlist_items || []).length} channels</option>`
+  ).join("");
   $("#boxGroupPlaylist").value = group?.playlist_id || state.playlists[0]?.id || "";
-  $("#boxGroupDevices").innerHTML = state.devices.map((device) => `<label><input type="checkbox" value="${device.id}" ${(device.box_group_id === id) ? "checked" : ""}> <span>${escapeHtml(device.name)}<small>${escapeHtml(device.room_number || "No room")}</small></span></label>`).join("");
-  $("#boxGroupDialogTitle").textContent = group ? "Edit box group" : "Add box group"; $("#deleteBoxGroup").classList.toggle("hidden", !group); $("#boxGroupError").textContent = ""; $("#boxGroupDialog").showModal();
+  
+  const defPolicySelect = $("#boxGroupDefaultPolicy");
+  if (defPolicySelect) defPolicySelect.value = group?.default_channel_policy || "allow";
+
+  const devicesContainer = $("#boxGroupDevices");
+  if (devicesContainer) {
+    devicesContainer.innerHTML = state.devices.map((device) => {
+      const isChecked = device.box_group_id === id;
+      const isDevOnline = isOnline(device);
+      return `
+        <label class="group-device-option" data-search="${escapeHtml([device.name, device.room_number].filter(Boolean).join(' ').toLowerCase())}">
+          <input type="checkbox" value="${device.id}" ${isChecked ? "checked" : ""}>
+          <span><strong>${escapeHtml(device.name || "Untitled")}</strong> <small>${escapeHtml(device.room_number ? `Room ${device.room_number}` : "No room")} · <span style="color:${isDevOnline ? "var(--accent-cyan)" : "var(--text-muted)"}">${isDevOnline ? "ONLINE" : "OFFLINE"}</span></small></span>
+        </label>
+      `;
+    }).join("");
+  }
+
+  $("#boxGroupDialogTitle").textContent = group ? `Edit Box Group · ${group.name}` : "Add New Box Group";
+  $("#deleteBoxGroup").classList.toggle("hidden", !group);
+  $("#boxGroupError").textContent = "";
+  $("#boxGroupDialog").showModal();
 }
+
+$("#boxGroupDeviceSearch")?.addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  $$("#boxGroupDevices .group-device-option").forEach((opt) => {
+    opt.classList.toggle("hidden", q && !opt.dataset.search.includes(q));
+  });
+});
+
+$("#selectAllBoxesBtn")?.addEventListener("click", () => {
+  $$("#boxGroupDevices input[type='checkbox']").forEach((cb) => {
+    if (!cb.closest(".group-device-option")?.classList.contains("hidden")) cb.checked = true;
+  });
+});
+
+$("#clearAllBoxesBtn")?.addEventListener("click", () => {
+  $$("#boxGroupDevices input[type='checkbox']").forEach((cb) => {
+    if (!cb.closest(".group-device-option")?.classList.contains("hidden")) cb.checked = false;
+  });
+});
+
+async function saveBoxGroupData(syncToBoxes = true) {
+  const oldId = $("#boxGroupId").value;
+  $("#boxGroupError").textContent = "";
+  try {
+    const result = await api(oldId ? `/api/v1/admin/box-groups/${oldId}` : "/api/v1/admin/box-groups", {
+      method: oldId ? "PATCH" : "POST",
+      body: JSON.stringify({
+        name: $("#boxGroupName").value,
+        playlistId: $("#boxGroupPlaylist").value,
+        defaultPolicy: $("#boxGroupDefaultPolicy")?.value || "allow"
+      })
+    });
+    const groupId = result.group.id;
+    const selected = new Set($$("#boxGroupDevices input:checked").map((input) => input.value));
+    
+    // Update member box assignments
+    const affectedDevices = state.devices.filter((device) => selected.has(device.id) || device.box_group_id === groupId);
+    if (affectedDevices.length) {
+      await Promise.all(affectedDevices.map((device) => api(`/api/v1/admin/devices/${device.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          box_group_id: selected.has(device.id) ? groupId : null,
+          queue_sync: syncToBoxes && isOnline(device)
+        })
+      })));
+    }
+
+    $("#boxGroupDialog").close();
+    await loadDevices();
+    await loadBoxGroups();
+    showToast(syncToBoxes ? "Box group saved and pushed to online screens." : "Box group saved as draft (No sync).", "success");
+  } catch (error) {
+    $("#boxGroupError").textContent = error.message;
+    showToast(error.message, "error");
+  }
+}
+
+$("#boxGroupForm")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveBoxGroupData(true);
+});
+
+$("#saveBoxGroupSyncBtn")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  saveBoxGroupData(true);
+});
+
+$("#saveBoxGroupNoSyncBtn")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  saveBoxGroupData(false);
+});
 
 $("#addBoxGroup")?.addEventListener("click", () => openBoxGroup());
 $$('[data-close-box-group]').forEach((button) => button.addEventListener("click", () => $("#boxGroupDialog").close()));
-$("#boxGroupForm")?.addEventListener("submit", async (event) => {
-  event.preventDefault(); const oldId = $("#boxGroupId").value; $("#boxGroupError").textContent = "";
-  try {
-    const result = await api(oldId ? `/api/v1/admin/box-groups/${oldId}` : "/api/v1/admin/box-groups", { method: oldId ? "PATCH" : "POST", body: JSON.stringify({ name: $("#boxGroupName").value, playlistId: $("#boxGroupPlaylist").value }) });
-    const groupId = result.group.id; const selected = new Set($$("#boxGroupDevices input:checked").map((input) => input.value));
-    await Promise.all(state.devices.filter((device) => selected.has(device.id) || device.box_group_id === groupId).map((device) => api(`/api/v1/admin/devices/${device.id}`, { method: "PATCH", body: JSON.stringify({ box_group_id: selected.has(device.id) ? groupId : null }) })));
-    $("#boxGroupDialog").close(); await loadDevices(); await loadBoxGroups(); toast("Box group saved and queued for sync.");
-  } catch (error) { $("#boxGroupError").textContent = error.message; }
+
+$("#deleteBoxGroup")?.addEventListener("click", async () => {
+  const id = $("#boxGroupId").value;
+  if (!id || !confirm("Delete this box group? Devices will keep their individual policy rules.")) return;
+  await api(`/api/v1/admin/box-groups/${id}`, { method: "DELETE" });
+  $("#boxGroupDialog").close();
+  await loadDevices();
+  await loadBoxGroups();
+  showToast("Box group deleted.", "success");
 });
-$("#deleteBoxGroup")?.addEventListener("click", async () => { const id = $("#boxGroupId").value; if (!id || !confirm("Delete this box group? Devices will keep their individual policy rules.")) return; await api(`/api/v1/admin/box-groups/${id}`, { method: "DELETE" }); $("#boxGroupDialog").close(); await loadDevices(); await loadBoxGroups(); toast("Box group deleted."); });
 
 let activePolicy = null;
 async function openChannelPolicy(targetType, targetId) {
@@ -1384,13 +2184,13 @@ async function openChannelPolicy(targetType, targetId) {
   const group = targetType === "device" ? state.groups.find((item) => item.id === target?.box_group_id) : target;
   const playlistId = targetType === "group" ? target?.playlist_id : (target?.assigned_playlist_id || group?.playlist_id);
   const playlist = state.playlists.find((item) => item.id === playlistId);
-  if (!target || !playlist) { toast("Assign a master playlist before setting channel policy."); return; }
+  if (!target || !playlist) { showToast("Assign a master playlist before setting channel policy.", "warning"); return; }
   const own = await api(`/api/v1/admin/channel-policy/${targetType}/${targetId}`);
   let inherited = { rules: [], defaultPolicy: "allow" };
   if (targetType === "device" && group) inherited = await api(`/api/v1/admin/channel-policy/group/${group.id}`);
   activePolicy = { targetType, targetId, playlist, ownRules: new Map(own.rules.filter((rule) => rule.playlist_id === playlist.id).map((rule) => [rule.playlist_item_id, rule.decision])), ownDefault: own.defaultPolicy || (targetType === "group" ? "allow" : "inherit"), groupRules: new Map(inherited.rules.filter((rule) => rule.playlist_id === playlist.id).map((rule) => [rule.playlist_item_id, rule.decision])), groupDefault: inherited.defaultPolicy || "allow", groupName: group?.name || "" };
   $("#channelPolicyTargetType").value = targetType; $("#channelPolicyTargetId").value = targetId; $("#channelPolicyPlaylistId").value = playlist.id;
-  $("#channelPolicyTitle").textContent = `${target.name} channel policy`; $("#channelPolicySubtitle").textContent = `${playlist.title} · Individual box decisions always have final precedence.`;
+  $("#channelPolicyTitle").textContent = `${target.name} Channel Policy`; $("#channelPolicySubtitle").textContent = `${playlist.title} · Individual box decisions always have final precedence.`;
   $("#channelPolicyDefault").innerHTML = targetType === "group" ? `<option value="allow">Allow all unless blocked</option><option value="block">Block all unless allowed</option>` : `<option value="inherit">Inherit group/default</option><option value="allow">Allow all unless this box blocks</option><option value="block">Block all unless this box allows</option>`;
   $("#channelPolicyDefault").value = activePolicy.ownDefault; $("#channelPolicySearch").value = "";
   const groups = [...new Set((playlist.playlist_items || []).map((item) => item.metadata?.group).filter(Boolean))].sort();
@@ -1414,11 +2214,51 @@ function renderChannelPolicy() {
   $("#channelPolicySummary").textContent = `${allowed} allowed · ${blocked} blocked · ${items.length} visible in this filter`;
 }
 
-$("#channelPolicySearch")?.addEventListener("input", renderChannelPolicy); $("#channelPolicyGroupFilter")?.addEventListener("change", renderChannelPolicy); $("#channelPolicyDefault")?.addEventListener("change", (event) => { activePolicy.ownDefault = event.target.value; renderChannelPolicy(); });
+$("#channelPolicySearch")?.addEventListener("input", renderChannelPolicy);
+$("#channelPolicyGroupFilter")?.addEventListener("change", renderChannelPolicy);
+$("#channelPolicyDefault")?.addEventListener("change", (event) => { activePolicy.ownDefault = event.target.value; renderChannelPolicy(); });
 function setVisiblePolicy(decision) { $$(".policy-channel-row").forEach((row) => decision ? activePolicy.ownRules.set(row.dataset.itemId, decision) : activePolicy.ownRules.delete(row.dataset.itemId)); renderChannelPolicy(); }
-$("#policyAllowVisible")?.addEventListener("click", () => setVisiblePolicy("allow")); $("#policyBlockVisible")?.addEventListener("click", () => setVisiblePolicy("block")); $("#policyInheritVisible")?.addEventListener("click", () => setVisiblePolicy(""));
+$("#policyAllowVisible")?.addEventListener("click", () => setVisiblePolicy("allow"));
+$("#policyBlockVisible")?.addEventListener("click", () => setVisiblePolicy("block"));
+$("#policyInheritVisible")?.addEventListener("click", () => setVisiblePolicy(""));
 $$('[data-close-channel-policy]').forEach((button) => button.addEventListener("click", () => $("#channelPolicyDialog").close()));
-$("#channelPolicyForm")?.addEventListener("submit", async (event) => { event.preventDefault(); $("#channelPolicyError").textContent = ""; try { await api(`/api/v1/admin/channel-policy/${activePolicy.targetType}/${activePolicy.targetId}`, { method: "PUT", body: JSON.stringify({ playlistId: activePolicy.playlist.id, defaultPolicy: activePolicy.ownDefault, rules: [...activePolicy.ownRules].map(([playlistItemId, decision]) => ({ playlistItemId, decision })) }) }); $("#channelPolicyDialog").close(); await loadDevices(); await loadBoxGroups(); toast("Channel policy saved and pushed."); } catch (error) { $("#channelPolicyError").textContent = error.message; } });
+
+async function saveChannelPolicyData(syncToDevices = true) {
+  $("#channelPolicyError").textContent = "";
+  try {
+    const result = await api(`/api/v1/admin/channel-policy/${activePolicy.targetType}/${activePolicy.targetId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        playlistId: activePolicy.playlist.id,
+        defaultPolicy: activePolicy.ownDefault,
+        rules: [...activePolicy.ownRules].map(([playlistItemId, decision]) => ({ playlistItemId, decision })),
+        queue_sync: syncToDevices
+      })
+    });
+    $("#channelPolicyDialog").close();
+    await loadDevices();
+    await loadBoxGroups();
+    const count = result.pushedDevices || 0;
+    if (syncToDevices) {
+      showToast(count > 0 ? `Channel policy saved and pushed to ${count} online screen${count === 1 ? "" : "s"}.` : `Channel policy saved.`, "success");
+    } else {
+      showToast("Channel policy saved as draft (No sync).", "success");
+    }
+  } catch (error) {
+    $("#channelPolicyError").textContent = error.message;
+    showToast(error.message, "error");
+  }
+}
+
+$("#channelPolicyForm")?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  saveChannelPolicyData(true);
+});
+
+$("#savePolicyDraftBtn")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  saveChannelPolicyData(false);
+});
 $("#editDeviceChannelPolicy")?.addEventListener("click", () => openChannelPolicy("device", $("#deviceId").value));
 $("#deviceAssignedPlaylist")?.addEventListener("change", () => $("#editDeviceChannelPolicy").disabled = !($("#deviceAssignedPlaylist").value || state.groups.find((group) => group.id === $("#deviceBoxGroup").value)?.playlist_id));
 $("#deviceBoxGroup")?.addEventListener("change", () => $("#editDeviceChannelPolicy").disabled = !($("#deviceAssignedPlaylist").value || state.groups.find((group) => group.id === $("#deviceBoxGroup").value)?.playlist_id));

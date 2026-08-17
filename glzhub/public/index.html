@@ -3,23 +3,32 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#050a12">
   <title>GLZ Hub | Device Management & TV Studio Control Center</title>
   <meta name="description" content="Centralized device management, box groups, playlist studio, guest experiences, and XMLTV EPG schedule editor for GLZ TV displays.">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GLZ Hub">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@500;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 </head>
 
 <body>
   <div class="shell">
-    <aside class="rail">
-      <a class="brand" href="/">
-        <span class="brand-mark">G</span>
-        <span><strong>GLZ Hub</strong><small>Control Center</small></span>
-      </a>
+    <div id="railBackdrop" class="rail-backdrop hidden"></div>
+    <aside class="rail" id="mainRail">
+      <div class="rail-header">
+        <a class="brand" href="/">
+          <span class="brand-mark">G</span>
+          <span><strong>GLZ Hub</strong><small>Control Center</small></span>
+        </a>
+        <button id="closeRailButton" class="icon-button mobile-only" aria-label="Close Menu">✕</button>
+      </div>
       <nav>
         <button class="nav active" data-view="devices">▣ <span>Devices</span></button>
         <button class="nav" data-view="groups">▦ <span>Box groups</span></button>
@@ -32,12 +41,27 @@
         <button class="nav" data-view="pair">＋ <span>Pair a TV</span></button>
       </nav>
       <div class="rail-foot">
-        <span id="accountEmail">Not signed in</span>
+        <div class="user-chip">
+          <div class="user-avatar" id="userAvatar">A</div>
+          <div class="user-info">
+            <span id="accountEmail">Not signed in</span>
+            <small id="connectionStatus" class="connection-status">Online</small>
+          </div>
+        </div>
         <button id="signOut" class="text-button hidden">Sign out</button>
       </div>
     </aside>
 
     <main>
+      <div class="mobile-top-bar mobile-only">
+        <button id="mobileNavToggle" class="mobile-menu-btn" aria-label="Open Navigation">☰</button>
+        <div class="mobile-brand">
+          <span class="brand-mark-sm">G</span>
+          <strong>GLZ Hub</strong>
+        </div>
+        <button id="mobileRefreshBtn" class="icon-button" title="Refresh">🔄</button>
+      </div>
+
       <section id="authView" class="auth-wrap">
         <div class="auth-card">
           <div class="eyebrow">FAMILY ENTERTAINMENT & CONTROL</div>
@@ -67,23 +91,55 @@
       </section>
 
       <section id="appView" class="hidden">
-        <header>
+        <header id="mainAppHeader">
           <div>
             <div class="eyebrow">GLZTECH CONTROL CENTER</div>
             <h2 id="pageTitle">Your TVs</h2>
           </div>
           <div class="header-actions">
-            <button id="refreshDashboardButton" type="button" class="secondary" title="Refresh all device status">🔄 Refresh</button>
-            <button id="pairButton" class="primary">＋ Pair a TV</button>
+            <button id="refreshDashboardButton" type="button" class="secondary" title="Refresh all device status">🔄 <span>Refresh</span></button>
+            <button id="pairButton" class="primary">＋ <span>Pair a TV</span></button>
           </div>
         </header>
 
+        <!-- Devices List View -->
         <section id="devicesView">
           <div class="stats">
-            <article><span>Managed screens</span><strong id="deviceCount">0</strong></article>
-            <article><span>Online now</span><strong id="onlineCount">0</strong></article>
-            <article><span>Needs attention</span><strong id="attentionCount">0</strong></article>
+            <article class="stat-card">
+              <div class="stat-meta">
+                <span>Managed screens</span>
+                <strong id="deviceCount">0</strong>
+              </div>
+              <div class="stat-badge" id="fleetScoreBadge">100% HEALTH</div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-meta">
+                <span>Online now</span>
+                <strong id="onlineCount" class="text-emerald">0</strong>
+              </div>
+              <div class="stat-indicator online-pulse"></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-meta">
+                <span>Needs attention</span>
+                <strong id="attentionCount" class="text-amber">0</strong>
+              </div>
+              <div class="stat-indicator" id="attentionIndicator"></div>
+            </article>
           </div>
+
+          <div class="device-toolbar">
+            <div class="search-wrap">
+              <input id="deviceSearchInput" type="search" placeholder="⌕ Filter screens by name, room, guest, model, or status…" autocomplete="off">
+            </div>
+            <div class="filter-pills" id="deviceFilterPills">
+              <button class="filter-pill active" data-filter="all">All</button>
+              <button class="filter-pill" data-filter="online">Online</button>
+              <button class="filter-pill" data-filter="syncing">Syncing</button>
+              <button class="filter-pill" data-filter="offline">Offline</button>
+            </div>
+          </div>
+
           <div id="deviceGrid" class="device-list"></div>
           <div id="emptyState" class="empty hidden">
             <div class="empty-icon">＋</div>
@@ -93,6 +149,193 @@
           </div>
         </section>
 
+        <!-- Dedicated Full-Page Device Editor Studio -->
+        <section id="deviceEditorView" class="hidden">
+          <div class="editor-header">
+            <div class="editor-breadcrumb">
+              <button type="button" class="back-link" id="backToDevicesBtn">← Back to TV Fleet</button>
+              <div class="device-hero">
+                <div class="screen-icon-lg"></div>
+                <div>
+                  <div class="eyebrow" id="editorDeviceEyebrow">DEVICE CONTROL STUDIO</div>
+                  <h2 id="editorDeviceTitle">Living Room</h2>
+                  <div class="device-quick-meta">
+                    <span id="editorDeviceStatus" class="status">ONLINE</span>
+                    <span id="editorDeviceModel" class="meta-pill">Android TV</span>
+                    <span id="editorDeviceSite" class="meta-pill">Hotel Resort</span>
+                    <span id="editorDeviceVersion" class="meta-pill">App v2.2.0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="header-actions">
+              <button id="forceRefreshDevice" type="button" class="secondary">⚡ Force Refresh</button>
+              <button id="unpairDevice" type="button" class="danger-button">Remove Pairing</button>
+              <button id="saveDeviceNoSyncTopBtn" type="button" class="secondary">💾 Save (No Sync)</button>
+              <button id="saveDeviceTopBtn" type="button" class="primary">Save &amp; Sync to TV</button>
+            </div>
+          </div>
+
+          <div class="editor-nav-tabs">
+            <button type="button" class="editor-tab active" data-tab="tab-general">🏷️ General &amp; Stay</button>
+            <button type="button" class="editor-tab" data-tab="tab-lineup">📺 TV Channels &amp; Guide</button>
+            <button type="button" class="editor-tab" data-tab="tab-playback">🎨 Playback &amp; Display</button>
+            <button type="button" class="editor-tab" data-tab="tab-apps">📱 Managed Apps</button>
+            <button type="button" class="editor-tab" data-tab="tab-network">🌐 Network &amp; System</button>
+          </div>
+
+          <form id="deviceForm" class="editor-form">
+            <input id="deviceId" type="hidden">
+            <input id="configVersion" type="hidden">
+
+            <!-- Tab 1: General & Stay -->
+            <div class="tab-pane active" id="tab-general">
+              <div class="editor-card">
+                <h4 class="card-title">Identity &amp; Location</h4>
+                <div class="form-grid">
+                  <label>Device Name<input id="deviceName" required placeholder="e.g. Master Bedroom"></label>
+                  <label>Welcome Guest Name<input id="guestName" required placeholder="e.g. John Doe"></label>
+                  <label class="wide">Assigned Property<select id="deviceSite"></select></label>
+                  <label>Room / Suite Number<input id="roomNumber" maxlength="30" placeholder="e.g. 402"></label>
+                  <label>Weather Location<input id="weatherLocation" placeholder="e.g. San Juan, PR"></label>
+                </div>
+              </div>
+              <div class="editor-card">
+                <h4 class="card-title">Guest Stay Period</h4>
+                <div class="form-grid">
+                  <label>Arrival Date<input id="arrivalDate" type="date"></label>
+                  <label>Departure Date<input id="departureDate" type="date"></label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 2: Channels & Lineup -->
+            <div class="tab-pane" id="tab-lineup">
+              <div class="editor-card">
+                <h4 class="card-title">Assigned TV Lineup</h4>
+                <div class="form-grid">
+                  <label class="wide">Assigned TV Playlist Lineup
+                    <select id="deviceAssignedPlaylist">
+                      <option value="">Default (All Published TV Playlists)</option>
+                    </select>
+                  </label>
+                  <label class="wide">Box Group (Shared Lineup &amp; Policy)
+                    <select id="deviceBoxGroup"><option value="">No box group</option></select>
+                  </label>
+                  <div class="wide channel-policy-launch-card">
+                    <div>
+                      <strong>Granular Channel Access Rules</strong>
+                      <p>Override group policy to allow or block specific channels on this box.</p>
+                    </div>
+                    <button id="editDeviceChannelPolicy" type="button" class="secondary">Configure Channel Policy</button>
+                  </div>
+                  <label class="wide">Home Screen Hero Preview Channel
+                    <select id="homePreviewChannel"><option value="">No live preview</option></select>
+                    <small>Muted live TV channel played inside the GLZ TV Home hero banner.</small>
+                  </label>
+                </div>
+              </div>
+              <div class="editor-card">
+                <h4 class="card-title">Direct Stream &amp; XMLTV Overrides</h4>
+                <div class="form-grid">
+                  <label class="wide">Custom M3U Playlist URL (Optional Override)<input id="playlistUrl" type="url" placeholder="https://…"></label>
+                  <label class="wide">Custom XMLTV EPG URL (Optional Override)<input id="epgUrl" type="url" placeholder="https://…"></label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 3: Playback & Display -->
+            <div class="tab-pane" id="tab-playback">
+              <div class="editor-card">
+                <h4 class="card-title">Startup &amp; Interface Experience</h4>
+                <div class="form-grid">
+                  <label>Start Screen Destination
+                    <select id="startDestination">
+                      <option value="Home">Home (Guest Portal)</option>
+                      <option value="Live">Live TV Guide</option>
+                      <option value="You">You (Account / Apps)</option>
+                    </select>
+                  </label>
+                  <label>Visual Theme Mode
+                    <select id="themeMode">
+                      <option value="adaptive">Adaptive</option>
+                      <option value="dark">Dark Luxury</option>
+                      <option value="light">Light</option>
+                      <option value="ocean">Ocean Blue</option>
+                      <option value="sunset">Sunset Amber</option>
+                      <option value="emerald">Emerald Green</option>
+                      <option value="cyberpunk">Cyberpunk Neon</option>
+                      <option value="midnight">Midnight OLED</option>
+                    </select>
+                  </label>
+                  <label>OSD Banner Timeout
+                    <select id="osdTimeoutSeconds">
+                      <option value="5">5 seconds</option>
+                      <option value="7">7 seconds</option>
+                      <option value="8">8 seconds (default)</option>
+                      <option value="10">10 seconds</option>
+                    </select>
+                  </label>
+                  <label>Closed Captions Language<input id="captionsLanguage" maxlength="12" placeholder="en"></label>
+                </div>
+              </div>
+              <div class="editor-card">
+                <h4 class="card-title">Display &amp; Power Behaviors</h4>
+                <div class="checkbox-grid">
+                  <label class="check-card"><input id="captionsEnabled" type="checkbox"> <div><strong>Enable Closed Captions</strong><small>Show subtitles on supported video streams</small></div></label>
+                  <label class="check-card"><input id="autoStart" type="checkbox"> <div><strong>Auto-Start on Boot</strong><small>Launch GLZ TV when television turns on</small></div></label>
+                  <label class="check-card"><input id="resumeLastChannel" type="checkbox"> <div><strong>Resume Last Channel</strong><small>Automatically start the last watched stream</small></div></label>
+                  <label class="check-card"><input id="keepAwakeHome" type="checkbox"> <div><strong>Keep Screen Awake on Home</strong><small>Prevent TV screensaver while on guest home</small></div></label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 4: Managed Apps -->
+            <div class="tab-pane" id="tab-apps">
+              <div class="editor-card">
+                <h4 class="card-title">Visible Entertainment Apps</h4>
+                <p class="field-help" style="margin-bottom:14px;">Select the entertainment apps shown on the GLZ TV Home dashboard.</p>
+                <div id="visibleApps" class="app-checklist"></div>
+              </div>
+              <div class="editor-card">
+                <h4 class="card-title">Deploy App to this Screen</h4>
+                <div class="inline-action">
+                  <select id="deployApp"></select>
+                  <button id="deployButton" type="button" class="secondary">Push to TV</button>
+                </div>
+                <small class="field-help" style="margin-top:6px;display:block;">Sends a remote installation trigger to open the Play Store package or secure APK installer.</small>
+              </div>
+            </div>
+
+            <!-- Tab 5: Network & System -->
+            <div class="tab-pane" id="tab-network">
+              <div class="editor-card">
+                <h4 class="card-title">Network &amp; Connectivity Overrides</h4>
+                <div class="form-grid">
+                  <label>Custom Connection Label<input id="customConnectionLabel" maxlength="80" placeholder="e.g. Resort High-Speed Wi-Fi"></label>
+                  <label>Custom ISP / Provider Name<input id="customIspName" maxlength="100" placeholder="e.g. Property Fiber Network"></label>
+                </div>
+              </div>
+              <div class="editor-card">
+                <h4 class="card-title">App Updates &amp; Diagnostics</h4>
+                <div class="checkbox-grid">
+                  <label class="check-card"><input id="autoUpdate" type="checkbox"> <div><strong>Auto-Update GLZ TV</strong><small>Download release APK updates automatically</small></div></label>
+                  <label class="check-card"><input id="wifiOnly" type="checkbox"> <div><strong>Wi-Fi Only Downloads</strong><small>Do not use mobile/metered data</small></div></label>
+                </div>
+              </div>
+            </div>
+
+            <p id="deviceError" class="error"></p>
+
+            <div class="editor-footer-bar">
+              <button type="button" class="secondary" id="cancelDeviceEditorBtn">Cancel &amp; Back</button>
+              <button type="button" class="secondary" id="saveDeviceNoSyncBtn">💾 Save Draft (No Sync)</button>
+              <button type="submit" class="primary save-large" id="saveDeviceSyncBtn">Save &amp; Sync to TV</button>
+            </div>
+          </form>
+        </section>
+
+        <!-- EPG View -->
         <section id="epgView" class="hidden">
           <div class="epg-toolbar">
             <div>
@@ -116,7 +359,7 @@
           <div id="epgNotice" class="epg-notice">Select a playlist, then load its managed guide or open an XMLTV source.</div>
           <div class="epg-workspace">
             <div class="epg-workspace-tools">
-              <input id="epgChannelFilter" placeholder="⌕ Filter channels…">
+              <input id="epgChannelFilter" placeholder="⌕ Filter channels by name or ID…">
               <label>Schedule date<input id="epgScheduleDate" type="date"></label>
               <button id="epgAddChannel" class="secondary" disabled>＋ Add channel</button>
               <button id="epgAddProgramme" class="primary" disabled>＋ Add programme</button>
@@ -125,26 +368,42 @@
           </div>
         </section>
 
+        <!-- Box Groups Studio View -->
         <section id="groupsView" class="hidden">
           <div class="section-toolbar">
             <div>
-              <div class="eyebrow">CHANNEL ACCESS CONTROL</div>
+              <div class="eyebrow">CHANNEL ACCESS CONTROL &amp; FLEET CLUSTERS</div>
               <h3>Box Groups</h3>
-              <p>Assign a shared lineup and channel policy to multiple GLZ TV boxes.</p>
+              <p>Assign shared TV lineups and granular channel policy to clusters of televisions.</p>
             </div>
-            <button id="addBoxGroup" class="primary">＋ Add box group</button>
+            <div class="header-actions">
+              <button id="addBoxGroup" class="primary">＋ Add box group</button>
+            </div>
+          </div>
+          <div class="studio-help">
+            <span><strong>Shared Lineups</strong> assign one master playlist to an entire cluster of screens with one click.</span>
+            <span><strong>Channel Policy</strong> block or allow specific channels per group while letting individual boxes override.</span>
+            <span><strong>Bulk TV Push</strong> push live lineup and policy reloads across all online group screens simultaneously.</span>
+          </div>
+          <div class="device-toolbar">
+            <div class="search-wrap">
+              <input id="groupSearchInput" type="search" placeholder="⌕ Search box groups by name or master lineup…" autocomplete="off">
+            </div>
           </div>
           <div id="boxGroupList" class="management-list"></div>
-          <div id="boxGroupEmpty" class="empty">
+          <div id="boxGroupEmpty" class="empty hidden">
             <div class="empty-icon">▦</div>
             <h3>No box groups yet</h3>
             <p>Create a group such as Puerto Rico Rooms, Lobby TVs, or Sports Bar.</p>
+            <button type="button" class="primary" onclick="$('#addBoxGroup').click()">＋ Add Box Group</button>
           </div>
         </section>
 
+        <!-- App Library View -->
         <section id="appsView" class="hidden">
           <div class="section-toolbar">
             <div>
+              <div class="eyebrow">ENTERTAINMENT &amp; UTILITIES</div>
               <h3>Managed app library</h3>
               <p>Publish Play Store listings or HTTPS APKs from your repository to paired TVs.</p>
             </div>
@@ -158,9 +417,11 @@
           </div>
         </section>
 
+        <!-- Radio Streams View -->
         <section id="radioView" class="hidden">
           <div class="section-toolbar">
             <div>
+              <div class="eyebrow">AUDIO BROADCASTS</div>
               <h3>GLZ Radio Streams</h3>
               <p>Manage audio broadcast streams and metadata consumed by glz-radio.</p>
             </div>
@@ -174,6 +435,7 @@
           </div>
         </section>
 
+        <!-- Playlist Studio View -->
         <section id="studioView" class="hidden">
           <div class="section-toolbar">
             <div>
@@ -181,11 +443,13 @@
               <h3>Playlist Studio</h3>
               <p>Import, organize, edit and publish channel lineups served to GLZ TV devices.</p>
             </div>
-            <button id="addPlaylistButton" class="primary">＋ Add TV playlist</button>
+            <div class="header-actions">
+              <button id="addPlaylistButton" class="primary">＋ Add TV playlist</button>
+            </div>
           </div>
           <div class="studio-help">
             <span><strong>Click to edit</strong> channel numbers and names directly in the table.</span>
-            <span><strong>Edit logo &amp; details</strong> opens stream, EPG ID, group, visibility and artwork controls.</span>
+            <span><strong>Preview stream</strong> test any live HLS stream or video feed right in your browser.</span>
             <span><strong>EPG editor</strong> imports XML/XML.GZ or fetches a guide from epg.best and publishes it with the M3U.</span>
           </div>
           <input id="m3uFileInput" class="hidden" type="file" accept=".m3u,.m3u8,audio/x-mpegurl">
@@ -197,63 +461,217 @@
           </div>
         </section>
 
+        <!-- Sites / Properties Studio View -->
         <section id="sitesView" class="hidden">
           <div class="section-toolbar">
             <div>
+              <div class="eyebrow">LOCATIONS, BUILDINGS &amp; RESORTS</div>
               <h3>Properties</h3>
-              <p>Organize televisions by hotel, building, or managed location.</p>
+              <p>Organize televisions by hotel, resort, building, or managed location.</p>
             </div>
-            <button id="addSiteButton" class="primary">＋ Add property</button>
+            <div class="header-actions">
+              <button id="addSiteButton" class="primary">＋ Add property</button>
+            </div>
+          </div>
+          <div class="studio-help">
+            <span><strong>Property Branding</strong> customize guest portals, hero banners, and Wi-Fi essentials per location.</span>
+            <span><strong>Fleet Distribution</strong> group televisions by resort property to monitor uptime and sync health.</span>
+            <span><strong>Instant Navigation</strong> filter screens or jump straight into the guest experience studio for any property.</span>
+          </div>
+          <div class="device-toolbar">
+            <div class="search-wrap">
+              <input id="siteSearchInput" type="search" placeholder="⌕ Search properties by name or address…" autocomplete="off">
+            </div>
           </div>
           <div id="siteList" class="management-list"></div>
           <div id="siteEmpty" class="empty hidden">
             <div class="empty-icon">⌂</div>
             <h3>No properties yet</h3>
             <p>Create a property before assigning televisions.</p>
+            <button type="button" class="primary" onclick="$('#addSiteButton').click()">＋ Add Property</button>
           </div>
         </section>
 
+        <!-- Guest Experience Studio View -->
         <section id="experienceView" class="hidden">
-          <form id="experienceForm" class="experience-editor">
-            <div class="section-toolbar">
-              <div>
-                <h3>Property guest experience</h3>
-                <p>Branding, stay information and services delivered to TVs assigned to this property.</p>
+          <div class="editor-header">
+            <div class="editor-breadcrumb">
+              <div class="device-hero">
+                <div class="property-icon-lg">✦</div>
+                <div>
+                  <div class="eyebrow">GUEST PORTAL &amp; BRANDING STUDIO</div>
+                  <h2 id="experiencePropertyTitle">Property Guest Experience</h2>
+                  <div class="device-quick-meta">
+                    <span id="experienceScreensCount" class="meta-pill">0 Screens Assigned</span>
+                    <span id="experienceOnlineCount" class="status">0 ONLINE</span>
+                    <span class="meta-pill">GLZ TV Home Portal</span>
+                  </div>
+                </div>
               </div>
-              <label class="property-picker">Property<select id="experienceSite"></select></label>
-              <button class="primary" type="submit">Save &amp; publish</button>
             </div>
-            <div class="experience-grid">
-              <fieldset>
-                <legend>Welcome</legend>
-                <label>Property name<input id="propertyName" required maxlength="100"></label>
-                <label>Welcome message<input id="welcomeMessage" required maxlength="180"></label>
-                <label>Logo URL<input id="logoUrl" type="url" placeholder="https://…"></label>
-                <label>Hero image URL<input id="heroImageUrl" type="url" placeholder="https://…"></label>
-              </fieldset>
-              <fieldset>
-                <legend>Stay essentials</legend>
-                <label>Wi-Fi name<input id="wifiName" maxlength="100"></label>
-                <label>Wi-Fi instructions<textarea id="wifiInstructions" rows="3" maxlength="300"></textarea></label>
-                <label>Checkout time<input id="checkoutTime" placeholder="11:00 AM" maxlength="40"></label>
-                <label>Front desk contact<input id="frontDesk" placeholder="Dial 0" maxlength="100"></label>
-              </fieldset>
-              <fieldset>
-                <legend>Guest notice</legend>
-                <label>Notice title<input id="noticeTitle" maxlength="100"></label>
-                <label>Notice message<textarea id="noticeBody" rows="5" maxlength="500"></textarea></label>
-              </fieldset>
-              <fieldset>
-                <legend>Service tiles</legend>
-                <p class="field-help">One per line: Title | Short description | HTTPS link</p>
-                <textarea id="guestServices" rows="8"
-                  placeholder="Room Service | View today’s menu | https://hotel.example/menu&#10;Spa | Hours and reservations | https://hotel.example/spa"></textarea>
-              </fieldset>
+            <div class="header-actions">
+              <div class="property-select-wrap">
+                <label style="margin:0;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px;">Property:
+                  <select id="experienceSite" style="padding:7px 12px;font-size:13px;width:auto;min-width:180px;"></select>
+                </label>
+              </div>
+              <button id="previewExperienceBtn" type="button" class="secondary">👁️ Live TV Preview</button>
+              <button id="saveExperienceDraftTopBtn" type="button" class="secondary">💾 Save Draft</button>
+              <button id="saveExperienceTopBtn" type="button" class="primary">Save &amp; Publish</button>
             </div>
+          </div>
+
+          <div class="editor-nav-tabs">
+            <button type="button" class="exp-tab active" data-tab="exp-tab-branding">🏨 Branding &amp; Welcome</button>
+            <button type="button" class="exp-tab" data-tab="exp-tab-wifi">📶 Stay Essentials &amp; Wi-Fi</button>
+            <button type="button" class="exp-tab" data-tab="exp-tab-notices">📢 Notices &amp; Announcements</button>
+            <button type="button" class="exp-tab" data-tab="exp-tab-services">🛎️ Concierge &amp; Service Tiles</button>
+          </div>
+
+          <form id="experienceForm" class="editor-form">
+            <!-- Tab 1: Branding & Welcome -->
+            <div class="exp-pane active" id="exp-tab-branding">
+              <div class="editor-card">
+                <h4 class="card-title">Property Identity &amp; Welcome Headline</h4>
+                <div class="form-grid">
+                  <label>Property Name<input id="propertyName" required maxlength="100" placeholder="e.g. GLZ Hotel &amp; Resort"></label>
+                  <label>Welcome Message / Tagline<input id="welcomeMessage" required maxlength="180" placeholder="e.g. Relax, explore, and enjoy your stay."></label>
+                  <label class="wide">Logo URL (PNG / SVG)<input id="logoUrl" type="url" placeholder="https://…/logo.png"><small>High-resolution transparent logo displayed on the TV Home bar.</small></label>
+                  <label class="wide">Hero Background Image URL (16:9 4K / 1080p)<input id="heroImageUrl" type="url" placeholder="https://…/hero.jpg"><small>High-definition luxury backdrop displayed behind the Home portal.</small></label>
+                </div>
+              </div>
+              <div class="editor-card" id="brandingPreviewCard">
+                <h4 class="card-title">Live Branding Preview</h4>
+                <div class="branding-live-preview">
+                  <div class="hero-preview-backdrop" id="heroPreviewBackdrop">
+                    <div class="hero-preview-overlay">
+                      <img id="logoPreviewImg" class="logo-preview-img hidden" alt="Logo">
+                      <div class="hero-preview-text">
+                        <strong id="previewPropertyName">GLZ Hotel &amp; Resort</strong>
+                        <span id="previewWelcomeMsg">Relax, explore, and enjoy your stay.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 2: Stay Essentials & Wi-Fi -->
+            <div class="exp-pane" id="exp-tab-wifi">
+              <div class="editor-card">
+                <h4 class="card-title">Guest Wi-Fi Connectivity</h4>
+                <div class="form-grid">
+                  <label>Wi-Fi Network Name (SSID)<input id="wifiName" maxlength="100" placeholder="e.g. GLZ-Resort-Guest"></label>
+                  <label class="wide">Wi-Fi Password &amp; Portal Instructions<textarea id="wifiInstructions" rows="3" maxlength="300" placeholder="e.g. Select GLZ-Resort-Guest. Enter your room number and last name on the captive portal."></textarea></label>
+                </div>
+              </div>
+              <div class="editor-card">
+                <h4 class="card-title">Front Desk &amp; Checkout Information</h4>
+                <div class="form-grid">
+                  <label>Checkout Time<input id="checkoutTime" placeholder="e.g. 11:00 AM" maxlength="40"></label>
+                  <label>Front Desk / Concierge Contact<input id="frontDesk" placeholder="e.g. Dial 0 or 787-555-0199" maxlength="100"></label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 3: Notices & Announcements -->
+            <div class="exp-pane" id="exp-tab-notices">
+              <div class="editor-card">
+                <h4 class="card-title">Guest Broadcast Notice</h4>
+                <p class="field-help" style="margin-bottom:14px;">Displays an eye-catching announcement card or weather notice on the guest home screen.</p>
+                <div class="form-grid">
+                  <label class="wide">Notice Title<input id="noticeTitle" maxlength="100" placeholder="e.g. Sunset Poolside Happy Hour"></label>
+                  <label class="wide">Notice Body / Details<textarea id="noticeBody" rows="4" maxlength="500" placeholder="e.g. Join us by the infinity pool daily from 5 PM to 7 PM for complimentary artisanal cocktails."></textarea></label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 4: Concierge & Service Tiles (Visual Builder) -->
+            <div class="exp-pane" id="exp-tab-services">
+              <div class="editor-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+                  <div>
+                    <h4 class="card-title" style="margin:0;">Interactive Guest Service Tiles</h4>
+                    <p class="field-help" style="margin:2px 0 0;">Interactive services and links delivered directly to televisions assigned to this property.</p>
+                  </div>
+                  <button type="button" id="addServiceTileBtn" class="primary small-btn">＋ Add Service Tile</button>
+                </div>
+                <div id="serviceTilesList" class="service-tiles-grid"></div>
+                <!-- Hidden fallback for sync compatibility -->
+                <textarea id="guestServices" class="hidden"></textarea>
+              </div>
+            </div>
+
             <p id="experienceError" class="error"></p>
+
+            <div class="editor-footer-bar">
+              <button type="button" class="secondary" id="saveExperienceDraftBtn">💾 Save Draft (No Sync)</button>
+              <button type="submit" class="primary save-large" id="saveExperiencePublishBtn">Save &amp; Publish to TVs</button>
+            </div>
           </form>
         </section>
 
+        <!-- Live TV Experience Simulator Dialog -->
+        <dialog id="experienceSimulatorDialog" style="max-width: 860px; width: 94vw;">
+          <div class="dialog-head">
+            <div>
+              <div class="eyebrow">GLZ TV HOME PREVIEW</div>
+              <h3 id="simDialogTitle">TV Screen Simulation</h3>
+              <p class="field-help">Live preview of the guest welcome interface on television displays.</p>
+            </div>
+            <button class="icon-button" type="button" id="closeSimDialogBtn">✕</button>
+          </div>
+          <div class="tv-simulator-frame">
+            <div class="tv-sim-hero" id="simHeroBg">
+              <div class="tv-sim-topbar">
+                <div class="tv-sim-logo-wrap">
+                  <img id="simLogo" class="tv-sim-logo hidden" alt="">
+                  <strong id="simPropertyName">GLZ Hotel &amp; Resort</strong>
+                </div>
+                <div class="tv-sim-clock">3:45 PM · 78°F Sunny</div>
+              </div>
+              <div class="tv-sim-welcome-box">
+                <div class="tv-sim-guest-greeting">WELCOME TO YOUR SUITE</div>
+                <h2 id="simWelcomeMsg">Relax, explore, and enjoy your stay.</h2>
+              </div>
+            </div>
+            <div class="tv-sim-widgets">
+              <div class="tv-sim-card wifi-card">
+                <div class="card-icon">📶</div>
+                <div>
+                  <small>GUEST WI-FI</small>
+                  <strong id="simWifiName">GLZ-Guest</strong>
+                  <p id="simWifiInfo">Connect with your room number</p>
+                </div>
+              </div>
+              <div class="tv-sim-card desk-card">
+                <div class="card-icon">🛎️</div>
+                <div>
+                  <small>FRONT DESK</small>
+                  <strong id="simFrontDesk">Dial 0</strong>
+                  <p id="simCheckout">Checkout: 11:00 AM</p>
+                </div>
+              </div>
+              <div class="tv-sim-card notice-card" id="simNoticeCard">
+                <div class="card-icon">📢</div>
+                <div>
+                  <small>ANNOUNCEMENT</small>
+                  <strong id="simNoticeTitle">Notice</strong>
+                  <p id="simNoticeBody">No active notices</p>
+                </div>
+              </div>
+            </div>
+            <div class="tv-sim-services-row">
+              <div class="tv-sim-services-heading">FEATURED HOTEL SERVICES</div>
+              <div id="simServicesGrid" class="tv-sim-services-grid"></div>
+            </div>
+          </div>
+          <div class="form-actions" style="margin-top:18px;">
+            <button type="button" class="secondary" id="closeSimDialogBtnBottom">Close Preview</button>
+          </div>
+        </dialog>
+
+        <!-- Pair TV View -->
         <section id="pairView" class="panel hidden">
           <div class="eyebrow">ADD A SCREEN</div>
           <h3>Pair a GLZ TV</h3>
@@ -282,115 +700,65 @@
     </main>
   </div>
 
-  <dialog id="deviceDialog">
-    <form id="deviceForm" method="dialog">
+  <!-- Box Group Dialog -->
+  <dialog id="boxGroupDialog" style="max-width: 780px; width: 92vw;">
+    <form id="boxGroupForm">
       <div class="dialog-head">
         <div>
-          <div class="eyebrow">DEVICE SETTINGS</div>
-          <h3 id="dialogTitle">Living Room</h3>
+          <div class="eyebrow">BOX GROUP STUDIO</div>
+          <h3 id="boxGroupDialogTitle">Add box group</h3>
         </div>
-        <button class="icon-button" value="cancel" aria-label="Close">×</button>
+        <button class="icon-button" type="button" data-close-box-group>✕</button>
       </div>
-      <input id="deviceId" type="hidden">
-      <input id="configVersion" type="hidden">
-      <div class="form-grid">
-        <label>Device name<input id="deviceName" required></label>
-        <label>Welcome guest name<input id="guestName" required></label>
-        <label class="wide">Property<select id="deviceSite"></select></label>
-        <label class="wide">Assigned TV Playlist Lineup
-          <select id="deviceAssignedPlaylist">
-            <option value="">Default (All Published TV Playlists)</option>
-          </select>
-        </label>
-        <label class="wide">Box group<select id="deviceBoxGroup"><option value="">No box group</option></select></label>
-        <div class="wide channel-policy-launch">
-          <span><strong>Channel access</strong><small>Individual box rules override its group.</small></span>
-          <button id="editDeviceChannelPolicy" type="button" class="secondary">Set channel policy</button>
-        </div>
-        <label>Room number<input id="roomNumber" maxlength="30"></label>
-        <label>Arrival date<input id="arrivalDate" type="date"></label>
-        <label>Departure date<input id="departureDate" type="date"></label>
-        <label class="wide">M3U playlist URL<input id="playlistUrl" type="url" placeholder="https://…"></label>
-        <label class="wide">XMLTV EPG URL<input id="epgUrl" type="url" placeholder="https://…"></label>
-        <label class="wide">Home preview channel<select id="homePreviewChannel"><option value="">No live preview</option></select><small>Muted live channel shown inside the Home hero card.</small></label>
-        <label>Weather location<input id="weatherLocation"></label>
-        <label>Connection label<input id="customConnectionLabel" maxlength="80" placeholder="Automatic (Wi-Fi / Ethernet)"><small>Optional label shown on the TV, such as Resort Ethernet.</small></label>
-        <label>ISP or network name<input id="customIspName" maxlength="100" placeholder="Automatic ISP detection"><small>Optional custom provider or property network name.</small></label>
-        <label>Start screen
-          <select id="startDestination">
-            <option>Home</option>
-            <option>Live</option>
-            <option>You</option>
-          </select>
-        </label>
-        <label>Theme
-          <select id="themeMode">
-            <option value="adaptive">Adaptive</option>
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-            <option value="ocean">Ocean</option>
-            <option value="sunset">Sunset</option>
-            <option value="emerald">Emerald</option>
-            <option value="cyberpunk">Cyberpunk</option>
-            <option value="midnight">Midnight</option>
-          </select>
-        </label>
-        <label>OSD Banner Timeout
-          <select id="osdTimeoutSeconds">
-            <option value="5">5 seconds</option>
-            <option value="7">7 seconds</option>
-            <option value="8">8 seconds (default)</option>
-            <option value="10">10 seconds</option>
-          </select>
-        </label>
-        <label>Closed captions language<input id="captionsLanguage" maxlength="12" placeholder="en"></label>
-        <label class="check"><input id="captionsEnabled" type="checkbox"> Enable closed captions</label>
-        <label class="check"><input id="autoStart" type="checkbox"> Start GLZ TV after device boot</label>
-        <label class="check"><input id="resumeLastChannel" type="checkbox"> Resume the last channel</label>
-        <label class="check"><input id="keepAwakeHome" type="checkbox"> Keep screen awake on Home</label>
-        <label class="check"><input id="autoUpdate" type="checkbox"> Auto update GLZ TV app</label>
-        <label class="check"><input id="wifiOnly" type="checkbox"> Download updates on Wi-Fi only</label>
-        <fieldset class="wide app-fieldset">
-          <legend>Apps shown inside GLZ TV</legend>
-          <p class="field-help">Check the entertainment apps this television should display.</p>
-          <div id="visibleApps" class="app-checklist"></div>
-        </fieldset>
-        <label class="wide">Deploy a managed app
-          <div class="inline-action"><select id="deployApp"></select><button id="deployButton" type="button" class="secondary">Send to TV</button></div>
-          <small>The TV will open the Play Store or secure repository installer.</small>
-        </label>
-      </div>
-      <p id="deviceError" class="error"></p>
-      <div class="form-actions">
-        <button id="forceRefreshDevice" type="button" class="secondary" style="margin-right: auto;">⚡ Force Refresh EPG &amp; M3U</button>
-        <button id="unpairDevice" type="button" class="danger-button">Remove pairing</button>
-        <button type="button" class="secondary" data-close-dialog>Cancel</button>
-        <button type="submit" class="primary">Save &amp; sync</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="boxGroupDialog">
-    <form id="boxGroupForm">
-      <div class="dialog-head"><div><div class="eyebrow">BOX GROUP</div><h3 id="boxGroupDialogTitle">Add box group</h3></div><button class="icon-button" type="button" data-close-box-group>×</button></div>
       <input id="boxGroupId" type="hidden">
       <div class="form-grid">
-        <label>Group name<input id="boxGroupName" required maxlength="100" placeholder="Puerto Rico Rooms"></label>
-        <label>Master playlist<select id="boxGroupPlaylist" required></select></label>
-        <fieldset class="wide app-fieldset"><legend>Boxes in this group</legend><div id="boxGroupDevices" class="policy-device-list"></div></fieldset>
+        <label>Group Name<input id="boxGroupName" required maxlength="100" placeholder="e.g. Puerto Rico Suites"></label>
+        <label>Master TV Playlist<select id="boxGroupPlaylist" required></select></label>
+        <label class="wide">Default Channel Access Policy
+          <select id="boxGroupDefaultPolicy">
+            <option value="allow">Allow all channels in playlist (unless explicitly blocked)</option>
+            <option value="block">Block all channels in playlist (only show explicitly allowed)</option>
+          </select>
+        </label>
+        <fieldset class="wide app-fieldset">
+          <legend>Member Televisions in this Group</legend>
+          <div class="member-boxes-tools">
+            <input id="boxGroupDeviceSearch" class="small-search" placeholder="⌕ Filter member screens…" autocomplete="off">
+            <div style="display:flex;gap:6px;">
+              <button type="button" id="selectAllBoxesBtn" class="secondary small-btn">Select All</button>
+              <button type="button" id="clearAllBoxesBtn" class="secondary small-btn">Clear</button>
+            </div>
+          </div>
+          <div id="boxGroupDevices" class="policy-device-list"></div>
+        </fieldset>
       </div>
       <p id="boxGroupError" class="error"></p>
-      <div class="form-actions"><button id="deleteBoxGroup" type="button" class="danger-button hidden">Delete group</button><button type="button" class="secondary" data-close-box-group>Cancel</button><button class="primary">Save group</button></div>
+      <div class="form-actions">
+        <button id="deleteBoxGroup" type="button" class="danger-button hidden" style="margin-right: auto;">Delete Group</button>
+        <button type="button" class="secondary" data-close-box-group>Cancel</button>
+        <button type="button" class="secondary" id="saveBoxGroupNoSyncBtn">💾 Save Draft (No Sync)</button>
+        <button class="primary" type="submit" id="saveBoxGroupSyncBtn">Save &amp; Push to Boxes</button>
+      </div>
     </form>
   </dialog>
 
-  <dialog id="channelPolicyDialog" class="policy-dialog">
+  <!-- Channel Policy Dialog -->
+  <dialog id="channelPolicyDialog" class="policy-dialog" style="max-width: 860px; width: 94vw;">
     <form id="channelPolicyForm">
-      <div class="dialog-head"><div><div class="eyebrow">CHANNEL ACCESS POLICY</div><h3 id="channelPolicyTitle">Channel policy</h3><p id="channelPolicySubtitle"></p></div><button class="icon-button" type="button" data-close-channel-policy>×</button></div>
-      <input id="channelPolicyTargetType" type="hidden"><input id="channelPolicyTargetId" type="hidden"><input id="channelPolicyPlaylistId" type="hidden">
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">CHANNEL ACCESS CONTROL</div>
+          <h3 id="channelPolicyTitle">Channel Policy</h3>
+          <p id="channelPolicySubtitle"></p>
+        </div>
+        <button class="icon-button" type="button" data-close-channel-policy>✕</button>
+      </div>
+      <input id="channelPolicyTargetType" type="hidden">
+      <input id="channelPolicyTargetId" type="hidden">
+      <input id="channelPolicyPlaylistId" type="hidden">
       <div class="policy-controls">
         <label>Default behavior<select id="channelPolicyDefault"></select></label>
-        <input id="channelPolicySearch" placeholder="Search number, channel, group, or EPG ID…">
+        <input id="channelPolicySearch" placeholder="⌕ Search number, channel name, group, or EPG ID…">
         <select id="channelPolicyGroupFilter"><option value="">All channel groups</option></select>
         <button id="policyAllowVisible" type="button" class="secondary">Allow visible</button>
         <button id="policyBlockVisible" type="button" class="secondary">Block visible</button>
@@ -399,35 +767,57 @@
       <div class="policy-summary" id="channelPolicySummary"></div>
       <div id="channelPolicyList" class="policy-channel-list"></div>
       <p id="channelPolicyError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-channel-policy>Cancel</button><button class="primary">Save &amp; push policy</button></div>
+      <div class="form-actions">
+        <button type="button" class="secondary" data-close-channel-policy>Cancel</button>
+        <button type="button" class="secondary" id="savePolicyDraftBtn">💾 Save (No Sync)</button>
+        <button class="primary" type="submit">Save &amp; Push Policy</button>
+      </div>
     </form>
   </dialog>
 
-  <dialog id="siteDialog">
+  <!-- Site / Property Dialog -->
+  <dialog id="siteDialog" style="max-width: 740px; width: 92vw;">
     <form id="siteForm">
       <div class="dialog-head">
         <div>
-          <div class="eyebrow">PROPERTY</div>
+          <div class="eyebrow">PROPERTY STUDIO</div>
           <h3 id="siteDialogTitle">Add property</h3>
-        </div><button class="icon-button" type="button" data-close-site>×</button>
+        </div>
+        <button class="icon-button" type="button" data-close-site>✕</button>
       </div>
       <input id="siteId" type="hidden">
       <div class="form-grid">
-        <label>Property name<input id="siteName" required maxlength="100" placeholder="GLZ Hotel Downtown"></label>
-        <label>Address or location<input id="siteAddress" maxlength="240" placeholder="Orlando, Florida"></label>
+        <label>Property Name<input id="siteName" required maxlength="100" placeholder="e.g. GLZ Hotel &amp; Resort San Juan"></label>
+        <label>Address or Location<input id="siteAddress" maxlength="240" placeholder="e.g. 1045 Ashford Ave, San Juan, PR"></label>
+        <fieldset class="wide app-fieldset">
+          <legend>Assign Screens to this Property</legend>
+          <div class="member-boxes-tools">
+            <input id="siteDeviceSearch" class="small-search" placeholder="⌕ Filter screens…" autocomplete="off">
+            <div style="display:flex;gap:6px;">
+              <button type="button" id="selectAllSiteBoxesBtn" class="secondary small-btn">Select All</button>
+              <button type="button" id="clearAllSiteBoxesBtn" class="secondary small-btn">Clear</button>
+            </div>
+          </div>
+          <div id="siteDevicesList" class="policy-device-list"></div>
+        </fieldset>
       </div>
       <p id="siteError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-site>Cancel</button><button class="primary" type="submit">Save property</button></div>
+      <div class="form-actions">
+        <button id="deleteSiteBtn" type="button" class="danger-button hidden" style="margin-right: auto;">Delete Property</button>
+        <button type="button" class="secondary" data-close-site>Cancel</button>
+        <button class="primary" type="submit">Save Property</button>
+      </div>
     </form>
   </dialog>
 
+  <!-- App Dialog -->
   <dialog id="appDialog">
     <form id="appForm">
       <div class="dialog-head">
         <div>
           <div class="eyebrow">APP LIBRARY</div>
           <h3 id="appDialogTitle">Add a managed app</h3>
-        </div><button class="icon-button" type="button" data-close-app>×</button>
+        </div><button class="icon-button" type="button" data-close-app>✕</button>
       </div>
       <input id="appId" type="hidden">
       <div class="form-grid">
@@ -446,13 +836,14 @@
     </form>
   </dialog>
 
+  <!-- Radio Dialog -->
   <dialog id="radioDialog">
     <form id="radioForm">
       <div class="dialog-head">
         <div>
           <div class="eyebrow">RADIO STREAMS</div>
           <h3 id="radioDialogTitle">Add radio station</h3>
-        </div><button class="icon-button" type="button" data-close-radio>×</button>
+        </div><button class="icon-button" type="button" data-close-radio>✕</button>
       </div>
       <input id="radioId" type="hidden">
       <div class="form-grid">
@@ -468,13 +859,14 @@
     </form>
   </dialog>
 
-  <dialog id="playlistDialog" style="max-width: 680px; width: 90vw;">
+  <!-- Playlist Studio Dialog -->
+  <dialog id="playlistDialog" style="max-width: 780px; width: 92vw;">
     <form id="playlistForm">
       <div class="dialog-head">
         <div>
           <div class="eyebrow">PLAYLIST STUDIO</div>
           <h3 id="playlistDialogTitle">Edit playlist &amp; channels</h3>
-        </div><button class="icon-button" type="button" data-close-playlist>×</button>
+        </div><button class="icon-button" type="button" data-close-playlist>✕</button>
       </div>
       <input id="playlistId" type="hidden">
       <div class="form-grid">
@@ -487,12 +879,17 @@
         <label class="check wide"><input id="playlistPublished" type="checkbox" checked> Publish this lineup to assigned televisions</label>
       </div>
 
-      <div id="playlistItemsSection" style="margin-top: 1.5rem; border-top: 1px solid var(--line); padding-top: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-          <h4 style="margin: 0; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-main);">Channels / Media Items</h4>
-          <button type="button" id="addPlaylistItemButton" class="secondary" style="font-size: 0.8rem; padding: 0.25rem 0.6rem;">＋ Add Channel</button>
+      <div id="playlistItemsSection" class="playlist-items-section">
+        <div class="playlist-items-header">
+          <div>
+            <h4 class="section-title">Channels / Media Items (<span id="playlistItemCount">0</span>)</h4>
+          </div>
+          <div class="channel-actions-group">
+            <input id="playlistItemFilter" class="small-search" placeholder="⌕ Filter channels…" autocomplete="off">
+            <button type="button" id="addPlaylistItemButton" class="secondary small-btn">＋ Add Channel</button>
+          </div>
         </div>
-        <div id="playlistItemsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 220px; overflow-y: auto; padding-right: 4px;"></div>
+        <div id="playlistItemsList" class="playlist-items-scroll"></div>
       </div>
 
       <p id="playlistError" class="error"></p>
@@ -500,11 +897,42 @@
     </form>
   </dialog>
 
+  <!-- Live Stream Preview Dialog -->
+  <dialog id="streamPreviewDialog" class="stream-preview-dialog">
+    <div class="dialog-head">
+      <div>
+        <div class="eyebrow">LIVE STREAM TESTER</div>
+        <h3 id="streamPreviewTitle">Live Stream Preview</h3>
+        <p id="streamPreviewSubtitle" class="stream-subtitle">HLS / Video Player</p>
+      </div>
+      <button class="icon-button" type="button" id="closeStreamPreview">✕</button>
+    </div>
+    <div class="video-container">
+      <video id="previewVideo" controls autoplay playsinline></video>
+      <audio id="previewAudio" controls autoplay class="hidden"></audio>
+    </div>
+    <div class="stream-stats-bar">
+      <div class="stream-stat"><span>Format</span><strong id="statFormat">HLS / Auto</strong></div>
+      <div class="stream-stat"><span>Resolution</span><strong id="statResolution">-- × --</strong></div>
+      <div class="stream-stat"><span>Status</span><strong id="statStatus" class="text-emerald">Connecting…</strong></div>
+      <div class="stream-stat"><span>Buffer</span><strong id="statBuffer">0.0s</strong></div>
+    </div>
+    <div class="stream-url-bar">
+      <input id="streamPreviewUrl" readonly>
+      <button type="button" id="copyStreamUrlBtn" class="secondary small-btn">📋 Copy URL</button>
+      <button type="button" id="openExternalStreamBtn" class="secondary small-btn">↗ External</button>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="secondary" id="stopAndCloseStreamBtn">Close Stream</button>
+    </div>
+  </dialog>
+
+  <!-- Guide Dialog -->
   <dialog id="guideDialog" style="max-width: 720px; width: 92vw;">
     <form id="guideForm">
       <div class="dialog-head">
         <div><div class="eyebrow">XMLTV GUIDE WORKSPACE</div><h3 id="guideDialogTitle">EPG editor</h3></div>
-        <button class="icon-button" type="button" data-close-guide>×</button>
+        <button class="icon-button" type="button" data-close-guide>✕</button>
       </div>
       <input id="guidePlaylistId" type="hidden">
       <div class="form-grid">
@@ -528,9 +956,10 @@
     </form>
   </dialog>
 
+  <!-- EPG Channel Dialog -->
   <dialog id="epgChannelDialog">
     <form id="epgChannelForm">
-      <div class="dialog-head"><div><div class="eyebrow">EPG CHANNEL</div><h3 id="epgChannelDialogTitle">Add channel</h3></div><button class="icon-button" type="button" data-close-epg-channel>×</button></div>
+      <div class="dialog-head"><div><div class="eyebrow">EPG CHANNEL</div><h3 id="epgChannelDialogTitle">Add channel</h3></div><button class="icon-button" type="button" data-close-epg-channel>✕</button></div>
       <input id="epgOriginalChannelId" type="hidden">
       <div class="form-grid">
         <label>XMLTV channel ID<input id="epgChannelId" required maxlength="120" placeholder="WKAQ.us"></label>
@@ -542,9 +971,10 @@
     </form>
   </dialog>
 
+  <!-- EPG Programme Dialog -->
   <dialog id="epgProgrammeDialog">
     <form id="epgProgrammeForm">
-      <div class="dialog-head"><div><div class="eyebrow">PROGRAMME</div><h3 id="epgProgrammeDialogTitle">Add programme</h3></div><button class="icon-button" type="button" data-close-epg-programme>×</button></div>
+      <div class="dialog-head"><div><div class="eyebrow">PROGRAMME</div><h3 id="epgProgrammeDialogTitle">Add programme</h3></div><button class="icon-button" type="button" data-close-epg-programme>✕</button></div>
       <input id="epgProgrammeIndex" type="hidden">
       <div class="form-grid">
         <label class="wide">Channel<select id="epgProgrammeChannel" required></select></label>
@@ -560,13 +990,14 @@
     </form>
   </dialog>
 
+  <!-- Playlist Item Dialog -->
   <dialog id="playlistItemDialog">
     <form id="playlistItemForm">
       <div class="dialog-head">
         <div>
-          <div class="eyebrow">CHANNEL / TRACK ITEM</div>
+          <div class="eyebrow">CHANNEL / MEDIA ITEM</div>
           <h3 id="playlistItemDialogTitle">Add channel to playlist</h3>
-        </div><button class="icon-button" type="button" data-close-playlist-item>×</button>
+        </div><button class="icon-button" type="button" data-close-playlist-item>✕</button>
       </div>
       <input id="itemPlaylistId" type="hidden">
       <input id="itemId" type="hidden">
@@ -581,10 +1012,21 @@
         <label class="check wide"><input id="itemHidden" type="checkbox"> Hide this channel from the published lineup</label>
       </div>
       <p id="itemError" class="error"></p>
-      <div class="form-actions"><button id="deleteCurrentChannel" type="button" class="danger-button hidden">Delete channel</button><button type="button" class="secondary" data-close-playlist-item>Cancel</button><button class="primary" type="submit">Save item</button></div>
+      <div class="form-actions">
+        <button id="previewCurrentItemBtn" type="button" class="secondary" style="margin-right: auto;">▶ Preview stream</button>
+        <button id="deleteCurrentChannel" type="button" class="danger-button hidden">Delete channel</button>
+        <button type="button" class="secondary" data-close-playlist-item>Cancel</button>
+        <button class="primary" type="submit">Save item</button>
+      </div>
     </form>
   </dialog>
-  <div id="toast" role="status"></div>
+
+  <!-- Modern Notification Toast Container -->
+  <div id="toast" role="status" class="toast">
+    <span id="toastIcon" class="toast-icon">ℹ</span>
+    <span id="toastMessage" class="toast-msg">Notification</span>
+  </div>
+
   <script type="module" src="/app.js"></script>
 </body>
 

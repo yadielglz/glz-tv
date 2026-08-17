@@ -24,30 +24,33 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.glztv.app.R
 
+val GoogleSansFlexFamily = FontFamily(
+    Font(R.font.google_sans_flex, FontWeight.Light),
+    Font(R.font.google_sans_flex, FontWeight.Normal),
+    Font(R.font.google_sans_flex, FontWeight.Medium),
+    Font(R.font.google_sans_flex, FontWeight.SemiBold),
+    Font(R.font.google_sans_flex, FontWeight.Bold),
+    Font(R.font.google_sans_flex, FontWeight.ExtraBold),
+    Font(R.font.google_sans_flex, FontWeight.Black)
+)
+
 private val typography = Typography().run {
-    val family = FontFamily(
-        Font(R.font.roboto_flex, FontWeight.Normal),
-        Font(R.font.roboto_flex, FontWeight.Medium),
-        Font(R.font.roboto_flex, FontWeight.SemiBold),
-        Font(R.font.roboto_flex, FontWeight.Bold),
-        Font(R.font.roboto_flex, FontWeight.Black)
-    )
     copy(
-        displayLarge = displayLarge.copy(fontFamily = family),
-        displayMedium = displayMedium.copy(fontFamily = family),
-        displaySmall = displaySmall.copy(fontFamily = family),
-        headlineLarge = headlineLarge.copy(fontFamily = family),
-        headlineMedium = headlineMedium.copy(fontFamily = family),
-        headlineSmall = headlineSmall.copy(fontFamily = family),
-        titleLarge = titleLarge.copy(fontFamily = family),
-        titleMedium = titleMedium.copy(fontFamily = family),
-        titleSmall = titleSmall.copy(fontFamily = family),
-        bodyLarge = bodyLarge.copy(fontFamily = family),
-        bodyMedium = bodyMedium.copy(fontFamily = family),
-        bodySmall = bodySmall.copy(fontFamily = family),
-        labelLarge = labelLarge.copy(fontFamily = family),
-        labelMedium = labelMedium.copy(fontFamily = family),
-        labelSmall = labelSmall.copy(fontFamily = family)
+        displayLarge = displayLarge.copy(fontFamily = GoogleSansFlexFamily),
+        displayMedium = displayMedium.copy(fontFamily = GoogleSansFlexFamily),
+        displaySmall = displaySmall.copy(fontFamily = GoogleSansFlexFamily),
+        headlineLarge = headlineLarge.copy(fontFamily = GoogleSansFlexFamily),
+        headlineMedium = headlineMedium.copy(fontFamily = GoogleSansFlexFamily),
+        headlineSmall = headlineSmall.copy(fontFamily = GoogleSansFlexFamily),
+        titleLarge = titleLarge.copy(fontFamily = GoogleSansFlexFamily),
+        titleMedium = titleMedium.copy(fontFamily = GoogleSansFlexFamily),
+        titleSmall = titleSmall.copy(fontFamily = GoogleSansFlexFamily),
+        bodyLarge = bodyLarge.copy(fontFamily = GoogleSansFlexFamily),
+        bodyMedium = bodyMedium.copy(fontFamily = GoogleSansFlexFamily),
+        bodySmall = bodySmall.copy(fontFamily = GoogleSansFlexFamily),
+        labelLarge = labelLarge.copy(fontFamily = GoogleSansFlexFamily),
+        labelMedium = labelMedium.copy(fontFamily = GoogleSansFlexFamily),
+        labelSmall = labelSmall.copy(fontFamily = GoogleSansFlexFamily)
     )
 }
 

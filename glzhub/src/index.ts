@@ -264,7 +264,15 @@ async function listDevices(request: Request, env: Env): Promise<Response> {
     env,
     `/rest/v1/devices?owner_id=eq.${user.id}&select=*&order=created_at.desc`
   ) as Record<string, unknown>[];
-  return json({ devices });
+  const tenMinutesAgo = Date.now() - 10 * 60_000;
+  const sanitized = devices.map((d) => {
+    const isOnline = d.last_seen_at && new Date(String(d.last_seen_at)).getTime() > tenMinutesAgo;
+    if (!isOnline && ["queued", "syncing"].includes(String(d.sync_status))) {
+      return { ...d, sync_status: "complete", sync_message: null, sync_progress: 0 };
+    }
+    return d;
+  });
+  return json({ devices: sanitized });
 }
 
 async function updateDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
@@ -272,7 +280,7 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
   const input = await body(request);
   const currentRows = await supabaseJson(
     env,
-    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=config_version`
+    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=config_version,last_seen_at,sync_status`
   ) as Record<string, unknown>[];
   if (!currentRows[0]) return json({ error: "Device not found." }, 404);
   const allowed = [
@@ -316,11 +324,23 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     }
     patch.box_group_id = groupId;
   }
-  patch.config_version = Number(currentRows[0].config_version || 0) + 1;
+
+  const tenMinutesAgo = Date.now() - 10 * 60_000;
+  const isOnline = currentRows[0].last_seen_at && (new Date(String(currentRows[0].last_seen_at)).getTime() > tenMinutesAgo);
+  const shouldSync = input.queue_sync !== false && input.sync !== false && isOnline;
+
+  if (shouldSync) {
+    patch.config_version = Number(currentRows[0].config_version || 0) + 1;
+    patch.sync_status = "queued";
+    patch.sync_progress = 0;
+    patch.sync_message = "Waiting for TV";
+  } else if (!isOnline) {
+    patch.sync_status = "complete";
+    patch.sync_progress = 0;
+    patch.sync_message = null;
+  }
+
   patch.updated_at = new Date().toISOString();
-  patch.sync_status = "queued";
-  patch.sync_progress = 0;
-  patch.sync_message = "Waiting for TV";
   patch.sync_updated_at = patch.updated_at;
   const devices = await supabaseJson(
     env,
@@ -332,16 +352,23 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     }
   ) as Record<string, unknown>[];
   if (!devices[0]) return json({ error: "Device not found." }, 404);
-  return json({ device: devices[0] });
+  return json({ device: devices[0], isOnline: Boolean(isOnline) });
 }
 
 async function forceRefreshDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
   const user = await adminUser(request, env);
   const currentRows = await supabaseJson(
     env,
-    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=config_version`
+    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=config_version,last_seen_at`
   ) as Record<string, unknown>[];
   if (!currentRows[0]) return json({ error: "Device not found." }, 404);
+
+  const tenMinutesAgo = Date.now() - 10 * 60_000;
+  const isOnline = currentRows[0].last_seen_at && (new Date(String(currentRows[0].last_seen_at)).getTime() > tenMinutesAgo);
+  if (!isOnline) {
+    return json({ error: "Cannot sync: Device is currently offline. Please power on the TV to refresh." }, 400);
+  }
+
   const token = new Date().toISOString();
   const patch = {
     force_refresh_token: token,
@@ -534,16 +561,23 @@ async function channelPolicy(request: Request, env: Env, targetType: string, tar
   await supabaseJson(env, `/rest/v1/${targetTable}?id=eq.${encodeURIComponent(targetId)}&owner_id=eq.${user.id}`, {
     method: 'PATCH', body: JSON.stringify(targetType === 'group' ? { default_channel_policy: defaultPolicy } : { channel_policy_mode: defaultPolicy })
   });
-  const refreshFilter = targetType === 'device' ? `id=eq.${encodeURIComponent(targetId)}` : `box_group_id=eq.${encodeURIComponent(targetId)}`;
-  const affectedDevices = await supabaseJson(env, `/rest/v1/devices?owner_id=eq.${user.id}&${refreshFilter}&select=id,config_version`) as Record<string, unknown>[];
-  await Promise.all(affectedDevices.map((device) => supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}&owner_id=eq.${user.id}`, {
-    method: "PATCH", body: JSON.stringify({
-      config_version: Number(device.config_version || 0) + 1,
-      force_refresh_token: crypto.randomUUID(),
-      sync_status: "queued", sync_progress: 0, sync_message: "Waiting for TV", sync_updated_at: new Date().toISOString()
-    })
-  })));
-  return json({ ok: true, rules: rules.length });
+  const shouldSync = input.queue_sync !== false && input.sync !== false;
+  let pushedDevicesCount = 0;
+  if (shouldSync) {
+    const tenMinutesAgo = Date.now() - 10 * 60_000;
+    const refreshFilter = targetType === 'device' ? `id=eq.${encodeURIComponent(targetId)}` : `box_group_id=eq.${encodeURIComponent(targetId)}`;
+    const affectedDevices = await supabaseJson(env, `/rest/v1/devices?owner_id=eq.${user.id}&${refreshFilter}&select=id,config_version,last_seen_at`) as Record<string, unknown>[];
+    const onlineDevices = affectedDevices.filter((d) => d.last_seen_at && new Date(String(d.last_seen_at)).getTime() > tenMinutesAgo);
+    pushedDevicesCount = onlineDevices.length;
+    await Promise.all(onlineDevices.map((device) => supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}&owner_id=eq.${user.id}`, {
+      method: "PATCH", body: JSON.stringify({
+        config_version: Number(device.config_version || 0) + 1,
+        force_refresh_token: crypto.randomUUID(),
+        sync_status: "queued", sync_progress: 0, sync_message: "Updating channel policy", sync_updated_at: new Date().toISOString()
+      })
+    })));
+  }
+  return json({ ok: true, rules: rules.length, pushedDevices: pushedDevicesCount });
 }
 
 async function getGuestExperience(request: Request, env: Env): Promise<Response> {
@@ -592,7 +626,28 @@ async function updateGuestExperience(request: Request, env: Env): Promise<Respon
       body: JSON.stringify(profile)
     }
   ) as Record<string, unknown>[];
-  return json({ profile: profiles[0] });
+
+  const shouldSync = input.queue_sync !== false && input.sync !== false;
+  let pushedCount = 0;
+  if (shouldSync) {
+    const tenMinutesAgo = Date.now() - 10 * 60_000;
+    const siteDevices = await supabaseJson(env,
+      `/rest/v1/devices?owner_id=eq.${user.id}&site_id=eq.${encodeURIComponent(siteId)}&select=id,config_version,last_seen_at`
+    ) as Record<string, unknown>[];
+    const onlineDevices = siteDevices.filter((d) => d.last_seen_at && new Date(String(d.last_seen_at)).getTime() > tenMinutesAgo);
+    pushedCount = onlineDevices.length;
+    const token = new Date().toISOString();
+    await Promise.all(onlineDevices.map((d) => supabaseJson(env,
+      `/rest/v1/devices?id=eq.${encodeURIComponent(String(d.id))}&owner_id=eq.${user.id}`,
+      { method: "PATCH", body: JSON.stringify({
+        config_version: Number(d.config_version || 0) + 1,
+        force_refresh_token: token,
+        sync_status: "queued", sync_progress: 0, sync_message: "Updating guest experience", sync_updated_at: token
+      }) }
+    )));
+  }
+
+  return json({ profile: profiles[0], pushedDevices: pushedCount });
 }
 
 async function listSites(request: Request, env: Env): Promise<Response> {
@@ -1355,10 +1410,15 @@ async function pushPlaylist(request: Request, env: Env, playlistId: string): Pro
   const { user } = await ownedPlaylist(request, env, playlistId);
   const token = crypto.randomUUID();
   const devices = await supabaseJson(env,
-    `/rest/v1/devices?owner_id=eq.${user.id}&or=(assigned_playlist_id.eq.${encodeURIComponent(playlistId)},assigned_playlist_id.is.null)&select=id,config_version`
+    `/rest/v1/devices?owner_id=eq.${user.id}&or=(assigned_playlist_id.eq.${encodeURIComponent(playlistId)},assigned_playlist_id.is.null)&select=id,config_version,last_seen_at`
   ) as Record<string, unknown>[];
   const pushedAt = new Date().toISOString();
-  await Promise.all(devices.map((device) => supabaseJson(env,
+  const tenMinutesAgo = Date.now() - 10 * 60_000;
+  const onlineDevices = devices.filter((device) => {
+    return device.last_seen_at && new Date(String(device.last_seen_at)).getTime() > tenMinutesAgo;
+  });
+
+  await Promise.all(onlineDevices.map((device) => supabaseJson(env,
     `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}&owner_id=eq.${user.id}`,
     { method: "PATCH", body: JSON.stringify({
       config_version: Number(device.config_version || 0) + 1,
@@ -1366,7 +1426,7 @@ async function pushPlaylist(request: Request, env: Env, playlistId: string): Pro
       sync_status: "queued", sync_progress: 0, sync_message: "Waiting for TV", sync_updated_at: pushedAt
     }) }
   )));
-  return json({ ok: true, devices: devices.length });
+  return json({ ok: true, pushedDevices: onlineDevices.length, totalDevices: devices.length });
 }
 
 async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Response> {
@@ -1429,11 +1489,24 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
     }
   }
 
+  const etag = `"${await sha256(m3uContent)}"`;
+  if (request.headers.get("if-none-match") === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        "content-type": "audio/x-mpegurl; charset=utf-8",
+        "etag": etag,
+        "cache-control": "private, max-age=30, stale-while-revalidate=120"
+      }
+    });
+  }
+
   return new Response(m3uContent, {
     status: 200,
     headers: {
       "content-type": "audio/x-mpegurl; charset=utf-8",
-      "cache-control": "no-cache"
+      "etag": etag,
+      "cache-control": "private, max-age=30, stale-while-revalidate=120"
     }
   });
 }
