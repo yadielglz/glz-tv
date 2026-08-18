@@ -135,6 +135,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import android.view.SurfaceView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.AudioAttributes
@@ -2679,6 +2680,49 @@ private fun ChannelCard(
 }
 
 @Composable
+private fun TvOptionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .onFocusChanged { isFocused = it.isFocused }
+            .padding(vertical = 2.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = when {
+            isFocused -> Color(0xFFC4FF4D)
+            selected -> Color(0xFF23405F)
+            else -> Color.White.copy(alpha = 0.12f)
+        },
+        contentColor = when {
+            isFocused -> Color.Black
+            selected -> Color(0xFFC4FF4D)
+            else -> Color.White
+        },
+        border = BorderStroke(
+            width = if (isFocused) 3.5.dp else if (selected) 2.dp else 1.dp,
+            color = when {
+                isFocused -> Color(0xFFC4FF4D)
+                selected -> Color(0xFFC4FF4D).copy(alpha = 0.7f)
+                else -> Color.White.copy(alpha = 0.18f)
+            }
+        ),
+        shadowElevation = if (isFocused) 8.dp else 0.dp
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            fontWeight = if (isFocused || selected) FontWeight.Black else FontWeight.SemiBold,
+            fontSize = 14.sp
+        )
+    }
+}
+
+@Composable
 private fun ImmersivePlayerScreen(
     channel: Channel,
     channels: List<Channel>,
@@ -2962,7 +3006,7 @@ private fun ImmersivePlayerScreen(
                                     .onFocusChanged { isFocused = it.isFocused }
                                     .clickable {
                                         if (selectingMultiViewChannel) {
-                                            if (item.id != channel.id) onAddToMultiView(item)
+                                            onAddToMultiView(item)
                                             selectingMultiViewChannel = false
                                         } else {
                                             onTune(item)
@@ -3092,45 +3136,79 @@ private fun ImmersivePlayerScreen(
                 color = Color(0xF20B1114),
                 contentColor = Color.White,
                 shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                 tonalElevation = 18.dp,
                 shadowElevation = 24.dp
             ) {
                 Column(
                     Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("OPTIONS", fontWeight = FontWeight.Black, color = Color(0xFFC4FF4D))
-                        Button(onClick = { onPreviousChannel(); drawer = PlayerDrawer.None },
-                            modifier = Modifier.focusRequester(optionsFocus)) { Text("Previous") }
-                        Button(onClick = { drawer = PlayerDrawer.Recent }) { Text("Recent") }
-                        Button(onClick = { selectingMultiViewChannel = true; drawer = PlayerDrawer.Channels }) {
-                            Text("Add to MultiView")
-                        }
-                        Button(onClick = { showDiagnostics = !showDiagnostics }) { Text("Stream info") }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("OPTIONS", fontWeight = FontWeight.Black, color = Color(0xFFC4FF4D), fontSize = 16.sp)
+                        TvOptionButton(
+                            text = "Previous",
+                            onClick = { onPreviousChannel(); drawer = PlayerDrawer.None },
+                            modifier = Modifier.focusRequester(optionsFocus)
+                        )
+                        TvOptionButton(
+                            text = "Recent",
+                            onClick = { drawer = PlayerDrawer.Recent }
+                        )
+                        TvOptionButton(
+                            text = "Add to MultiView",
+                            onClick = { selectingMultiViewChannel = true; drawer = PlayerDrawer.Channels }
+                        )
+                        TvOptionButton(
+                            text = if (showDiagnostics) "Hide Stream Info" else "Stream Info",
+                            selected = showDiagnostics,
+                            onClick = { showDiagnostics = !showDiagnostics }
+                        )
                     }
                     if (playbackControls.audioTracks.isNotEmpty()) {
-                        Text("AUDIO", color = Color.White.copy(alpha = .6f),
-                            style = MaterialTheme.typography.labelSmall)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(playbackControls.audioTracks, key = { it.id }) { track ->
-                                Button(onClick = { playbackControls.chooseAudio(track.id) }) {
-                                    Text(if (track.selected) "✓ ${track.label}" else track.label)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "AUDIO",
+                                color = Color.White.copy(alpha = .6f),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(playbackControls.audioTracks, key = { it.id }) { track ->
+                                    TvOptionButton(
+                                        text = if (track.selected) "✓ ${track.label}" else track.label,
+                                        selected = track.selected,
+                                        onClick = { playbackControls.chooseAudio(track.id) }
+                                    )
                                 }
                             }
                         }
                     }
-                    Text("SUBTITLES", color = Color.White.copy(alpha = .6f),
-                        style = MaterialTheme.typography.labelSmall)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item {
-                            Button(onClick = { playbackControls.chooseSubtitle(null) }) {
-                                Text(if (!captionsEnabled) "✓ Off" else "Off")
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            "SUBTITLES",
+                            color = Color.White.copy(alpha = .6f),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            item {
+                                TvOptionButton(
+                                    text = if (!captionsEnabled) "✓ Off" else "Off",
+                                    selected = !captionsEnabled,
+                                    onClick = { playbackControls.chooseSubtitle(null) }
+                                )
                             }
-                        }
-                        items(playbackControls.subtitleTracks, key = { it.id }) { track ->
-                            Button(onClick = { playbackControls.chooseSubtitle(track.id) }) {
-                                Text(if (track.selected && captionsEnabled) "✓ ${track.label}" else track.label)
+                            items(playbackControls.subtitleTracks, key = { it.id }) { track ->
+                                val isSelected = track.selected && captionsEnabled
+                                TvOptionButton(
+                                    text = if (isSelected) "✓ ${track.label}" else track.label,
+                                    selected = isSelected,
+                                    onClick = { playbackControls.chooseSubtitle(track.id) }
+                                )
                             }
                         }
                     }
@@ -3150,7 +3228,9 @@ private fun ImmersivePlayerScreen(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                     .padding(horizontal = 48.dp, vertical = 30.dp),
                 color = Color(0xF20B1114), contentColor = Color.White,
-                shape = RoundedCornerShape(24.dp), tonalElevation = 18.dp
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                tonalElevation = 18.dp
             ) {
                 Column(Modifier.padding(22.dp)) {
                     Text("RECENT CHANNELS", color = Color(0xFFC4FF4D),
@@ -3160,17 +3240,33 @@ private fun ImmersivePlayerScreen(
                         items(recentChannels, key = { "recent-${it.id}" }) { recent ->
                             val programme = guide.forChannel(recent)
                                 .firstOrNull { it.startMillis <= now && it.endMillis > now }
-                            Button(onClick = {
-                                onTune(recent)
-                                drawer = PlayerDrawer.None
-                            }) {
-                                Column(Modifier.width(150.dp)) {
+                            var isFocused by remember(recent.id) { mutableStateOf(false) }
+                            Surface(
+                                onClick = {
+                                    onTune(recent)
+                                    drawer = PlayerDrawer.None
+                                },
+                                modifier = Modifier
+                                    .onFocusChanged { isFocused = it.isFocused }
+                                    .padding(vertical = 2.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isFocused) Color(0xFFC4FF4D) else Color.White.copy(alpha = 0.12f),
+                                contentColor = if (isFocused) Color.Black else Color.White,
+                                border = BorderStroke(
+                                    width = if (isFocused) 3.5.dp else 1.dp,
+                                    color = if (isFocused) Color(0xFFC4FF4D) else Color.White.copy(alpha = 0.18f)
+                                ),
+                                shadowElevation = if (isFocused) 8.dp else 0.dp
+                            ) {
+                                Column(Modifier.width(180.dp).padding(14.dp)) {
                                     Text(recent.name, maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        fontWeight = FontWeight.Bold)
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isFocused) Color.Black else Color.White)
                                     Text(programme?.title ?: "Live programming", maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.labelSmall)
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isFocused) Color.Black.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.6f))
                                 }
                             }
                         }
@@ -3194,7 +3290,10 @@ private fun MultiViewScreen(
     var activePane by remember { mutableStateOf(0) }
     val focusRequester = remember { FocusRequester() }
     BackHandler(onBack = onExit)
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(Unit) {
+        delay(60)
+        focusRequester.requestFocus()
+    }
 
     Row(
         Modifier.fillMaxSize().background(Color.Black).focusRequester(focusRequester).focusable()
@@ -3208,31 +3307,46 @@ private fun MultiViewScreen(
                         onExpand(if (activePane == 0) primary else secondary)
                         true
                     }
+                    KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                        onExit()
+                        true
+                    }
                     else -> false
                 }
             }
     ) {
         listOf(primary, secondary).forEachIndexed { index, paneChannel ->
+            val isFocused = activePane == index
             val programme = guide.forChannel(paneChannel).firstOrNull {
                 it.startMillis <= System.currentTimeMillis() && it.endMillis > System.currentTimeMillis()
             }
             Box(
-                Modifier.weight(1f).fillMaxHeight().padding(4.dp)
+                Modifier.weight(1f).fillMaxHeight().padding(6.dp)
+                    .clickable {
+                        if (activePane == index) {
+                            onExpand(paneChannel)
+                        } else {
+                            activePane = index
+                        }
+                    }
                     .border(
-                        if (activePane == index) 5.dp else 1.dp,
-                        if (activePane == index) MaterialTheme.colorScheme.secondary
+                        if (isFocused) 4.5.dp else 1.dp,
+                        if (isFocused) Color(0xFFC4FF4D)
                         else Color.White.copy(alpha = .18f),
                         RoundedCornerShape(18.dp)
                     ).clip(RoundedCornerShape(18.dp))
             ) {
                 VideoPlayer(
-                    paneChannel, captionsEnabled, captionLanguage,
-                    Modifier.fillMaxSize(), muted = activePane != index,
-                    createMediaSession = activePane == index
+                    channel = paneChannel,
+                    captionsEnabled = captionsEnabled,
+                    captionLanguage = captionLanguage,
+                    modifier = Modifier.fillMaxSize(),
+                    muted = !isFocused,
+                    createMediaSession = isFocused
                 )
                 Surface(
                     Modifier.align(Alignment.BottomStart).fillMaxWidth(),
-                    color = Color.Black.copy(alpha = .72f)
+                    color = Color.Black.copy(alpha = .78f)
                 ) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         ChannelLogo(paneChannel, 42.dp, guide)
@@ -3246,11 +3360,18 @@ private fun MultiViewScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodySmall)
                         }
-                        Text(if (activePane == index) "AUDIO" else "MUTED",
-                            color = if (activePane == index) MaterialTheme.colorScheme.secondary
-                            else Color.White.copy(alpha = .55f),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Black)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isFocused) Color(0xFFC4FF4D) else Color.White.copy(alpha = .15f)
+                        ) {
+                            Text(
+                                if (isFocused) "AUDIO ACTIVE" else "MUTED",
+                                Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                color = if (isFocused) Color.Black else Color.White.copy(alpha = .6f),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
                     }
                 }
             }
@@ -3535,8 +3656,14 @@ private fun VideoPlayer(
             .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
             .build()
     }
-    val mediaSession = remember(createMediaSession) {
-        if (createMediaSession) MediaSession.Builder(context, player).build() else null
+    val mediaSession = remember(createMediaSession, channel.id) {
+        if (createMediaSession) {
+            runCatching {
+                MediaSession.Builder(context, player)
+                    .setId("glz_tv_${channel.id}_${System.identityHashCode(player)}")
+                    .build()
+            }.getOrNull()
+        } else null
     }
     var retryAttempt by remember(channel.id) { mutableStateOf(0) }
     var playbackMessage by remember(channel.id) { mutableStateOf<String?>("Connecting…") }
@@ -3697,6 +3824,7 @@ private fun VideoPlayer(
                     controllerAutoShow = false
                     isFocusable = false
                     isFocusableInTouchMode = false
+                    (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
                 }
             },
             update = {
@@ -3704,6 +3832,7 @@ private fun VideoPlayer(
                 it.keepScreenOn = keepScreenOn
                 it.resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
             },
             modifier = Modifier.fillMaxSize()
         )
