@@ -102,6 +102,7 @@ fun RadioScreen(
     var playing by remember { mutableStateOf(false) }
     var screensaverVisible by remember { mutableStateOf(false) }
     var screensaverRevision by remember { mutableStateOf(0) }
+    var radioRetryAttempt by remember(selected?.code) { mutableStateOf(0) }
     val dataSourceFactory = remember {
         DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}")
     }
@@ -122,6 +123,7 @@ fun RadioScreen(
     }
 
     fun stopRadio() {
+        radioRetryAttempt = 0
         player.stop()
         player.clearMediaItems()
         playing = false
@@ -131,6 +133,7 @@ fun RadioScreen(
 
     fun playStation(station: RadioStation) {
         selected = station
+        radioRetryAttempt = 0
         dataSourceFactory.setDefaultRequestProperties(station.requestHeaders)
         val metadata = MediaMetadata.Builder()
             .setTitle(station.name)
@@ -151,15 +154,20 @@ fun RadioScreen(
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
                 onPlayingChanged(isPlaying)
-                if (isPlaying) status = "Live"
-                else if (player.playbackState == Player.STATE_READY && selected != null) {
+                if (isPlaying) {
+                    radioRetryAttempt = 0
+                    status = "Live"
+                } else if (player.playbackState == Player.STATE_READY && selected != null) {
+                    radioRetryAttempt = 0
                     status = "Paused"
                 }
             }
 
             override fun onPlayerError(error: PlaybackException) {
                 playing = false
-                status = "Station unavailable · choose another station"
+                radioRetryAttempt += 1
+                val nextDelaySec = minOf(15, 1 shl minOf(radioRetryAttempt - 1, 4))
+                status = "Station offline · retrying in ${nextDelaySec}s (#$radioRetryAttempt)"
             }
         }
         player.addListener(listener)
@@ -169,6 +177,26 @@ fun RadioScreen(
             player.stop()
             player.release()
             GlzHubManager.reportActivity(prefs, "idle")
+        }
+    }
+
+    LaunchedEffect(selected?.code, radioRetryAttempt) {
+        val currentStation = selected ?: return@LaunchedEffect
+        if (radioRetryAttempt > 0) {
+            val backoffSec = minOf(15L, 1L shl minOf(radioRetryAttempt - 1, 4))
+            delay(backoffSec * 1_000L)
+            status = "Reconnecting to station (#$radioRetryAttempt)…"
+            dataSourceFactory.setDefaultRequestProperties(currentStation.requestHeaders)
+            val metadata = MediaMetadata.Builder()
+                .setTitle(currentStation.name)
+                .setArtist(currentStation.genre)
+                .apply { currentStation.logoUrl?.let { setArtworkUri(Uri.parse(it)) } }
+                .build()
+            player.setMediaItem(
+                MediaItem.Builder().setUri(currentStation.streamUrl).setMediaMetadata(metadata).build()
+            )
+            player.prepare()
+            player.play()
         }
     }
 

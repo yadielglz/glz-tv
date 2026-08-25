@@ -1,5 +1,6 @@
 interface Env {
   ASSETS: Fetcher;
+  EPG_BUCKET: R2Bucket;
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
   SUPABASE_SECRET_KEY: string;
@@ -71,19 +72,24 @@ function isHttpsUrl(value: string | null): boolean {
 
 const MAX_XMLTV_BYTES = 40 * 1024 * 1024;
 
+function managedGuideObjectKey(playlistId: string): string {
+  return `guides/${playlistId}.xml`;
+}
+
 function validateXmlTv(value: unknown): { xml: string; channelCount: number; programmeCount: number } {
   if (typeof value !== "string" || value.length < 20) throw new Error("Invalid XMLTV guide");
-  const size = new TextEncoder().encode(value).byteLength;
+  // Measure UTF-8 bytes without allocating another guide-sized Uint8Array.
+  const size = new Blob([value]).size;
   if (size > MAX_XMLTV_BYTES) {
     throw new Error(`XMLTV guide is ${(size / 1024 / 1024).toFixed(1)} MB after decompression; maximum is 40 MB`);
   }
   const xml = value.replace(/^\uFEFF/, "").trim();
   if (!/<tv(?:\s|>)/i.test(xml) || !/<\/tv>/i.test(xml)) throw new Error("Invalid XMLTV guide");
-  return {
-    xml,
-    channelCount: (xml.match(/<channel(?:\s|>)/gi) || []).length,
-    programmeCount: (xml.match(/<programme(?:\s|>)/gi) || []).length
-  };
+  let channelCount = 0;
+  let programmeCount = 0;
+  for (const _match of xml.matchAll(/<channel(?:\s|>)/gi)) channelCount++;
+  for (const _match of xml.matchAll(/<programme(?:\s|>)/gi)) programmeCount++;
+  return { xml, channelCount, programmeCount };
 }
 
 async function xmlTextFromResponse(response: Response): Promise<string> {
@@ -1286,19 +1292,31 @@ async function saveManagedGuide(request: Request, env: Env, playlistId: string):
   }
   const guide = validateXmlTv(rawXml);
   const name = optionalString(input.name, "guide name", 120) || `${String(playlist.title)} Guide`;
-  const rows = await supabaseJson(env, "/rest/v1/epg_guides?on_conflict=playlist_id&select=id,name,source_url,channel_count,programme_count,updated_at", {
-    method: "POST",
-    headers: { prefer: "resolution=merge-duplicates,return=representation" },
-    body: JSON.stringify({
-      owner_id: user.id, playlist_id: playlistId, name, source_url: sourceUrl,
-      xml_content: guide.xml, channel_count: guide.channelCount, programme_count: guide.programmeCount,
-      updated_at: new Date().toISOString()
-    })
-  }) as Record<string, unknown>[];
+  const objectKey = managedGuideObjectKey(playlistId);
+  await env.EPG_BUCKET.put(objectKey, guide.xml, {
+    httpMetadata: { contentType: "application/xml; charset=utf-8" }
+  });
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await supabaseJson(env, "/rest/v1/epg_guides?on_conflict=playlist_id&select=id,name,source_url,channel_count,programme_count,updated_at", {
+      method: "POST",
+      headers: { prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify({
+        owner_id: user.id, playlist_id: playlistId, name, source_url: sourceUrl,
+        xml_content: null, object_key: objectKey,
+        channel_count: guide.channelCount, programme_count: guide.programmeCount,
+        updated_at: new Date().toISOString(), refresh_started_at: null, refresh_error: null
+      })
+    }) as Record<string, unknown>[];
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`EPG publish failed: ${detail}`);
+  }
   const publicUrl = `${new URL(request.url).origin}/api/v1/guides/${playlistId}.xml.gz`;
   await supabaseJson(env, `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${user.id}`, {
     method: "PATCH", body: JSON.stringify({ epg_url: publicUrl, updated_at: new Date().toISOString() })
   });
+  await invalidateManagedGuideCache(new URL(request.url).origin, playlistId);
   return json({ guide: rows[0], url: publicUrl });
 }
 
@@ -1312,8 +1330,28 @@ async function fetchGuidePreview(request: Request, env: Env): Promise<Response> 
   return new Response(guide.xml, { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" } });
 }
 
-async function refreshManagedGuideSource(env: Env, row: Record<string, unknown>): Promise<void> {
+async function invalidateManagedGuideCache(origin: string, playlistId: string): Promise<void> {
+  await Promise.all([
+    caches.default.delete(`${origin}/api/v1/guides/${playlistId}.xml`),
+    caches.default.delete(`${origin}/api/v1/guides/${playlistId}.xml.gz`)
+  ]);
+}
+
+async function refreshManagedGuideSource(env: Env, row: Record<string, unknown>, origin: string): Promise<void> {
+  const guideId = encodeURIComponent(String(row.id));
   try {
+    // Conditional update provides a cross-isolate lock. Abandoned locks expire.
+    const lockBefore = new Date(Date.now() - 10 * 60_000).toISOString();
+    const claimed = await supabaseJson(env,
+      `/rest/v1/epg_guides?id=eq.${guideId}&or=(refresh_started_at.is.null,refresh_started_at.lt.${encodeURIComponent(lockBefore)})&select=id`,
+      {
+        method: "PATCH",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify({ refresh_started_at: new Date().toISOString(), refresh_error: null })
+      }
+    ) as Record<string, unknown>[];
+    if (!claimed[0]) return;
+
     const source = await fetch(String(row.source_url), {
       headers: {
         "user-agent": "GLZ-Hub-EPG/1.0",
@@ -1322,34 +1360,48 @@ async function refreshManagedGuideSource(env: Env, row: Record<string, unknown>)
     });
     if (!source.ok) throw new Error(`EPG source returned ${source.status}`);
     const refreshed = validateXmlTv(await xmlTextFromResponse(source));
-    await supabaseJson(env, `/rest/v1/epg_guides?id=eq.${encodeURIComponent(String(row.id))}`, {
+    const objectKey = managedGuideObjectKey(String(row.playlist_id));
+    await env.EPG_BUCKET.put(objectKey, refreshed.xml, {
+      httpMetadata: { contentType: "application/xml; charset=utf-8" }
+    });
+    await supabaseJson(env, `/rest/v1/epg_guides?id=eq.${guideId}`, {
       method: "PATCH",
       body: JSON.stringify({
-        xml_content: refreshed.xml,
+        xml_content: null,
+        object_key: objectKey,
         channel_count: refreshed.channelCount,
         programme_count: refreshed.programmeCount,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        refresh_started_at: null,
+        refresh_error: null
       })
     });
+    await invalidateManagedGuideCache(origin, String(row.playlist_id));
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await supabaseJson(env, `/rest/v1/epg_guides?id=eq.${guideId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ refresh_started_at: null, refresh_error: message.slice(0, 500) })
+    }).catch(() => undefined);
     console.error(JSON.stringify({
       event: "managed_epg_background_refresh_failed",
       guideId: String(row.id),
-      error: error instanceof Error ? error.message : String(error)
+      error: message
     }));
   }
 }
 
-function managedGuideResponse(xml: string, playlistId: string, gzip: boolean): Response {
+function managedGuideResponse(body: string | ReadableStream, playlistId: string, gzip: boolean): Response {
   const headers = new Headers({
     "content-type": "application/xml; charset=utf-8",
     "cache-control": "public, max-age=300",
     "content-disposition": `attachment; filename="guide-${playlistId}.xml${gzip ? ".gz" : ""}"`
   });
-  let responseBody: BodyInit = xml;
+  let responseBody: BodyInit = body;
   if (gzip) {
     headers.set("content-encoding", "gzip");
-    responseBody = new Blob([xml]).stream().pipeThrough(new CompressionStream("gzip"));
+    const stream = body instanceof ReadableStream ? body : new Blob([body]).stream();
+    responseBody = stream.pipeThrough(new CompressionStream("gzip"));
   }
   return new Response(responseBody, { headers });
 }
@@ -1383,14 +1435,22 @@ async function exportManagedGuide(
     if (!playlists[0]) return json({ error: "Guide not found." }, 404);
   }
   const rows = await supabaseJson(env,
-    `/rest/v1/epg_guides?playlist_id=eq.${encodeURIComponent(playlistId)}${ownerFilter}&select=id,name,source_url,xml_content,updated_at`
+    `/rest/v1/epg_guides?playlist_id=eq.${encodeURIComponent(playlistId)}${ownerFilter}&select=id,playlist_id,name,source_url,object_key,xml_content,updated_at,refresh_started_at`
   ) as Record<string, unknown>[];
   if (!rows[0]) return json({ error: "Guide not found." }, 404);
   const row = rows[0];
   const stale = row.source_url && Date.now() - new Date(String(row.updated_at)).getTime() >= 6 * 60 * 60_000;
-  if (stale) ctx.waitUntil(refreshManagedGuideSource(env, row));
+  if (stale) ctx.waitUntil(refreshManagedGuideSource(env, row, new URL(request.url).origin));
 
-  const response = managedGuideResponse(String(row.xml_content), playlistId, gzip);
+  let guideBody: string | ReadableStream;
+  if (row.object_key) {
+    const object = await env.EPG_BUCKET.get(String(row.object_key));
+    if (!object) throw new Error("Managed EPG object is missing from storage");
+    guideBody = object.body;
+  } else {
+    guideBody = String(row.xml_content);
+  }
+  const response = managedGuideResponse(guideBody, playlistId, gzip);
   if (!requireAdmin) {
     const cacheResponse = response.clone();
     cacheResponse.headers.set("x-glzhub-cache", "MISS");
@@ -1610,7 +1670,9 @@ export default {
       if (error instanceof Response) return error;
       console.error(error);
       const message = error instanceof Error ? error.message : "Unexpected error";
-      const status = message.startsWith("Invalid") || message.startsWith("Expected") ? 400 : 500;
+      const isInputError = message.startsWith("Invalid") || message.startsWith("Expected");
+      const isPublishError = message.startsWith("EPG publish failed:");
+      const status = isInputError ? 400 : isPublishError ? 502 : 500;
       return json({ error: status === 500 ? "Service unavailable." : message }, status);
     }
   }

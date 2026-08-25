@@ -2455,7 +2455,20 @@ $("#epgFetchButton")?.addEventListener("click", async () => {
 $("#epgPublish")?.addEventListener("click", async () => {
   if (!epgState.playlistId || !epgState.doc) return epgNotice("Select a playlist and load a guide first.", true);
   $("#epgPublish").disabled = true;
-  try { const result = await api(`/api/v1/admin/playlists/${epgState.playlistId}/guide`, { method: "PUT", body: JSON.stringify({ name: `${state.playlists.find((p) => p.id === epgState.playlistId)?.title || "GLZ TV"} Guide`, sourceUrl: epgState.sourceUrl || null, xml: serializeEpg() }) }); const pushed = await api(`/api/v1/admin/playlists/${epgState.playlistId}/push`, { method: "POST" }); epgState.dirty = false; epgNotice(`${result.guide.channel_count} channels · ${result.guide.programme_count} programmes published and pushed to ${pushed.devices} TV${pushed.devices === 1 ? "" : "s"}.${epgState.sourceUrl ? " Automatic source refresh is active." : ""}`); toast("EPG published."); } catch (error) { epgNotice(error.message, true); } finally { $("#epgPublish").disabled = false; }
+  try {
+    const payload = {
+      name: `${state.playlists.find((p) => p.id === epgState.playlistId)?.title || "GLZ TV"} Guide`,
+      sourceUrl: epgState.sourceUrl || null,
+      // Let the Worker fetch an unchanged remote guide directly, avoiding a
+      // second decompressed copy in the browser request and Worker JSON parser.
+      ...(!epgState.sourceUrl || epgState.dirty ? { xml: serializeEpg() } : {})
+    };
+    const result = await api(`/api/v1/admin/playlists/${epgState.playlistId}/guide`, { method: "PUT", body: JSON.stringify(payload) });
+    const pushed = await api(`/api/v1/admin/playlists/${epgState.playlistId}/push`, { method: "POST" });
+    epgState.dirty = false;
+    epgNotice(`${result.guide.channel_count} channels · ${result.guide.programme_count} programmes published and pushed to ${pushed.pushedDevices} TV${pushed.pushedDevices === 1 ? "" : "s"}.${epgState.sourceUrl ? " Automatic source refresh is active." : ""}`);
+    toast("EPG published.");
+  } catch (error) { epgNotice(error.message, true); } finally { $("#epgPublish").disabled = false; }
 });
 $("#epgExportXml")?.addEventListener("click", () => downloadEpgDocument(false));
 $("#epgExportGz")?.addEventListener("click", () => downloadEpgDocument(true));

@@ -21,6 +21,17 @@ data class EpgGuide(
     val channelNames: Map<String, String>,
     val channelLogos: Map<String, String> = emptyMap()
 ) {
+    private val programmeMatchCache = mutableMapOf<String, List<Programme>>()
+    private val logoMatchCache = mutableMapOf<String, String?>()
+    private val exactNormalizedNameMap: Map<String, String> by lazy {
+        buildMap {
+            channelNames.forEach { (id, name) ->
+                val norm = normalize(name)
+                if (norm.isNotBlank()) putIfAbsent(norm, id)
+            }
+        }
+    }
+
     companion object {
         val Empty = EpgGuide(emptyMap(), emptyMap(), emptyMap())
     }
@@ -33,9 +44,7 @@ data class EpgGuide(
         }
         val normalizedName = normalize(channel.name)
         if (normalizedName.isBlank()) return null
-        channelNames.entries.firstOrNull { entry ->
-            normalize(entry.value) == normalizedName
-        }?.key?.let { return it }
+        exactNormalizedNameMap[normalizedName]?.let { return it }
         return channelNames.entries.firstOrNull { entry ->
             val norm = normalize(entry.value)
             norm.isNotEmpty() && (normalizedName.startsWith(norm) || norm.startsWith(normalizedName))
@@ -43,31 +52,47 @@ data class EpgGuide(
     }
 
     fun forChannel(channel: Channel): List<Programme> {
-        programmes[channel.id]?.takeIf(List<Programme>::isNotEmpty)?.let { return it }
-        val matchedId = findMatchedChannelId(channel)
-        return matchedId?.let(programmes::get).orEmpty()
+        val cacheKey = "${channel.id}\u0000${channel.name}"
+        return synchronized(programmeMatchCache) {
+            programmeMatchCache.getOrPut(cacheKey) {
+                programmes[channel.id]?.takeIf(List<Programme>::isNotEmpty)
+                    ?: findMatchedChannelId(channel)?.let(programmes::get).orEmpty()
+            }
+        }
     }
 
     fun logoForChannel(channel: Channel): String? {
-        channelLogos[channel.id]?.takeIf(String::isNotBlank)?.let { return it }
-        val matchedId = findMatchedChannelId(channel)
-        return matchedId?.let { channelLogos[it] }?.takeIf(String::isNotBlank)
+        val cacheKey = "${channel.id}\u0000${channel.name}"
+        return synchronized(logoMatchCache) {
+            if (logoMatchCache.containsKey(cacheKey)) return@synchronized logoMatchCache[cacheKey]
+            val logo = channelLogos[channel.id]?.takeIf(String::isNotBlank)
+                ?: findMatchedChannelId(channel)?.let { channelLogos[it] }?.takeIf(String::isNotBlank)
+            logoMatchCache[cacheKey] = logo
+            logo
+        }
     }
 }
 
 object EpgParser {
+    private val dateFormatTL = ThreadLocal.withInitial {
+        SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US).apply { isLenient = false }
+    }
+
     fun parse(xml: String): EpgGuide {
-        val handler = GuideHandler()
+        val cutoff = System.currentTimeMillis() - (2L * 60L * 60L * 1000L)
+        val handler = GuideHandler(cutoff)
         SAXParserFactory.newInstance().apply {
             isNamespaceAware = false
             isValidating = false
         }.newSAXParser().parse(InputSource(StringReader(xml)), handler)
 
-        handler.programmes.values.forEach { it.sortBy(Programme::startMillis) }
-        return EpgGuide(handler.programmes, handler.channelNames, handler.channelLogos)
+        val prunedProgrammes = handler.programmes.mapValues { (_, list) ->
+            list.sortedBy(Programme::startMillis)
+        }.filterValues { it.isNotEmpty() }
+        return EpgGuide(prunedProgrammes, handler.channelNames, handler.channelLogos)
     }
 
-    private class GuideHandler : DefaultHandler() {
+    private class GuideHandler(private val cutoffMillis: Long) : DefaultHandler() {
         val channelNames = mutableMapOf<String, String>()
         val channelLogos = mutableMapOf<String, String>()
         val programmes = mutableMapOf<String, MutableList<Programme>>()
@@ -117,7 +142,7 @@ object EpgParser {
                 "channel" -> channelId = null
                 "programme" -> {
                     val id = programmeId
-                    if (id != null && startMillis > 0L) {
+                    if (id != null && startMillis > 0L && endMillis >= cutoffMillis) {
                         programmes.getOrPut(id) { mutableListOf() }.add(
                             Programme(id, startMillis, endMillis, title, description)
                         )
@@ -135,9 +160,7 @@ object EpgParser {
             val parts = value.trim().split(Regex("\\s+"))
             val local = parts[0].take(14).padEnd(14, '0')
             val offset = (parts.getOrNull(1) ?: "+0000").replace(":", "")
-            SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US).apply {
-                isLenient = false
-            }.parse("$local $offset")!!.time
+            dateFormatTL.get()!!.parse("$local $offset")!!.time
         }.getOrNull()
     }
 }

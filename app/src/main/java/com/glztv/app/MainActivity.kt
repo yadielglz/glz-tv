@@ -29,6 +29,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
@@ -61,6 +63,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -181,6 +184,8 @@ import com.glztv.app.ui.screens.RadioScreen
 import com.glztv.app.ui.screens.WeatherScreen
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -521,15 +526,18 @@ internal fun TvScreen(
             }
         }
         val refreshResult = runCatching {
-            onProgress(55, "Downloading TV playlist")
-            val parsed = withContext(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
-            onProgress(72, "Downloading programme guide")
-            val parsedGuide = withContext(Dispatchers.IO) { epgRepository.load(forceRefresh) }
-            val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
-            check(parsedGuide.programmeCount == 0 || matchedChannels > 0) {
-                "EPG downloaded ${parsedGuide.programmeCount} programmes but matched 0 of ${parsed.size} channels"
+            onProgress(55, "Downloading TV lineup & programme guide")
+            coroutineScope {
+                val parsedDeferred = async(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
+                val guideDeferred = async(Dispatchers.IO) { epgRepository.load(forceRefresh) }
+                val parsed = parsedDeferred.await()
+                val parsedGuide = guideDeferred.await()
+                val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
+                check(parsedGuide.programmeCount == 0 || matchedChannels > 0) {
+                    "EPG downloaded ${parsedGuide.programmeCount} programmes but matched 0 of ${parsed.size} channels"
+                }
+                Triple(parsed, parsedGuide, Pair(cached.first != null && cached.second != null, matchedChannels))
             }
-            Triple(parsed, parsedGuide, Pair(cached.first != null && cached.second != null, matchedChannels))
         }
         refreshResult.onSuccess { (parsed, parsedGuide, refreshInfo) ->
             val (fromCache, matchedChannels) = refreshInfo
@@ -829,16 +837,18 @@ internal fun TvScreen(
                         .padding(horizontal = safeHorizontalPadding, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    ExpressiveNavigationRail(
-                        section = section,
-                        onSection = {
-                            if (it == AppSection.Live) {
-                                playerActive = false
-                                GlzHubManager.reportActivity(prefs, "idle")
+                    if (section != AppSection.Home) {
+                        ExpressiveNavigationRail(
+                            section = section,
+                            onSection = {
+                                if (it == AppSection.Live) {
+                                    playerActive = false
+                                    GlzHubManager.reportActivity(prefs, "idle")
+                                }
+                                section = it
                             }
-                            section = it
-                        }
-                    )
+                        )
+                    }
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         when (section) {
                             AppSection.Home -> GuestHubHome(
@@ -847,11 +857,18 @@ internal fun TvScreen(
                                 entertainmentApps = managedEntertainmentApps,
                                 previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
                                 captionLanguage = captionLanguage,
-                                onLive = {
+                                channels = ordered,
+                                guide = guide,
+                                onWatchChannel = { channel ->
+                                    section = AppSection.Live
+                                    tuneChannel(channel)
+                                },
+                                onNavigateSection = {
                                     playerActive = false
                                     GlzHubManager.reportActivity(prefs, "idle")
-                                    section = AppSection.Live
+                                    section = it
                                 },
+                                onOpenSettings = { showSettings = true },
                                 modifier = Modifier.fillMaxSize()
                             )
                             AppSection.Live -> GuideSection(
@@ -1040,9 +1057,15 @@ private fun GuestHubHome(
     entertainmentApps: List<EntertainmentApp>,
     previewChannel: Channel?,
     captionLanguage: String,
-    onLive: () -> Unit,
+    channels: List<Channel>,
+    guide: EpgGuide,
+    onWatchChannel: (Channel) -> Unit,
+    onNavigateSection: (AppSection) -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showQuickWatchDrawer by remember { mutableStateOf(false) }
+
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
     val timeGreeting = when (hour) {
         in 5..11 -> "Good Morning"
@@ -1050,152 +1073,412 @@ private fun GuestHubHome(
         else -> "Good Evening"
     }
 
-    BoxWithConstraints(
-        modifier
-            .background(Color.Transparent)
-            .padding(horizontal = 4.dp, vertical = 4.dp)
-    ) {
-        val compactHeight = maxHeight < 420.dp
-        val guestHeight = if (compactHeight) 130.dp else (maxHeight * .40f).coerceIn(180.dp, 220.dp)
-        val appHeight = if (compactHeight) 90.dp else (maxHeight * .23f).coerceIn(96.dp, 114.dp)
-        val visibleCards = when {
-            maxWidth >= 840.dp -> 5
-            maxWidth >= 640.dp -> 4
-            maxWidth >= 460.dp -> 3
-            else -> 2
-        }
-        val cardSpacing = 14.dp
-        val rowEdgePadding = 4.dp
-        val appWidth = (
-            (maxWidth - rowEdgePadding * 2 - cardSpacing * (visibleCards - 1)) / visibleCards
-        ).coerceAtLeast(140.dp)
-
-        Column(
-            Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 14.dp)
+    Box(modifier.fillMaxSize()) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            Card(
-                Modifier
-                    .fillMaxWidth()
-                    .height(guestHeight),
-                shape = RoundedCornerShape(32.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ),
-                elevation = CardDefaults.cardElevation(12.dp)
+            val compactHeight = maxHeight < 440.dp
+            val guestHeight = if (compactHeight) 140.dp else (maxHeight * .38f).coerceIn(180.dp, 230.dp)
+            val appHeight = if (compactHeight) 90.dp else 108.dp
+            val appWidth = 160.dp
+
+            Column(
+                Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(if (compactHeight) 10.dp else 16.dp)
             ) {
-                Box(
+                // 1. TOP HERO CARD
+                Card(
                     Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                                )
-                            )
-                        )
+                        .fillMaxWidth()
+                        .height(guestHeight),
+                    shape = RoundedCornerShape(28.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    elevation = CardDefaults.cardElevation(12.dp)
                 ) {
-                    experience.heroImageUrl?.let { imageUrl ->
-                        AsyncImage(
-                            model = imageUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color.Black.copy(alpha = 0.25f),
-                                            Color.Black.copy(alpha = 0.75f)
-                                        )
-                                    )
-                                )
-                        )
-                    }
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 28.dp, vertical = if (compactHeight) 12.dp else 18.dp),
-                        contentAlignment = Alignment.CenterStart
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                                    )
+                                )
+                            )
+                    ) {
+                        experience.heroImageUrl?.let { imageUrl ->
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color.Black.copy(alpha = 0.20f),
+                                                Color.Black.copy(alpha = 0.75f)
+                                            )
+                                        )
+                                    )
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 28.dp, vertical = if (compactHeight) 12.dp else 18.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f).padding(end = if (previewChannel != null) 18.dp else 0.dp)) {
+                                    Text(
+                                        "$timeGreeting, ${guestName.ifBlank { "Guest" }}",
+                                        color = Color.White,
+                                        fontSize = if (compactHeight) 26.sp else 34.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = (-0.5).sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        experience.welcomeMessage,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.95f),
+                                        fontSize = if (compactHeight) 14.sp else 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    val stayLine = listOfNotNull(
+                                        experience.propertyName.takeIf(String::isNotBlank),
+                                        experience.roomNumber?.let { "Room $it" },
+                                        experience.checkoutTime?.let { "Checkout $it" }
+                                    ).joinToString("  •  ")
+                                    if (!compactHeight && stayLine.isNotBlank()) {
+                                        Text(
+                                            stayLine,
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(top = 6.dp),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                previewChannel?.let { channel ->
+                                    val videoHeight = if (compactHeight) 84.dp
+                                    else (guestHeight - 36.dp).coerceIn(110.dp, 160.dp)
+                                    ChannelPreviewCard(
+                                        channel = channel,
+                                        captionLanguage = captionLanguage,
+                                        modifier = Modifier.width(videoHeight * (16f / 9f)),
+                                        videoHeight = videoHeight,
+                                        showChannelName = false
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. QUICK NAVIGATION ACTION BUTTONS ROW (BELOW HERO)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .focusGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HomeNavActionButton(
+                        label = "▶ WATCH NOW",
+                        isPrimary = true,
+                        accentColor = Color(0xFF00E5FF),
+                        onClick = { showQuickWatchDrawer = true },
+                        modifier = Modifier.weight(1.3f)
+                    )
+                    HomeNavActionButton(
+                        label = "📺 TV GUIDE",
+                        isPrimary = false,
+                        accentColor = MaterialTheme.colorScheme.primary,
+                        onClick = { onNavigateSection(AppSection.Live) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    HomeNavActionButton(
+                        label = "📻 RADIO",
+                        isPrimary = false,
+                        accentColor = Color(0xFFFF9100),
+                        onClick = { onNavigateSection(AppSection.Radio) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    HomeNavActionButton(
+                        label = "🌤 WEATHER",
+                        isPrimary = false,
+                        accentColor = Color(0xFF00E676),
+                        onClick = { onNavigateSection(AppSection.Weather) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    HomeNavActionButton(
+                        label = "👤 YOU & APPS",
+                        isPrimary = false,
+                        accentColor = Color(0xFFFF4081),
+                        onClick = { onNavigateSection(AppSection.You) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    HomeNavActionButton(
+                        label = "⚙ SETTINGS",
+                        isPrimary = false,
+                        accentColor = MaterialTheme.colorScheme.secondary,
+                        onClick = onOpenSettings,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // 3. ENTERTAINMENT APPS ROW
+                HubSectionTitle("ENTERTAINMENT APPS", "Streaming services and installed TV applications")
+                LazyRow(
+                    Modifier
+                        .fillMaxWidth()
+                        .focusGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp)
+                ) {
+                    items(entertainmentApps, key = EntertainmentApp::packageName) { app ->
+                        EntertainmentAppCard(app, appWidth, appHeight)
+                    }
+                }
+            }
+        }
+
+        // 4. WATCH NOW QUICK CHANNEL SELECTION DRAWER OVERLAY
+        if (showQuickWatchDrawer) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .clickable(onClick = { showQuickWatchDrawer = false })
+            ) {
+                AnimatedVisibility(
+                    visible = showQuickWatchDrawer,
+                    enter = fadeIn(tween(200)) + slideInHorizontally(tween(220), initialOffsetX = { it }),
+                    exit = fadeOut(tween(150)) + slideOutHorizontally(tween(180), targetOffsetX = { it }),
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                ) {
+                    QuickWatchChannelDrawer(
+                        channels = channels,
+                        guide = guide,
+                        onSelectChannel = { channel ->
+                            showQuickWatchDrawer = false
+                            onWatchChannel(channel)
+                        },
+                        onClose = { showQuickWatchDrawer = false }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeNavActionButton(
+    label: String,
+    isPrimary: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .tvFocusableWithPhysics(
+                shape = RoundedCornerShape(18.dp),
+                focusedScale = 1.05f,
+                glowColor = accentColor,
+                onFocusChange = { focused = it }
+            ),
+        shape = RoundedCornerShape(18.dp),
+        color = when {
+            focused && isPrimary -> accentColor
+            focused -> Color.White
+            isPrimary -> accentColor.copy(alpha = 0.25f)
+            else -> Color.White.copy(alpha = 0.08f)
+        },
+        contentColor = when {
+            focused -> Color.Black
+            isPrimary -> accentColor
+            else -> Color.White
+        },
+        border = BorderStroke(
+            if (focused) 2.dp else 1.dp,
+            when {
+                focused && isPrimary -> accentColor
+                focused -> Color.White
+                isPrimary -> accentColor.copy(alpha = 0.60f)
+                else -> Color.White.copy(alpha = 0.12f)
+            }
+        )
+    ) {
+        Box(
+            Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                label,
+                fontWeight = FontWeight.Black,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickWatchChannelDrawer(
+    channels: List<Channel>,
+    guide: EpgGuide,
+    onSelectChannel: (Channel) -> Unit,
+    onClose: () -> Unit
+) {
+    BackHandler(onBack = onClose)
+    val now = remember { System.currentTimeMillis() }
+    val firstItemFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        delay(120L)
+        runCatching { firstItemFocus.requestFocus() }
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(440.dp)
+            .clickable(enabled = false, onClick = {}),
+        color = Color(0xFF0A101C).copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+    ) {
+        Column(Modifier.fillMaxSize().padding(20.dp)) {
+            // Header
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.LiveTv,
+                        contentDescription = null,
+                        tint = Color(0xFF00E5FF),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("WATCH NOW", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White)
+                        Text("${channels.size} channels available", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                TvSettingsButton(
+                    label = "Close",
+                    onClick = onClose
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            // Channel List
+            LazyColumn(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .focusGroup(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(channels, key = { _, channel -> channel.id }) { index, channel ->
+                    val currentProg = remember(channel, guide) {
+                        guide.forChannel(channel).firstOrNull { it.startMillis <= now && it.endMillis > now }
+                    }
+                    var focused by remember { mutableStateOf(false) }
+
+                    Surface(
+                        onClick = { onSelectChannel(channel) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (index == 0) Modifier.focusRequester(firstItemFocus) else Modifier)
+                            .tvFocusableWithPhysics(
+                                shape = RoundedCornerShape(16.dp),
+                                focusedScale = 1.03f,
+                                glowColor = Color(0xFF00E5FF),
+                                onFocusChange = { focused = it }
+                            ),
+                        shape = RoundedCornerShape(16.dp),
+                        color = when {
+                            focused -> Color(0xFF00E5FF)
+                            else -> Color.White.copy(alpha = 0.05f)
+                        },
+                        contentColor = when {
+                            focused -> Color.Black
+                            else -> Color.White
+                        },
+                        border = BorderStroke(
+                            if (focused) 2.dp else 1.dp,
+                            if (focused) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.10f)
+                        )
                     ) {
                         Row(
-                            Modifier.fillMaxWidth(),
+                            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(Modifier.weight(1f).padding(end = if (previewChannel != null) 18.dp else 0.dp)) {
+                            // Channel Number Badge
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (focused) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.10f),
+                                modifier = Modifier.padding(end = 12.dp)
+                            ) {
                                 Text(
-                                    "$timeGreeting, ${guestName.ifBlank { "Guest" }}",
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = if (compactHeight) 26.sp else 34.sp,
+                                    channel.number?.let { "#$it" } ?: "#",
+                                    Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Black,
-                                    letterSpacing = (-0.5).sp,
-                                    style = MaterialTheme.typography.headlineLarge.copy(
-                                        shadow = androidx.compose.ui.graphics.Shadow(
-                                            color = Color.Black.copy(alpha = 0.5f),
-                                            offset = androidx.compose.ui.geometry.Offset(0f, 2f),
-                                            blurRadius = 6f
-                                        )
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    color = if (focused) Color.Black else Color(0xFF00E5FF)
                                 )
+                            }
+                            // Channel Logo
+                            ChannelLogo(channel, 38.dp, guide)
+                            Spacer(Modifier.width(12.dp))
+                            // Channel Name & Programme Info
+                            Column(Modifier.weight(1f)) {
                                 Text(
-                                    experience.welcomeMessage,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.95f),
-                                    fontSize = if (compactHeight) 14.sp else 16.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    channel.name,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                val stayLine = listOfNotNull(
-                                    experience.propertyName.takeIf(String::isNotBlank),
-                                    experience.roomNumber?.let { "Room $it" },
-                                    experience.checkoutTime?.let { "Checkout $it" }
-                                ).joinToString("  •  ")
-                                if (!compactHeight && stayLine.isNotBlank()) {
+                                currentProg?.let { prog ->
                                     Text(
-                                        stayLine,
+                                        prog.title,
                                         fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(top = 6.dp),
+                                        color = if (focused) Color.Black.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
-                            previewChannel?.let { channel ->
-                                val videoHeight = if (compactHeight) 80.dp
-                                else (guestHeight - 36.dp).coerceIn(110.dp, 160.dp)
-                                ChannelPreviewCard(
-                                    channel = channel,
-                                    captionLanguage = captionLanguage,
-                                    modifier = Modifier.width(videoHeight * (16f / 9f)),
-                                    videoHeight = videoHeight,
-                                    showChannelName = false
-                                )
-                            }
                         }
                     }
-                }
-            }
-            HubSectionTitle("ENTERTAINMENT", "Live TV, apps and streaming services")
-            LazyRow(
-                Modifier
-                    .fillMaxWidth()
-                    .focusGroup(),
-                horizontalArrangement = Arrangement.spacedBy(cardSpacing),
-                contentPadding = PaddingValues(horizontal = rowEdgePadding, vertical = 6.dp)
-            ) {
-                item { LiveTvHubCard(onLive, appWidth, appHeight) }
-                items(entertainmentApps, key = EntertainmentApp::packageName) { app ->
-                    EntertainmentAppCard(app, appWidth, appHeight)
                 }
             }
         }
@@ -3890,13 +4173,18 @@ private fun currentNetworkTransport(context: Context): String? {
     }
 }
 
-private enum class SettingsTab(val title: String, val icon: ImageVector) {
-    Sources("Sources & Refresh", Icons.Default.Refresh),
-    Appearance("Appearance", Icons.Default.Settings),
-    Playback("Player & Captions", Icons.Default.LiveTv),
-    Startup("Startup & Updates", Icons.Default.Home),
-    Hub("GLZ Hub", Icons.Default.Settings),
-    Guest("Guest & Location", Icons.Default.Person)
+private enum class SettingsTab(
+    val title: String,
+    val description: String,
+    val icon: ImageVector,
+    val accentColor: Color
+) {
+    Sources("Sources & Lineup", "M3U Playlists, EPG data & Hub Sync", Icons.Default.Refresh, Color(0xFF00E5FF)),
+    Appearance("Appearance & Themes", "Color palettes, contrast & UI styling", Icons.Default.Settings, Color(0xFFD500F9)),
+    Playback("Player & Captions", "OSD timeout, subtitle language & tracks", Icons.Default.LiveTv, Color(0xFF00E676)),
+    Startup("Startup & Updates", "Default destination, auto-start & updates", Icons.Default.Home, Color(0xFFFF9100)),
+    Hub("GLZ Hub Pairing", "Remote management & pairing code", Icons.Default.Wifi, Color(0xFF1DE9B6)),
+    Guest("Guest & Network", "Guest greeting, weather city & ISP labels", Icons.Default.Person, Color(0xFFFF4081))
 }
 
 @Composable
@@ -3907,46 +4195,78 @@ private fun TvCategoryTab(
     modifier: Modifier = Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
+    val activeColor = tab.accentColor
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused }
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                    event.nativeKeyEvent.keyCode in listOf(
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER
-                    )
-                ) {
-                    onSelect()
-                    true
-                } else false
-            }
+            .tvFocusableWithPhysics(
+                shape = RoundedCornerShape(18.dp),
+                focusedScale = 1.04f,
+                glowColor = activeColor,
+                onFocusChange = {
+                    focused = it
+                    if (it) onSelect()
+                }
+            )
             .clickable(onClick = onSelect),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         color = when {
-            focused -> MaterialTheme.colorScheme.primary
-            selected -> MaterialTheme.colorScheme.primaryContainer
-            else -> MaterialTheme.colorScheme.surfaceVariant
+            focused -> activeColor
+            selected -> activeColor.copy(alpha = 0.22f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
         },
         contentColor = when {
-            focused -> MaterialTheme.colorScheme.onPrimary
-            selected -> MaterialTheme.colorScheme.onPrimaryContainer
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
+            focused -> Color.Black
+            selected -> activeColor
+            else -> MaterialTheme.colorScheme.onSurface
         },
         border = BorderStroke(
-            if (focused) 4.dp else 1.dp,
-            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
+            if (focused) 2.dp else 1.dp,
+            when {
+                focused -> activeColor
+                selected -> activeColor.copy(alpha = 0.60f)
+                else -> Color.White.copy(alpha = 0.08f)
+            }
         )
     ) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(tab.icon, contentDescription = null, Modifier.size(22.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (focused) Color.Black.copy(alpha = 0.2f) else activeColor.copy(alpha = 0.15f),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        tab.icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = if (focused) Color.Black else activeColor
+                    )
+                }
+            }
             Spacer(Modifier.width(14.dp))
-            Text(tab.title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    tab.title,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp,
+                    maxLines = 1
+                )
+                Text(
+                    tab.description,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (focused) Color.Black.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -4007,58 +4327,93 @@ private fun SettingsDialog(
     val initialFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        delay(60)
+        delay(80)
         runCatching { initialFocus.requestFocus() }
     }
 
     BackHandler(onBack = onDismiss)
-    Surface(
-        Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(Color(0xFF10192A), Color(0xFF070B14), Color.Black)
+                )
+            )
     ) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 36.dp, vertical = 24.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        Column(Modifier.fillMaxSize()) {
+            // Header Bar
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.Black.copy(alpha = 0.40f),
+                border = BorderStroke(0.dp, Color.Transparent)
             ) {
-                Icon(Icons.Default.Settings, null, Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.Black)
-                    Text("GLZ TV TV-Optimized Configuration",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
-                }
-                TvSettingsButton(
-                    label = "Cancel",
-                    onClick = onDismiss
-                )
-                Spacer(Modifier.width(12.dp))
-                TvSettingsButton(
-                    label = "Save & Apply",
-                    onClick = {
-                        onSave(
-                            playlistValue.trim(), epgValue.trim(), headerValue.trim(),
-                            weatherLocationValue.trim().ifBlank { DEFAULT_WEATHER_LOCATION },
-                            guestNameValue.trim().ifBlank { "Guest" },
-                            connectionLabelValue.trim(), ispNameValue.trim(),
-                            themeValue, captionsValue, languageValue.trim(), osdTimeoutValue,
-                            autoUpdateValue, wifiOnlyValue, autoStartValue, resumeLastValue,
-                            startDestinationValue
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 36.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)),
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "SETTINGS DASHBOARD",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp,
+                            color = Color.White
                         )
-                    },
-                    enabled = playlistValue.startsWith("http")
-                )
+                        Text(
+                            "Configure playlist sources, player behavior & TV settings",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = activeTab.accentColor.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, activeTab.accentColor.copy(alpha = 0.35f))
+                    ) {
+                        Text(
+                            activeTab.title.uppercase(Locale.ROOT),
+                            Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = activeTab.accentColor
+                        )
+                    }
+                }
             }
 
-            Spacer(Modifier.height(20.dp))
-
-            Row(Modifier.fillMaxWidth().weight(1f)) {
+            // Main Dashboard Body
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(horizontal = 36.dp, vertical = 16.dp)
+            ) {
+                // Left Navigation Pane
                 Column(
                     Modifier
-                        .width(260.dp)
+                        .width(280.dp)
                         .fillMaxHeight()
-                        .padding(end = 16.dp),
+                        .padding(end = 20.dp)
+                        .focusGroup(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     SettingsTab.values().forEachIndexed { index, tab ->
@@ -4071,327 +4426,414 @@ private fun SettingsDialog(
                     }
                 }
 
+                // Vertical Divider
                 Box(
                     Modifier
                         .fillMaxHeight()
                         .width(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        .background(Color.White.copy(alpha = 0.10f))
                 )
 
+                // Right Content Panel
                 Column(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .padding(start = 24.dp)
+                        .padding(start = 28.dp)
                         .verticalScroll(rememberScrollState())
                         .focusGroup(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    when (activeTab) {
-                        SettingsTab.Sources -> {
-                            SettingsLabel("SOURCE STATUS & REFRESH")
-                            Surface(
-                                Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(18.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Column(Modifier.padding(18.dp)) {
-                                    Text(
-                                        syncMessage,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 15.sp
-                                    )
-                                    if (syncLoading) {
-                                        Spacer(Modifier.height(12.dp))
-                                        LinearProgressIndicator(
-                                            progress = { syncProgress / 100f },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        Text(
-                                            "$syncProgress%",
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    Spacer(Modifier.height(14.dp))
-                                    TvSettingsButton(
-                                        label = if (syncLoading) "Syncing everything…" else "↻ Sync Now",
-                                        enabled = !syncLoading,
-                                        onClick = {
-                                            syncLoading = true
-                                            syncProgress = 0
-                                            syncMessage = "Contacting GLZ Hub and refreshing all managed data…"
-                                            settingsScope.launch {
-                                                syncMessage = runCatching {
-                                                    onSyncNow { percent, message ->
-                                                        syncProgress = percent
-                                                        syncMessage = message
+                    AnimatedContent(
+                        targetState = activeTab,
+                        transitionSpec = { fadeIn(tween(180)).togetherWith(fadeOut(tween(140))) },
+                        label = "settings-tab-content"
+                    ) { currentTab ->
+                        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                            when (currentTab) {
+                                SettingsTab.Sources -> {
+                                    SettingsLabel("SOURCE STATUS & REFRESH")
+                                    Surface(
+                                        Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = Color.White.copy(alpha = 0.05f),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                                    ) {
+                                        Column(Modifier.padding(20.dp)) {
+                                            Text(
+                                                syncMessage,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 15.sp
+                                            )
+                                            if (syncLoading) {
+                                                Spacer(Modifier.height(12.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { syncProgress / 100f },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                                Text(
+                                                    "$syncProgress%",
+                                                    color = SettingsTab.Sources.accentColor,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Spacer(Modifier.height(14.dp))
+                                            TvSettingsButton(
+                                                label = if (syncLoading) "Syncing content…" else "↻ Refresh & Sync Now",
+                                                enabled = !syncLoading,
+                                                onClick = {
+                                                    syncLoading = true
+                                                    syncProgress = 0
+                                                    syncMessage = "Contacting GLZ Hub and refreshing all managed data…"
+                                                    settingsScope.launch {
+                                                        syncMessage = runCatching {
+                                                            onSyncNow { percent, message ->
+                                                                syncProgress = percent
+                                                                syncMessage = message
+                                                            }
+                                                        }.getOrElse { "Sync failed · ${it.message}" }
+                                                        syncLoading = false
                                                     }
                                                 }
-                                                    .getOrElse { "Sync failed · ${it.message}" }
-                                                syncLoading = false
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                            SettingsLabel("PLAYLIST & EPG SOURCES")
-                            ProtectedSourceField(
-                                value = playlistValue,
-                                onValueChange = { playlistValue = it },
-                                label = "M3U playlist URL"
-                            )
-                            ProtectedSourceField(
-                                value = epgValue,
-                                onValueChange = { epgValue = it },
-                                label = "XMLTV EPG URL"
-                            )
-                            ProtectedSourceField(
-                                headerValue, { headerValue = it },
-                                "Request headers", "One Name: value header per line",
-                                singleLine = false, minLines = 3
-                            )
-                        }
-
-                        SettingsTab.Appearance -> {
-                            SettingsLabel("COLOR THEME")
-                            Text("Choose your preferred TV color palette", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            val themes = listOf(
-                                "adaptive" to "Adaptive",
-                                "dark" to "Dark Mode",
-                                "light" to "Light Mode",
-                                "ocean" to "Ocean Breeze",
-                                "sunset" to "Sunset Glow",
-                                "emerald" to "Emerald Forest",
-                                "cyberpunk" to "Neon Cyberpunk",
-                                "midnight" to "Midnight Gold"
-                            )
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                themes.forEach { (value, label) ->
-                                    var focused by remember(value) { mutableStateOf(false) }
-                                    Surface(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .onFocusChanged { focused = it.isFocused }
-                                            .onPreviewKeyEvent { event ->
-                                                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                                                    event.nativeKeyEvent.keyCode in listOf(
-                                                        KeyEvent.KEYCODE_DPAD_CENTER,
-                                                        KeyEvent.KEYCODE_ENTER,
-                                                        KeyEvent.KEYCODE_NUMPAD_ENTER
-                                                    )
-                                                ) {
-                                                    themeValue = value
-                                                    true
-                                                } else false
-                                            }
-                                            .clickable { themeValue = value },
-                                        shape = RoundedCornerShape(16.dp),
-                                        border = BorderStroke(
-                                            if (focused) 4.dp else 1.dp,
-                                            if (focused) MaterialTheme.colorScheme.secondary
-                                            else Color.Transparent
-                                        ),
-                                        color = if (themeValue == value) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = if (themeValue == value) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant
-                                    ) {
-                                        Row(
-                                            Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                                            if (themeValue == value) {
-                                                Text("Selected ✓", fontWeight = FontWeight.Black, fontSize = 14.sp)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        SettingsTab.Playback -> {
-                            SettingsLabel("PLAYER BANNERS (OSD)")
-                            Text("Banner display duration during channel change", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                listOf(5 to "5 Seconds", 7 to "7 Seconds", 8 to "8 Seconds (Default)", 10 to "10 Seconds").forEach { (timeout, label) ->
-                                    var focused by remember(timeout) { mutableStateOf(false) }
-                                    Surface(
-                                        Modifier
-                                            .weight(1f)
-                                            .onFocusChanged { focused = it.isFocused }
-                                            .onPreviewKeyEvent { event ->
-                                                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                                                    event.nativeKeyEvent.keyCode in listOf(
-                                                        KeyEvent.KEYCODE_DPAD_CENTER,
-                                                        KeyEvent.KEYCODE_ENTER,
-                                                        KeyEvent.KEYCODE_NUMPAD_ENTER
-                                                    )
-                                                ) {
-                                                    osdTimeoutValue = timeout
-                                                    true
-                                                } else false
-                                            }
-                                            .clickable { osdTimeoutValue = timeout },
-                                        shape = RoundedCornerShape(14.dp),
-                                        border = BorderStroke(
-                                            if (focused) 4.dp else 1.dp,
-                                            if (focused) MaterialTheme.colorScheme.secondary
-                                            else Color.Transparent
-                                        ),
-                                        color = if (osdTimeoutValue == timeout)
-                                            MaterialTheme.colorScheme.secondary
-                                        else MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = if (osdTimeoutValue == timeout)
-                                            MaterialTheme.colorScheme.onSecondary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant
-                                    ) {
-                                        Text(
-                                            label,
-                                            Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp
-                                        )
-                                    }
-                                }
-                            }
-
-                            SettingsLabel("CLOSED CAPTIONS")
-                            SettingsToggle("Enable Closed Captions", captionsValue) { captionsValue = it }
-                            ProtectedSourceField(
-                                languageValue, { languageValue = it },
-                                "Preferred language code", "Examples: en, es, fr",
-                                enabled = captionsValue
-                            )
-                        }
-
-                        SettingsTab.Startup -> {
-                            SettingsLabel("START DESTINATION")
-                            Text("Screen shown when GLZ TV launches", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                listOf(AppSection.Home to "Home Screen", AppSection.Live to "Live TV Direct", AppSection.Radio to "Radio", AppSection.Weather to "Weather", AppSection.You to "You & Apps")
-                                    .forEach { (destination, label) ->
-                                        var focused by remember(destination) { mutableStateOf(false) }
-                                        Surface(
-                                            Modifier
-                                                .weight(1f)
-                                                .onFocusChanged { focused = it.isFocused }
-                                                .onPreviewKeyEvent { event ->
-                                                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                                                        event.nativeKeyEvent.keyCode in listOf(
-                                                            KeyEvent.KEYCODE_DPAD_CENTER,
-                                                            KeyEvent.KEYCODE_ENTER,
-                                                            KeyEvent.KEYCODE_NUMPAD_ENTER
-                                                        )
-                                                    ) {
-                                                        startDestinationValue = destination.name
-                                                        true
-                                                    } else false
-                                                }
-                                                .clickable { startDestinationValue = destination.name },
-                                            shape = RoundedCornerShape(14.dp),
-                                            border = BorderStroke(
-                                                if (focused) 4.dp else 1.dp,
-                                                if (focused) MaterialTheme.colorScheme.secondary
-                                                else Color.Transparent
-                                            ),
-                                            color = if (startDestinationValue == destination.name)
-                                                MaterialTheme.colorScheme.secondary
-                                            else MaterialTheme.colorScheme.surfaceVariant,
-                                            contentColor = if (startDestinationValue == destination.name)
-                                                MaterialTheme.colorScheme.onSecondary
-                                            else MaterialTheme.colorScheme.onSurfaceVariant
-                                        ) {
-                                            Text(
-                                                label,
-                                                Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp
                                             )
                                         }
                                     }
-                            }
+                                    SettingsLabel("PLAYLIST & EPG SOURCES")
+                                    ProtectedSourceField(
+                                        value = playlistValue,
+                                        onValueChange = { playlistValue = it },
+                                        label = "M3U Playlist URL"
+                                    )
+                                    ProtectedSourceField(
+                                        value = epgValue,
+                                        onValueChange = { epgValue = it },
+                                        label = "XMLTV EPG URL"
+                                    )
+                                    ProtectedSourceField(
+                                        headerValue, { headerValue = it },
+                                        "Request Headers", "One Name: value header per line",
+                                        singleLine = false, minLines = 3
+                                    )
+                                }
 
-                            SettingsLabel("STARTUP & REBOOT")
-                            SettingsToggle("Open after device restart", autoStartValue) { autoStartValue = it }
-                            SettingsToggle("Resume last channel", resumeLastValue) { resumeLastValue = it }
-
-                            SettingsLabel("APPLICATION UPDATES")
-                            SettingsToggle("Check automatically for updates", autoUpdateValue) { autoUpdateValue = it }
-                            SettingsToggle("Download updates on Wi-Fi only", wifiOnlyValue) { wifiOnlyValue = it }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(updateStatus, Modifier.weight(1f),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
-                                TvSettingsButton("Check now", onClick = {
-                                    updateStatus = "Checking GitHub…"
-                                    settingsScope.launch {
-                                        updateStatus = onCheckForUpdate()
-                                    }
-                                })
-                            }
-                        }
-
-                        SettingsTab.Hub -> {
-                            SettingsLabel("GLZ HUB PAIRING STATUS")
-                            Surface(
-                                Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(18.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Column(Modifier.padding(18.dp)) {
-                                    Text(hubMessage, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                    Spacer(Modifier.height(6.dp))
+                                SettingsTab.Appearance -> {
+                                    SettingsLabel("COLOR THEMES")
                                     Text(
-                                        "Manage this television at glzhub.glztech.com/pair",
+                                        "Choose your preferred TV color palette",
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 14.sp
                                     )
-                                    Spacer(Modifier.height(14.dp))
-                                    TvSettingsButton(
-                                        label = if (hubLoading) "Connecting…" else "🔑 Generate pairing code",
-                                        enabled = !hubLoading,
-                                        onClick = {
-                                            hubLoading = true
-                                            settingsScope.launch {
-                                                runCatching { onBeginHubEnrollment() }
-                                                    .onSuccess { hubMessage = "Pairing code: $it · expires in 1 hour" }
-                                                    .onFailure { hubMessage = "Could not reach GLZ Hub: ${it.message}" }
-                                                hubLoading = false
+                                    val themes = listOf(
+                                        "adaptive" to "Adaptive System",
+                                        "dark" to "Dark Mode",
+                                        "light" to "Light Mode",
+                                        "ocean" to "Ocean Breeze",
+                                        "sunset" to "Sunset Glow",
+                                        "emerald" to "Emerald Forest",
+                                        "cyberpunk" to "Neon Cyberpunk",
+                                        "midnight" to "Midnight Gold"
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        themes.forEach { (value, label) ->
+                                            val isSelected = themeValue == value
+                                            var focused by remember(value) { mutableStateOf(false) }
+                                            Surface(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .tvFocusableWithPhysics(
+                                                        shape = RoundedCornerShape(16.dp),
+                                                        focusedScale = 1.03f,
+                                                        glowColor = SettingsTab.Appearance.accentColor,
+                                                        onFocusChange = { focused = it }
+                                                    )
+                                                    .clickable { themeValue = value },
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = when {
+                                                    focused -> SettingsTab.Appearance.accentColor
+                                                    isSelected -> SettingsTab.Appearance.accentColor.copy(alpha = 0.20f)
+                                                    else -> Color.White.copy(alpha = 0.05f)
+                                                },
+                                                contentColor = when {
+                                                    focused -> Color.Black
+                                                    isSelected -> SettingsTab.Appearance.accentColor
+                                                    else -> Color.White
+                                                },
+                                                border = BorderStroke(
+                                                    if (focused) 2.dp else 1.dp,
+                                                    when {
+                                                        focused -> SettingsTab.Appearance.accentColor
+                                                        isSelected -> SettingsTab.Appearance.accentColor.copy(alpha = 0.50f)
+                                                        else -> Color.White.copy(alpha = 0.10f)
+                                                    }
+                                                )
+                                            ) {
+                                                Row(
+                                                    Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                                                    if (isSelected) {
+                                                        Text("SELECTED ✓", fontWeight = FontWeight.Black, fontSize = 13.sp)
+                                                    }
+                                                }
                                             }
                                         }
+                                    }
+                                }
+
+                                SettingsTab.Playback -> {
+                                    SettingsLabel("PLAYER BANNERS (OSD)")
+                                    Text(
+                                        "Banner display duration during channel change",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 14.sp
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        listOf(
+                                            5 to "5 Seconds",
+                                            7 to "7 Seconds",
+                                            8 to "8 Seconds (Default)",
+                                            10 to "10 Seconds"
+                                        ).forEach { (timeout, label) ->
+                                            val isSelected = osdTimeoutValue == timeout
+                                            var focused by remember(timeout) { mutableStateOf(false) }
+                                            Surface(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .tvFocusableWithPhysics(
+                                                        shape = RoundedCornerShape(16.dp),
+                                                        focusedScale = 1.04f,
+                                                        glowColor = SettingsTab.Playback.accentColor,
+                                                        onFocusChange = { focused = it }
+                                                    )
+                                                    .clickable { osdTimeoutValue = timeout },
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = when {
+                                                    focused -> SettingsTab.Playback.accentColor
+                                                    isSelected -> SettingsTab.Playback.accentColor.copy(alpha = 0.20f)
+                                                    else -> Color.White.copy(alpha = 0.05f)
+                                                },
+                                                contentColor = when {
+                                                    focused -> Color.Black
+                                                    isSelected -> SettingsTab.Playback.accentColor
+                                                    else -> Color.White
+                                                },
+                                                border = BorderStroke(
+                                                    if (focused) 2.dp else 1.dp,
+                                                    when {
+                                                        focused -> SettingsTab.Playback.accentColor
+                                                        isSelected -> SettingsTab.Playback.accentColor.copy(alpha = 0.50f)
+                                                        else -> Color.White.copy(alpha = 0.10f)
+                                                    }
+                                                )
+                                            ) {
+                                                Text(
+                                                    label,
+                                                    Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 14.sp
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    SettingsLabel("CLOSED CAPTIONS")
+                                    SettingsToggle("Enable Closed Captions", captionsValue) { captionsValue = it }
+                                    ProtectedSourceField(
+                                        languageValue, { languageValue = it },
+                                        "Preferred Language Code", "Examples: en, es, fr",
+                                        enabled = captionsValue
+                                    )
+                                }
+
+                                SettingsTab.Startup -> {
+                                    SettingsLabel("START DESTINATION")
+                                    Text(
+                                        "Screen shown when GLZ TV launches",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 14.sp
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        listOf(
+                                            AppSection.Home to "Home Screen",
+                                            AppSection.Live to "Live TV Direct",
+                                            AppSection.Radio to "Radio",
+                                            AppSection.Weather to "Weather",
+                                            AppSection.You to "You & Apps"
+                                        ).forEach { (destination, label) ->
+                                            val isSelected = startDestinationValue == destination.name
+                                            var focused by remember(destination) { mutableStateOf(false) }
+                                            Surface(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .tvFocusableWithPhysics(
+                                                        shape = RoundedCornerShape(16.dp),
+                                                        focusedScale = 1.04f,
+                                                        glowColor = SettingsTab.Startup.accentColor,
+                                                        onFocusChange = { focused = it }
+                                                    )
+                                                    .clickable { startDestinationValue = destination.name },
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = when {
+                                                    focused -> SettingsTab.Startup.accentColor
+                                                    isSelected -> SettingsTab.Startup.accentColor.copy(alpha = 0.20f)
+                                                    else -> Color.White.copy(alpha = 0.05f)
+                                                },
+                                                contentColor = when {
+                                                    focused -> Color.Black
+                                                    isSelected -> SettingsTab.Startup.accentColor
+                                                    else -> Color.White
+                                                },
+                                                border = BorderStroke(
+                                                    if (focused) 2.dp else 1.dp,
+                                                    when {
+                                                        focused -> SettingsTab.Startup.accentColor
+                                                        isSelected -> SettingsTab.Startup.accentColor.copy(alpha = 0.50f)
+                                                        else -> Color.White.copy(alpha = 0.10f)
+                                                    }
+                                                )
+                                            ) {
+                                                Text(
+                                                    label,
+                                                    Modifier.padding(horizontal = 10.dp, vertical = 14.dp),
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    SettingsLabel("STARTUP & REBOOT")
+                                    SettingsToggle("Open automatically after device restart", autoStartValue) { autoStartValue = it }
+                                    SettingsToggle("Resume last playing channel", resumeLastValue) { resumeLastValue = it }
+
+                                    SettingsLabel("APPLICATION UPDATES")
+                                    SettingsToggle("Check automatically for updates", autoUpdateValue) { autoUpdateValue = it }
+                                    SettingsToggle("Download updates on Wi-Fi only", wifiOnlyValue) { wifiOnlyValue = it }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            updateStatus,
+                                            Modifier.weight(1f),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 15.sp
+                                        )
+                                        TvSettingsButton("Check Now", onClick = {
+                                            updateStatus = "Checking GitHub…"
+                                            settingsScope.launch {
+                                                updateStatus = onCheckForUpdate()
+                                            }
+                                        })
+                                    }
+                                }
+
+                                SettingsTab.Hub -> {
+                                    SettingsLabel("GLZ HUB PAIRING STATUS")
+                                    Surface(
+                                        Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = Color.White.copy(alpha = 0.05f),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                                    ) {
+                                        Column(Modifier.padding(20.dp)) {
+                                            Text(hubMessage, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                "Manage this television at glzhub.glztech.com/pair",
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 14.sp
+                                            )
+                                            Spacer(Modifier.height(14.dp))
+                                            TvSettingsButton(
+                                                label = if (hubLoading) "Connecting…" else "🔑 Generate Pairing Code",
+                                                enabled = !hubLoading,
+                                                onClick = {
+                                                    hubLoading = true
+                                                    settingsScope.launch {
+                                                        runCatching { onBeginHubEnrollment() }
+                                                            .onSuccess { hubMessage = "Pairing code: $it · expires in 1 hour" }
+                                                            .onFailure { hubMessage = "Could not reach GLZ Hub: ${it.message}" }
+                                                        hubLoading = false
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                SettingsTab.Guest -> {
+                                    SettingsLabel("GUEST & LOCATION")
+                                    ProtectedSourceField(
+                                        guestNameValue, { guestNameValue = it },
+                                        "Welcome Guest Name", "Shown in the Home welcome card"
+                                    )
+                                    ProtectedSourceField(
+                                        weatherLocationValue, { weatherLocationValue = it },
+                                        "Weather Location", "City or municipality used by Open-Meteo"
+                                    )
+                                    SettingsLabel("NETWORK DISPLAY")
+                                    Text(
+                                        "Optional labels shown in the top status bar. Leave blank for automatic detection.",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 14.sp
+                                    )
+                                    ProtectedSourceField(
+                                        connectionLabelValue, { connectionLabelValue = it },
+                                        "Connection Label", "Example: Resort Ethernet or Guest Wi-Fi"
+                                    )
+                                    ProtectedSourceField(
+                                        ispNameValue, { ispNameValue = it },
+                                        "ISP or Network Name", "Example: GLZ Fiber or Charter Spectrum"
                                     )
                                 }
                             }
                         }
-
-                        SettingsTab.Guest -> {
-                            SettingsLabel("GUEST & LOCATION")
-                            ProtectedSourceField(
-                                guestNameValue, { guestNameValue = it },
-                                "Welcome guest name", "Shown in the Home welcome card"
-                            )
-                            ProtectedSourceField(
-                                weatherLocationValue, { weatherLocationValue = it },
-                                "Weather location", "City or municipality used by Open-Meteo"
-                            )
-                            SettingsLabel("NETWORK DISPLAY")
-                            Text(
-                                "Optional labels shown in the top status bar. Leave blank to use automatic detection.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            ProtectedSourceField(
-                                connectionLabelValue, { connectionLabelValue = it },
-                                "Connection label", "Example: Resort Ethernet or Guest Wi-Fi"
-                            )
-                            ProtectedSourceField(
-                                ispNameValue, { ispNameValue = it },
-                                "ISP or network name", "Example: GLZ Fiber or Charter Spectrum"
-                            )
-                        }
                     }
                     Spacer(Modifier.height(24.dp))
+                }
+            }
+
+            // Sticky Bottom Action Bar
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.Black.copy(alpha = 0.65f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f))
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 36.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Navigate with D-Pad · Press Back or Cancel to exit",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        TvSettingsButton(
+                            label = "Cancel",
+                            onClick = onDismiss
+                        )
+                        TvSettingsButton(
+                            label = "Save & Apply",
+                            onClick = {
+                                onSave(
+                                    playlistValue.trim(), epgValue.trim(), headerValue.trim(),
+                                    weatherLocationValue.trim().ifBlank { DEFAULT_WEATHER_LOCATION },
+                                    guestNameValue.trim().ifBlank { "Guest" },
+                                    connectionLabelValue.trim(), ispNameValue.trim(),
+                                    themeValue, captionsValue, languageValue.trim(), osdTimeoutValue,
+                                    autoUpdateValue, wifiOnlyValue, autoStartValue, resumeLastValue,
+                                    startDestinationValue
+                                )
+                            },
+                            enabled = playlistValue.startsWith("http")
+                        )
+                    }
                 }
             }
         }
@@ -4406,35 +4848,46 @@ private fun TvSettingsButton(
     modifier: Modifier = Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
+    val isPrimary = label.contains("Save") || label.contains("Sync") || label.contains("Generate")
+
     Surface(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .onFocusChanged { focused = it.isFocused }
-            .onPreviewKeyEvent { event ->
-                if (enabled && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                    event.nativeKeyEvent.keyCode in listOf(
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER
-                    )
-                ) {
-                    onClick()
-                    true
-                } else false
-            },
+            .tvFocusableWithPhysics(
+                shape = RoundedCornerShape(16.dp),
+                focusedScale = 1.05f,
+                glowColor = if (isPrimary) MaterialTheme.colorScheme.primary else Color.White,
+                onFocusChange = { focused = it }
+            ),
         shape = RoundedCornerShape(16.dp),
-        color = if (focused) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (enabled) (if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
-        else MaterialTheme.colorScheme.onSurface.copy(alpha = .38f),
+        color = when {
+            focused && isPrimary -> MaterialTheme.colorScheme.primary
+            focused -> Color.White
+            isPrimary -> MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+            else -> Color.White.copy(alpha = 0.08f)
+        },
+        contentColor = when {
+            focused -> Color.Black
+            isPrimary -> MaterialTheme.colorScheme.primary
+            else -> Color.White
+        },
         border = BorderStroke(
-            if (focused) 4.dp else 1.dp,
-            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
+            if (focused) 2.dp else 1.dp,
+            when {
+                focused && isPrimary -> MaterialTheme.colorScheme.primary
+                focused -> Color.White
+                isPrimary -> MaterialTheme.colorScheme.primary.copy(alpha = 0.50f)
+                else -> Color.White.copy(alpha = 0.15f)
+            }
         )
     ) {
-        Text(label, Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-            fontWeight = FontWeight.Black)
+        Text(
+            label,
+            Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+            fontWeight = FontWeight.Black,
+            fontSize = 14.sp
+        )
     }
 }
 
@@ -4463,31 +4916,27 @@ private fun ProtectedSourceField(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .onFocusChanged {
-                focused = it.isFocused
-                if (!it.isFocused) editing = false
-            }
-            .onPreviewKeyEvent { event ->
-                if (enabled && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    when (event.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            if (!editing) {
-                                editing = true
-                                true
-                            } else false
-                        }
-                        else -> false
-                    }
-                } else false
-            }
+            .tvFocusableWithPhysics(
+                shape = RoundedCornerShape(16.dp),
+                focusedScale = 1.02f,
+                glowColor = MaterialTheme.colorScheme.secondary,
+                onFocusChange = {
+                    focused = it
+                    if (!it) editing = false
+                }
+            )
             .clickable(enabled = enabled) { editing = true },
-        shape = RoundedCornerShape(14.dp),
-        color = Color.Transparent,
+        shape = RoundedCornerShape(16.dp),
+        color = when {
+            focused -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+            else -> Color.White.copy(alpha = 0.05f)
+        },
         border = BorderStroke(
-            if (focused) 4.dp else 1.dp,
-            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
+            if (focused) 2.dp else 1.dp,
+            when {
+                focused -> MaterialTheme.colorScheme.secondary
+                else -> Color.White.copy(alpha = 0.10f)
+            }
         )
     ) {
         OutlinedTextField(
@@ -4497,7 +4946,7 @@ private fun ProtectedSourceField(
                 .fillMaxWidth()
                 .focusRequester(focusRequester)
                 .focusProperties { canFocus = editing },
-            label = { Text(label) },
+            label = { Text(label, fontWeight = FontWeight.Bold) },
             readOnly = !editing,
             enabled = enabled,
             singleLine = singleLine,
@@ -4505,16 +4954,18 @@ private fun ProtectedSourceField(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.secondary,
                 focusedLabelColor = MaterialTheme.colorScheme.secondary,
-                cursorColor = MaterialTheme.colorScheme.secondary
+                cursorColor = MaterialTheme.colorScheme.secondary,
+                unfocusedBorderColor = Color.Transparent
             ),
             supportingText = {
                 Text(
                     when {
-                        editing -> "Editing active · Press Back when done"
+                        editing -> "Keyboard active · Press Back when done editing"
                         focused -> "Press OK to edit${help.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}"
                         help.isNotBlank() -> help
                         else -> "Press OK to edit"
-                    }
+                    },
+                    color = if (focused) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         )
@@ -4525,10 +4976,11 @@ private fun ProtectedSourceField(
 private fun SettingsLabel(value: String) {
     Text(
         value,
-        Modifier.padding(top = 8.dp),
+        Modifier.padding(top = 10.dp),
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Black
+        fontWeight = FontWeight.Black,
+        letterSpacing = 1.2.sp
     )
 }
 
@@ -4538,34 +4990,43 @@ private fun SettingsToggle(label: String, checked: Boolean, onChecked: (Boolean)
     Surface(
         Modifier
             .fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused }
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                    event.nativeKeyEvent.keyCode in listOf(
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER
-                    )
-                ) {
-                    onChecked(!checked)
-                    true
-                } else false
-            }
+            .tvFocusableWithPhysics(
+                shape = RoundedCornerShape(16.dp),
+                focusedScale = 1.02f,
+                glowColor = MaterialTheme.colorScheme.primary,
+                onFocusChange = { focused = it }
+            )
             .clickable { onChecked(!checked) },
-        shape = RoundedCornerShape(14.dp),
-        color = if (focused) MaterialTheme.colorScheme.surfaceContainerHighest
-        else Color.Transparent,
+        shape = RoundedCornerShape(16.dp),
+        color = when {
+            focused -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+            checked -> Color.White.copy(alpha = 0.08f)
+            else -> Color.White.copy(alpha = 0.04f)
+        },
         border = BorderStroke(
-            if (focused) 4.dp else 1.dp,
-            if (focused) MaterialTheme.colorScheme.secondary else Color.Transparent
+            if (focused) 2.dp else 1.dp,
+            when {
+                focused -> MaterialTheme.colorScheme.primary
+                checked -> MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)
+                else -> Color.White.copy(alpha = 0.08f)
+            }
         )
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-            Switch(checked = checked, onCheckedChange = null)
+            Text(
+                label,
+                Modifier.weight(1f),
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = Color.White
+            )
+            Switch(
+                checked = checked,
+                onCheckedChange = null
+            )
         }
     }
 }

@@ -15,7 +15,14 @@ class PlaylistRepository(
     private val appContext = context.applicationContext
     private val sourceClient = SourceClient(client)
 
-    fun cached(): List<Channel>? = ChannelCache.read(appContext, preferences.playlistUrl)
+    fun cached(): List<Channel>? {
+        val url = preferences.playlistUrl
+        if (url.isBlank()) return null
+        ChannelMemoryCache.get(url)?.let { return it }
+        return ChannelCache.read(appContext, url)?.also {
+            ChannelMemoryCache.set(url, it)
+        }
+    }
 
     fun load(forceRefresh: Boolean = false): List<Channel> {
         val sourceUrl = preferences.playlistUrl
@@ -29,6 +36,7 @@ class PlaylistRepository(
         ).also {
             check(it.isNotEmpty()) { "Playlist did not contain channels" }
             ChannelCache.write(appContext, sourceUrl, it)
+            ChannelMemoryCache.set(sourceUrl, it)
         }
     }
 }

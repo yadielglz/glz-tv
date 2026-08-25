@@ -14,8 +14,13 @@ class EpgRepository(
     private val appContext = context.applicationContext
     private val sourceClient = SourceClient(client)
 
-    fun cached(): EpgGuide? = preferences.epgUrl.takeIf(String::isNotBlank)
-        ?.let { EpgCache.read(appContext, it) }
+    fun cached(): EpgGuide? {
+        val url = preferences.epgUrl.takeIf(String::isNotBlank) ?: return null
+        EpgMemoryCache.get(url)?.let { return it }
+        return EpgCache.read(appContext, url)?.also {
+            EpgMemoryCache.set(url, it)
+        }
+    }
 
     fun load(forceRefresh: Boolean = false): EpgGuide {
         val sourceUrl = preferences.epgUrl
@@ -36,6 +41,7 @@ class EpgRepository(
                 }
             }.onSuccess { guide ->
                 EpgCache.write(appContext, sourceUrl, guide)
+                EpgMemoryCache.set(sourceUrl, guide)
                 return guide
             }.onFailure { error ->
                 lastError = error

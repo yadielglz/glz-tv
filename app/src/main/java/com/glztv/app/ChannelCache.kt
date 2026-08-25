@@ -9,7 +9,7 @@ private const val CHANNEL_CACHE_MAX_AGE_MS = 24L * 60L * 60L * 1000L
 
 object ChannelCache {
     fun read(context: Context, sourceUrl: String): List<Channel>? = runCatching {
-        val file = context.filesDir.resolve(CHANNEL_CACHE_FILE)
+        val file = context.cacheDir.resolve(CHANNEL_CACHE_FILE)
         if (!file.isFile) return null
         val root = JSONObject(file.readText())
         if (root.optString("source") != sourceUrl) return null
@@ -58,8 +58,8 @@ object ChannelCache {
                 .put("source", sourceUrl)
                 .put("savedAt", System.currentTimeMillis())
                 .put("channels", entries)
-            val target = context.filesDir.resolve(CHANNEL_CACHE_FILE)
-            val temporary = context.filesDir.resolve("$CHANNEL_CACHE_FILE.tmp")
+            val target = context.cacheDir.resolve(CHANNEL_CACHE_FILE)
+            val temporary = context.cacheDir.resolve("$CHANNEL_CACHE_FILE.tmp")
             temporary.writeText(root.toString())
             if (target.exists()) target.delete()
             if (!temporary.renameTo(target)) {
