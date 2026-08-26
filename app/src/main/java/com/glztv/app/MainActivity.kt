@@ -4326,6 +4326,11 @@ private fun SettingsDialog(
     val settingsScope = rememberCoroutineScope()
     val initialFocus = remember { FocusRequester() }
 
+    val rightPanelScrollState = rememberScrollState()
+    LaunchedEffect(activeTab) {
+        rightPanelScrollState.scrollTo(0)
+    }
+
     LaunchedEffect(Unit) {
         delay(80)
         runCatching { initialFocus.requestFocus() }
@@ -4440,7 +4445,7 @@ private fun SettingsDialog(
                         .weight(1f)
                         .fillMaxHeight()
                         .padding(start = 28.dp)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(rightPanelScrollState)
                         .focusGroup(),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
@@ -4730,18 +4735,44 @@ private fun SettingsDialog(
 
                                 SettingsTab.Hub -> {
                                     SettingsLabel("GLZ HUB PAIRING STATUS")
+                                    var cardFocused by remember { mutableStateOf(false) }
                                     Surface(
-                                        Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .tvFocusableWithPhysics(
+                                                shape = RoundedCornerShape(20.dp),
+                                                focusedScale = 1.02f,
+                                                glowColor = SettingsTab.Hub.accentColor,
+                                                onFocusChange = { cardFocused = it }
+                                            )
+                                            .clickable(enabled = !hubLoading) {
+                                                hubLoading = true
+                                                settingsScope.launch {
+                                                    runCatching { onBeginHubEnrollment() }
+                                                        .onSuccess { hubMessage = "Pairing code: $it · expires in 1 hour" }
+                                                        .onFailure { hubMessage = "Could not reach GLZ Hub: ${it.message}" }
+                                                    hubLoading = false
+                                                }
+                                            },
                                         shape = RoundedCornerShape(20.dp),
-                                        color = Color.White.copy(alpha = 0.05f),
-                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                                        color = when {
+                                            cardFocused -> SettingsTab.Hub.accentColor.copy(alpha = 0.18f)
+                                            else -> Color.White.copy(alpha = 0.05f)
+                                        },
+                                        border = BorderStroke(
+                                            if (cardFocused) 2.dp else 1.dp,
+                                            when {
+                                                cardFocused -> SettingsTab.Hub.accentColor
+                                                else -> Color.White.copy(alpha = 0.12f)
+                                            }
+                                        )
                                     ) {
                                         Column(Modifier.padding(20.dp)) {
                                             Text(hubMessage, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
                                             Spacer(Modifier.height(6.dp))
                                             Text(
                                                 "Manage this television at glzhub.glztech.com/pair",
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                color = if (cardFocused) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontSize = 14.sp
                                             )
                                             Spacer(Modifier.height(14.dp))
