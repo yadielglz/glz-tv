@@ -792,11 +792,6 @@ internal fun TvScreen(
                                     section = AppSection.Live
                                     tuneChannel(channel)
                                 },
-                                onOpenGuide = {
-                                    playerActive = false
-                                    GlzHubManager.reportActivity(prefs, "idle")
-                                    section = AppSection.Live
-                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                             AppSection.Live -> GuideSection(
@@ -992,7 +987,6 @@ private fun GuestHubHome(
     channels: List<Channel>,
     guide: EpgGuide,
     onWatchChannel: (Channel) -> Unit,
-    onOpenGuide: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showQuickWatchDrawer by remember { mutableStateOf(false) }
@@ -1020,19 +1014,13 @@ private fun GuestHubHome(
                 .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             val compactHeight = maxHeight < 440.dp
-            // Hero occupies the upper ~2/3 of the available space.
-            val guestHeight = if (compactHeight) (maxHeight * 0.62f).coerceAtLeast(150.dp)
-            else (maxHeight * 0.667f).coerceIn(240.dp, 460.dp)
 
-            Column(
-                Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(if (compactHeight) 10.dp else 16.dp)
-            ) {
-                // 1. TOP HERO CARD
+            Column(Modifier.fillMaxSize()) {
+                // 1. HERO — fills everything above the pinned action row.
                 Card(
                     Modifier
                         .fillMaxWidth()
-                        .height(guestHeight),
+                        .weight(1f),
                     shape = RoundedCornerShape(28.dp),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
                     colors = CardDefaults.cardColors(
@@ -1151,17 +1139,18 @@ private fun GuestHubHome(
                                         modifier = Modifier.padding(top = 3.dp)
                                     )
                                 }
+                                experience.roomNumber?.takeIf(String::isNotBlank)?.let {
+                                    Text(
+                                        "Room $it",
+                                        color = Color.White.copy(alpha = 0.78f),
+                                        fontSize = if (compactHeight) 13.sp else 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 1.dp)
+                                    )
+                                }
                                 if (!compactHeight) {
-                                    experience.roomNumber?.takeIf(String::isNotBlank)?.let {
-                                        Text(
-                                            "Room $it",
-                                            color = Color.White.copy(alpha = 0.72f),
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
                                     val stayInfo = listOfNotNull(
                                         experience.checkoutTime?.let { "Checkout $it" },
                                         if (!experience.arrivalDate.isNullOrBlank() &&
@@ -1184,32 +1173,45 @@ private fun GuestHubHome(
 
                             Spacer(Modifier.weight(1f))
 
-                            // Live context — one metric per line; channel tag anchors
-                            // the right edge of the network line.
+                            // Live context — clock leads (bigger), then aligned metric
+                            // lines; channel tag anchors the right edge of the network line.
                             val timeText = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(now))
                             val meridiemSep = timeText.lastIndexOf(' ')
-                            Row(verticalAlignment = Alignment.Bottom) {
+                            Row(
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    "NOW",
+                                    Modifier
+                                        .width(74.dp)
+                                        .padding(bottom = 3.dp),
+                                    color = Color.White.copy(alpha = 0.45f),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 1.sp,
+                                    maxLines = 1
+                                )
                                 Text(
                                     if (meridiemSep > 0) timeText.substring(0, meridiemSep) else timeText,
                                     color = Color.White,
-                                    fontSize = if (compactHeight) 20.sp else 24.sp,
+                                    fontSize = if (compactHeight) 22.sp else 28.sp,
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = (-0.5).sp,
                                     maxLines = 1
                                 )
                                 if (meridiemSep > 0) {
-                                    Spacer(Modifier.width(5.dp))
                                     Text(
                                         timeText.substring(meridiemSep + 1),
                                         color = Color.White.copy(alpha = 0.70f),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Normal,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
                                         maxLines = 1,
-                                        modifier = Modifier.padding(bottom = 2.dp)
+                                        modifier = Modifier.padding(bottom = 3.dp)
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(if (compactHeight) 4.dp else 8.dp))
+                            Spacer(Modifier.height(if (compactHeight) 6.dp else 10.dp))
                             weather?.let {
                                 HeroInfoLine(
                                     "WEATHER",
@@ -1261,7 +1263,10 @@ private fun GuestHubHome(
                     }
                 }
 
-                // 2. CONTENT SHORTCUTS ROW (section navigation lives in the rail)
+                Spacer(Modifier.height(if (compactHeight) 10.dp else 16.dp))
+
+                // 2. ACTION ROW — pinned to the bottom (section nav lives in the rail;
+                // "Guide" is already there, so it's not repeated here).
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -1293,17 +1298,9 @@ private fun GuestHubHome(
                             isPrimary = true,
                             accentColor = MaterialTheme.colorScheme.primary,
                             onClick = { showQuickWatchDrawer = true },
-                            modifier = Modifier.weight(1.4f)
+                            modifier = Modifier.weight(1.6f)
                         )
                     }
-                    HomeNavActionButton(
-                        label = "GUIDE",
-                        icon = Icons.Default.CalendarMonth,
-                        isPrimary = false,
-                        accentColor = MaterialTheme.colorScheme.secondary,
-                        onClick = onOpenGuide,
-                        modifier = Modifier.weight(1f)
-                    )
                     HomeNavActionButton(
                         label = "APPS",
                         icon = Icons.Default.Apps,

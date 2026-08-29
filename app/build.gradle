@@ -13,7 +13,7 @@ android {
         minSdk 24
         targetSdk 36
         versionCode providers.gradleProperty("releaseVersionCode").map { it.toInteger() }.getOrElse(26828001)
-        versionName providers.gradleProperty("releaseVersionName").getOrElse("26.828.01-rc2")
+        versionName providers.gradleProperty("releaseVersionName").getOrElse("26.828.01-rc3")
     }
 
     signingConfigs {
