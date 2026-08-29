@@ -446,9 +446,17 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     const assigned = await supabaseJson(env, `/rest/v1/playlists?${playlistFilter}&select=id,epg_url`) as Record<string, unknown>[];
     if (assigned[0]?.epg_url) managedEpgUrl = assigned[0].epg_url;
   }
-  const profiles = device.site_id ? await supabaseJson(env,
+  let profiles = device.site_id ? await supabaseJson(env,
     `/rest/v1/guest_experience_profiles?site_id=eq.${device.site_id}&owner_id=eq.${device.owner_id}&select=*`
   ) as Record<string, unknown>[] : [];
+  if (!profiles[0]) {
+    // Device has no site assigned (or that site has no profile yet) — fall back to
+    // the owner's most recently updated guest experience so branding, hero image
+    // and welcome copy still reach the screen.
+    profiles = await supabaseJson(env,
+      `/rest/v1/guest_experience_profiles?owner_id=eq.${device.owner_id}&select=*&order=updated_at.desc&limit=1`
+    ) as Record<string, unknown>[];
+  }
   const profile = profiles[0] ?? {};
   return json({
     version: device.config_version,

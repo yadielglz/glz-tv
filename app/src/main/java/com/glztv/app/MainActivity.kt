@@ -1042,42 +1042,17 @@ private fun GuestHubHome(
                 ) {
                     Box(Modifier.fillMaxSize()) {
                         val scrimColor = MaterialTheme.colorScheme.surface
+                        val hasPreview = previewChannel != null
 
-                        if (previewChannel != null) {
-                            // Live channel preview fills the whole hero; greeting text sits
-                            // over a scrim on the left so the video is the focal point.
-                            VideoPlayer(
-                                channel = previewChannel,
-                                captionsEnabled = false,
-                                captionLanguage = captionLanguage,
-                                modifier = Modifier.fillMaxSize(),
-                                muted = true,
-                                createMediaSession = false,
-                                keepScreenOn = false,
-                                cropVideo = true
-                            )
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            0f to scrimColor.copy(alpha = 0.97f),
-                                            0.30f to scrimColor.copy(alpha = 0.88f),
-                                            0.62f to scrimColor.copy(alpha = 0f)
-                                        )
-                                    )
-                            )
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color.Black.copy(alpha = 0.08f),
-                                                Color.Black.copy(alpha = 0.32f)
-                                            )
-                                        )
-                                    )
+                        // Base layer: the hero background image whenever one is configured,
+                        // otherwise the ambient gradient. Drawn first so it shows while a
+                        // preview video is buffering or if playback fails.
+                        if (!experience.heroImageUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = experience.heroImageUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
                             )
                         } else {
                             Box(
@@ -1093,48 +1068,59 @@ private fun GuestHubHome(
                                         )
                                     )
                             )
-                            experience.heroImageUrl?.let { imageUrl ->
-                                AsyncImage(
-                                    model = imageUrl,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                // Left scrim keeps the identity + context text legible over
-                                // any hero image; vertical scrim darkens the base.
-                                Box(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                0f to Color.Black.copy(alpha = 0.75f),
-                                                0.42f to Color.Black.copy(alpha = 0.35f),
-                                                0.75f to Color.Black.copy(alpha = 0f)
-                                            )
-                                        )
-                                )
-                                Box(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                listOf(
-                                                    Color.Black.copy(alpha = 0.10f),
-                                                    Color.Black.copy(alpha = 0.55f)
-                                                )
-                                            )
-                                        )
-                                )
-                            }
                         }
+
+                        // Live channel preview covers the base when a Home preview channel
+                        // is set.
+                        previewChannel?.let { channel ->
+                            VideoPlayer(
+                                channel = channel,
+                                captionsEnabled = false,
+                                captionLanguage = captionLanguage,
+                                modifier = Modifier.fillMaxSize(),
+                                muted = true,
+                                createMediaSession = false,
+                                keepScreenOn = false,
+                                cropVideo = true
+                            )
+                        }
+
+                        // Scrims — legibility for the identity + context text over an image
+                        // or video. Lighter over a still image so the backdrop still reads.
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        0f to scrimColor.copy(alpha = if (hasPreview) 0.96f else 0.82f),
+                                        0.34f to scrimColor.copy(alpha = if (hasPreview) 0.80f else 0.45f),
+                                        0.68f to scrimColor.copy(alpha = 0f)
+                                    )
+                                )
+                        )
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.Black.copy(alpha = 0.10f),
+                                            Color.Black.copy(alpha = 0.48f)
+                                        )
+                                    )
+                                )
+                        )
 
                         Column(
                             Modifier
                                 .fillMaxSize()
                                 .padding(horizontal = 28.dp, vertical = if (compactHeight) 14.dp else 22.dp)
                         ) {
-                            // Guest identity — kept off the video face.
-                            Column(Modifier.fillMaxWidth(if (previewChannel != null) 0.60f else 1f)) {
+                            // Guest identity — narrowed when there's a backdrop (video or
+                            // image) so it clears the right side; full width otherwise.
+                            val hasBackdrop = previewChannel != null ||
+                                !experience.heroImageUrl.isNullOrBlank()
+                            Column(Modifier.fillMaxWidth(if (hasBackdrop) 0.60f else 1f)) {
                                 Text(
                                     timeGreeting,
                                     color = Color.White.copy(alpha = 0.85f),
