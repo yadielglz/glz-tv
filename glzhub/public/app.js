@@ -511,7 +511,18 @@ function openApp(id = "") {
   $("#appDialog").showModal();
 }
 
-function openDevice(id) {
+async function openDevice(id) {
+  // A freshly paired device is usually opened before Playlist Studio (or even
+  // the dashboard) has finished loading, so state.playlists / sites / groups can
+  // still be empty — which left the "Channel lineup" selector with no options
+  // until the operator reloaded the portal. Lazy-load whatever is missing.
+  const pending = [];
+  if (!state.playlists.length) pending.push(loadPlaylists().catch(() => {}));
+  if (!state.sites.length || !state.groups.length || !state.apps.length) {
+    pending.push(loadDevices().catch(() => {}));
+  }
+  if (pending.length) await Promise.all(pending);
+
   const device = state.devices.find((item) => item.id === id);
   if (!device) return;
   $("#deviceId").value = device.id;

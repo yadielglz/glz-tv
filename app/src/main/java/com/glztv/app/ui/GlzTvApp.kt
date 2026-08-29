@@ -22,7 +22,7 @@ fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int) {
         context.getSharedPreferences(PreferencesRepository.FILE_NAME, Context.MODE_PRIVATE)
     }
     var themeMode by remember {
-        mutableStateOf(prefs.getString(THEME_MODE, "adaptive") ?: "adaptive")
+        mutableStateOf(prefs.getString(THEME_MODE, "dark") ?: "dark")
     }
     GlzTheme(themeMode) {
         AmbientBackground {

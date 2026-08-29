@@ -1,23 +1,17 @@
 package com.glztv.app.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -61,13 +55,6 @@ private val defaultDark = darkColorScheme(
     surface = Color(0xFF101524), surfaceVariant = Color(0xFF1A2136),
     onSurface = Color(0xFFF0F4FC), onSurfaceVariant = Color(0xFFA0ACCE)
 )
-private val defaultLight = lightColorScheme(
-    primary = Color(0xFF006970), onPrimary = Color.White,
-    primaryContainer = Color(0xFF9CF1FA), secondary = Color(0xFF6200EE),
-    onSecondary = Color.White, background = Color(0xFFF4F7FC),
-    surface = Color(0xFFFFFFFF), surfaceVariant = Color(0xFFE1E7F0),
-    onSurface = Color(0xFF101524), onSurfaceVariant = Color(0xFF424B60)
-)
 private val ocean = darkColorScheme(
     primary = Color(0xFF00E5FF), onPrimary = Color(0xFF00363D), primaryContainer = Color(0xFF004D57),
     secondary = Color(0xFF00FFB2), onSecondary = Color(0xFF003827), background = Color(0xFF040D14),
@@ -101,22 +88,17 @@ private val midnight = darkColorScheme(
 
 @Composable
 fun GlzTheme(mode: String, content: @Composable () -> Unit) {
-    val context = LocalContext.current
-    val dark = when (mode) {
-        "dark", "ocean", "sunset", "emerald", "cyberpunk", "midnight" -> true
-        "light" -> false
-        else -> isSystemInDarkTheme()
-    }
-    val colors = when {
-        mode == "ocean" -> ocean
-        mode == "sunset" -> sunset
-        mode == "emerald" -> emerald
-        mode == "cyberpunk" -> cyberpunk
-        mode == "midnight" -> midnight
-        mode == "adaptive" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> defaultDark
-        else -> defaultLight
+    // GLZ TV is a dark-only experience: the cinematic gradients, glow focus states, and
+    // neon accents are designed for a dark canvas. Legacy "light"/"adaptive"/"dark"
+    // preferences all resolve to the default dark palette; the named variants below are
+    // all dark schemes as well.
+    val colors = when (mode) {
+        "ocean" -> ocean
+        "sunset" -> sunset
+        "emerald" -> emerald
+        "cyberpunk" -> cyberpunk
+        "midnight" -> midnight
+        else -> defaultDark
     }
     MaterialTheme(
         colorScheme = colors,

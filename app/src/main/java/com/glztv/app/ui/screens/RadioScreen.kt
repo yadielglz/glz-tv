@@ -15,6 +15,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import com.glztv.app.ui.components.tvFocusableWithPhysics
+import com.glztv.app.ui.components.GlzPanel
+import com.glztv.app.ui.components.GlzFocusCard
+import com.glztv.app.ui.components.GlzCardDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -241,21 +244,13 @@ fun RadioScreen(
             Column {
                 Text(
                     "GLZ Radio",
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = (-0.5).sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        shadow = androidx.compose.ui.graphics.Shadow(
-                            color = Color.Black.copy(alpha = 0.5f),
-                            offset = androidx.compose.ui.geometry.Offset(0f, 2f),
-                            blurRadius = 6f
-                        )
-                    )
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     "Live audio streams managed by GLZ Hub",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.95f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium
                 )
@@ -263,11 +258,11 @@ fun RadioScreen(
             Surface(
                 shape = RoundedCornerShape(999.dp),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f))
             ) {
                 Text(
                     "${stations.size} STATIONS",
-                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                     fontWeight = FontWeight.Black,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.primary
@@ -275,12 +270,9 @@ fun RadioScreen(
             }
         }
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Surface(
+            GlzPanel(
                 modifier = Modifier.weight(1.15f).fillMaxHeight(),
-                shape = RoundedCornerShape(30.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
-                tonalElevation = 8.dp
+                shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge)
             ) {
                 if (loading) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -307,12 +299,9 @@ fun RadioScreen(
                     }
                 }
             }
-            Surface(
+            GlzPanel(
                 modifier = Modifier.weight(.85f).fillMaxHeight(),
-                shape = RoundedCornerShape(30.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                tonalElevation = 10.dp
+                shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge)
             ) {
                 Box(
                     Modifier
@@ -320,9 +309,9 @@ fun RadioScreen(
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                                     Color.Transparent,
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.90f)
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                                 )
                             )
                         )
@@ -330,7 +319,7 @@ fun RadioScreen(
                     Column(
                         Modifier
                             .fillMaxSize()
-                            .padding(28.dp),
+                            .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
@@ -339,18 +328,18 @@ fun RadioScreen(
                         val displayTag = if (parts.size > 1) parts.first() else ""
 
                         Surface(
-                            shape = RoundedCornerShape(32.dp),
+                            shape = RoundedCornerShape(28.dp),
                             color = Color.White.copy(alpha = 0.08f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.20f)),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
                             shadowElevation = 16.dp
                         ) {
                             AsyncImage(
                                 model = selected?.logoUrl ?: R.drawable.ic_launcher,
                                 contentDescription = selected?.name,
                                 modifier = Modifier
-                                    .size(160.dp)
+                                    .size(150.dp)
                                     .padding(12.dp)
-                                    .clip(RoundedCornerShape(24.dp)),
+                                    .clip(RoundedCornerShape(20.dp)),
                                 contentScale = ContentScale.Fit
                             )
                         }
@@ -360,7 +349,7 @@ fun RadioScreen(
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)),
-                                modifier = Modifier.padding(top = 18.dp)
+                                modifier = Modifier.padding(top = 16.dp)
                             ) {
                                 Text(
                                     displayTag,
@@ -374,12 +363,13 @@ fun RadioScreen(
 
                         Text(
                             displayTitle,
-                            Modifier.padding(top = if (displayTag.isNotBlank()) 8.dp else 20.dp),
-                            fontSize = 26.sp,
+                            Modifier.padding(top = if (displayTag.isNotBlank()) 8.dp else 16.dp),
+                            fontSize = 24.sp,
                             fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = Color.White,
                             maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                         Text(
                             selected?.genre ?: "Browse the live station list",
@@ -393,18 +383,18 @@ fun RadioScreen(
                             AudioSpectrumVisualizer(
                                 isPlaying = true,
                                 modifier = Modifier
-                                    .padding(top = 16.dp)
-                                    .width(60.dp)
+                                    .padding(top = 14.dp)
+                                    .width(68.dp)
                                     .height(24.dp),
                                 barColor = MaterialTheme.colorScheme.primary
                             )
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (playing) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, if (playing) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color.Transparent),
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (playing) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            border = BorderStroke(1.dp, if (playing) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.10f)),
                             modifier = Modifier.padding(top = 14.dp)
                         ) {
                             Text(
@@ -412,12 +402,13 @@ fun RadioScreen(
                                 Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                                 color = if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Black,
-                                fontSize = 12.sp
+                                fontSize = 11.sp,
+                                letterSpacing = 0.5.sp
                             )
                         }
 
                         Row(
-                            Modifier.padding(top = 24.dp),
+                            Modifier.padding(top = 22.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             Button(
@@ -428,8 +419,9 @@ fun RadioScreen(
                                     else selected?.let(::playStation)
                                 },
                                 modifier = Modifier.tvFocusableWithPhysics(
-                                    shape = RoundedCornerShape(20.dp),
-                                    focusedScale = 1.08f
+                                    shape = RoundedCornerShape(18.dp),
+                                    focusedScale = 1.08f,
+                                    glowColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
                                 Icon(
@@ -442,8 +434,9 @@ fun RadioScreen(
                                 enabled = selected != null || player.mediaItemCount > 0,
                                 onClick = ::stopRadio,
                                 modifier = Modifier.tvFocusableWithPhysics(
-                                    shape = RoundedCornerShape(20.dp),
-                                    focusedScale = 1.08f
+                                    shape = RoundedCornerShape(18.dp),
+                                    focusedScale = 1.08f,
+                                    glowColor = MaterialTheme.colorScheme.secondary
                                 )
                             ) {
                                 Icon(Icons.Default.Stop, null)
@@ -577,43 +570,20 @@ private fun RadioStationRow(
     isPlaying: Boolean,
     onPlay: () -> Unit
 ) {
-    var focused by remember { mutableStateOf(false) }
     val rawName = station.name.trim()
     val parts = rawName.split("|").map(String::trim).filter(String::isNotBlank)
     val title = if (parts.size > 1) parts.last() else rawName
     val tag = if (parts.size > 1) parts.first() else ""
     val activeColor = MaterialTheme.colorScheme.primary
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onPlay)
-            .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(22.dp),
-                focusedScale = 1.04f,
-                glowColor = activeColor,
-                onFocusChange = { focused = it }
-            ),
-        shape = RoundedCornerShape(22.dp),
-        color = when {
-            focused -> activeColor
-            selected -> activeColor.copy(alpha = 0.20f)
-            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f)
-        },
-        border = BorderStroke(
-            1.dp,
-            when {
-                focused -> activeColor
-                selected -> activeColor.copy(alpha = 0.60f)
-                else -> Color.White.copy(alpha = 0.10f)
-            }
-        ),
-        contentColor = when {
-            focused -> MaterialTheme.colorScheme.onPrimary
-            selected -> activeColor
-            else -> MaterialTheme.colorScheme.onSurface
-        }
-    ) {
+    GlzFocusCard(
+        onClick = onPlay,
+        modifier = Modifier.fillMaxWidth(),
+        selected = selected,
+        accent = activeColor,
+        shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
+        focusedScale = 1.04f
+    ) { focused ->
         Row(
             Modifier
                 .fillMaxWidth()

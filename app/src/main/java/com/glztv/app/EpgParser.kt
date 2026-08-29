@@ -78,9 +78,8 @@ object EpgParser {
         SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US).apply { isLenient = false }
     }
 
-    fun parse(xml: String): EpgGuide {
-        val cutoff = System.currentTimeMillis() - (2L * 60L * 60L * 1000L)
-        val handler = GuideHandler(cutoff)
+    fun parse(xml: String, cutoffMillis: Long = 0L): EpgGuide {
+        val handler = GuideHandler(cutoffMillis)
         SAXParserFactory.newInstance().apply {
             isNamespaceAware = false
             isValidating = false

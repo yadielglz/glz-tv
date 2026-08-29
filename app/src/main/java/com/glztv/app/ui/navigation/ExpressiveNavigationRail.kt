@@ -1,8 +1,6 @@
 package com.glztv.app.ui.navigation
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,8 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.WbSunny
@@ -25,20 +23,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.glztv.app.BuildConfig
-import com.glztv.app.ui.components.tvFocusableWithPhysics
+import com.glztv.app.ui.components.GlzFocusCard
 
 @Composable
 fun ExpressiveNavigationRail(
@@ -69,7 +62,7 @@ fun ExpressiveNavigationRail(
                 RailDestination("Home", section == AppSection.Home, Icons.Default.Home, compactHeight) {
                     onSection(AppSection.Home)
                 }
-                RailDestination("Live TV", section == AppSection.Live, Icons.Default.LiveTv, compactHeight) {
+                RailDestination("Guide", section == AppSection.Live, Icons.Default.CalendarMonth, compactHeight) {
                     onSection(AppSection.Live)
                 }
                 RailDestination("Radio", section == AppSection.Radio, Icons.Default.Radio, compactHeight) {
@@ -101,33 +94,14 @@ private fun RailDestination(
     compactHeight: Boolean,
     onClick: () -> Unit
 ) {
-    var focused by remember { mutableStateOf(false) }
-    val activeColor = MaterialTheme.colorScheme.primary
-    val shape = RoundedCornerShape(24.dp)
-
-    Surface(
+    GlzFocusCard(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .tvFocusableWithPhysics(
-                shape = shape,
-                focusedScale = 1.08f,
-                glowColor = activeColor,
-                onFocusChange = { focused = it }
-            ),
-        shape = shape,
-        color = when {
-            focused -> activeColor
-            selected -> activeColor.copy(alpha = 0.20f)
-            else -> Color.Transparent
-        },
-        border = if (selected && !focused) BorderStroke(1.dp, activeColor.copy(alpha = 0.5f)) else null,
-        contentColor = when {
-            focused -> MaterialTheme.colorScheme.onPrimary
-            selected -> activeColor
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
-        }
-    ) {
+        modifier = Modifier.fillMaxWidth(),
+        selected = selected,
+        shape = RoundedCornerShape(24.dp),
+        focusedScale = 1.08f,
+        restFill = Color.Transparent
+    ) { focused ->
         Column(
             Modifier
                 .fillMaxWidth()

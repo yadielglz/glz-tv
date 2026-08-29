@@ -1,6 +1,8 @@
 package com.glztv.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.glztv.app.BuildConfig
 import com.glztv.app.model.NetworkInfo
 import com.glztv.app.model.WeatherInfo
 import kotlinx.coroutines.delay
@@ -46,7 +49,9 @@ fun SlimHeader(
     networkInfo: NetworkInfo?,
     onWeatherClick: (() -> Unit)?,
     onRefresh: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    /** When true, hide the network / weather / clock cluster (Home shows its own). */
+    minimal: Boolean = false
 ) {
     val compactHeader = LocalConfiguration.current.screenWidthDp < 700
     val headerHorizontalPadding = if (compactHeader) 12.dp else 40.dp
@@ -85,9 +90,26 @@ fun SlimHeader(
                     letterSpacing = 0.5.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                if (BuildConfig.DEBUG) {
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFFF9100).copy(alpha = 0.20f),
+                        border = BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.60f))
+                    ) {
+                        Text(
+                            "BETA",
+                            Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            color = Color(0xFFFF9100),
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
             }
             Spacer(Modifier.weight(1f))
-            if (contentLoaded) {
+            if (contentLoaded && !minimal) {
                 if (!compactHeader) networkInfo?.let {
                     Column(
                         Modifier.padding(horizontal = 14.dp),
