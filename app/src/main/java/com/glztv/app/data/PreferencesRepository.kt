@@ -19,11 +19,16 @@ class PreferencesRepository(context: Context) {
     val requestHeaders: Map<String, String>
         get() = parseRequestHeaders(sharedPreferences.getString(REQUEST_HEADERS, "").orEmpty())
 
+    /** Per-channel fallback stream URLs, keyed by channel number and by channel id. */
+    val channelFallbacks: Map<String, List<String>>
+        get() = parseChannelFallbacks(sharedPreferences.getString(CHANNEL_FALLBACKS, "").orEmpty())
+
     companion object {
         const val FILE_NAME = "glz_tv"
         const val PLAYLIST_URL = "playlist_url"
         const val EPG_URL = "epg_url"
         const val REQUEST_HEADERS = "request_headers"
+        const val CHANNEL_FALLBACKS = "channel_fallbacks"
         const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
         const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 
@@ -33,6 +38,23 @@ class PreferencesRepository(context: Context) {
                 if (separator > 0) {
                     put(line.take(separator).trim(), line.drop(separator + 1).trim())
                 }
+            }
+        }
+
+        /**
+         * Parses lines of the form `key = url1, url2` where `key` is a channel
+         * number or channel id. Blank lines and lines without `=` are ignored.
+         */
+        fun parseChannelFallbacks(source: String): Map<String, List<String>> = buildMap {
+            source.lineSequence().forEach { line ->
+                val separator = line.indexOf('=')
+                if (separator <= 0) return@forEach
+                val key = line.take(separator).trim()
+                val urls = line.drop(separator + 1)
+                    .split(',')
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                if (key.isNotEmpty() && urls.isNotEmpty()) put(key, urls)
             }
         }
     }

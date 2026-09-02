@@ -242,6 +242,7 @@ object GlzHubManager {
         if (config.has("wifiOnly")) {
             editor.putBoolean("wifi_only", config.optBoolean("wifiOnly", false))
         }
+        config.stringOrNull("updateChannel")?.let { editor.putString("update_channel", it.lowercase()) }
         if (forceRefreshTriggered) {
             editor.putString("last_force_refresh_token", forceRefreshToken)
         }
@@ -253,6 +254,24 @@ object GlzHubManager {
                 "request_headers",
                 headers.keys().asSequence().joinToString("\n") { "$it: ${headers.optString(it)}" }
             )
+        }
+        if (config.has("channelFallbacks")) {
+            val fallbacks = config.optJSONObject("channelFallbacks")
+            if (fallbacks == null) {
+                editor.remove("channel_fallbacks")
+            } else {
+                editor.putString(
+                    "channel_fallbacks",
+                    fallbacks.keys().asSequence().joinToString("\n") { key ->
+                        val urls = when (val value = fallbacks.opt(key)) {
+                            is JSONArray -> (0 until value.length())
+                                .mapNotNull { value.optString(it).takeIf(String::isNotBlank) }
+                            else -> listOf(fallbacks.optString(key)).filter(String::isNotBlank)
+                        }
+                        "$key = ${urls.joinToString(", ")}"
+                    }
+                )
+            }
         }
         editor.putStringSet(VISIBLE_APPS, appPackages)
             .putBoolean(VISIBLE_APPS_MANAGED, true)

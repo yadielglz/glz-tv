@@ -14,4 +14,23 @@ class PreferencesRepositoryTest {
             )
         )
     }
+
+    @Test
+    fun parsesChannelFallbacksWithSingleAndMultipleUrls() {
+        assertEquals(
+            mapOf(
+                "2" to listOf("https://a.example/wkaq.m3u8"),
+                "wkaq" to listOf("https://a.example/wkaq.m3u8", "https://b.example/wkaq.m3u8")
+            ),
+            PreferencesRepository.parseChannelFallbacks(
+                """
+                    2 = https://a.example/wkaq.m3u8
+
+                    wkaq = https://a.example/wkaq.m3u8 , https://b.example/wkaq.m3u8
+                    no-equals-line
+                    3 =
+                """.trimIndent()
+            )
+        )
+    }
 }

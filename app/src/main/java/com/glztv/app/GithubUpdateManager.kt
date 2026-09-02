@@ -8,14 +8,38 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.URLDecoder
 
 object GithubUpdateManager {
-    private const val LATEST_RELEASE =
-        "https://api.github.com/repos/yadielglz/glz-tv/releases/latest"
+    private const val RELEASES =
+        "https://api.github.com/repos/yadielglz/glz-tv/releases?per_page=30"
     private const val APK_MIME = "application/vnd.android.package-archive"
+
+    /**
+     * Which GitHub release ring this install follows. The [marker] is matched against the
+     * lowercased tag suffix (the part after the first `-`). Stable releases (no suffix) are
+     * offered on every channel; a channel additionally accepts its own pre-release tags.
+     */
+    enum class UpdateChannel(val id: String, val label: String, val marker: String?) {
+        PRODUCTION("production", "Production", null),
+        FAMILY("family", "Family", "family"),
+        BETA("beta", "Beta", "beta"),
+        RELEASE_CANDIDATE("rc", "Release Candidate", "rc");
+
+        companion object {
+            fun from(id: String?): UpdateChannel =
+                values().firstOrNull { it.id.equals(id, ignoreCase = true) } ?: PRODUCTION
+        }
+    }
+
+    /**
+     * The first release on the Production ring. Every stable release tagged before this one
+     * belongs to the Family ring, so Production installs are never offered an older build.
+     */
+    internal const val PRODUCTION_FLOOR = "26.902.05"
 
     data class UpdateInfo(
         val version: String,
@@ -24,30 +48,61 @@ object GithubUpdateManager {
         val notes: String
     )
 
-    fun check(client: OkHttpClient): UpdateInfo? {
+    fun check(client: OkHttpClient, channel: UpdateChannel = UpdateChannel.PRODUCTION): UpdateInfo? {
         val response = client.newCall(
             Request.Builder()
-                .url(LATEST_RELEASE)
+                .url(RELEASES)
                 .header("Accept", "application/vnd.github+json")
                 .header("User-Agent", "GLZ-TV/${BuildConfig.VERSION_NAME}")
                 .build()
         ).execute()
         val text = response.body?.string().orEmpty()
         check(response.isSuccessful) { "GitHub returned ${response.code}" }
-        val release = JSONObject(text)
-        val version = release.getString("tag_name").removePrefix("v")
-        if (compareVersions(version, BuildConfig.VERSION_NAME.substringBefore("-")) <= 0) return null
-        val assets = release.getJSONArray("assets")
+        val releases = JSONArray(text)
+        val currentBase = BuildConfig.VERSION_NAME.substringBefore("-")
+        val currentTag = "v${BuildConfig.VERSION_NAME}"
+
+        // The newest published release on the selected channel. published_at is ISO-8601,
+        // so lexical comparison matches chronological order.
+        val newest = (0 until releases.length())
+            .map { releases.getJSONObject(it) }
+            .filterNot { it.optBoolean("draft", false) }
+            .filter { matchesChannel(it.getString("tag_name"), channel) }
+            .maxByOrNull { it.optString("published_at") }
+            ?: return null
+
+        val tag = newest.getString("tag_name")
+        val version = tag.removePrefix("v")
+        if (tag.equals(currentTag, ignoreCase = true)) return null
+        // Never step onto an older base version (e.g. a Beta user must not be pulled back
+        // to an older stable). Equal base is allowed so rc1 -> rc2 -> final still flows.
+        if (compareVersions(version.substringBefore("-"), currentBase) < 0) return null
+        val assets = newest.optJSONArray("assets") ?: return null
         val asset = (0 until assets.length())
             .map { assets.getJSONObject(it) }
             .firstOrNull { it.optString("name").endsWith(".apk", ignoreCase = true) }
-            ?: error("Release $version does not include an APK")
+            ?: return null
         return UpdateInfo(
             version = version,
             downloadUrl = asset.getString("browser_download_url"),
-            releaseUrl = release.optString("html_url"),
-            notes = release.optString("body").take(1_200)
+            releaseUrl = newest.optString("html_url"),
+            notes = newest.optString("body").take(1_200)
         )
+    }
+
+    internal fun matchesChannel(tag: String, channel: UpdateChannel): Boolean {
+        val version = tag.removePrefix("v")
+        val base = version.substringBefore("-")
+        val suffix = version.substringAfter("-", "").lowercase()
+        val stable = suffix.isEmpty()
+        return when (channel) {
+            // Production: stable tags from the floor release onward only.
+            UpdateChannel.PRODUCTION -> stable && compareVersions(base, PRODUCTION_FLOOR) >= 0
+            // Family: every stable tag (including the pre-floor history) plus -family builds.
+            UpdateChannel.FAMILY -> stable || suffix.startsWith("family")
+            UpdateChannel.BETA -> stable || suffix.startsWith("beta")
+            UpdateChannel.RELEASE_CANDIDATE -> stable || suffix.startsWith("rc")
+        }
     }
 
     fun canInstall(context: Context): Boolean =
