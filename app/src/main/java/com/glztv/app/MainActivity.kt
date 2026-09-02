@@ -1686,7 +1686,7 @@ private fun QuickWatchChannelDrawer(
                     .focusGroup(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                itemsIndexed(channels, key = { _, channel -> channel.id }) { index, channel ->
+                itemsIndexed(channels, key = { index, channel -> "$index:${channel.id}" }) { index, channel ->
                     val currentProg = remember(channel, guide) {
                         guide.forChannel(channel).firstOrNull { it.startMillis <= now && it.endMillis > now }
                     }
@@ -3130,7 +3130,7 @@ private fun EpgGrid(
                     modifier = Modifier.fillMaxSize().focusGroup(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(channels, key = { "grid-${it.streamUrl}" }) { channel ->
+                    itemsIndexed(channels, key = { index, ch -> "grid-$index-${ch.streamUrl}" }) { _, channel ->
                         EpgGridRow(
                             channel = channel,
                             programmes = guide.forChannel(channel),
@@ -3438,7 +3438,7 @@ private fun ChannelPane(
                 contentPadding = PaddingValues(bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(channels, key = { it.streamUrl }) { channel ->
+                itemsIndexed(channels, key = { index, ch -> "$index-${ch.streamUrl}" }) { _, channel ->
                     ChannelCard(channel, channel == selected, channel.id in favorites,
                         guide, { onSelect(channel) }, { onFavorite(channel) })
                 }
@@ -3746,11 +3746,14 @@ private fun ImmersivePlayerScreen(
         }
 
         if (drawer == PlayerDrawer.Channels) {
-            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .88f else 420.dp
+            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .92f else 436.dp
             Surface(
-                Modifier.width(drawerWidth).fillMaxHeight(),
+                Modifier.width(drawerWidth).fillMaxHeight()
+                    .padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = 6.dp),
                 color = Color(0xF20B1114),
                 contentColor = Color.White,
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                 tonalElevation = 18.dp,
                 shadowElevation = 24.dp
             ) {
@@ -3803,7 +3806,7 @@ private fun ImmersivePlayerScreen(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        items(channels, key = { "drawer-${it.streamUrl}" }) { item ->
+                        itemsIndexed(channels, key = { index, ch -> "drawer-$index-${ch.streamUrl}" }) { _, item ->
                             val isSelected = item.id == channel.id
                             var isFocused by remember(item.id) { mutableStateOf(false) }
                             val itemProgramme = guide.forChannel(item)
@@ -3860,11 +3863,14 @@ private fun ImmersivePlayerScreen(
             }
         }
         if (drawer == PlayerDrawer.Services) {
-            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .92f else 440.dp
+            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .96f else 456.dp
             Surface(
-                Modifier.width(drawerWidth).fillMaxHeight().align(Alignment.CenterEnd),
+                Modifier.width(drawerWidth).fillMaxHeight().align(Alignment.CenterEnd)
+                    .padding(end = 14.dp, top = 14.dp, bottom = 14.dp, start = 6.dp),
                 color = Color(0xF20B1114),
                 contentColor = Color.White,
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                 tonalElevation = 18.dp,
                 shadowElevation = 24.dp
             ) {
