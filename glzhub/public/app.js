@@ -164,7 +164,7 @@ function renderDevices() {
   const badge = $("#fleetScoreBadge");
   if (badge) {
     badge.textContent = `${fleetScore}% HEALTH`;
-    badge.style.color = fleetScore >= 80 ? "var(--accent-cyan)" : (fleetScore >= 50 ? "var(--amber)" : "var(--danger)");
+    badge.style.color = fleetScore >= 80 ? "var(--success)" : (fleetScore >= 50 ? "var(--amber)" : "var(--danger)");
   }
 
   const query = deviceSearchQuery.trim().toLowerCase();
@@ -763,6 +763,24 @@ $("#mobileRefreshBtn")?.addEventListener("click", () => {
   showToast("Refreshing status…", "info");
 });
 
+/* ----- Light / dark theme ----- */
+function applyTheme(theme) {
+  const next = theme === "dark" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("glzhub-theme", next); } catch (e) {}
+  const meta = $("#themeColorMeta");
+  if (meta) meta.setAttribute("content", next === "dark" ? "#0d1117" : "#ffffff");
+  $$("#themeToggle, #themeToggleMobile").forEach((btn) => {
+    btn.textContent = next === "dark" ? "☀" : "◐";
+    btn.title = next === "dark" ? "Switch to light theme" : "Switch to dark theme";
+  });
+}
+function toggleTheme() {
+  applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+}
+applyTheme(document.documentElement.getAttribute("data-theme") || "light");
+$$("#themeToggle, #themeToggleMobile").forEach((btn) => btn.addEventListener("click", toggleTheme));
+
 $("#deviceSearchInput")?.addEventListener("input", (event) => {
   deviceSearchQuery = event.target.value;
   renderDevices();
@@ -929,7 +947,7 @@ function openSite(id = "") {
       return `
         <label class="site-device-option" data-search="${escapeHtml([device.name, device.room_number].filter(Boolean).join(' ').toLowerCase())}">
           <input type="checkbox" value="${device.id}" ${isChecked ? "checked" : ""}>
-          <span><strong>${escapeHtml(device.name || "Untitled")}</strong> <small>${escapeHtml(device.room_number ? `Room ${device.room_number}` : "No room")} · <span style="color:${isDevOnline ? "var(--accent-cyan)" : "var(--text-muted)"}">${isDevOnline ? "ONLINE" : "OFFLINE"}</span></small></span>
+          <span><strong>${escapeHtml(device.name || "Untitled")}</strong> <small>${escapeHtml(device.room_number ? `Room ${device.room_number}` : "No room")} · <span style="color:${isDevOnline ? "var(--success)" : "var(--text-muted)"};font-weight:700">${isDevOnline ? "ONLINE" : "OFFLINE"}</span></small></span>
         </label>
       `;
     }).join("");
@@ -2092,7 +2110,7 @@ function openBoxGroup(id = "") {
       return `
         <label class="group-device-option" data-search="${escapeHtml([device.name, device.room_number].filter(Boolean).join(' ').toLowerCase())}">
           <input type="checkbox" value="${device.id}" ${isChecked ? "checked" : ""}>
-          <span><strong>${escapeHtml(device.name || "Untitled")}</strong> <small>${escapeHtml(device.room_number ? `Room ${device.room_number}` : "No room")} · <span style="color:${isDevOnline ? "var(--accent-cyan)" : "var(--text-muted)"}">${isDevOnline ? "ONLINE" : "OFFLINE"}</span></small></span>
+          <span><strong>${escapeHtml(device.name || "Untitled")}</strong> <small>${escapeHtml(device.room_number ? `Room ${device.room_number}` : "No room")} · <span style="color:${isDevOnline ? "var(--success)" : "var(--text-muted)"};font-weight:700">${isDevOnline ? "ONLINE" : "OFFLINE"}</span></small></span>
         </label>
       `;
     }).join("");
@@ -2190,23 +2208,30 @@ $("#deleteBoxGroup")?.addEventListener("click", async () => {
 
 let activePolicy = null;
 async function openChannelPolicy(targetType, targetId) {
-  if (!state.playlists.length) await loadPlaylists();
-  const target = targetType === "group" ? state.groups.find((item) => item.id === targetId) : state.devices.find((item) => item.id === targetId);
-  const group = targetType === "device" ? state.groups.find((item) => item.id === target?.box_group_id) : target;
-  const playlistId = targetType === "group" ? target?.playlist_id : (target?.assigned_playlist_id || group?.playlist_id);
-  const playlist = state.playlists.find((item) => item.id === playlistId);
-  if (!target || !playlist) { showToast("Assign a master playlist before setting channel policy.", "warning"); return; }
-  const own = await api(`/api/v1/admin/channel-policy/${targetType}/${targetId}`);
-  let inherited = { rules: [], defaultPolicy: "allow" };
-  if (targetType === "device" && group) inherited = await api(`/api/v1/admin/channel-policy/group/${group.id}`);
-  activePolicy = { targetType, targetId, playlist, ownRules: new Map(own.rules.filter((rule) => rule.playlist_id === playlist.id).map((rule) => [rule.playlist_item_id, rule.decision])), ownDefault: own.defaultPolicy || (targetType === "group" ? "allow" : "inherit"), groupRules: new Map(inherited.rules.filter((rule) => rule.playlist_id === playlist.id).map((rule) => [rule.playlist_item_id, rule.decision])), groupDefault: inherited.defaultPolicy || "allow", groupName: group?.name || "" };
-  $("#channelPolicyTargetType").value = targetType; $("#channelPolicyTargetId").value = targetId; $("#channelPolicyPlaylistId").value = playlist.id;
-  $("#channelPolicyTitle").textContent = `${target.name} Channel Policy`; $("#channelPolicySubtitle").textContent = `${playlist.title} · Individual box decisions always have final precedence.`;
-  $("#channelPolicyDefault").innerHTML = targetType === "group" ? `<option value="allow">Allow all unless blocked</option><option value="block">Block all unless allowed</option>` : `<option value="inherit">Inherit group/default</option><option value="allow">Allow all unless this box blocks</option><option value="block">Block all unless this box allows</option>`;
-  $("#channelPolicyDefault").value = activePolicy.ownDefault; $("#channelPolicySearch").value = "";
-  const groups = [...new Set((playlist.playlist_items || []).map((item) => item.metadata?.group).filter(Boolean))].sort();
-  $("#channelPolicyGroupFilter").innerHTML = `<option value="">All channel groups</option>` + groups.map((name) => `<option>${escapeHtml(name)}</option>`).join("");
-  renderChannelPolicy(); $("#channelPolicyError").textContent = ""; $("#channelPolicyDialog").showModal();
+  try {
+    if (!state.playlists.length) await loadPlaylists();
+    const target = targetType === "group" ? state.groups.find((item) => item.id === targetId) : state.devices.find((item) => item.id === targetId);
+    const group = targetType === "device" ? state.groups.find((item) => item.id === target?.box_group_id) : target;
+    const playlistId = targetType === "group" ? target?.playlist_id : (target?.assigned_playlist_id || group?.playlist_id);
+    const playlist = state.playlists.find((item) => item.id === playlistId);
+    if (!target) { showToast("That box group could not be found — reload and try again.", "warning"); return; }
+    if (!playlist) { showToast("Assign a master TV playlist to this group before setting channel policy.", "warning"); return; }
+    const own = await api(`/api/v1/admin/channel-policy/${targetType}/${targetId}`);
+    let inherited = { rules: [], defaultPolicy: "allow" };
+    if (targetType === "device" && group) inherited = await api(`/api/v1/admin/channel-policy/group/${group.id}`);
+    activePolicy = { targetType, targetId, playlist, ownRules: new Map((own.rules || []).filter((rule) => rule.playlist_id === playlist.id).map((rule) => [rule.playlist_item_id, rule.decision])), ownDefault: own.defaultPolicy || (targetType === "group" ? "allow" : "inherit"), groupRules: new Map((inherited.rules || []).filter((rule) => rule.playlist_id === playlist.id).map((rule) => [rule.playlist_item_id, rule.decision])), groupDefault: inherited.defaultPolicy || "allow", groupName: group?.name || "" };
+    $("#channelPolicyTargetType").value = targetType; $("#channelPolicyTargetId").value = targetId; $("#channelPolicyPlaylistId").value = playlist.id;
+    $("#channelPolicyTitle").textContent = `${target.name} Channel Policy`; $("#channelPolicySubtitle").textContent = `${playlist.title} · Individual box decisions always have final precedence.`;
+    $("#channelPolicyDefault").innerHTML = targetType === "group" ? `<option value="allow">Allow all unless blocked</option><option value="block">Block all unless allowed</option>` : `<option value="inherit">Inherit group/default</option><option value="allow">Allow all unless this box blocks</option><option value="block">Block all unless this box allows</option>`;
+    $("#channelPolicyDefault").value = activePolicy.ownDefault; $("#channelPolicySearch").value = "";
+    const groups = [...new Set((playlist.playlist_items || []).map((item) => item.metadata?.group).filter(Boolean))].sort();
+    $("#channelPolicyGroupFilter").innerHTML = `<option value="">All channel groups</option>` + groups.map((name) => `<option>${escapeHtml(name)}</option>`).join("");
+    renderChannelPolicy(); $("#channelPolicyError").textContent = "";
+    $("#channelPolicyDialog").showModal();
+  } catch (error) {
+    console.error("openChannelPolicy failed", error);
+    showToast(`Could not open channel policy: ${error.message}`, "error");
+  }
 }
 
 function policyEffective(itemId) {
@@ -2220,7 +2245,8 @@ function renderChannelPolicy() {
   const query = $("#channelPolicySearch").value.trim().toLowerCase(); const groupFilter = $("#channelPolicyGroupFilter").value;
   const items = [...(activePolicy.playlist.playlist_items || [])].sort((a, b) => Number(a.position) - Number(b.position)).filter((item) => { const meta = item.metadata || {}; return (!groupFilter || meta.group === groupFilter) && [item.title, meta.tvg_chno, meta.group, meta.tvg_id].filter(Boolean).join(" ").toLowerCase().includes(query); });
   let allowed = 0; let blocked = 0;
-  $("#channelPolicyList").innerHTML = items.map((item) => { const meta = item.metadata || {}; const effective = policyEffective(item.id); effective.decision === "block" ? blocked++ : allowed++; return `<div class="policy-channel-row" data-item-id="${item.id}"><strong>CH ${escapeHtml(meta.tvg_chno || item.position || "—")}</strong><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(meta.tvg_id || "No EPG ID")}</small></span><span>${escapeHtml(meta.group || "Ungrouped")}</span><span class="policy-result ${effective.decision === "block" ? "blocked" : "allowed"}">${effective.decision.toUpperCase()}<small>${escapeHtml(effective.reason)}</small></span><select class="policy-rule"><option value="">Inherit</option><option value="allow">Allow</option><option value="block">Block</option></select></div>`; }).join("");
+  const headHtml = `<div class="policy-channel-head"><span>CH</span><span>Channel</span><span>Group</span><span>Effective</span><span>Rule</span></div>`;
+  $("#channelPolicyList").innerHTML = headHtml + (items.length ? items.map((item) => { const meta = item.metadata || {}; const effective = policyEffective(item.id); effective.decision === "block" ? blocked++ : allowed++; return `<div class="policy-channel-row" data-item-id="${item.id}"><strong>${escapeHtml(meta.tvg_chno || item.position || "—")}</strong><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(meta.tvg_id || "No EPG ID")}</small></span><span>${escapeHtml(meta.group || "Ungrouped")}</span><span class="policy-result ${effective.decision === "block" ? "blocked" : "allowed"}">${effective.decision.toUpperCase()}<small>${escapeHtml(effective.reason)}</small></span><select class="policy-rule"><option value="">Inherit</option><option value="allow">Allow</option><option value="block">Block</option></select></div>`; }).join("") : `<div class="policy-empty">No channels match this filter.</div>`);
   $$(".policy-channel-row").forEach((row) => { const select = row.querySelector("select"); select.value = activePolicy.ownRules.get(row.dataset.itemId) || ""; select.addEventListener("change", () => { select.value ? activePolicy.ownRules.set(row.dataset.itemId, select.value) : activePolicy.ownRules.delete(row.dataset.itemId); renderChannelPolicy(); }); });
   $("#channelPolicySummary").textContent = `${allowed} allowed · ${blocked} blocked · ${items.length} visible in this filter`;
 }

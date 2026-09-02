@@ -4,17 +4,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#050a12">
+  <meta name="theme-color" content="#ffffff" id="themeColorMeta">
   <title>GLZ Hub | Device Management & TV Studio Control Center</title>
   <meta name="description" content="Centralized device management, box groups, playlist studio, guest experiences, and XMLTV EPG schedule editor for GLZ TV displays.">
   <link rel="manifest" href="/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="GLZ Hub">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("glzhub-theme");
+        if (t !== "light" && t !== "dark") {
+          t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=2.3.1">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 </head>
 
@@ -47,6 +60,7 @@
             <span id="accountEmail">Not signed in</span>
             <small id="connectionStatus" class="connection-status">Online</small>
           </div>
+          <button id="themeToggle" class="icon-button" type="button" title="Switch light / dark theme" aria-label="Switch light / dark theme">◐</button>
         </div>
         <button id="signOut" class="text-button hidden">Sign out</button>
       </div>
@@ -59,7 +73,10 @@
           <span class="brand-mark-sm">G</span>
           <strong>GLZ Hub</strong>
         </div>
-        <button id="mobileRefreshBtn" class="icon-button" title="Refresh">🔄</button>
+        <div style="display:flex;gap:8px;">
+          <button id="themeToggleMobile" class="icon-button" type="button" title="Switch light / dark theme" aria-label="Switch light / dark theme">◐</button>
+          <button id="mobileRefreshBtn" class="icon-button" title="Refresh">🔄</button>
+        </div>
       </div>
 
       <section id="authView" class="auth-wrap">
@@ -758,14 +775,21 @@
       <input id="channelPolicyPlaylistId" type="hidden">
       <div class="policy-controls">
         <label>Default behavior<select id="channelPolicyDefault"></select></label>
-        <input id="channelPolicySearch" placeholder="⌕ Search number, channel name, group, or EPG ID…">
-        <select id="channelPolicyGroupFilter"><option value="">All channel groups</option></select>
-        <button id="policyAllowVisible" type="button" class="secondary">Allow visible</button>
-        <button id="policyBlockVisible" type="button" class="secondary">Block visible</button>
-        <button id="policyInheritVisible" type="button" class="secondary">Reset visible</button>
+        <label>Channel group<select id="channelPolicyGroupFilter"><option value="">All channel groups</option></select></label>
+        <label class="policy-search-field">Search<input id="channelPolicySearch" placeholder="Number, channel name, group, or EPG ID…"></label>
+        <div class="policy-bulk">
+          <span>Apply to filtered</span>
+          <button id="policyAllowVisible" type="button" class="secondary small-btn">Allow</button>
+          <button id="policyBlockVisible" type="button" class="secondary small-btn">Block</button>
+          <button id="policyInheritVisible" type="button" class="secondary small-btn">Reset</button>
+        </div>
       </div>
       <div class="policy-summary" id="channelPolicySummary"></div>
-      <div id="channelPolicyList" class="policy-channel-list"></div>
+      <div id="channelPolicyList" class="policy-channel-list">
+        <div class="policy-channel-head">
+          <span>CH</span><span>Channel</span><span>Group</span><span>Effective</span><span>Rule</span>
+        </div>
+      </div>
       <p id="channelPolicyError" class="error"></p>
       <div class="form-actions">
         <button type="button" class="secondary" data-close-channel-policy>Cancel</button>
@@ -1027,7 +1051,7 @@
     <span id="toastMessage" class="toast-msg">Notification</span>
   </div>
 
-  <script type="module" src="/app.js"></script>
+  <script type="module" src="/app.js?v=2.3.1"></script>
 </body>
 
 </html>
