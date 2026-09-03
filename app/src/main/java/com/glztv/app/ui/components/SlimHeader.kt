@@ -95,7 +95,6 @@ fun SlimHeader(
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = Color(0xFFFF9100).copy(alpha = 0.20f),
-                        border = BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.60f))
                     ) {
                         Text(
                             "BETA",

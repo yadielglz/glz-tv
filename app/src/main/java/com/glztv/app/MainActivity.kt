@@ -1056,7 +1056,6 @@ private fun GuestHubHome(
                         .fillMaxWidth()
                         .weight(1f),
                     shape = RoundedCornerShape(28.dp),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ),
@@ -1422,7 +1421,6 @@ private fun HomeAppsDrawer(
             .clickable(enabled = false, onClick = {}),
         color = Color(0xFF0A101C).copy(alpha = 0.96f),
         shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
     ) {
         Column(Modifier.fillMaxSize().padding(20.dp)) {
             Row(
@@ -1677,7 +1675,6 @@ private fun QuickWatchChannelDrawer(
             .clickable(enabled = false, onClick = {}),
         color = Color(0xFF0A101C).copy(alpha = 0.96f),
         shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
     ) {
         Column(Modifier.fillMaxSize().padding(20.dp)) {
             // Header
@@ -1744,10 +1741,6 @@ private fun QuickWatchChannelDrawer(
                             focused -> Color.Black
                             else -> Color.White
                         },
-                        border = BorderStroke(
-                            if (focused) 2.dp else 1.dp,
-                            if (focused) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.10f)
-                        )
                     ) {
                         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                             Row(
@@ -1862,7 +1855,6 @@ private fun GuestYouSection(
                     Surface(
                         shape = androidx.compose.foundation.shape.CircleShape,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.60f)),
                         modifier = Modifier.size(46.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -1943,10 +1935,6 @@ private fun StaySummaryCard(
                 onFocusChange = { focused = it }
             ),
         shape = shape,
-        border = BorderStroke(
-            if (focused) 2.dp else 1.dp,
-            if (focused) primaryColor else Color.White.copy(alpha = 0.14f)
-        ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
         )
@@ -1995,7 +1983,6 @@ private fun StaySummaryCard(
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = primaryColor.copy(alpha = 0.20f),
-                            border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.50f))
                         ) {
                             Text(
                                 "ROOM $room",
@@ -2039,7 +2026,6 @@ private fun StaySummaryCard(
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color.White.copy(alpha = 0.08f),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
                             ) {
                                 Text(
                                     info,
@@ -2078,10 +2064,6 @@ private fun WifiInformationCard(
                 onFocusChange = { focused = it }
             ),
         shape = shape,
-        border = BorderStroke(
-            if (focused) 2.dp else 1.dp,
-            if (focused) secondaryColor else Color.White.copy(alpha = 0.14f)
-        ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
         )
@@ -2113,8 +2095,7 @@ private fun WifiInformationCard(
                         Modifier
                             .size(130.dp)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(20.dp)),
+                            .background(Color.White.copy(alpha = 0.08f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -2157,7 +2138,6 @@ private fun WifiInformationCard(
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = secondaryColor.copy(alpha = 0.20f),
-                            border = BorderStroke(1.dp, secondaryColor.copy(alpha = 0.45f))
                         ) {
                             Row(
                                 Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -2213,7 +2193,6 @@ private fun WifiQrCode(ssid: String, password: String?, size: androidx.compose.u
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = Color.White,
-        border = BorderStroke(2.dp, Color.White.copy(alpha = 0.80f)),
         shadowElevation = 8.dp,
         modifier = Modifier.size(size)
     ) {
@@ -2256,10 +2235,6 @@ private fun GuestServiceCard(service: GuestService) {
                 onFocusChange = { focused = it }
             ),
         shape = shape,
-        border = BorderStroke(
-            if (focused) 2.dp else 1.dp,
-            if (focused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
-        ),
         colors = CardDefaults.cardColors(
             containerColor = if (focused) MaterialTheme.colorScheme.surfaceVariant
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
@@ -2646,7 +2621,6 @@ private fun AdaptiveAppIcon(
         Modifier.size(size),
         shape = shape,
         color = Color.White.copy(alpha = 0.08f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
     ) {
         when {
             icon != null -> AsyncImage(
@@ -2980,7 +2954,6 @@ private fun EpgPreviewHeader(
         modifier,
         shape = RoundedCornerShape(16.dp),
         color = Color.White.copy(alpha = 0.05f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
     ) {
         Row(
             Modifier
@@ -3005,7 +2978,6 @@ private fun EpgPreviewHeader(
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = if (isLive) Color(0xFF00E5FF).copy(alpha = 0.20f) else Color.White.copy(alpha = 0.10f),
-                        border = BorderStroke(1.dp, if (isLive) Color(0xFF00E5FF).copy(alpha = 0.50f) else Color.White.copy(alpha = 0.15f))
                     ) {
                         Text(
                             if (isLive) "LIVE" else "UPCOMING",
@@ -3071,7 +3043,6 @@ private fun EpgPreviewHeader(
                         .height(62.dp),
                     shape = RoundedCornerShape(10.dp),
                     color = Color.Black,
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.20f))
                 ) {
                     VideoPlayer(
                         channel = channel,
@@ -3352,14 +3323,6 @@ private fun EpgGridRow(
                             isCurrent -> Color.White
                             else -> MaterialTheme.colorScheme.onSurface
                         },
-                        border = BorderStroke(
-                            if (progFocused) 1.5.dp else 0.5.dp,
-                            when {
-                                progFocused -> Color(0xFF00E5FF)
-                                isCurrent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                else -> Color.White.copy(alpha = 0.08f)
-                            }
-                        )
                     ) {
                         Column(
                             Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
@@ -3420,7 +3383,6 @@ private fun ChannelLogo(
         modifier = modifier.then(Modifier.size(size)),
         shape = CircleShape,
         color = Color(0xFFF7F7F4),
-        border = BorderStroke(1.dp, Color.Black.copy(alpha = .12f)),
         shadowElevation = 3.dp
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -3554,14 +3516,6 @@ private fun TvOptionButton(
             selected -> Color(0xFFC4FF4D)
             else -> Color.White
         },
-        border = BorderStroke(
-            width = if (isFocused) 3.5.dp else if (selected) 2.dp else 1.dp,
-            color = when {
-                isFocused -> Color(0xFFC4FF4D)
-                selected -> Color(0xFFC4FF4D).copy(alpha = 0.7f)
-                else -> Color.White.copy(alpha = 0.18f)
-            }
-        ),
         shadowElevation = if (isFocused) 8.dp else 0.dp
     ) {
         Text(
@@ -3787,7 +3741,6 @@ private fun ImmersivePlayerScreen(
                 color = Color(0xF20B1114),
                 contentColor = Color.White,
                 shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                 tonalElevation = 18.dp,
                 shadowElevation = 24.dp
             ) {
@@ -3861,11 +3814,6 @@ private fun ImmersivePlayerScreen(
                                     }
                                     .focusable(),
                                 shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(
-                                    if (isFocused) 5.dp else 1.dp,
-                                    if (isFocused) Color(0xFFC4FF4D)
-                                    else Color.Transparent
-                                ),
                                 color = if (isFocused)
                                     Color(0xFF23405F)
                                 else if (isSelected)
@@ -3909,7 +3857,6 @@ private fun ImmersivePlayerScreen(
                 color = Color(0xF20B1114),
                 contentColor = Color.White,
                 shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                 tonalElevation = 18.dp,
                 shadowElevation = 24.dp
             ) {
@@ -4018,11 +3965,6 @@ private fun ImmersivePlayerScreen(
                                 }
                                 .focusable(),
                             shape = RoundedCornerShape(20.dp),
-                            border = BorderStroke(
-                                if (isFocused) 5.dp else 1.dp,
-                                if (isFocused) MaterialTheme.colorScheme.secondary
-                                else Color.Transparent
-                            ),
                             color = if (isFocused) app.accent
                             else Color.White.copy(alpha = .08f),
                             shadowElevation = 0.dp
@@ -4062,7 +4004,6 @@ private fun ImmersivePlayerScreen(
                     .padding(horizontal = 48.dp, vertical = 30.dp),
                 color = Color(0xF20B1114), contentColor = Color.White,
                 shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                 tonalElevation = 18.dp
             ) {
                 Column(Modifier.padding(22.dp)) {
@@ -4085,10 +4026,6 @@ private fun ImmersivePlayerScreen(
                                 shape = RoundedCornerShape(16.dp),
                                 color = if (isFocused) Color(0xFFC4FF4D) else Color.White.copy(alpha = 0.12f),
                                 contentColor = if (isFocused) Color.Black else Color.White,
-                                border = BorderStroke(
-                                    width = if (isFocused) 3.5.dp else 1.dp,
-                                    color = if (isFocused) Color(0xFFC4FF4D) else Color.White.copy(alpha = 0.18f)
-                                ),
                                 shadowElevation = if (isFocused) 8.dp else 0.dp
                             ) {
                                 Column(Modifier.width(180.dp).padding(14.dp)) {
@@ -4856,10 +4793,6 @@ private fun SettingsChoiceRow(
             .clickable { onNext() },
         shape = RoundedCornerShape(16.dp),
         color = if (focused) accent.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-        border = BorderStroke(
-            if (focused) 2.dp else 1.dp,
-            if (focused) accent else Color.White.copy(alpha = 0.10f)
-        )
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
@@ -4923,10 +4856,6 @@ private fun SettingsActionRow(
             .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = if (focused) accent.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-        border = BorderStroke(
-            if (focused) 2.dp else 1.dp,
-            if (focused) accent else Color.White.copy(alpha = 0.10f)
-        )
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
@@ -5037,7 +4966,6 @@ private fun SettingsDialog(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = Color.Black.copy(alpha = 0.40f),
-                border = BorderStroke(0.dp, Color.Transparent)
             ) {
                 Row(
                     Modifier
@@ -5048,7 +4976,6 @@ private fun SettingsDialog(
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)),
                         modifier = Modifier.size(48.dp)
                     ) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -5079,7 +5006,6 @@ private fun SettingsDialog(
                     Surface(
                         shape = RoundedCornerShape(999.dp),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                     ) {
                         Text(
                             "v${BuildConfig.VERSION_NAME}",
@@ -5253,7 +5179,6 @@ private fun SettingsDialog(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = Color.Black.copy(alpha = 0.65f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f))
             ) {
                 Row(
                     Modifier
@@ -5327,15 +5252,6 @@ private fun TvSettingsButton(
             isPrimary -> MaterialTheme.colorScheme.primary
             else -> Color.White
         },
-        border = BorderStroke(
-            if (focused) 2.dp else 1.dp,
-            when {
-                focused && isPrimary -> MaterialTheme.colorScheme.primary
-                focused -> Color.White
-                isPrimary -> MaterialTheme.colorScheme.primary.copy(alpha = 0.50f)
-                else -> Color.White.copy(alpha = 0.15f)
-            }
-        )
     ) {
         Text(
             label,
@@ -5387,13 +5303,6 @@ private fun ProtectedSourceField(
             focused -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
             else -> Color.White.copy(alpha = 0.05f)
         },
-        border = BorderStroke(
-            if (focused) 2.dp else 1.dp,
-            when {
-                focused -> MaterialTheme.colorScheme.secondary
-                else -> Color.White.copy(alpha = 0.10f)
-            }
-        )
     ) {
         OutlinedTextField(
             value = value,

@@ -1,8 +1,9 @@
 package com.glztv.app.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -65,8 +66,13 @@ fun WeatherScreen(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+  GlzPanel(
+      modifier = modifier,
+      shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
+      fill = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+  ) {
     BoxWithConstraints(
-        modifier
+        Modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
@@ -113,14 +119,14 @@ fun WeatherScreen(
             }
 
             if (loading && weather == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     LinearProgressIndicator(
                         Modifier.width(240.dp),
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
             } else if (weather == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             "Weather unavailable",
@@ -136,57 +142,51 @@ fun WeatherScreen(
                     }
                 }
             } else {
-                // 2. Weather Content Layout (Scrollable or 2-column)
-                LazyColumn(
-                    Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(bottom = 20.dp)
+                // Contained + D-pad scrollable, like the Guide panel.
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .focusable(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // Top Hero & Metrics Row
-                    item {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            // Current Temperature Hero Banner
-                            WeatherHeroCard(
-                                weather = weather,
-                                modifier = Modifier
-                                    .weight(1.25f)
-                                    .height(if (compactHeight) 190.dp else 225.dp)
-                            )
-
-                            // Quick Meteorological Metrics Grid
-                            WeatherMetricsPanel(
-                                weather = weather,
-                                modifier = Modifier
-                                    .weight(1.75f)
-                                    .height(if (compactHeight) 190.dp else 225.dp)
-                            )
-                        }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        WeatherHeroCard(
+                            weather = weather,
+                            modifier = Modifier
+                                .weight(1.25f)
+                                .height(if (compactHeight) 190.dp else 225.dp)
+                        )
+                        WeatherMetricsPanel(
+                            weather = weather,
+                            modifier = Modifier
+                                .weight(1.75f)
+                                .height(if (compactHeight) 190.dp else 225.dp)
+                        )
                     }
 
-                    // Hourly Forecast Ribbon (if available)
                     if (weather.hourly.isNotEmpty()) {
-                        item {
-                            WeatherSectionHeader("HOURLY FORECAST", "Next 18 hours forecast progression")
-                            Spacer(Modifier.height(6.dp))
-                            HourlyForecastRow(weather.hourly)
-                        }
+                        WeatherSectionHeader("HOURLY FORECAST", "Next 18 hours forecast progression")
+                        Spacer(Modifier.height(6.dp))
+                        HourlyForecastRow(weather.hourly)
                     }
 
-                    // 5-Day Daily Forecast Section
                     if (weather.forecast.isNotEmpty()) {
-                        item {
-                            WeatherSectionHeader("5-DAY EXTENDED FORECAST", "Daily outlook & precipitation probability")
-                            Spacer(Modifier.height(6.dp))
-                            DailyForecastGrid(weather.forecast)
-                        }
+                        WeatherSectionHeader("5-DAY EXTENDED FORECAST", "Daily outlook & precipitation probability")
+                        Spacer(Modifier.height(6.dp))
+                        DailyForecastGrid(weather.forecast)
                     }
+
+                    Spacer(Modifier.height(6.dp))
                 }
             }
         }
     }
+  }
 }
 
 @Composable
@@ -271,7 +271,6 @@ private fun WeatherHeroCard(weather: WeatherInfo, modifier: Modifier = Modifier)
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = Color.White.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.20f))
                     ) {
                         Text(
                             "Feels like ${weather.feelsLike}°",
@@ -286,7 +285,6 @@ private fun WeatherHeroCard(weather: WeatherInfo, modifier: Modifier = Modifier)
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color.White.copy(alpha = 0.12f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.20f))
                         ) {
                             Text(
                                 "H: ${todayForecast.high}°  L: ${todayForecast.low}°",

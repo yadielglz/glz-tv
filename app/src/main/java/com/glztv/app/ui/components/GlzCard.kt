@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Shared card language for GLZ TV, taken from [ExpressiveNavigationRail]:
- * very round corners, translucent surfaceVariant fills, a white hairline border,
- * and a focus state where the fill flips to a solid accent.
+ * very round corners, translucent surfaceVariant fills, no drawn outline, and a
+ * focus/selected state carried entirely by the fill (plus scale + glow on focus).
  *
  * Use [GlzPanel] for static containers and [GlzFocusCard] for anything the
  * D-pad can land on.
@@ -53,7 +53,7 @@ fun GlzPanel(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge),
     fill: Color = GlzCardDefaults.panelFill(),
-    border: BorderStroke? = BorderStroke(1.dp, GlzCardDefaults.hairline),
+    border: BorderStroke? = null,
     tonalElevation: androidx.compose.ui.unit.Dp = 8.dp,
     content: @Composable () -> Unit,
 ) {
@@ -70,8 +70,8 @@ fun GlzPanel(
 /**
  * Focusable card. Identical focus/selected model to the rail's `RailDestination`:
  *
- * - rest: translucent surfaceVariant, hairline border, `onSurface` content
- * - selected: `accent @ 18%` wash, `accent @ 50%` border, `accent` content
+ * - rest: translucent surfaceVariant, `onSurface` content, no outline
+ * - selected: `accent @ 18%` wash, `accent` content
  * - focused: solid `accent` fill, contrast content, spring scale + accent glow
  *
  * [content] receives the current focused flag so callers can adjust secondary
@@ -103,11 +103,6 @@ fun GlzFocusCard(
         selected -> accent
         else -> MaterialTheme.colorScheme.onSurface
     }
-    val border = when {
-        focused -> null // the glow ring from tvFocusableWithPhysics is the edge
-        selected -> BorderStroke(1.dp, accent.copy(alpha = 0.5f))
-        else -> BorderStroke(1.dp, GlzCardDefaults.hairline)
-    }
 
     Surface(
         onClick = onClick,
@@ -124,7 +119,7 @@ fun GlzFocusCard(
         shape = shape,
         color = container,
         contentColor = contentColor,
-        border = border,
+        border = null,
         tonalElevation = if (focused) 12.dp else 2.dp,
     ) {
         Column(modifier = contentModifier, content = { content(focused) })

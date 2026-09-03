@@ -258,7 +258,6 @@ fun RadioScreen(
             Surface(
                 shape = RoundedCornerShape(999.dp),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f))
             ) {
                 Text(
                     "${stations.size} STATIONS",
@@ -269,7 +268,7 @@ fun RadioScreen(
                 )
             }
         }
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             GlzPanel(
                 modifier = Modifier.weight(1.15f).fillMaxHeight(),
                 shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge)
@@ -330,7 +329,6 @@ fun RadioScreen(
                         Surface(
                             shape = RoundedCornerShape(28.dp),
                             color = Color.White.copy(alpha = 0.08f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
                             shadowElevation = 16.dp
                         ) {
                             AsyncImage(
@@ -348,7 +346,6 @@ fun RadioScreen(
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.40f)),
                                 modifier = Modifier.padding(top = 16.dp)
                             ) {
                                 Text(
@@ -394,7 +391,6 @@ fun RadioScreen(
                             shape = RoundedCornerShape(16.dp),
                             color = if (playing) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            border = BorderStroke(1.dp, if (playing) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.10f)),
                             modifier = Modifier.padding(top = 14.dp)
                         ) {
                             Text(

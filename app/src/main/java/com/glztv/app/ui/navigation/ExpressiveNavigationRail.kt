@@ -1,6 +1,5 @@
 package com.glztv.app.ui.navigation
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -44,7 +43,6 @@ fun ExpressiveNavigationRail(
             .fillMaxHeight(),
         shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
         tonalElevation = 8.dp
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {

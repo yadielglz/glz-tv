@@ -1,11 +1,10 @@
 package com.glztv.app.ui.components
 
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.border
-import androidx.compose.foundation.focusable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -20,17 +19,16 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Custom Compose modifier providing smooth D-Pad focus spring physics, scale elevation,
- * dynamic drop shadow, and a glowing border outline for Android TV and touchscreen inputs.
+ * D-Pad focus physics for Android TV. No drawn outline — focus reads as a
+ * spring scale bump plus a soft coloured glow (a tinted elevation halo) so the
+ * selection/fill state of the underlying Surface is the "selector".
  */
 fun Modifier.tvFocusableWithPhysics(
     shape: Shape = RoundedCornerShape(20.dp),
     focusedScale: Float = 1.05f,
-    focusedBorderWidth: Dp = 3.dp,
     glowColor: Color? = null,
     onFocusChange: ((Boolean) -> Unit)? = null
 ): Modifier = composed {
@@ -43,6 +41,12 @@ fun Modifier.tvFocusableWithPhysics(
             stiffness = Spring.StiffnessLow
         ),
         label = "FocusScale"
+    )
+
+    val glowElevation by animateDpAsState(
+        targetValue = if (isFocused) 22.dp else 0.dp,
+        animationSpec = tween(180),
+        label = "FocusGlow"
     )
 
     val activeGlowColor = glowColor ?: MaterialTheme.colorScheme.primary
@@ -58,21 +62,11 @@ fun Modifier.tvFocusableWithPhysics(
             this.shape = shape
             this.clip = true
         }
-        .then(
-            if (isFocused) {
-                Modifier
-                    .shadow(
-                        elevation = 12.dp,
-                        shape = shape,
-                        ambientColor = activeGlowColor,
-                        spotColor = activeGlowColor
-                    )
-                    .border(
-                        border = BorderStroke(focusedBorderWidth, activeGlowColor),
-                        shape = shape
-                    )
-            } else {
-                Modifier
-            }
+        .shadow(
+            elevation = glowElevation,
+            shape = shape,
+            clip = false,
+            ambientColor = activeGlowColor,
+            spotColor = activeGlowColor
         )
 }
