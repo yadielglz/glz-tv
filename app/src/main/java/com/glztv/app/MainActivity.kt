@@ -223,6 +223,20 @@ private const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
 private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
 
+// Shared slide+fade motion for Home section switches and every edge panel.
+private const val PANEL_ANIM_IN = 240
+private const val PANEL_ANIM_OUT = 170
+
+/** Enter transition for an edge panel: slide in from its own screen edge + fade. */
+private fun panelEnter(fromLeft: Boolean) =
+    fadeIn(tween(PANEL_ANIM_IN)) +
+        slideInHorizontally(tween(PANEL_ANIM_IN)) { width -> if (fromLeft) -width else width }
+
+/** Exit transition mirroring [panelEnter]. */
+private fun panelExit(fromLeft: Boolean) =
+    fadeOut(tween(PANEL_ANIM_OUT)) +
+        slideOutHorizontally(tween(PANEL_ANIM_OUT)) { width -> if (fromLeft) -width else width }
+
 private enum class PlayerDrawer { None, Channels, Services, Recent }
 
 private data class EntertainmentApp(
@@ -780,7 +794,19 @@ internal fun TvScreen(
                         }
                     )
                     Box(Modifier.weight(1f).fillMaxHeight()) {
-                        when (section) {
+                        AnimatedContent(
+                            targetState = section,
+                            transitionSpec = {
+                                (fadeIn(tween(PANEL_ANIM_IN)) +
+                                    slideInHorizontally(tween(PANEL_ANIM_IN)) { it / 14 })
+                                    .togetherWith(
+                                        fadeOut(tween(PANEL_ANIM_OUT)) +
+                                            slideOutHorizontally(tween(PANEL_ANIM_OUT)) { -it / 14 }
+                                    )
+                            },
+                            label = "section"
+                        ) { visibleSection ->
+                        when (visibleSection) {
                             AppSection.Home -> GuestHubHome(
                                 guestName = guestName,
                                 experience = guestExperience,
@@ -841,6 +867,7 @@ internal fun TvScreen(
                                 experience = guestExperience,
                                 modifier = Modifier.fillMaxSize()
                             )
+                        }
                         }
                     }
                 }
@@ -1330,8 +1357,8 @@ private fun GuestHubHome(
             ) {
                 AnimatedVisibility(
                     visible = showQuickWatchDrawer,
-                    enter = fadeIn(tween(200)) + slideInHorizontally(tween(220), initialOffsetX = { it }),
-                    exit = fadeOut(tween(150)) + slideOutHorizontally(tween(180), targetOffsetX = { it }),
+                    enter = panelEnter(fromLeft = false),
+                    exit = panelExit(fromLeft = false),
                     modifier = Modifier.align(Alignment.CenterEnd)
                 ) {
                     QuickWatchChannelDrawer(
@@ -1357,8 +1384,8 @@ private fun GuestHubHome(
             ) {
                 AnimatedVisibility(
                     visible = showAppsDrawer,
-                    enter = fadeIn(tween(200)) + slideInHorizontally(tween(220), initialOffsetX = { it }),
-                    exit = fadeOut(tween(150)) + slideOutHorizontally(tween(180), targetOffsetX = { it }),
+                    enter = panelEnter(fromLeft = false),
+                    exit = panelExit(fromLeft = false),
                     modifier = Modifier.align(Alignment.CenterEnd)
                 ) {
                     HomeAppsDrawer(
@@ -1394,6 +1421,7 @@ private fun HomeAppsDrawer(
             .width(440.dp)
             .clickable(enabled = false, onClick = {}),
         color = Color(0xFF0A101C).copy(alpha = 0.96f),
+        shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
     ) {
         Column(Modifier.fillMaxSize().padding(20.dp)) {
@@ -1648,6 +1676,7 @@ private fun QuickWatchChannelDrawer(
             .width(440.dp)
             .clickable(enabled = false, onClick = {}),
         color = Color(0xFF0A101C).copy(alpha = 0.96f),
+        shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
     ) {
         Column(Modifier.fillMaxSize().padding(20.dp)) {
@@ -3617,13 +3646,13 @@ private fun ImmersivePlayerScreen(
         when (drawer) {
             PlayerDrawer.None -> playerFocus.requestFocus()
             PlayerDrawer.Channels -> {
-                channelListState.scrollToItem((selectedIndex - 2).coerceAtLeast(0))
-                delay(60)
-                selectedChannelFocus.requestFocus()
+                runCatching { channelListState.scrollToItem((selectedIndex - 2).coerceAtLeast(0)) }
+                delay(PANEL_ANIM_IN.toLong())
+                runCatching { selectedChannelFocus.requestFocus() }
             }
             PlayerDrawer.Services -> {
-                delay(60)
-                firstServiceFocus.requestFocus()
+                delay(PANEL_ANIM_IN.toLong())
+                runCatching { firstServiceFocus.requestFocus() }
             }
             PlayerDrawer.Recent -> Unit
         }
@@ -3745,14 +3774,19 @@ private fun ImmersivePlayerScreen(
             }
         }
 
-        if (drawer == PlayerDrawer.Channels) {
-            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .92f else 436.dp
+        AnimatedVisibility(
+            visible = drawer == PlayerDrawer.Channels,
+            enter = panelEnter(fromLeft = true),
+            exit = panelExit(fromLeft = true),
+            modifier = Modifier.align(Alignment.TopStart)
+        ) {
+            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .88f else 420.dp
+            // Flush to the left screen edge; only the inner (right) corners are rounded.
             Surface(
-                Modifier.width(drawerWidth).fillMaxHeight()
-                    .padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = 6.dp),
+                Modifier.width(drawerWidth).fillMaxHeight(),
                 color = Color(0xF20B1114),
                 contentColor = Color.White,
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                 tonalElevation = 18.dp,
                 shadowElevation = 24.dp
@@ -3862,14 +3896,19 @@ private fun ImmersivePlayerScreen(
                 }
             }
         }
-        if (drawer == PlayerDrawer.Services) {
-            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .96f else 456.dp
+        AnimatedVisibility(
+            visible = drawer == PlayerDrawer.Services,
+            enter = panelEnter(fromLeft = false),
+            exit = panelExit(fromLeft = false),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .92f else 440.dp
+            // Flush to the right screen edge; only the inner (left) corners are rounded.
             Surface(
-                Modifier.width(drawerWidth).fillMaxHeight().align(Alignment.CenterEnd)
-                    .padding(end = 14.dp, top = 14.dp, bottom = 14.dp, start = 6.dp),
+                Modifier.width(drawerWidth).fillMaxHeight(),
                 color = Color(0xF20B1114),
                 contentColor = Color.White,
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                 tonalElevation = 18.dp,
                 shadowElevation = 24.dp
