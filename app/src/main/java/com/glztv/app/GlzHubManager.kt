@@ -20,6 +20,7 @@ object GlzHubManager {
     const val VISIBLE_APPS = "hub_visible_apps"
     const val VISIBLE_APPS_MANAGED = "hub_visible_apps_managed"
     const val GUEST_EXPERIENCE = "hub_guest_experience"
+    const val APP_LANGUAGE = "app_language"
     private const val ACTIVITY_TYPE = "hub_activity_type"
     private const val ACTIVITY_LABEL = "hub_activity_label"
     private const val ACTIVITY_PACKAGE = "hub_activity_package"
@@ -212,6 +213,11 @@ object GlzHubManager {
                 ?.let { editor.putString("epg_url", it) }
         }
         config.stringOrNull("themeMode")?.let { editor.putString("theme_mode", it) }
+        val remoteLang = config.stringOrNull("appLanguage") ?: config.stringOrNull("language")
+        remoteLang?.let { lang ->
+            val normalized = if (lang.trim().startsWith("es", ignoreCase = true)) "es" else "en"
+            editor.putString(APP_LANGUAGE, normalized)
+        }
         config.stringOrNull("weatherLocation")?.let { editor.putString("weather_location", it) }
         if (config.has("customConnectionLabel")) {
             if (config.isNull("customConnectionLabel")) editor.remove("custom_connection_label")

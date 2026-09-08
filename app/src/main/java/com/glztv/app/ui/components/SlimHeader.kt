@@ -55,6 +55,7 @@ fun SlimHeader(
     /** When true, hide the network / weather / clock cluster (Home shows its own). */
     minimal: Boolean = false
 ) {
+    val strings = com.glztv.app.ui.i18n.LocalGlzStrings.current
     val compactHeader = LocalConfiguration.current.screenWidthDp < 700
     val headerHorizontalPadding = if (compactHeader) 12.dp else 40.dp
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -180,7 +181,7 @@ fun SlimHeader(
                 ) {
                     Icon(
                         Icons.Default.Nightlight,
-                        "Ambient Mode",
+                        strings.ambientMode,
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -194,7 +195,7 @@ fun SlimHeader(
                     focusedScale = 1.15f
                 )
             ) {
-                Icon(Icons.Default.Refresh, "Refresh", tint = MaterialTheme.colorScheme.onSurface)
+                Icon(Icons.Default.Refresh, strings.refresh, tint = MaterialTheme.colorScheme.onSurface)
             }
             Spacer(Modifier.width(6.dp))
             FilledIconButton(
@@ -204,7 +205,7 @@ fun SlimHeader(
                     focusedScale = 1.15f
                 )
             ) {
-                Icon(Icons.Default.Settings, "Settings")
+                Icon(Icons.Default.Settings, strings.settings)
             }
         }
     }

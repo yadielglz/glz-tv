@@ -85,6 +85,42 @@ private val midnight = darkColorScheme(
     surface = Color(0xFF0E0E14), surfaceVariant = Color(0xFF181824), onSurface = Color(0xFFF5F5FA),
     onSurfaceVariant = Color(0xFFCCCCCC)
 )
+private val arctic = darkColorScheme(
+    primary = Color(0xFF38E1FF), onPrimary = Color(0xFF003543), primaryContainer = Color(0xFF004E63),
+    secondary = Color(0xFF8A99FF), onSecondary = Color(0xFF101B55), background = Color(0xFF060913),
+    surface = Color(0xFF0C1322), surfaceVariant = Color(0xFF162035), onSurface = Color(0xFFF0F5FF),
+    onSurfaceVariant = Color(0xFFA5B7D8)
+)
+private val crimson = darkColorScheme(
+    primary = Color(0xFFFF1744), onPrimary = Color(0xFF45000C), primaryContainer = Color(0xFF680016),
+    secondary = Color(0xFFFF8A00), onSecondary = Color(0xFF421E00), background = Color(0xFF110305),
+    surface = Color(0xFF1C070B), surfaceVariant = Color(0xFF2C0F15), onSurface = Color(0xFFFFF0F1),
+    onSurfaceVariant = Color(0xFFE2B0B6)
+)
+private val amethyst = darkColorScheme(
+    primary = Color(0xFFB347FF), onPrimary = Color(0xFF2C004F), primaryContainer = Color(0xFF48007E),
+    secondary = Color(0xFFFF33A1), onSecondary = Color(0xFF450024), background = Color(0xFF0C0416),
+    surface = Color(0xFF160924), surfaceVariant = Color(0xFF24133A), onSurface = Color(0xFFFBF2FF),
+    onSurfaceVariant = Color(0xFFD4BEE6)
+)
+private val synthwave = darkColorScheme(
+    primary = Color(0xFF00F5D4), onPrimary = Color(0xFF00372F), primaryContainer = Color(0xFF005549),
+    secondary = Color(0xFFF72585), onSecondary = Color(0xFF450020), background = Color(0xFF0C061C),
+    surface = Color(0xFF160E2C), surfaceVariant = Color(0xFF251A44), onSurface = Color(0xFFF5EEFF),
+    onSurfaceVariant = Color(0xFFC7B6E2)
+)
+private val solar = darkColorScheme(
+    primary = Color(0xFFFFB703), onPrimary = Color(0xFF402B00), primaryContainer = Color(0xFF664500),
+    secondary = Color(0xFFFB8500), onSecondary = Color(0xFF421F00), background = Color(0xFF100904),
+    surface = Color(0xFF1D1209), surfaceVariant = Color(0xFF2E1F14), onSurface = Color(0xFFFFF7ED),
+    onSurfaceVariant = Color(0xFFDFC6B2)
+)
+private val stealth = darkColorScheme(
+    primary = Color(0xFFE2E8F0), onPrimary = Color(0xFF1E293B), primaryContainer = Color(0xFF334155),
+    secondary = Color(0xFF38BDF8), onSecondary = Color(0xFF002B3D), background = Color(0xFF040507),
+    surface = Color(0xFF0B0D12), surfaceVariant = Color(0xFF161A22), onSurface = Color(0xFFF8FAFC),
+    onSurfaceVariant = Color(0xFF94A3B8)
+)
 
 @Composable
 fun GlzTheme(mode: String, content: @Composable () -> Unit) {
@@ -98,6 +134,12 @@ fun GlzTheme(mode: String, content: @Composable () -> Unit) {
         "emerald" -> emerald
         "cyberpunk" -> cyberpunk
         "midnight" -> midnight
+        "arctic" -> arctic
+        "crimson" -> crimson
+        "amethyst" -> amethyst
+        "synthwave" -> synthwave
+        "solar" -> solar
+        "stealth" -> stealth
         else -> defaultDark
     }
     MaterialTheme(

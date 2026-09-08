@@ -137,11 +137,12 @@ fun AmbientScreensaverScreen(
     val amPmString = amPmFormat.format(dateObj).uppercase(Locale.getDefault())
     val dateString = dateFormat.format(dateObj)
 
+    val strings = com.glztv.app.ui.i18n.LocalGlzStrings.current
     val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
     val greeting = when (hour) {
-        in 5..11 -> "Good Morning"
-        in 12..17 -> "Good Afternoon"
-        else -> "Good Evening"
+        in 5..11 -> strings.goodMorning
+        in 12..17 -> strings.goodAfternoon
+        else -> strings.goodEvening
     }
 
     Box(
@@ -208,7 +209,7 @@ fun AmbientScreensaverScreen(
                         letterSpacing = 0.8.sp
                     )
                     Text(
-                        "GLZ TV AMBIENT",
+                        strings.screensaverTitle,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
                         color = primaryAccent,
@@ -324,7 +325,7 @@ fun AmbientScreensaverScreen(
 
                             Column {
                                 Text(
-                                    "NOW PLAYING",
+                                    strings.nowStreamingRadio,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 1.sp,
@@ -361,7 +362,7 @@ fun AmbientScreensaverScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Press any button on remote to wake up",
+                    strings.screensaverPrompt,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White.copy(alpha = 0.35f)

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Glz TV</string>
+    <string name="empty_title">Tus canales, a un toque</string>
+    <string name="empty_message">Añade una lista M3U para empezar a ver televisión en vivo.</string>
+    <string name="add_source">Añadir lista</string>
+    <string name="search_hint">Buscar canales o grupos</string>
+</resources>

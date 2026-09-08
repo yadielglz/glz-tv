@@ -184,6 +184,8 @@ import com.glztv.app.ui.components.SlimHeader
 import com.glztv.app.model.NetworkInfo
 import com.glztv.app.model.WeatherInfo
 import com.glztv.app.ui.GlzTvApp
+import com.glztv.app.ui.i18n.GlzStrings
+import com.glztv.app.ui.i18n.LocalGlzStrings
 import com.glztv.app.ui.screens.RadioScreen
 import com.glztv.app.ui.screens.WeatherScreen
 import com.google.zxing.BarcodeFormat
@@ -330,11 +332,16 @@ internal fun TvScreen(
     themeMode: String,
     deepLinkChannelId: String?,
     networkPermissionRevision: Int,
-    onThemeMode: (String) -> Unit
+    onThemeMode: (String) -> Unit,
+    onLanguageChanged: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val safeHorizontalPadding = if (LocalConfiguration.current.screenWidthDp >= 600) 40.dp else 12.dp
     val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+    var appLanguage by remember {
+        mutableStateOf(prefs.getString(GlzHubManager.APP_LANGUAGE, "en") ?: "en")
+    }
+    val strings = LocalGlzStrings.current
     val client = remember { createPermissiveOkHttpClient() }
     val sourcePreferences = remember { PreferencesRepository(context) }
     val playlistRepository = remember { PlaylistRepository(context, sourcePreferences, client) }
@@ -537,6 +544,11 @@ internal fun TvScreen(
         appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
         networkOverrideRevision++
         onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
+        val syncedLang = prefs.getString(GlzHubManager.APP_LANGUAGE, appLanguage) ?: appLanguage
+        if (syncedLang != appLanguage) {
+            appLanguage = syncedLang
+            onLanguageChanged(syncedLang)
+        }
         captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
         captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
         keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
@@ -598,6 +610,11 @@ internal fun TvScreen(
             appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
             networkOverrideRevision++
             onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
+            val initialSyncedLang = prefs.getString(GlzHubManager.APP_LANGUAGE, appLanguage) ?: appLanguage
+            if (initialSyncedLang != appLanguage) {
+                appLanguage = initialSyncedLang
+                onLanguageChanged(initialSyncedLang)
+            }
             hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
                 ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
                 else "Not connected"
@@ -635,6 +652,11 @@ internal fun TvScreen(
                         prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
                     networkOverrideRevision++
                     onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
+                    val loopSyncedLang = prefs.getString(GlzHubManager.APP_LANGUAGE, appLanguage) ?: appLanguage
+                    if (loopSyncedLang != appLanguage) {
+                        appLanguage = loopSyncedLang
+                        onLanguageChanged(loopSyncedLang)
+                    }
                     captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
                     captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
                     keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
@@ -946,6 +968,7 @@ internal fun TvScreen(
             sourceStatus = status,
             hubStatus = hubStatus,
             screensaverTimeoutMinutes = screensaverTimeoutMinutes,
+            appLanguage = appLanguage,
             onOpenSpeedTest = {
                 speedTestTargetUrl = null
                 showSpeedTestDialog = true
@@ -962,7 +985,7 @@ internal fun TvScreen(
             onDismiss = { showSettings = false },
             onSave = { playlist, epg, headers, location, name, connectionLabel, ispName, theme,
                        captions, language, osdTimeout, screensaverTimeout, autoUpdate, wifiOnly, autoStart, resumeLast,
-                       startDestination, updateChannel ->
+                       startDestination, updateChannel, chosenLang ->
                 prefs.edit().putString(PLAYLIST_URL, playlist).putString(EPG_URL, epg)
                     .putString(REQUEST_HEADERS, headers)
                     .putString(WEATHER_LOCATION, location)
@@ -978,8 +1001,14 @@ internal fun TvScreen(
                     .putBoolean(AUTO_START, autoStart)
                     .putBoolean(RESUME_LAST_CHANNEL, resumeLast)
                     .putString(START_DESTINATION, startDestination)
-                    .putString(UPDATE_CHANNEL, updateChannel).apply()
+                    .putString(UPDATE_CHANNEL, updateChannel)
+                    .putString(GlzHubManager.APP_LANGUAGE, chosenLang)
+                    .apply()
                 onThemeMode(theme)
+                if (chosenLang != appLanguage) {
+                    appLanguage = chosenLang
+                    onLanguageChanged(chosenLang)
+                }
                 captionsEnabled = captions
                 captionLanguage = language
                 osdTimeoutSeconds = osdTimeout
@@ -1084,13 +1113,14 @@ private fun UpdateNotificationBanner(
     }
 
     val accent = MaterialTheme.colorScheme.primary
+    val strings = LocalGlzStrings.current
     Surface(
         modifier = modifier
-            .widthIn(max = 860.dp)
-            .fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        color = Color(0xF40D1424),
-        border = BorderStroke(1.5.dp, accent.copy(alpha = 0.40f)),
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0xF20F1626),
+        border = BorderStroke(1.5.dp, accent.copy(alpha = 0.60f)),
         tonalElevation = 16.dp,
         shadowElevation = 24.dp
     ) {
@@ -1099,42 +1129,36 @@ private fun UpdateNotificationBanner(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(18.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Icon Badge
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = accent.copy(alpha = 0.18f),
-                modifier = Modifier.size(48.dp)
+            // Left: Icon + Release details
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 24.dp)
             ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Default.Refresh,
                         contentDescription = null,
                         tint = accent,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(22.dp)
                     )
-                }
-            }
-
-            // Title & Info
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+                    Spacer(Modifier.width(10.dp))
                     Text(
-                        "GLZ TV ${update.version}",
-                        fontSize = 16.sp,
+                        text = "GLZ TV v${update.version}",
+                        color = Color.White,
                         fontWeight = FontWeight.Black,
-                        color = Color.White
+                        fontSize = 17.sp,
+                        letterSpacing = 0.3.sp
                     )
+                    Spacer(Modifier.width(12.dp))
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = accent.copy(alpha = 0.20f)
                     ) {
                         Text(
-                            "UPDATE AVAILABLE",
+                            strings.updateAvailableTitle.uppercase(),
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -1156,14 +1180,14 @@ private fun UpdateNotificationBanner(
                 )
             }
 
-            // Action Buttons with high contrast & TV focus physics
+            // Action Buttons
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Update Now (Primary)
                 UpdateActionButton(
-                    label = if (downloading) "Downloading…" else "Update Now",
+                    label = if (downloading) strings.buffering else strings.updateNow,
                     isPrimary = true,
                     enabled = !downloading,
                     loading = downloading,
@@ -1173,7 +1197,7 @@ private fun UpdateNotificationBanner(
 
                 // Not Now (Secondary)
                 UpdateActionButton(
-                    label = "Not Now",
+                    label = strings.notNow,
                     isPrimary = false,
                     enabled = !downloading,
                     loading = false,
@@ -1286,11 +1310,12 @@ private fun GuestHubHome(
         }
     }
 
+    val strings = LocalGlzStrings.current
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
     val timeGreeting = when (hour) {
-        in 5..11 -> "Good Morning"
-        in 12..17 -> "Good Afternoon"
-        else -> "Good Evening"
+        in 5..11 -> strings.goodMorning
+        in 12..17 -> strings.goodAfternoon
+        else -> strings.goodEvening
     }
 
     Box(modifier.fillMaxSize()) {
@@ -1403,7 +1428,7 @@ private fun GuestHubHome(
                                     maxLines = 1
                                 )
                                 Text(
-                                    guestName.ifBlank { "Guest" },
+                                    guestName.ifBlank { strings.guest },
                                     color = Color.White,
                                     fontSize = if (compactHeight) 32.sp else 48.sp,
                                     fontWeight = FontWeight.Black,
@@ -1426,7 +1451,7 @@ private fun GuestHubHome(
                                 }
                                 experience.roomNumber?.takeIf(String::isNotBlank)?.let {
                                     Text(
-                                        "Room $it",
+                                        "${strings.room} $it",
                                         color = Color.White.copy(alpha = 0.78f),
                                         fontSize = if (compactHeight) 13.sp else 15.sp,
                                         fontWeight = FontWeight.SemiBold,
@@ -1437,7 +1462,7 @@ private fun GuestHubHome(
                                 }
                                 if (!compactHeight) {
                                     val stayInfo = listOfNotNull(
-                                        experience.checkoutTime?.let { "Checkout $it" },
+                                        experience.checkoutTime?.let { "${strings.checkout} $it" },
                                         if (!experience.arrivalDate.isNullOrBlank() &&
                                             !experience.departureDate.isNullOrBlank()
                                         ) "${experience.arrivalDate} – ${experience.departureDate}" else null
@@ -1467,7 +1492,7 @@ private fun GuestHubHome(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    "NOW",
+                                    strings.now,
                                     Modifier
                                         .width(74.dp)
                                         .padding(bottom = 3.dp),
@@ -1499,7 +1524,7 @@ private fun GuestHubHome(
                             Spacer(Modifier.height(if (compactHeight) 6.dp else 10.dp))
                             weather?.let {
                                 HeroInfoLine(
-                                    "WEATHER",
+                                    strings.weather,
                                     it.location,
                                     "${weatherGlyph(it.weatherCode)}  ${it.temperature}°F, ${weatherConditionText(it.weatherCode)}"
                                 )
@@ -1510,8 +1535,8 @@ private fun GuestHubHome(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 HeroInfoLine(
-                                    "NETWORK",
-                                    networkInfo?.connection ?: "Offline",
+                                    strings.network,
+                                    networkInfo?.connection ?: strings.offline,
                                     networkInfo?.isp.orEmpty(),
                                     modifier = Modifier.weight(1f, fill = false),
                                     stacked = true
@@ -1533,7 +1558,7 @@ private fun GuestHubHome(
                                             )
                                             Spacer(Modifier.width(6.dp))
                                             Text(
-                                                "${channel.number.ifBlank { "LIVE" }} · ${channel.name}",
+                                                "${channel.number.ifBlank { strings.live }} · ${channel.name}",
                                                 color = Color.White,
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
@@ -1561,7 +1586,7 @@ private fun GuestHubHome(
                 ) {
                     if (resumeChannel != null) {
                         HomeNavActionButton(
-                            label = "CONTINUE  ·  ${resumeChannel.name.uppercase(Locale.getDefault())}",
+                            label = "${strings.continueWatching}  ·  ${resumeChannel.name.uppercase(Locale.getDefault())}",
                             icon = Icons.Default.PlayArrow,
                             isPrimary = true,
                             accentColor = MaterialTheme.colorScheme.primary,
@@ -1569,7 +1594,7 @@ private fun GuestHubHome(
                             modifier = Modifier.weight(2f)
                         )
                         HomeNavActionButton(
-                            label = "LIVE TV",
+                            label = strings.liveTv,
                             icon = Icons.Default.LiveTv,
                             isPrimary = false,
                             accentColor = MaterialTheme.colorScheme.primary,
@@ -1578,7 +1603,7 @@ private fun GuestHubHome(
                         )
                     } else {
                         HomeNavActionButton(
-                            label = "LIVE TV",
+                            label = strings.liveTv,
                             icon = Icons.Default.LiveTv,
                             isPrimary = true,
                             accentColor = MaterialTheme.colorScheme.primary,
@@ -1587,7 +1612,7 @@ private fun GuestHubHome(
                         )
                     }
                     HomeNavActionButton(
-                        label = "APPS",
+                        label = strings.apps,
                         icon = Icons.Default.Apps,
                         isPrimary = false,
                         accentColor = MaterialTheme.colorScheme.secondary,
@@ -1689,7 +1714,8 @@ private fun HomeAppsDrawer(
                     )
                     Spacer(Modifier.width(10.dp))
                     Column {
-                        Text("APPS", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White)
+                        val drawerStrings = LocalGlzStrings.current
+                        Text(drawerStrings.apps, fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White)
                         Text(
                             "${apps.size} apps & services",
                             fontSize = 12.sp,
@@ -1697,7 +1723,8 @@ private fun HomeAppsDrawer(
                         )
                     }
                 }
-                TvSettingsButton(label = "Close", onClick = onClose)
+                val drawerStrings = LocalGlzStrings.current
+                TvSettingsButton(label = drawerStrings.close, onClick = onClose)
             }
 
             Spacer(Modifier.height(14.dp))
@@ -1944,12 +1971,14 @@ private fun QuickWatchChannelDrawer(
                     )
                     Spacer(Modifier.width(10.dp))
                     Column {
-                        Text("LIVE TV", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White)
+                        val drawerStrings = LocalGlzStrings.current
+                        Text(drawerStrings.liveTv, fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White)
                         Text("${channels.size} channels available", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                val drawerStrings = LocalGlzStrings.current
                 TvSettingsButton(
-                    label = "Close",
+                    label = drawerStrings.close,
                     onClick = onClose
                 )
             }
@@ -4985,7 +5014,28 @@ private val THEME_VALUES = listOf(
     "sunset" to "Sunset Glow",
     "emerald" to "Emerald Forest",
     "cyberpunk" to "Neon Cyberpunk",
-    "midnight" to "Midnight Gold"
+    "midnight" to "Midnight Gold",
+    "arctic" to "Arctic Frost",
+    "crimson" to "Crimson Eclipse",
+    "amethyst" to "Amethyst Neon",
+    "synthwave" to "Tokyo Synthwave",
+    "solar" to "Solar Flare",
+    "stealth" to "Carbon Stealth"
+)
+
+private val THEME_LABELS_ES = mapOf(
+    "dark" to "GLZ Oscuro",
+    "ocean" to "Brisa Marina",
+    "sunset" to "Resplandor del Atardecer",
+    "emerald" to "Bosque Esmeralda",
+    "cyberpunk" to "Cyberpunk Neón",
+    "midnight" to "Oro de Medianoche",
+    "arctic" to "Escarcha Ártica",
+    "crimson" to "Eclipse Carmesí",
+    "amethyst" to "Amatista Neón",
+    "synthwave" to "Tokyo Synthwave",
+    "solar" to "Llamarada Solar",
+    "stealth" to "Carbono Sigilo"
 )
 private val OSD_VALUES = listOf(5, 7, 8, 10)
 private val START_DESTINATIONS = listOf(
@@ -4998,10 +5048,31 @@ private val START_DESTINATIONS = listOf(
 
 private val UPDATE_CHANNEL_IDS = GithubUpdateManager.UpdateChannel.values().map { it.id }
 
-private fun onOff(value: Boolean) = if (value) "On" else "Off"
-private fun themeLabel(value: String) = THEME_VALUES.firstOrNull { it.first == value }?.second ?: "GLZ Dark"
-private fun startDestinationLabel(name: String) =
-    START_DESTINATIONS.firstOrNull { it.first.name == name }?.second ?: "Home Screen"
+private fun onOff(value: Boolean, language: String = "en") =
+    if (language.startsWith("es", ignoreCase = true)) {
+        if (value) "Activado" else "Desactivado"
+    } else {
+        if (value) "On" else "Off"
+    }
+
+private fun themeLabel(value: String, language: String = "en") =
+    if (language.startsWith("es", ignoreCase = true)) {
+        THEME_LABELS_ES[value] ?: THEME_VALUES.firstOrNull { it.first == value }?.second ?: "GLZ Oscuro"
+    } else {
+        THEME_VALUES.firstOrNull { it.first == value }?.second ?: "GLZ Dark"
+    }
+
+private fun startDestinationLabel(name: String, language: String = "en"): String {
+    val isEs = language.startsWith("es", ignoreCase = true)
+    return when (name) {
+        AppSection.Home.name -> if (isEs) "Pantalla de Inicio" else "Home Screen"
+        AppSection.Live.name -> if (isEs) "TV en Vivo" else "Live TV"
+        AppSection.Radio.name -> "Radio"
+        AppSection.Weather.name -> if (isEs) "Clima" else "Weather"
+        AppSection.You.name -> if (isEs) "Tú y Apps" else "You & Apps"
+        else -> if (isEs) "Pantalla de Inicio" else "Home Screen"
+    }
+}
 private fun updateChannelLabel(id: String) = GithubUpdateManager.UpdateChannel.from(id).label
 
 /** Wrap-around step through [values]; returns [current] unchanged if it is not in the list and the list is empty. */
@@ -5161,6 +5232,7 @@ private fun SettingsDialog(
     sourceStatus: String,
     hubStatus: String,
     screensaverTimeoutMinutes: Int = 5,
+    appLanguage: String = "en",
     onOpenSpeedTest: () -> Unit,
     onSyncNow: suspend ((Int, String) -> Unit) -> String,
     onCheckForUpdate: suspend () -> String,
@@ -5168,7 +5240,7 @@ private fun SettingsDialog(
     onDismiss: () -> Unit,
     onSave: (
         String, String, String, String, String, String, String, String, Boolean, String, Int, Int,
-        Boolean, Boolean, Boolean, Boolean, String, String
+        Boolean, Boolean, Boolean, Boolean, String, String, String
     ) -> Unit
 ) {
     var showAdvanced by remember { mutableStateOf(false) }
@@ -5183,6 +5255,8 @@ private fun SettingsDialog(
     var themeValue by remember {
         mutableStateOf(if (themeMode == "light" || themeMode == "adaptive") "dark" else themeMode)
     }
+    var appLanguageValue by remember { mutableStateOf(appLanguage) }
+    val strings = GlzStrings.get(appLanguageValue)
     var captionsValue by remember { mutableStateOf(captionsEnabled) }
     var languageValue by remember { mutableStateOf(captionLanguage) }
     var osdTimeoutValue by remember { mutableStateOf(osdTimeoutSeconds) }
@@ -5318,94 +5392,100 @@ private fun SettingsDialog(
                         ProtectedSourceField(connectionLabelValue, { connectionLabelValue = it }, "Connection Label", "Example: Resort Ethernet or Guest Wi-Fi")
                         ProtectedSourceField(ispNameValue, { ispNameValue = it }, "ISP or Network Name", "Example: GLZ Fiber or Charter Spectrum")
                     } else {
-                        SettingsLabel("APPEARANCE")
+                        SettingsLabel(strings.sectionAppearance.uppercase())
                         SettingsChoiceRow(
-                            name = "Theme",
-                            valueText = themeLabel(themeValue),
+                            name = strings.theme,
+                            valueText = themeLabel(themeValue, appLanguageValue),
                             onPrev = { themeValue = cycleList(THEME_VALUES.map { it.first }, themeValue, -1) },
                             onNext = { themeValue = cycleList(THEME_VALUES.map { it.first }, themeValue, 1) },
                             first = true,
                             focusRequester = initialFocus
                         )
-
-                        SettingsLabel("PLAYER")
                         SettingsChoiceRow(
-                            name = "OSD Banner Duration",
-                            valueText = "$osdTimeoutValue seconds" + if (osdTimeoutValue == 8) " (default)" else "",
+                            name = strings.appLanguage,
+                            valueText = if (appLanguageValue == "es") "Español" else "English",
+                            onPrev = { appLanguageValue = if (appLanguageValue == "es") "en" else "es" },
+                            onNext = { appLanguageValue = if (appLanguageValue == "es") "en" else "es" }
+                        )
+
+                        SettingsLabel(strings.sectionPlayer.uppercase())
+                        SettingsChoiceRow(
+                            name = strings.osdTimeout,
+                            valueText = "$osdTimeoutValue ${strings.seconds}" + if (osdTimeoutValue == 8) " (default)" else "",
                             onPrev = { osdTimeoutValue = cycleList(OSD_VALUES, osdTimeoutValue, -1) },
                             onNext = { osdTimeoutValue = cycleList(OSD_VALUES, osdTimeoutValue, 1) }
                         )
                         SettingsChoiceRow(
-                            name = "Ambient Screensaver",
+                            name = strings.screensaverTimeout,
                             valueText = when (screensaverTimeoutValue) {
-                                0 -> "Off"
-                                2 -> "2 minutes"
-                                5 -> "5 minutes (default)"
-                                10 -> "10 minutes"
-                                15 -> "15 minutes"
-                                else -> "$screensaverTimeoutValue minutes"
+                                0 -> strings.off
+                                2 -> "2 ${strings.minutes}"
+                                5 -> "5 ${strings.minutes} (default)"
+                                10 -> "10 ${strings.minutes}"
+                                15 -> "15 ${strings.minutes}"
+                                else -> "$screensaverTimeoutValue ${strings.minutes}"
                             },
                             onPrev = { screensaverTimeoutValue = cycleList(listOf(0, 2, 5, 10, 15), screensaverTimeoutValue, -1) },
                             onNext = { screensaverTimeoutValue = cycleList(listOf(0, 2, 5, 10, 15), screensaverTimeoutValue, 1) }
                         )
                         SettingsChoiceRow(
-                            name = "Closed Captions",
-                            valueText = onOff(captionsValue),
+                            name = strings.closedCaptions,
+                            valueText = onOff(captionsValue, appLanguageValue),
                             onPrev = { captionsValue = !captionsValue },
                             onNext = { captionsValue = !captionsValue }
                         )
 
-                        SettingsLabel("STARTUP")
+                        SettingsLabel(strings.sectionStartup.uppercase())
                         SettingsChoiceRow(
-                            name = "Start Screen",
-                            valueText = startDestinationLabel(startDestinationValue),
+                            name = strings.startDestination,
+                            valueText = startDestinationLabel(startDestinationValue, appLanguageValue),
                             onPrev = { startDestinationValue = cycleList(START_DESTINATIONS.map { it.first.name }, startDestinationValue, -1) },
                             onNext = { startDestinationValue = cycleList(START_DESTINATIONS.map { it.first.name }, startDestinationValue, 1) }
                         )
                         SettingsChoiceRow(
-                            name = "Auto-start after reboot",
-                            valueText = onOff(autoStartValue),
+                            name = strings.autoStart,
+                            valueText = onOff(autoStartValue, appLanguageValue),
                             onPrev = { autoStartValue = !autoStartValue },
                             onNext = { autoStartValue = !autoStartValue }
                         )
                         SettingsChoiceRow(
-                            name = "Resume last channel",
-                            valueText = onOff(resumeLastValue),
+                            name = strings.resumeLast,
+                            valueText = onOff(resumeLastValue, appLanguageValue),
                             onPrev = { resumeLastValue = !resumeLastValue },
                             onNext = { resumeLastValue = !resumeLastValue }
                         )
 
-                        SettingsLabel("UPDATES")
+                        SettingsLabel(strings.sectionUpdates.uppercase())
                         SettingsChoiceRow(
-                            name = "Update Channel",
+                            name = strings.updateChannel,
                             valueText = updateChannelLabel(updateChannelValue),
                             onPrev = { updateChannelValue = cycleList(UPDATE_CHANNEL_IDS, updateChannelValue, -1) },
                             onNext = { updateChannelValue = cycleList(UPDATE_CHANNEL_IDS, updateChannelValue, 1) }
                         )
                         SettingsChoiceRow(
-                            name = "Auto-check for updates",
-                            valueText = onOff(autoUpdateValue),
+                            name = strings.autoUpdateCheck,
+                            valueText = onOff(autoUpdateValue, appLanguageValue),
                             onPrev = { autoUpdateValue = !autoUpdateValue },
                             onNext = { autoUpdateValue = !autoUpdateValue }
                         )
                         SettingsChoiceRow(
-                            name = "Download updates on Wi-Fi only",
-                            valueText = onOff(wifiOnlyValue),
+                            name = strings.wifiOnly,
+                            valueText = onOff(wifiOnlyValue, appLanguageValue),
                             onPrev = { wifiOnlyValue = !wifiOnlyValue },
                             onNext = { wifiOnlyValue = !wifiOnlyValue }
                         )
                         SettingsActionRow(
-                            name = "Check for Updates",
+                            name = strings.checkUpdates,
                             valueText = updateStatus,
                             onClick = {
-                                updateStatus = "Checking GitHub…"
+                                updateStatus = strings.checkingUpdate
                                 settingsScope.launch { updateStatus = onCheckForUpdate() }
                             }
                         )
 
-                        SettingsLabel("SOURCES & SYNC")
+                        SettingsLabel(strings.sectionSources.uppercase())
                         SettingsActionRow(
-                            name = if (syncLoading) "Syncing…  $syncProgress%" else "Refresh & Sync Now",
+                            name = if (syncLoading) "${strings.buffering}  $syncProgress%" else strings.syncNow,
                             valueText = syncMessage,
                             enabled = !syncLoading,
                             onClick = {
@@ -5424,7 +5504,7 @@ private fun SettingsDialog(
                             }
                         )
                         SettingsActionRow(
-                            name = if (hubLoading) "Connecting to GLZ Hub…" else "GLZ Hub Pairing",
+                            name = if (hubLoading) "Connecting to GLZ Hub…" else strings.hubStatus,
                             valueText = hubMessage,
                             enabled = !hubLoading,
                             onClick = {
@@ -5438,7 +5518,7 @@ private fun SettingsDialog(
                             }
                         )
                         SettingsActionRow(
-                            name = "Advanced · Text & URLs",
+                            name = strings.advancedOptions,
                             valueText = "Playlist, EPG, headers, guest & network labels",
                             onClick = { showAdvanced = true }
                         )
@@ -5467,18 +5547,19 @@ private fun SettingsDialog(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        "Up / Down to move · Left / Right to change · Back to exit",
+                        if (appLanguageValue == "es") "Arriba / Abajo para mover · Izq / Der para cambiar · Atrás para salir"
+                        else "Up / Down to move · Left / Right to change · Back to exit",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         TvSettingsButton(
-                            label = "Cancel",
+                            label = strings.close,
                             onClick = onDismiss
                         )
                         TvSettingsButton(
-                            label = "Save & Apply",
+                            label = strings.saveAndApply,
                             onClick = {
                                 onSave(
                                     playlistValue.trim(), epgValue.trim(), headerValue.trim(),
@@ -5488,7 +5569,8 @@ private fun SettingsDialog(
                                     themeValue, captionsValue, languageValue.trim(), osdTimeoutValue,
                                     screensaverTimeoutValue,
                                     autoUpdateValue, wifiOnlyValue, autoStartValue, resumeLastValue,
-                                    startDestinationValue, updateChannelValue
+                                    startDestinationValue, updateChannelValue,
+                                    appLanguageValue
                                 )
                             },
                             enabled = playlistValue.startsWith("http")

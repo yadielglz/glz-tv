@@ -47,6 +47,7 @@ fun ExpressiveNavigationRail(
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val compactHeight = maxHeight < 600.dp
+            val strings = com.glztv.app.ui.i18n.LocalGlzStrings.current
             Column(
                 Modifier
                     .fillMaxSize()
@@ -57,19 +58,19 @@ fun ExpressiveNavigationRail(
                 verticalArrangement = Arrangement.spacedBy(if (compactHeight) 8.dp else 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                RailDestination("Home", section == AppSection.Home, Icons.Default.Home, compactHeight) {
+                RailDestination(strings.navHome, section == AppSection.Home, Icons.Default.Home, compactHeight) {
                     onSection(AppSection.Home)
                 }
-                RailDestination("Guide", section == AppSection.Live, Icons.Default.CalendarMonth, compactHeight) {
+                RailDestination(strings.navGuide, section == AppSection.Live, Icons.Default.CalendarMonth, compactHeight) {
                     onSection(AppSection.Live)
                 }
-                RailDestination("Radio", section == AppSection.Radio, Icons.Default.Radio, compactHeight) {
+                RailDestination(strings.navRadio, section == AppSection.Radio, Icons.Default.Radio, compactHeight) {
                     onSection(AppSection.Radio)
                 }
-                RailDestination("Weather", section == AppSection.Weather, Icons.Default.WbSunny, compactHeight) {
+                RailDestination(strings.navWeather, section == AppSection.Weather, Icons.Default.WbSunny, compactHeight) {
                     onSection(AppSection.Weather)
                 }
-                RailDestination("You", section == AppSection.You, Icons.Default.Person, compactHeight) {
+                RailDestination(strings.navYou, section == AppSection.You, Icons.Default.Person, compactHeight) {
                     onSection(AppSection.You)
                 }
                 Spacer(Modifier.weight(1f))
