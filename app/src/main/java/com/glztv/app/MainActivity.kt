@@ -30,7 +30,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
@@ -85,10 +87,10 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -166,6 +168,10 @@ import com.glztv.app.player.TrackOption
 import com.glztv.app.player.TrackPreferenceManager
 import com.glztv.app.player.PlaybackPerformance
 import com.glztv.app.player.PlaybackDiagnosticsPanel
+import com.glztv.app.player.SpeedTestResult
+import com.glztv.app.player.StreamSpeedTester
+import com.glztv.app.ui.components.StreamSpeedTestDialog
+import com.glztv.app.ui.screens.AmbientScreensaverScreen
 import com.glztv.app.ui.theme.GlzTheme
 import com.glztv.app.ui.theme.AmbientBackground
 import com.glztv.app.ui.components.tvFocusableWithPhysics
@@ -219,6 +225,7 @@ private const val LAST_CHANNEL_ID = "last_channel_id"
 private const val WEATHER_LOCATION = "weather_location"
 private const val GUEST_NAME = "guest_name"
 private const val OSD_TIMEOUT_SECONDS = "osd_timeout_seconds"
+private const val SCREENSAVER_TIMEOUT_MINUTES = "screensaver_timeout_minutes"
 private const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
 private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
@@ -403,6 +410,14 @@ internal fun TvScreen(
     }
     val recentChannelManager = remember { RecentChannelManager(prefs) }
     var recentRevision by remember { mutableStateOf(0) }
+    var showScreensaver by remember { mutableStateOf(false) }
+    var showSpeedTestDialog by remember { mutableStateOf(false) }
+    var speedTestTargetUrl by remember { mutableStateOf<String?>(null) }
+    var screensaverTimeoutMinutes by remember {
+        mutableStateOf(prefs.getInt(SCREENSAVER_TIMEOUT_MINUTES, 5))
+    }
+    var lastUserInteractionTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    var lastSpeedTestResult by remember { mutableStateOf<SpeedTestResult?>(null) }
 
     val keepScreenAwake = radioPlaying || (section == AppSection.Home && keepAwakeAtHome)
     DisposableEffect(keepScreenAwake) {
@@ -697,6 +712,20 @@ internal fun TvScreen(
         prefs.edit().putString(LAST_CHANNEL_ID, it.id).apply()
     }
     val immersive = section == AppSection.Live && selected != null && playerActive
+
+    LaunchedEffect(screensaverTimeoutMinutes, showScreensaver, immersive, radioPlaying, showSettings, showSpeedTestDialog) {
+        if (screensaverTimeoutMinutes <= 0) return@LaunchedEffect
+        while (true) {
+            delay(5_000L)
+            val idleTime = System.currentTimeMillis() - lastUserInteractionTime
+            val timeoutMillis = screensaverTimeoutMinutes * 60 * 1000L
+            if (idleTime >= timeoutMillis && !showScreensaver && !showSettings && !showSpeedTestDialog) {
+                if (!immersive || radioPlaying) {
+                    showScreensaver = true
+                }
+            }
+        }
+    }
     val resumeChannel = remember(ordered, recentRevision) {
         prefs.getString(LAST_CHANNEL_ID, null)?.let { id -> ordered.firstOrNull { it.id == id } }
     }
@@ -713,8 +742,18 @@ internal fun TvScreen(
         }
     }
 
-    Scaffold(
-        containerColor = Color.Transparent,
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    lastUserInteractionTime = System.currentTimeMillis()
+                }
+                false
+            }
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
         topBar = {
             if (!immersive) {
             SlimHeader(
@@ -725,6 +764,7 @@ internal fun TvScreen(
                     onWeatherClick = { section = AppSection.Weather },
                     onRefresh = { scope.launch { loadSources(forceRefresh = true) } },
                     onSettings = { showSettings = true },
+                    onScreensaver = { showScreensaver = true },
                     minimal = section == AppSection.Home
                 )
             }
@@ -749,6 +789,11 @@ internal fun TvScreen(
                     guide = guide,
                     captionsEnabled = captionsEnabled,
                     captionLanguage = captionLanguage,
+                    speedTestResult = lastSpeedTestResult,
+                    onRunSpeedTest = { url ->
+                        speedTestTargetUrl = url
+                        showSpeedTestDialog = true
+                    },
                     onCaptionsChanged = { enabled, language ->
                         captionsEnabled = enabled
                         captionLanguage = language
@@ -900,6 +945,11 @@ internal fun TvScreen(
                 ?: GithubUpdateManager.UpdateChannel.PRODUCTION.id,
             sourceStatus = status,
             hubStatus = hubStatus,
+            screensaverTimeoutMinutes = screensaverTimeoutMinutes,
+            onOpenSpeedTest = {
+                speedTestTargetUrl = null
+                showSpeedTestDialog = true
+            },
             onSyncNow = { progress -> syncEverythingNow(progress) },
             onCheckForUpdate = { checkForAppUpdate() },
             onBeginHubEnrollment = {
@@ -911,7 +961,7 @@ internal fun TvScreen(
             },
             onDismiss = { showSettings = false },
             onSave = { playlist, epg, headers, location, name, connectionLabel, ispName, theme,
-                       captions, language, osdTimeout, autoUpdate, wifiOnly, autoStart, resumeLast,
+                       captions, language, osdTimeout, screensaverTimeout, autoUpdate, wifiOnly, autoStart, resumeLast,
                        startDestination, updateChannel ->
                 prefs.edit().putString(PLAYLIST_URL, playlist).putString(EPG_URL, epg)
                     .putString(REQUEST_HEADERS, headers)
@@ -922,6 +972,7 @@ internal fun TvScreen(
                     .putBoolean(CAPTIONS_ENABLED, captions)
                     .putString(CAPTION_LANGUAGE, language)
                     .putInt(OSD_TIMEOUT_SECONDS, osdTimeout)
+                    .putInt(SCREENSAVER_TIMEOUT_MINUTES, screensaverTimeout)
                     .putBoolean(AUTO_UPDATE_CHECK, autoUpdate)
                     .putBoolean(WIFI_ONLY_UPDATES, wifiOnly)
                     .putBoolean(AUTO_START, autoStart)
@@ -932,6 +983,7 @@ internal fun TvScreen(
                 captionsEnabled = captions
                 captionLanguage = language
                 osdTimeoutSeconds = osdTimeout
+                screensaverTimeoutMinutes = screensaverTimeout
                 weatherLocation = location
                 guestName = name
                 networkOverrideRevision++
@@ -941,70 +993,270 @@ internal fun TvScreen(
         )
     }
 
-    availableUpdate?.let { update ->
-        AlertDialog(
-            onDismissRequest = {
-                if (!updateDownloading) {
+    if (showSpeedTestDialog) {
+        StreamSpeedTestDialog(
+            client = client,
+            targetUrl = speedTestTargetUrl,
+            onDismiss = { showSpeedTestDialog = false }
+        )
+    }
+
+    AnimatedVisibility(
+        visible = showScreensaver,
+        enter = fadeIn(tween(400)),
+        exit = fadeOut(tween(300))
+    ) {
+        AmbientScreensaverScreen(
+            weather = weather,
+            guestName = guestName,
+            radioPlaying = radioPlaying,
+            onDismiss = {
+                lastUserInteractionTime = System.currentTimeMillis()
+                showScreensaver = false
+            }
+        )
+    }
+
+    BackHandler(enabled = availableUpdate != null && !updateDownloading) {
+        availableUpdate = null
+        updateDownloadStatus = null
+    }
+
+    AnimatedVisibility(
+        visible = availableUpdate != null,
+        enter = slideInVertically(initialOffsetY = { it * 2 }, animationSpec = tween(350)) + fadeIn(animationSpec = tween(300)),
+        exit = slideOutVertically(targetOffsetY = { it * 2 }, animationSpec = tween(300)) + fadeOut(animationSpec = tween(250)),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(horizontal = safeHorizontalPadding, vertical = 24.dp)
+    ) {
+        availableUpdate?.let { update ->
+            UpdateNotificationBanner(
+                update = update,
+                downloading = updateDownloading,
+                downloadStatus = updateDownloadStatus,
+                onUpdateNow = {
+                    if (!GithubUpdateManager.canInstall(context)) {
+                        updateDownloadStatus =
+                            "Allow GLZ TV to install unknown apps, then choose Update Now again."
+                        GithubUpdateManager.requestInstallPermission(context)
+                    } else {
+                        updateDownloading = true
+                        updateDownloadStatus = "Downloading update…"
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    GithubUpdateManager.download(context, client, update)
+                                }
+                            }.onSuccess { apk ->
+                                updateDownloadStatus = "Opening system installer…"
+                                GithubUpdateManager.launchInstaller(context, apk)
+                            }.onFailure {
+                                updateDownloadStatus = "Download failed: ${it.message}"
+                            }
+                            updateDownloading = false
+                        }
+                    }
+                },
+                onNotNow = {
                     availableUpdate = null
                     updateDownloadStatus = null
                 }
-            },
-            icon = { Icon(Icons.Default.Refresh, null) },
-            title = { Text("GLZ TV ${update.version} is available") },
-            text = {
-                Column {
-                    Text(
-                        update.notes.ifBlank {
-                            "A new version is ready from the official GLZ TV GitHub release."
-                        },
-                        maxLines = 8,
-                        overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+    }
+}
+
+@Composable
+private fun UpdateNotificationBanner(
+    update: GithubUpdateManager.UpdateInfo,
+    downloading: Boolean,
+    downloadStatus: String?,
+    onUpdateNow: () -> Unit,
+    onNotNow: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val initialFocus = remember { FocusRequester() }
+    LaunchedEffect(update) {
+        delay(150L)
+        runCatching { initialFocus.requestFocus() }
+    }
+
+    val accent = MaterialTheme.colorScheme.primary
+    Surface(
+        modifier = modifier
+            .widthIn(max = 860.dp)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = Color(0xF40D1424),
+        border = BorderStroke(1.5.dp, accent.copy(alpha = 0.40f)),
+        tonalElevation = 16.dp,
+        shadowElevation = 24.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            // Icon Badge
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = accent.copy(alpha = 0.18f),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(26.dp)
                     )
-                    updateDownloadStatus?.let {
-                        Spacer(Modifier.height(12.dp))
-                        Text(it, color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Title & Info
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "GLZ TV ${update.version}",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = accent.copy(alpha = 0.20f)
+                    ) {
+                        Text(
+                            "UPDATE AVAILABLE",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.8.sp,
+                            color = accent
+                        )
                     }
                 }
-            },
-            confirmButton = {
-                Button(
-                    enabled = !updateDownloading,
-                    onClick = {
-                        if (!GithubUpdateManager.canInstall(context)) {
-                            updateDownloadStatus =
-                                "Allow GLZ TV to install unknown apps, then choose Install again."
-                            GithubUpdateManager.requestInstallPermission(context)
-                        } else {
-                            updateDownloading = true
-                            updateDownloadStatus = "Downloading update…"
-                            scope.launch {
-                                runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        GithubUpdateManager.download(context, client, update)
-                                    }
-                                }.onSuccess { apk ->
-                                    updateDownloadStatus = "Opening system installer…"
-                                    GithubUpdateManager.launchInstaller(context, apk)
-                                }.onFailure {
-                                    updateDownloadStatus = "Download failed: ${it.message}"
-                                }
-                                updateDownloading = false
-                            }
-                        }
-                    }
-                ) { Text(if (updateDownloading) "Downloading…" else "Install") }
-            },
-            dismissButton = {
-                Button(
-                    enabled = !updateDownloading,
-                    onClick = {
-                        availableUpdate = null
-                        updateDownloadStatus = null
-                    }
-                ) { Text("Later") }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = downloadStatus ?: update.notes.ifBlank {
+                        "A new version is ready from the official GLZ TV GitHub release."
+                    },
+                    color = if (downloadStatus != null) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (downloadStatus != null) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-        )
+
+            // Action Buttons with high contrast & TV focus physics
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Update Now (Primary)
+                UpdateActionButton(
+                    label = if (downloading) "Downloading…" else "Update Now",
+                    isPrimary = true,
+                    enabled = !downloading,
+                    loading = downloading,
+                    focusRequester = initialFocus,
+                    onClick = onUpdateNow
+                )
+
+                // Not Now (Secondary)
+                UpdateActionButton(
+                    label = "Not Now",
+                    isPrimary = false,
+                    enabled = !downloading,
+                    loading = false,
+                    onClick = onNotNow
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateActionButton(
+    label: String,
+    isPrimary: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    focusRequester: FocusRequester? = null,
+    modifier: Modifier = Modifier
+) {
+    var focused by remember { mutableStateOf(false) }
+    val accent = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(14.dp)
+
+    // Contrast calculations:
+    // When focused: solid bright white with pure black bold text and luminous glow (maximum contrast)
+    // When unfocused & primary: solid accent fill with onAccent high-contrast dark text
+    // When unfocused & secondary: dark slate background with crisp white border and white text
+    val backgroundColor = when {
+        focused -> Color.White
+        !enabled -> if (isPrimary) accent.copy(alpha = 0.40f) else Color.White.copy(alpha = 0.05f)
+        isPrimary -> accent
+        else -> Color(0xFF1E283C)
+    }
+
+    val contentColor = when {
+        focused -> Color.Black
+        !enabled -> if (isPrimary) GlzCardDefaults.onAccent(accent).copy(alpha = 0.60f) else Color.White.copy(alpha = 0.35f)
+        isPrimary -> GlzCardDefaults.onAccent(accent)
+        else -> Color.White
+    }
+
+    val borderStroke = when {
+        focused -> BorderStroke(2.dp, Color.White)
+        !enabled -> BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+        isPrimary -> BorderStroke(1.5.dp, Color.White.copy(alpha = 0.50f))
+        else -> BorderStroke(1.5.dp, Color.White.copy(alpha = 0.50f))
+    }
+
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .tvFocusableWithPhysics(
+                shape = shape,
+                focusedScale = 1.08f,
+                glowColor = if (isPrimary) accent else Color.White,
+                onFocusChange = { focused = it }
+            ),
+        shape = shape,
+        color = backgroundColor,
+        contentColor = contentColor,
+        border = borderStroke
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = contentColor
+                )
+            }
+            Text(
+                label,
+                fontWeight = FontWeight.Black,
+                fontSize = 14.sp
+            )
+        }
     }
 }
 
@@ -3538,6 +3790,8 @@ private fun ImmersivePlayerScreen(
     osdTimeoutSeconds: Int = 8,
     entertainmentApps: List<EntertainmentApp>,
     recentChannels: List<Channel>,
+    speedTestResult: SpeedTestResult? = null,
+    onRunSpeedTest: ((String) -> Unit)? = null,
     onPreviousChannel: () -> Unit,
     onAddToMultiView: (Channel) -> Unit,
     onTune: (Channel) -> Unit,
@@ -3994,6 +4248,8 @@ private fun ImmersivePlayerScreen(
         if (showDiagnostics && drawer == PlayerDrawer.Services) {
             PlaybackDiagnosticsPanel(
                 diagnostics = playbackControls.diagnostics,
+                speedTestResult = speedTestResult,
+                onRunSpeedTest = onRunSpeedTest?.let { action -> { action(channel.streamUrl) } },
                 modifier = Modifier.align(Alignment.TopStart).padding(30.dp)
             )
         }
@@ -4904,12 +5160,14 @@ private fun SettingsDialog(
     updateChannel: String,
     sourceStatus: String,
     hubStatus: String,
+    screensaverTimeoutMinutes: Int = 5,
+    onOpenSpeedTest: () -> Unit,
     onSyncNow: suspend ((Int, String) -> Unit) -> String,
     onCheckForUpdate: suspend () -> String,
     onBeginHubEnrollment: suspend () -> String,
     onDismiss: () -> Unit,
     onSave: (
-        String, String, String, String, String, String, String, String, Boolean, String, Int,
+        String, String, String, String, String, String, String, String, Boolean, String, Int, Int,
         Boolean, Boolean, Boolean, Boolean, String, String
     ) -> Unit
 ) {
@@ -4928,6 +5186,7 @@ private fun SettingsDialog(
     var captionsValue by remember { mutableStateOf(captionsEnabled) }
     var languageValue by remember { mutableStateOf(captionLanguage) }
     var osdTimeoutValue by remember { mutableStateOf(osdTimeoutSeconds) }
+    var screensaverTimeoutValue by remember { mutableStateOf(screensaverTimeoutMinutes) }
     var autoUpdateValue by remember { mutableStateOf(autoUpdate) }
     var wifiOnlyValue by remember { mutableStateOf(wifiOnly) }
     var autoStartValue by remember { mutableStateOf(autoStart) }
@@ -5077,6 +5336,19 @@ private fun SettingsDialog(
                             onNext = { osdTimeoutValue = cycleList(OSD_VALUES, osdTimeoutValue, 1) }
                         )
                         SettingsChoiceRow(
+                            name = "Ambient Screensaver",
+                            valueText = when (screensaverTimeoutValue) {
+                                0 -> "Off"
+                                2 -> "2 minutes"
+                                5 -> "5 minutes (default)"
+                                10 -> "10 minutes"
+                                15 -> "15 minutes"
+                                else -> "$screensaverTimeoutValue minutes"
+                            },
+                            onPrev = { screensaverTimeoutValue = cycleList(listOf(0, 2, 5, 10, 15), screensaverTimeoutValue, -1) },
+                            onNext = { screensaverTimeoutValue = cycleList(listOf(0, 2, 5, 10, 15), screensaverTimeoutValue, 1) }
+                        )
+                        SettingsChoiceRow(
                             name = "Closed Captions",
                             valueText = onOff(captionsValue),
                             onPrev = { captionsValue = !captionsValue },
@@ -5170,6 +5442,13 @@ private fun SettingsDialog(
                             valueText = "Playlist, EPG, headers, guest & network labels",
                             onClick = { showAdvanced = true }
                         )
+
+                        SettingsLabel("NETWORK & DIAGNOSTICS")
+                        SettingsActionRow(
+                            name = "Stream & Network Speed Test",
+                            valueText = "Benchmark latency, jitter & download throughput",
+                            onClick = onOpenSpeedTest
+                        )
                     }
                 }
                 Spacer(Modifier.height(24.dp))
@@ -5207,6 +5486,7 @@ private fun SettingsDialog(
                                     guestNameValue.trim().ifBlank { "Guest" },
                                     connectionLabelValue.trim(), ispNameValue.trim(),
                                     themeValue, captionsValue, languageValue.trim(), osdTimeoutValue,
+                                    screensaverTimeoutValue,
                                     autoUpdateValue, wifiOnlyValue, autoStartValue, resumeLastValue,
                                     startDestinationValue, updateChannelValue
                                 )

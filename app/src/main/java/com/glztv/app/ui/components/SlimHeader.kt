@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FilledIconButton
@@ -50,6 +51,7 @@ fun SlimHeader(
     onWeatherClick: (() -> Unit)?,
     onRefresh: () -> Unit,
     onSettings: () -> Unit,
+    onScreensaver: (() -> Unit)? = null,
     /** When true, hide the network / weather / clock cluster (Home shows its own). */
     minimal: Boolean = false
 ) {
@@ -168,6 +170,22 @@ fun SlimHeader(
                 }
             }
             Spacer(Modifier.width(8.dp))
+            if (onScreensaver != null) {
+                IconButton(
+                    onClick = onScreensaver,
+                    modifier = Modifier.tvFocusableWithPhysics(
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        focusedScale = 1.15f
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Nightlight,
+                        "Ambient Mode",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+            }
             IconButton(
                 onClick = onRefresh,
                 enabled = !loading,
