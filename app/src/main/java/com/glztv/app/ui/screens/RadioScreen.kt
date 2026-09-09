@@ -91,7 +91,8 @@ import java.util.Locale
 fun RadioScreen(
     prefs: SharedPreferences,
     client: OkHttpClient,
-    onPlayingChanged: (Boolean) -> Unit,
+    onPlayingChanged: (isPlaying: Boolean, station: RadioStation?) -> Unit = { _, _ -> },
+    onScreensaverTriggered: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -103,8 +104,6 @@ fun RadioScreen(
     var loading by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("Loading stations from GLZ Hub…") }
     var playing by remember { mutableStateOf(false) }
-    var screensaverVisible by remember { mutableStateOf(false) }
-    var screensaverRevision by remember { mutableStateOf(0) }
     var radioRetryAttempt by remember(selected?.code) { mutableStateOf(0) }
     val dataSourceFactory = remember {
         DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}")
@@ -130,6 +129,7 @@ fun RadioScreen(
         player.stop()
         player.clearMediaItems()
         playing = false
+        onPlayingChanged(false, selected)
         status = "Stopped"
         GlzHubManager.reportActivity(prefs, "idle")
     }
@@ -148,6 +148,7 @@ fun RadioScreen(
         )
         player.prepare()
         player.play()
+        onPlayingChanged(true, station)
         status = "Connecting…"
         GlzHubManager.reportActivity(prefs, "radio", station.name)
     }
@@ -156,7 +157,7 @@ fun RadioScreen(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
-                onPlayingChanged(isPlaying)
+                onPlayingChanged(isPlaying, selected)
                 if (isPlaying) {
                     radioRetryAttempt = 0
                     status = "Live"
@@ -168,6 +169,7 @@ fun RadioScreen(
 
             override fun onPlayerError(error: PlaybackException) {
                 playing = false
+                onPlayingChanged(false, selected)
                 radioRetryAttempt += 1
                 val nextDelaySec = minOf(15, 1 shl minOf(radioRetryAttempt - 1, 4))
                 status = "Station offline · retrying in ${nextDelaySec}s (#$radioRetryAttempt)"
@@ -175,7 +177,7 @@ fun RadioScreen(
         }
         player.addListener(listener)
         onDispose {
-            onPlayingChanged(false)
+            onPlayingChanged(false, null)
             player.removeListener(listener)
             player.stop()
             player.release()
@@ -218,23 +220,14 @@ fun RadioScreen(
             }
     }
 
-    LaunchedEffect(playing, selected?.code, screensaverRevision) {
-        screensaverVisible = false
+    LaunchedEffect(playing, selected?.code) {
         if (playing && selected != null) {
-            delay(15_000L)
-            screensaverVisible = true
+            delay(25_000L)
+            onScreensaverTriggered()
         }
     }
 
-    Box(
-        modifier.onPreviewKeyEvent { event ->
-            if (screensaverVisible && event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
-                screensaverVisible = false
-                screensaverRevision++
-                true
-            } else false
-        }
-    ) {
+    Box(modifier) {
     Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(
             Modifier.fillMaxWidth(),
@@ -444,18 +437,7 @@ fun RadioScreen(
             }
         }
     }
-        if (screensaverVisible && playing) {
-            selected?.let { station ->
-                RadioNowPlayingScreensaver(
-                    station = station,
-                    onDismiss = {
-                        screensaverVisible = false
-                        screensaverRevision++
-                    }
-                )
-            }
-        }
-    }
+}
 }
 
 @Composable
@@ -492,69 +474,6 @@ fun AudioSpectrumVisualizer(
                     .fillMaxHeight(heightPercent)
                     .background(barColor, RoundedCornerShape(2.dp))
             )
-        }
-    }
-}
-
-@Composable
-private fun RadioNowPlayingScreensaver(
-    station: RadioStation,
-    onDismiss: () -> Unit
-) {
-    val transition = rememberInfiniteTransition(label = "radio-logo-fade")
-    val logoAlpha by transition.animateFloat(
-        initialValue = .32f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2_400),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "radio-logo-alpha"
-    )
-    Box(
-        Modifier.fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(Color(0xFF18344A), Color(0xFF07101D), Color.Black)
-                )
-            )
-            .clickable(onClick = onDismiss)
-    ) {
-        AsyncImage(
-            model = station.logoUrl ?: R.drawable.ic_launcher,
-            contentDescription = station.name,
-            modifier = Modifier.align(Alignment.Center).size(280.dp).alpha(logoAlpha),
-            contentScale = ContentScale.Fit
-        )
-        Surface(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(64.dp),
-            color = Color.Black.copy(alpha = .78f),
-            contentColor = Color.White
-        ) {
-            Row(
-                Modifier.fillMaxSize().padding(horizontal = 28.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AudioSpectrumVisualizer(
-                    isPlaying = true,
-                    modifier = Modifier.width(36.dp).height(24.dp)
-                )
-                Text(
-                    "GLZ RADIO",
-                    Modifier.padding(start = 12.dp),
-                    color = MaterialTheme.colorScheme.secondary,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 12.sp
-                )
-                Text(
-                    "  ·  ${station.name}",
-                    Modifier.weight(1f),
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text("PLAYING", fontWeight = FontWeight.Black, fontSize = 12.sp)
-            }
         }
     }
 }

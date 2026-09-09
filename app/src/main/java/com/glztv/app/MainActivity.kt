@@ -400,6 +400,7 @@ internal fun TvScreen(
         mutableStateOf(prefs.getString(HOME_PREVIEW_CHANNEL_ID, null))
     }
     var radioPlaying by remember { mutableStateOf(false) }
+    var currentRadioStation by remember { mutableStateOf<RadioStation?>(null) }
     var osdTimeoutSeconds by remember {
         mutableStateOf(prefs.getInt(OSD_TIMEOUT_SECONDS, 8))
     }
@@ -903,7 +904,13 @@ internal fun TvScreen(
                             AppSection.Radio -> RadioScreen(
                                 prefs = prefs,
                                 client = client,
-                                onPlayingChanged = { radioPlaying = it },
+                                onPlayingChanged = { isPlaying, station ->
+                                    radioPlaying = isPlaying
+                                    currentRadioStation = station
+                                },
+                                onScreensaverTriggered = {
+                                    showScreensaver = true
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                             AppSection.Weather -> WeatherScreen(
@@ -1039,6 +1046,9 @@ internal fun TvScreen(
             weather = weather,
             guestName = guestName,
             radioPlaying = radioPlaying,
+            radioStationName = currentRadioStation?.name,
+            radioGenre = currentRadioStation?.genre,
+            radioLogoUrl = currentRadioStation?.logoUrl,
             onDismiss = {
                 lastUserInteractionTime = System.currentTimeMillis()
                 showScreensaver = false
