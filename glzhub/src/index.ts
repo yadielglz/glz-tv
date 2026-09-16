@@ -294,7 +294,7 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     "visible_apps", "theme_mode", "weather_location", "start_destination",
     "captions_enabled", "captions_language", "auto_start", "resume_last_channel",
     "osd_timeout_seconds", "auto_update", "wifi_only", "keep_awake_home", "home_preview_channel_id",
-    "custom_connection_label", "custom_isp_name",
+    "custom_connection_label", "custom_isp_name", "sports_bar_kiosk_enabled",
     "room_number", "arrival_date", "departure_date", "site_id", "assigned_playlist_id", "box_group_id"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
@@ -478,6 +478,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     resumeLastChannel: device.resume_last_channel,
     keepAwakeHome: device.keep_awake_home ?? false,
     homePreviewChannelId: device.home_preview_channel_id ?? null,
+    sportsBarKioskEnabled: device.sports_bar_kiosk_enabled ?? false,
     osdTimeoutSeconds: device.osd_timeout_seconds ?? 8,
     autoUpdate: device.auto_update ?? true,
     wifiOnly: device.wifi_only ?? false,
@@ -847,7 +848,7 @@ async function heartbeat(request: Request, env: Env): Promise<Response> {
   const activityType = activity
     ? requiredString(activity.type, "activity type", 20)
     : null;
-  if (activityType && !["idle", "channel", "radio", "app"].includes(activityType)) {
+  if (activityType && !["idle", "channel", "radio", "sports_bar", "app"].includes(activityType)) {
     throw new Error("Invalid activity type");
   }
   const patch: Record<string, unknown> = {

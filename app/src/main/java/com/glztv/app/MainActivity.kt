@@ -217,6 +217,8 @@ private const val CAPTION_LANGUAGE = "captions_language"
 private const val LEGACY_CAPTION_LANGUAGE = "caption_language"
 private const val KEEP_AWAKE_HOME = "keep_awake_home"
 private const val HOME_PREVIEW_CHANNEL_ID = "home_preview_channel_id"
+private const val SPORTS_BAR_KIOSK_CHANNEL_ID = "sports_bar_kiosk_channel_id"
+private const val SPORTS_BAR_KIOSK_RADIO_CODE = "sports_bar_kiosk_radio_code"
 private const val AUTO_UPDATE_CHECK = "auto_update_check"
 private const val WIFI_ONLY_UPDATES = "wifi_only_updates"
 private const val UPDATE_CHANNEL = "update_channel"
@@ -399,6 +401,9 @@ internal fun TvScreen(
     var homePreviewChannelId by remember {
         mutableStateOf(prefs.getString(HOME_PREVIEW_CHANNEL_ID, null))
     }
+    var sportsBarKioskEnabled by remember {
+        mutableStateOf(prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false))
+    }
     var radioPlaying by remember { mutableStateOf(false) }
     var currentRadioStation by remember { mutableStateOf<RadioStation?>(null) }
     var osdTimeoutSeconds by remember {
@@ -427,7 +432,8 @@ internal fun TvScreen(
     var lastUserInteractionTime by remember { mutableStateOf(System.currentTimeMillis()) }
     var lastSpeedTestResult by remember { mutableStateOf<SpeedTestResult?>(null) }
 
-    val keepScreenAwake = radioPlaying || (section == AppSection.Home && keepAwakeAtHome)
+    val keepScreenAwake = radioPlaying || section == AppSection.SportsBarKiosk ||
+        (section == AppSection.Home && keepAwakeAtHome)
     DisposableEffect(keepScreenAwake) {
         val window = (context as? Activity)?.window
         if (keepScreenAwake) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -554,6 +560,7 @@ internal fun TvScreen(
         captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
         keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
         homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
+        sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
         osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
         loadSources(forceRefresh = true) { percent, message -> report(percent, message) }
         val matchedChannels = channels.count { guide.forChannel(it).isNotEmpty() }
@@ -629,15 +636,37 @@ internal fun TvScreen(
         } else {
             loadSources()
         }
+        // Config is durable and versioned; polling it every five seconds creates needless
+        // Hub load. Keep an unclaimed pairing responsive, but otherwise separate the light
+        // heartbeat from the config/command check.
+        var nextConfigSyncAt = System.currentTimeMillis() + 5 * 60_000L
+        var nextHeartbeatAt = System.currentTimeMillis() + 90_000L
+        var nextCommandCheckAt = System.currentTimeMillis() + 30_000L
         while (true) {
-            delay(if (GlzHubManager.pairingCode(prefs) != null) 3_000L else 5_000L)
+            delay(15_000L)
+            val pendingEnrollment = GlzHubManager.pairingCode(prefs) != null
+            val now = System.currentTimeMillis()
+            if (!pendingEnrollment && now >= nextHeartbeatAt) {
+                runCatching { withContext(Dispatchers.IO) { GlzHubManager.heartbeat(prefs, client) } }
+                nextHeartbeatAt = now + 90_000L
+            }
+            if (!pendingEnrollment && now >= nextCommandCheckAt) {
+                runCatching { withContext(Dispatchers.IO) { GlzHubManager.commands(prefs, client) } }
+                    .onSuccess { commands ->
+                        for (command in commands) {
+                            handleManagedHubCommand(context, prefs, client, command) {
+                                loadSources(forceRefresh = true)
+                            }
+                        }
+                    }
+                nextCommandCheckAt = now + 30_000L
+            }
+            if (!pendingEnrollment && now < nextConfigSyncAt) continue
             runCatching {
-                withContext(Dispatchers.IO) {
-                    val result = GlzHubManager.sync(prefs, client)
-                    GlzHubManager.heartbeat(prefs, client)
-                    result
-                }
+                withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
             }.onSuccess { result ->
+                nextConfigSyncAt = now + 5 * 60_000L
+                nextHeartbeatAt = minOf(nextHeartbeatAt, now + 90_000L)
                 for (command in result.commands) {
                     handleManagedHubCommand(context, prefs, client, command) {
                         loadSources(forceRefresh = true)
@@ -662,6 +691,7 @@ internal fun TvScreen(
                     captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
                     keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
                     homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
+                    sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
                     reportHubSync(35, "Configuration received")
                     loadSources(forceRefresh = true) { percent, message ->
                         reportHubSync(percent, message)
@@ -672,6 +702,9 @@ internal fun TvScreen(
                     ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
                     else "Not connected"
             }.onFailure {
+                // Claiming a new pairing needs a quicker retry. Established devices retain
+                // their cached configuration and retry on the normal cadence.
+                nextConfigSyncAt = now + if (pendingEnrollment) 15_000L else 5 * 60_000L
                 hubStatus = "GLZ Hub sync unavailable · using saved settings"
             }
         }
@@ -734,7 +767,14 @@ internal fun TvScreen(
         GlzHubManager.reportActivity(prefs, "channel", it.name)
         prefs.edit().putString(LAST_CHANNEL_ID, it.id).apply()
     }
-    val immersive = section == AppSection.Live && selected != null && playerActive
+    val immersive = (section == AppSection.Live && selected != null && playerActive) ||
+        section == AppSection.SportsBarKiosk
+
+    LaunchedEffect(sportsBarKioskEnabled) {
+        if (!sportsBarKioskEnabled && section == AppSection.SportsBarKiosk) {
+            section = AppSection.Home
+        }
+    }
 
     LaunchedEffect(screensaverTimeoutMinutes, showScreensaver, immersive, radioPlaying, showSettings, showSpeedTestDialog) {
         if (screensaverTimeoutMinutes <= 0) return@LaunchedEffect
@@ -795,7 +835,15 @@ internal fun TvScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(if (immersive) PaddingValues(0.dp) else padding)) {
             if (immersive) {
-                if (multiViewSecondary != null) MultiViewScreen(
+                if (section == AppSection.SportsBarKiosk) {
+                    SportsBarKioskScreen(
+                        channels = ordered,
+                        prefs = prefs,
+                        client = client,
+                        captionLanguage = captionLanguage,
+                        onExit = { section = AppSection.Home }
+                    )
+                } else if (multiViewSecondary != null) MultiViewScreen(
                     primary = selected!!,
                     secondary = multiViewSecondary!!,
                     guide = guide,
@@ -890,6 +938,8 @@ internal fun TvScreen(
                                     section = AppSection.Live
                                     tuneChannel(channel)
                                 },
+                                sportsBarKioskEnabled = sportsBarKioskEnabled,
+                                onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
                                 modifier = Modifier.fillMaxSize()
                             )
                             AppSection.Live -> GuideSection(
@@ -941,6 +991,7 @@ internal fun TvScreen(
                                 experience = guestExperience,
                                 modifier = Modifier.fillMaxSize()
                             )
+                            AppSection.SportsBarKiosk -> Unit
                         }
                         }
                     }
@@ -1307,6 +1358,8 @@ private fun GuestHubHome(
     channels: List<Channel>,
     guide: EpgGuide,
     onWatchChannel: (Channel) -> Unit,
+    sportsBarKioskEnabled: Boolean = false,
+    onStartSportsBarKiosk: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showQuickWatchDrawer by remember { mutableStateOf(false) }
@@ -1629,6 +1682,16 @@ private fun GuestHubHome(
                         onClick = { showAppsDrawer = true },
                         modifier = Modifier.weight(1f)
                     )
+                    if (sportsBarKioskEnabled) {
+                        HomeNavActionButton(
+                            label = "Sports Bar",
+                            icon = Icons.Default.Radio,
+                            isPrimary = false,
+                            accentColor = MaterialTheme.colorScheme.tertiary,
+                            onClick = onStartSportsBarKiosk,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
@@ -4701,6 +4764,170 @@ private const val PLAYBACK_PROGRESS_EPSILON_MS = 250L
 private const val PLAYBACK_STALL_LIMIT_MS = 12_000L
 /** Delay (ms) before re-probing when the last source is also dead. */
 private const val DEAD_SOURCE_REPROBE_MS = 30_000L
+
+@Composable
+private fun SportsBarKioskScreen(
+    channels: List<Channel>,
+    prefs: SharedPreferences,
+    client: OkHttpClient,
+    captionLanguage: String,
+    onExit: () -> Unit
+) {
+    val context = LocalContext.current
+    var selectedChannelId by remember {
+        mutableStateOf(prefs.getString(SPORTS_BAR_KIOSK_CHANNEL_ID, null))
+    }
+    var stations by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
+    var selectedStationCode by remember {
+        mutableStateOf(prefs.getString(SPORTS_BAR_KIOSK_RADIO_CODE, null))
+    }
+    var chooser by remember { mutableStateOf<String?>(null) }
+    var radioStatus by remember { mutableStateOf("Loading GLZ Radio…") }
+    val channel = channels.firstOrNull { it.id == selectedChannelId } ?: channels.firstOrNull()
+    val station = stations.firstOrNull { it.code == selectedStationCode } ?: stations.firstOrNull()
+    val radioFactory = remember {
+        DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-SportsBar/${BuildConfig.VERSION_NAME}")
+    }
+    val radioPlayer = remember {
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(radioFactory))
+            .build()
+            .apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder().setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .setUsage(C.USAGE_MEDIA).build(),
+                    true
+                )
+                setHandleAudioBecomingNoisy(true)
+                setWakeMode(C.WAKE_MODE_LOCAL)
+            }
+    }
+
+    BackHandler(enabled = chooser == null) { onExit() }
+
+    LaunchedEffect(Unit) {
+        runCatching { withContext(Dispatchers.IO) { RadioCatalogManager.load(prefs, client) } }
+            .onSuccess {
+                stations = it.stations
+                radioStatus = if (it.fromCache) "Saved GLZ Radio stations" else "GLZ Radio live"
+            }
+            .onFailure { radioStatus = "GLZ Radio is temporarily unavailable" }
+    }
+    LaunchedEffect(channels, selectedChannelId) {
+        channel?.let {
+            if (it.id != selectedChannelId) selectedChannelId = it.id
+            prefs.edit().putString(SPORTS_BAR_KIOSK_CHANNEL_ID, it.id).apply()
+            GlzHubManager.reportActivity(prefs, "sports_bar", it.name)
+        }
+    }
+    LaunchedEffect(station?.code) {
+        val activeStation = station ?: return@LaunchedEffect
+        if (activeStation.code != selectedStationCode) selectedStationCode = activeStation.code
+        prefs.edit().putString(SPORTS_BAR_KIOSK_RADIO_CODE, activeStation.code).apply()
+        radioFactory.setDefaultRequestProperties(activeStation.requestHeaders)
+        radioPlayer.setMediaItem(
+            MediaItem.Builder().setUri(activeStation.streamUrl)
+                .setMediaMetadata(
+                    MediaMetadata.Builder().setTitle(activeStation.name)
+                        .setArtist(activeStation.genre).build()
+                ).build()
+        )
+        radioPlayer.prepare()
+        radioPlayer.play()
+    }
+    DisposableEffect(radioPlayer) {
+        onDispose {
+            radioPlayer.release()
+            GlzHubManager.reportActivity(prefs, "idle")
+        }
+    }
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black)
+            .onPreviewKeyEvent { event ->
+                if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+                when (event.nativeKeyEvent.keyCode) {
+                    KeyEvent.KEYCODE_MENU -> { chooser = "channel"; true }
+                    else -> false
+                }
+            }
+    ) {
+        channel?.let {
+            VideoPlayer(
+                channel = it,
+                captionsEnabled = false,
+                captionLanguage = captionLanguage,
+                modifier = Modifier.fillMaxSize(),
+                muted = true,
+                createMediaSession = false,
+                cropVideo = true
+            )
+        } ?: Surface(Modifier.align(Alignment.Center), color = Color.Black.copy(alpha = .72f)) {
+            Text("No TV channels are available", Modifier.padding(24.dp), color = Color.White)
+        }
+
+        Surface(
+            modifier = Modifier.align(Alignment.TopStart).padding(22.dp),
+            color = Color.Black.copy(alpha = .68f),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 11.dp)) {
+                Text("SPORTS BAR", color = Color(0xFFC4FF4D), fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp)
+                Text("TV is muted · GLZ Radio is playing", color = Color.White.copy(alpha = .88f),
+                    style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(24.dp).focusGroup(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            TvOptionButton("TV: ${channel?.name ?: "Choose channel"}", onClick = { chooser = "channel" })
+            TvOptionButton("RADIO: ${station?.name ?: radioStatus}", onClick = { chooser = "radio" })
+            TvOptionButton("Exit", onClick = onExit)
+        }
+
+        chooser?.let { type ->
+            BackHandler { chooser = null }
+            Surface(
+                modifier = Modifier.align(Alignment.Center).fillMaxWidth(.82f).fillMaxHeight(.78f),
+                color = Color(0xF20B1114), contentColor = Color.White,
+                shape = RoundedCornerShape(24.dp), tonalElevation = 18.dp
+            ) {
+                Column(Modifier.fillMaxSize().padding(22.dp)) {
+                    Text(
+                        if (type == "channel") "Choose background channel" else "Choose GLZ Radio station",
+                        fontSize = 24.sp, fontWeight = FontWeight.Black
+                    )
+                    Text("Changes stay on this TV", color = Color.White.copy(alpha = .65f),
+                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (type == "channel") {
+                            items(channels, key = { it.id }) { item ->
+                                TvOptionButton(
+                                    "${item.number.takeIf { it.isNotBlank() }?.plus(" · ").orEmpty()}${item.name}",
+                                    onClick = { selectedChannelId = item.id; chooser = null },
+                                    selected = item.id == channel?.id,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        } else {
+                            items(stations, key = { it.code }) { item ->
+                                TvOptionButton(
+                                    item.name,
+                                    onClick = { selectedStationCode = item.code; chooser = null },
+                                    selected = item.code == station?.code,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                    TvOptionButton("Close", onClick = { chooser = null }, modifier = Modifier.align(Alignment.End))
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun VideoPlayer(

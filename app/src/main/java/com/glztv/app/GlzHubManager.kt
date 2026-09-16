@@ -21,6 +21,7 @@ object GlzHubManager {
     const val VISIBLE_APPS_MANAGED = "hub_visible_apps_managed"
     const val GUEST_EXPERIENCE = "hub_guest_experience"
     const val APP_LANGUAGE = "app_language"
+    const val SPORTS_BAR_KIOSK_ENABLED = "sports_bar_kiosk_enabled"
     private const val ACTIVITY_TYPE = "hub_activity_type"
     private const val ACTIVITY_LABEL = "hub_activity_label"
     private const val ACTIVITY_PACKAGE = "hub_activity_package"
@@ -231,6 +232,9 @@ object GlzHubManager {
         if (config.has("captionsEnabled")) editor.putBoolean("captions_enabled", config.optBoolean("captionsEnabled"))
         config.stringOrNull("captionsLanguage")?.let { editor.putString("captions_language", it) }
         if (config.has("keepAwakeHome")) editor.putBoolean("keep_awake_home", config.optBoolean("keepAwakeHome"))
+        if (config.has("sportsBarKioskEnabled")) {
+            editor.putBoolean(SPORTS_BAR_KIOSK_ENABLED, config.optBoolean("sportsBarKioskEnabled"))
+        }
         if (config.has("homePreviewChannelId")) {
             if (config.isNull("homePreviewChannelId")) editor.remove("home_preview_channel_id")
             else editor.putString("home_preview_channel_id", config.optString("homePreviewChannelId"))

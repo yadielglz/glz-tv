@@ -584,6 +584,7 @@ async function openDevice(id) {
   $("#autoStart").checked = Boolean(device.auto_start);
   $("#resumeLastChannel").checked = device.resume_last_channel !== false;
   $("#keepAwakeHome").checked = Boolean(device.keep_awake_home);
+  $("#sportsBarKioskEnabled").checked = Boolean(device.sports_bar_kiosk_enabled);
   $("#autoUpdate").checked = device.auto_update !== false;
   $("#wifiOnly").checked = Boolean(device.wifi_only);
   const enabledApps = new Set(
@@ -870,6 +871,7 @@ async function saveDeviceSettings(syncToTv = true) {
         auto_start: $("#autoStart").checked,
         resume_last_channel: $("#resumeLastChannel").checked,
         keep_awake_home: $("#keepAwakeHome").checked,
+        sports_bar_kiosk_enabled: $("#sportsBarKioskEnabled").checked,
         auto_update: $("#autoUpdate").checked,
         wifi_only: $("#wifiOnly").checked,
         visible_apps: $$("#visibleApps input:checked").map((input) => input.value),
