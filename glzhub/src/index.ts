@@ -1500,6 +1500,7 @@ async function checkEventChannelsHealth(request: Request, env: Env): Promise<Res
     }));
   }
 
+  await pushConfigUpdateToAllDevices(env);
   return json({ ok: true, checkedCount: rows.length, onlineCount, offlineCount });
 }
 
@@ -2088,6 +2089,7 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
     const renumbered = assignCategoryChannelNumbers(deduplicated);
 
     const result = await saveIngestedEventChannels(env, renumbered);
+    await pushConfigUpdateToAllDevices(env);
     return json({ ok: true, ingestedCount: deduplicated.length, events: result });
   } catch (err) {
     return json({ ok: false, error: (err as Error).message }, 400);
@@ -2374,6 +2376,38 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   return env.ASSETS.fetch(request);
 }
 
+async function pushConfigUpdateToAllDevices(env: Env): Promise<number> {
+  try {
+    const devices = await supabaseJson(env,
+      "/rest/v1/devices?select=id,owner_id,config_version"
+    ).catch(() => null) as Record<string, unknown>[] | null;
+
+    if (!Array.isArray(devices) || devices.length === 0) return 0;
+
+    const token = crypto.randomUUID();
+    const pushedAt = new Date().toISOString();
+
+    await Promise.all(devices.map((device) =>
+      supabaseJson(env, `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          config_version: Number(device.config_version || 0) + 1,
+          force_refresh_token: token,
+          sync_status: "queued",
+          sync_progress: 0,
+          sync_message: "Auto-syncing live event guide",
+          sync_updated_at: pushedAt
+        })
+      }).catch(() => undefined)
+    ));
+
+    return devices.length;
+  } catch (err) {
+    console.error("Failed to push config update to devices:", err);
+    return 0;
+  }
+}
+
 async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: number; online: number; offline: number }> {
   let ingested = 0;
   try {
@@ -2431,6 +2465,9 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
   } catch (err) {
     console.error("Auto health check background error:", err);
   }
+
+  // Push updated config token to all registered TV devices
+  await pushConfigUpdateToAllDevices(env);
 
   return { ingested, online, offline };
 }
