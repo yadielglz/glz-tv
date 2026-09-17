@@ -1535,7 +1535,14 @@ function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now())
   const title = String(event.title || "").toUpperCase();
   const group = String(event.group_title || "").toUpperCase();
   const tvgId = String(event.tvg_id || "").toUpperCase();
-  const fullText = `${title} ${group} ${tvgId}`;
+  const sportLeague = String(event.sport_league || "").toUpperCase();
+  const fullText = `${sportLeague} ${title} ${group} ${tvgId}`;
+
+  // Strictly target MLB & NFL ONLY!
+  const isMlbOrNfl = /\b(MLB|NFL)\b/i.test(fullText) ||
+                     /^(MLB|NFL):/i.test(title) ||
+                     /\b(BASEBALL|FOOTBALL)\b/i.test(fullText);
+  if (!isMlbOrNfl) return false;
 
   // Check offline / placeholder / German feed keywords
   const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(group) ||
@@ -1832,17 +1839,17 @@ function isLiveEventChannel(groupTitle: string, title: string, tvgId: string): b
   const isPlaceholder = /\b(WILL START SOON|OFFLINE|OFF-LINE|NO EVENT|STREAM UNAVAILABLE|TEST|EMPTY|FEED OFFLINE|STANDBY|CHANNEL UNAVAILABLE|TEMPORARILY OFFLINE|NOT AVAILABLE|NO BROADCAST|NO SIGNAL|STREAM DOWN|OFF AIR|SIGN OFF|CHANNEL OFFLINE|STREAMING SOON|EVENT ENDED|FEED DOWN|TBD)\b/i.test(fullText);
   if (isPlaceholder) return false;
 
-  // 3. Target major sports & leagues: MLB, NBA, NFL, College Football (SEC, Big10, ACC, CFB), UFC/MMA/Boxing, Tennis
-  const isTargetLeague = /\b(MLB|NFL|NBA|MLS|NHL|UFC|MMA|PFL|WWE|BOXING|NCAA|SEC|BIG10|BIG\s*10|BIG12|BIG\s*12|ACC|PAC-12|CFB|COLLEGE\s*FOOTBALL|TENNIS|ATP|WTA|WIMBLEDON|US\s*OPEN)\b/i.test(fullText);
+  // 3. Strictly target MLB & NFL ONLY!
+  const isMlbOrNfl = /\b(MLB|NFL)\b/i.test(fullText) ||
+                     /^(MLB|NFL):/i.test(titleUpper) ||
+                     /\b(BASEBALL|FOOTBALL)\b/i.test(fullText);
+  if (!isMlbOrNfl) return false;
 
   // 4. Match explicit Event/PPV groups or matchup patterns (vs / @)
   const isEventGroup = groupUpper.includes("EVENTS") || groupUpper.includes("PPV") || groupUpper.includes("SPORTS");
   const containsMatchup = /\b(vs\.?|@)\b/i.test(titleUpper) || /\b(vs\.?|@)\b/i.test(tvgIdUpper);
 
-  if (isTargetLeague && (containsMatchup || isEventGroup)) return true;
-  if (containsMatchup && isEventGroup) return true;
-
-  return false;
+  return containsMatchup || isEventGroup;
 }
 
 function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
