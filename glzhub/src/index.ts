@@ -1514,9 +1514,22 @@ function escapeXml(value: unknown): string {
     .trim();
 }
 
-function isOfflineOrPlaceholderChannel(event: Record<string, unknown>): boolean {
-  if (event.is_online === false || String(event.is_online) === "false") return true;
-  if (String(event.status) === "disabled" || String(event.status) === "expired") return true;
+function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now()): boolean {
+  if (event.is_online === false || String(event.is_online) === "false") return false;
+  const status = String(event.status || "active");
+  if (status === "disabled" || status === "expired") return false;
+
+  const startTime = new Date(String(event.start_time)).getTime();
+  const endTime = new Date(String(event.end_time)).getTime();
+  if (!isNaN(startTime) && !isNaN(endTime)) {
+    const preBuffer = (Number(event.pre_buffer_hours) || 1) * 3600_000;
+    const postBuffer = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
+    const winStart = startTime - preBuffer;
+    const winEnd = endTime + postBuffer;
+    if (now < winStart || now > winEnd) {
+      return false; // Event has ended or is outside active window
+    }
+  }
 
   const title = String(event.title || "").toUpperCase();
   const group = String(event.group_title || "").toUpperCase();
@@ -1528,12 +1541,12 @@ function isOfflineOrPlaceholderChannel(event: Record<string, unknown>): boolean 
                    /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(tvgId) ||
                    /^(DE|GER):/i.test(title) ||
                    /\[DE\]|\(DE\)|\|DE\|/i.test(fullText);
-  if (isGerman) return true;
+  if (isGerman) return false;
 
   const isPlaceholder = /\b(WILL START SOON|OFFLINE|OFF-LINE|NO EVENT|STREAM UNAVAILABLE|TEST|EMPTY|FEED OFFLINE|STANDBY|CHANNEL UNAVAILABLE|TEMPORARILY OFFLINE|NOT AVAILABLE|NO BROADCAST|NO SIGNAL|STREAM DOWN|OFF AIR|SIGN OFF|CHANNEL OFFLINE|STREAMING SOON|EVENT ENDED|FEED DOWN|TBD)\b/i.test(fullText);
-  if (isPlaceholder) return true;
+  if (isPlaceholder) return false;
 
-  return false;
+  return true;
 }
 
 async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<string> {
@@ -1549,9 +1562,10 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
   let channelNodes = "";
   let programmeNodes = "";
   let index = 1;
+  const now = Date.now();
 
   for (const event of sortedEvents) {
-    if (isOfflineOrPlaceholderChannel(event)) continue;
+    if (!isEventActiveAndValid(event, now)) continue;
 
     const tvgId = escapeXml(String(event.tvg_id || `event.channel.${index}`));
     const channelNumber = escapeXml(String(event.channel_number || `30-${String(index).padStart(2, "0")}`));
@@ -2224,13 +2238,8 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
     const now = Date.now();
     let activeIndex = 1;
     for (const event of sortedEvents) {
-      if (isOfflineOrPlaceholderChannel(event)) continue;
-      const startTime = new Date(String(event.start_time)).getTime();
-      const endTime = new Date(String(event.end_time)).getTime();
-      const preBuffer = (Number(event.pre_buffer_hours) || 1) * 3600_000;
-      const postBuffer = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
-      if (now >= (startTime - preBuffer) && now <= (endTime + postBuffer)) {
-        const channelDisplayName = "SPORTS PPV";
+      if (!isEventActiveAndValid(event, now)) continue;
+      const channelDisplayName = "SPORTS PPV";
         const mediaUrl = String(event.stream_url || "");
         const tvgId = event.tvg_id ? ` tvg-id="${cleanAttribute(event.tvg_id)}"` : "";
         const tvgName = ` tvg-name="SPORTS PPV"`;
@@ -2240,7 +2249,6 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
         const channelGroup = cleanAttribute(event.group_title || "Major League Sports (Events)");
         m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
         activeIndex++;
-      }
     }
   }
 
