@@ -31,6 +31,7 @@ fun createPermissiveOkHttpClient(): OkHttpClient {
             .hostnameVerifier(HostnameVerifier { _, _ -> true })
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
+            .callTimeout(45, TimeUnit.SECONDS)
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
