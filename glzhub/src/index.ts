@@ -1881,11 +1881,61 @@ function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
     pendingExtInf = null;
   }
 
-  events.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-  return events.map((item, index) => ({
-    ...item,
-    channelNumber: `30-${String(index + 1).padStart(2, "0")}`
-  }));
+  return assignCategoryChannelNumbers(events);
+}
+
+function getChannelPrefix(sportLeague: string, title: string, groupTitle: string, tvgId: string): "31" | "30" | "29" {
+  const fullText = `${sportLeague} ${title} ${groupTitle} ${tvgId}`.toUpperCase();
+
+  // Tier 1: MLB Events -> 31-XX
+  if (sportLeague === "MLB" || /\b(MLB|BASEBALL)\b/i.test(fullText)) {
+    return "31";
+  }
+
+  // Tier 2: NBA Events and other US Major Sports -> 30-XX
+  const isUSMajor = /\b(NBA|NFL|NCAA|SEC|BIG10|BIG\s*10|BIG12|ACC|CFB|COLLEGE\s*FOOTBALL|MLS|NHL|UFC|MMA|PFL|WWE|BOXING|TENNIS|ATP|WTA|WIMBLEDON|US\s*OPEN)\b/i.test(fullText);
+  if (isUSMajor || ["NBA", "NFL", "NCAA", "UFC", "TENNIS", "MLS", "NHL"].includes(sportLeague)) {
+    return "30";
+  }
+
+  // Tier 3: All other events / General PPV -> 29-XX
+  return "29";
+}
+
+function assignCategoryChannelNumbers(events: ParsedEventChannel[]): ParsedEventChannel[] {
+  const mlbEvents: ParsedEventChannel[] = [];
+  const usMajorEvents: ParsedEventChannel[] = [];
+  const ppvEvents: ParsedEventChannel[] = [];
+
+  for (const item of events) {
+    const prefix = getChannelPrefix(item.sportLeague, item.title, item.groupTitle, item.tvgId);
+    if (prefix === "31") {
+      mlbEvents.push(item);
+    } else if (prefix === "30") {
+      usMajorEvents.push(item);
+    } else {
+      ppvEvents.push(item);
+    }
+  }
+
+  const result: ParsedEventChannel[] = [];
+
+  mlbEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  mlbEvents.forEach((item, idx) => {
+    result.push({ ...item, channelNumber: `31-${String(idx + 1).padStart(2, "0")}` });
+  });
+
+  usMajorEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  usMajorEvents.forEach((item, idx) => {
+    result.push({ ...item, channelNumber: `30-${String(idx + 1).padStart(2, "0")}` });
+  });
+
+  ppvEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  ppvEvents.forEach((item, idx) => {
+    result.push({ ...item, channelNumber: `29-${String(idx + 1).padStart(2, "0")}` });
+  });
+
+  return sortEventChannels(result);
 }
 
 async function listEventChannels(request: Request, env: Env): Promise<Response> {
@@ -1999,10 +2049,7 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
       }
     }
     const deduplicated = sortEventChannels(Array.from(uniqueMap.values()));
-    const renumbered = deduplicated.map((item, idx) => ({
-      ...item,
-      channelNumber: `30-${String(idx + 1).padStart(2, "0")}`
-    }));
+    const renumbered = assignCategoryChannelNumbers(deduplicated);
 
     const result = await saveIngestedEventChannels(env, renumbered);
     return json({ ok: true, ingestedCount: deduplicated.length, events: result });
@@ -2020,7 +2067,8 @@ async function createEventChannel(request: Request, env: Env): Promise<Response>
   const sportLeague = optionalString(input.sportLeague, "sportLeague", 40) || "SPORTS";
   const groupTitle = optionalString(input.groupTitle, "groupTitle", 120) || "Major League Sports (Events)";
   const logoUrl = optionalString(input.logoUrl, "logoUrl", 2048);
-  const channelNumber = optionalString(input.channelNumber, "channelNumber", 20) || "30-01";
+  const defaultPrefix = getChannelPrefix(sportLeague, title, groupTitle, tvgId);
+  const channelNumber = optionalString(input.channelNumber, "channelNumber", 20) || `${defaultPrefix}-01`;
   const startTime = optionalString(input.startTime, "startTime", 60) || new Date().toISOString();
   const endTime = optionalString(input.endTime, "endTime", 60) || new Date(Date.now() + 4 * 3600_000).toISOString();
   const preBufferHours = Number(input.preBufferHours || 1);
@@ -2314,10 +2362,7 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
           if (!uniqueMap.has(item.tvgId)) uniqueMap.set(item.tvgId, item);
         }
         const deduplicated = sortEventChannels(Array.from(uniqueMap.values()));
-        const renumbered = deduplicated.map((item, idx) => ({
-          ...item,
-          channelNumber: `30-${String(idx + 1).padStart(2, "0")}`
-        }));
+        const renumbered = assignCategoryChannelNumbers(deduplicated);
         await saveIngestedEventChannels(env, renumbered).catch((err) => console.error("Auto-ingest save error:", err));
         ingested = deduplicated.length;
       }
