@@ -97,4 +97,72 @@ class EpgParserTest {
         val channel = Channel("test", "Test", "TV", "1", "", "https://example.com/live.m3u8", emptyMap())
         assertEquals("Iso Program", guide.forChannel(channel).single().title)
     }
+
+    @Test
+    fun handlesUnescapedAmpersandsAndInvalidEntities() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tv>
+              <channel id="atnt">
+                <display-name>AT&T Sports &amp; More</display-name>
+              </channel>
+              <programme channel="atnt" start="20260729180000 +0000" stop="20260729190000 +0000">
+                <title>R&B &nbsp; &#0; Concert</title>
+                <desc>Details &lt;here&gt;</desc>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        val guide = EpgParser.parse(xml)
+        val channel = Channel("atnt", "AT&T Sports & More", "TV", "1", "", "", emptyMap())
+        val progs = guide.forChannel(channel)
+        assertEquals(1, progs.size)
+        assertTrue(progs.single().title.contains("R&B"))
+    }
+
+    @Test
+    fun handlesUnescapedLessThanSign() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tv>
+              <channel id="score">
+                <display-name>Score < 5</display-name>
+              </channel>
+              <programme channel="score" start="20260729180000 +0000" stop="20260729190000 +0000">
+                <title>Game 1 < Game 2</title>
+                <desc>Test</desc>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        val guide = EpgParser.parse(xml)
+        val channel = Channel("score", "Score < 5", "TV", "1", "", "", emptyMap())
+        val progs = guide.forChannel(channel)
+        assertEquals(1, progs.size)
+        assertTrue(progs.single().title.contains("Game 1"))
+    }
+
+    @Test
+    fun testMatchesChannelWithNumberPrefixAndMultipleDisplayNames() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tv>
+              <channel id="WKAQ.us">
+                <display-name>WKAQ: TELEMUNDO</display-name>
+                <display-name>Telemundo PR</display-name>
+                <display-name>2</display-name>
+              </channel>
+              <programme channel="WKAQ.us" start="20260729180000 +0000" stop="20260729190000 +0000">
+                <title>Telenoticias</title>
+                <desc>News</desc>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        val guide = EpgParser.parse(xml)
+        val channelWithPrefix = Channel("other_id", "2 · WKAQ: TELEMUNDO", "TV", "2", "", "", emptyMap())
+        val progs = guide.forChannel(channelWithPrefix)
+        assertEquals(1, progs.size)
+        assertEquals("Telenoticias", progs.single().title)
+    }
 }

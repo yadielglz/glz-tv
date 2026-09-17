@@ -48,6 +48,7 @@
         <button class="nav" data-view="sites">⌂ <span>Properties</span></button>
         <button class="nav" data-view="experience">✦ <span>Guest experience</span></button>
         <button class="nav" data-view="radio">🎙️ <span>Radio streams</span></button>
+        <button class="nav" data-view="events">⚡ <span>Live events</span></button>
         <button class="nav" data-view="studio">🎬 <span>TV playlists</span></button>
         <button class="nav" data-view="epg">▤ <span>EPG Studio</span></button>
         <button class="nav" data-view="apps">⬡ <span>App library</span></button>
@@ -714,9 +715,110 @@
             <p id="pairError" class="error"></p>
           </form>
         </section>
+
+        <!-- Live Event Channels & Temporary Schedule View -->
+        <section id="eventsView" class="panel hidden">
+          <div class="editor-header">
+            <div>
+              <div class="eyebrow">LIVE EVENT CHANNELS &amp; TEMPORARY SCHEDULE</div>
+              <h2>Temporary Live Event Channels</h2>
+              <p class="field-help">Auto-syncs live event streams from your provider (<code>starlite.best</code>). Schedules game active windows (game start ± 3h buffer) and injects XMLTV EPG data.</p>
+            </div>
+            <div class="header-actions">
+              <button id="syncConMeFeedBtn" type="button" class="primary">⚡ <span>Sync Provider Feed</span></button>
+              <button id="checkStreamHealthBtn" type="button" class="secondary">🩺 <span>Check Stream Health</span></button>
+              <button id="addEventChannelBtn" type="button" class="secondary">＋ <span>Add Custom Event</span></button>
+            </div>
+          </div>
+
+          <div class="stats" style="margin-bottom: 20px;">
+            <article class="stat-card">
+              <div class="stat-meta">
+                <span>Total Live Events</span>
+                <strong id="eventCount">0</strong>
+              </div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-meta">
+                <span>Active on TVs Now</span>
+                <strong id="activeEventCount" class="text-emerald">0</strong>
+              </div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-meta">
+                <span>Provider Source</span>
+                <strong style="font-size: 13px;">starlite.best/api/list/mygbb8</strong>
+              </div>
+            </article>
+          </div>
+
+          <div class="device-toolbar">
+            <div class="search-wrap">
+              <input id="eventSearchInput" type="search" placeholder="⌕ Search live events by title, team, league (MLB, NFL, NBA, MLS, UFC)…" autocomplete="off">
+            </div>
+          </div>
+
+          <div id="eventsList" class="management-list"></div>
+          <div id="eventsEmpty" class="empty hidden">
+            <div class="empty-icon">⚡</div>
+            <h3>No Live Events Scheduled</h3>
+            <p>Click "Sync Provider Feed" to automatically discover live MLB, NFL, NBA, MLS, and UFC game channels from your provider.</p>
+            <button type="button" class="primary" id="syncEventsEmptyBtn">⚡ Sync Provider Feed</button>
+          </div>
+        </section>
       </section>
     </main>
   </div>
+
+  <!-- Event Channel Dialog -->
+  <dialog id="eventDialog" style="max-width: 740px; width: 92vw;">
+    <form id="eventForm">
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">EVENT CHANNEL SCHEDULER</div>
+          <h3 id="eventDialogTitle">Edit Event Channel</h3>
+        </div>
+        <button class="icon-button" type="button" data-close-event>✕</button>
+      </div>
+      <input id="eventId" type="hidden">
+      <div class="form-grid">
+        <label class="wide">Event Title &amp; Matchup<input id="eventTitle" required maxlength="180" placeholder="e.g. MLB | Athletics @ Tampa Bay Rays"></label>
+        <label>League / Category
+          <select id="eventSportLeague">
+            <option value="MLB">MLB (Baseball)</option>
+            <option value="NFL">NFL (Football)</option>
+            <option value="NBA">NBA (Basketball)</option>
+            <option value="MLS">MLS (Soccer)</option>
+            <option value="UFC">UFC / Combat Sports</option>
+            <option value="NHL">NHL (Hockey)</option>
+            <option value="SPORTS">Other Sports</option>
+          </select>
+        </label>
+        <label>Group Title<input id="eventGroupTitle" required maxlength="120" value="Major League Sports (Events)"></label>
+        <label>Channel Number<input id="eventChannelNumber" required maxlength="20" value="30-01" placeholder="e.g. 30-01"></label>
+        <label class="wide">Stream URL (HLS / m3u8)<input id="eventStreamUrl" type="url" required placeholder="https://starlite.best/api/stream/..."></label>
+        <label class="wide">Logo URL (optional)<input id="eventLogoUrl" type="url" placeholder="https://media.starlite.best/...png"></label>
+        <label>Game Start Time (UTC / Local)<input id="eventStartTime" type="datetime-local" required></label>
+        <label>Game End Time (UTC / Local)<input id="eventEndTime" type="datetime-local" required></label>
+        <label>Pre-Game Buffer (Hours)<input id="eventPreBuffer" type="number" value="3" min="0" max="24"></label>
+        <label>Post-Game Buffer (Hours)<input id="eventPostBuffer" type="number" value="3" min="0" max="24"></label>
+        <label class="wide">Status
+          <select id="eventStatus">
+            <option value="active">Active (Shows on TVs during window)</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="disabled">Disabled / Hidden</option>
+            <option value="expired">Expired</option>
+          </select>
+        </label>
+      </div>
+      <p id="eventError" class="error"></p>
+      <div class="form-actions">
+        <button id="deleteEventBtn" type="button" class="danger-button hidden" style="margin-right: auto;">Delete Event</button>
+        <button type="button" class="secondary" data-close-event>Cancel</button>
+        <button class="primary" type="submit">Save Event Schedule</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Box Group Dialog -->
   <dialog id="boxGroupDialog" style="max-width: 780px; width: 92vw;">

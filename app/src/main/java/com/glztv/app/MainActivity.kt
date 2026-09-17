@@ -4802,6 +4802,7 @@ private fun SportsBarKioskScreen(
                 setWakeMode(C.WAKE_MODE_LOCAL)
             }
     }
+    val chooserFocusRequester = remember { FocusRequester() }
 
     BackHandler(enabled = chooser == null) { onExit() }
 
@@ -4820,10 +4821,11 @@ private fun SportsBarKioskScreen(
             GlzHubManager.reportActivity(prefs, "sports_bar", it.name)
         }
     }
-    LaunchedEffect(station?.code) {
+    LaunchedEffect(station?.code, station?.streamUrl) {
         val activeStation = station ?: return@LaunchedEffect
         if (activeStation.code != selectedStationCode) selectedStationCode = activeStation.code
         prefs.edit().putString(SPORTS_BAR_KIOSK_RADIO_CODE, activeStation.code).apply()
+        radioPlayer.stop()
         radioFactory.setDefaultRequestProperties(activeStation.requestHeaders)
         radioPlayer.setMediaItem(
             MediaItem.Builder().setUri(activeStation.streamUrl)
@@ -4834,6 +4836,11 @@ private fun SportsBarKioskScreen(
         )
         radioPlayer.prepare()
         radioPlayer.play()
+    }
+    LaunchedEffect(chooser) {
+        if (chooser != null) {
+            chooserFocusRequester.requestFocus()
+        }
     }
     DisposableEffect(radioPlayer) {
         onDispose {
@@ -4882,9 +4889,15 @@ private fun SportsBarKioskScreen(
             Modifier.align(Alignment.BottomCenter).padding(24.dp).focusGroup(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            TvOptionButton("TV: ${channel?.name ?: "Choose channel"}", onClick = { chooser = "channel" })
-            TvOptionButton("RADIO: ${station?.name ?: radioStatus}", onClick = { chooser = "radio" })
-            TvOptionButton("Exit", onClick = onExit)
+            TvOptionButton(
+                "TV: ${channel?.name ?: "Choose channel"}",
+                onClick = { if (chooser == null) chooser = "channel" }
+            )
+            TvOptionButton(
+                "RADIO: ${station?.name ?: radioStatus}",
+                onClick = { if (chooser == null) chooser = "radio" }
+            )
+            TvOptionButton("Exit", onClick = { if (chooser == null) onExit() })
         }
 
         chooser?.let { type ->
@@ -4903,21 +4916,31 @@ private fun SportsBarKioskScreen(
                         modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (type == "channel") {
-                            items(channels, key = { it.id }) { item ->
+                            itemsIndexed(
+                                channels,
+                                key = { index, item -> "${item.id.ifBlank { "chan" }}_$index" }
+                            ) { index, item ->
                                 TvOptionButton(
                                     "${item.number.takeIf { it.isNotBlank() }?.plus(" · ").orEmpty()}${item.name}",
                                     onClick = { selectedChannelId = item.id; chooser = null },
                                     selected = item.id == channel?.id,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(if (index == 0) Modifier.focusRequester(chooserFocusRequester) else Modifier)
                                 )
                             }
                         } else {
-                            items(stations, key = { it.code }) { item ->
+                            itemsIndexed(
+                                stations,
+                                key = { index, item -> "${item.code.ifBlank { "stat" }}_$index" }
+                            ) { index, item ->
                                 TvOptionButton(
                                     item.name,
                                     onClick = { selectedStationCode = item.code; chooser = null },
                                     selected = item.code == station?.code,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(if (index == 0) Modifier.focusRequester(chooserFocusRequester) else Modifier)
                                 )
                             }
                         }

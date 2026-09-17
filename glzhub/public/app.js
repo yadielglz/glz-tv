@@ -97,6 +97,7 @@ function showView(name) {
   $("#appsView").classList.toggle("hidden", name !== "apps");
   $("#experienceView").classList.toggle("hidden", name !== "experience");
   $("#radioView").classList.toggle("hidden", name !== "radio");
+  $("#eventsView")?.classList.toggle("hidden", name !== "events");
   $("#studioView").classList.toggle("hidden", name !== "studio");
   $("#epgView").classList.toggle("hidden", name !== "epg");
   $("#pairView").classList.toggle("hidden", name !== "pair");
@@ -104,10 +105,12 @@ function showView(name) {
   $("#pageTitle").textContent = name === "pair" ? "Pair a television" :
     name === "apps" ? "App management" : name === "groups" ? "Box Groups" : name === "sites" ? "Properties" :
       name === "experience" ? "Guest experience" : name === "radio" ? "Radio Streams" :
-        name === "studio" ? "Playlist Studio" : name === "epg" ? "EPG Studio" : "Your TVs";
+        name === "events" ? "Live Event Channels" :
+          name === "studio" ? "Playlist Studio" : name === "epg" ? "EPG Studio" : "Your TVs";
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === (name === "device-editor" ? "devices" : name)));
   if (name === "pair") loadPairingRequests();
   if (name === "radio") loadRadioStations();
+  if (name === "events") loadEventChannels();
   if (name === "studio") loadPlaylists();
   if (name === "epg") openEpgStudio();
   if (name === "groups") loadBoxGroups();
@@ -2536,3 +2539,227 @@ $("#epgProgrammeForm")?.addEventListener("submit", (event) => {
   $("#epgProgrammeDialog").close(); markEpgDirty();
 });
 $("#epgDeleteProgramme")?.addEventListener("click", () => { const node = [...epgState.doc.querySelectorAll("programme")][Number($("#epgProgrammeIndex").value)]; if (!node || !confirm("Delete this programme?")) return; node.remove(); $("#epgProgrammeDialog").close(); markEpgDirty(); });
+
+// Event Channels UI logic
+let eventSearchQuery = "";
+$("#eventSearchInput")?.addEventListener("input", (e) => {
+  eventSearchQuery = e.target.value.trim().toLowerCase();
+  renderEventChannels();
+});
+
+async function loadEventChannels() {
+  try {
+    const data = await api("/api/v1/admin/event-channels");
+    state.events = data.events || [];
+    renderEventChannels();
+  } catch (error) {
+    showToast(`Failed to load event channels: ${error.message}`, "error");
+  }
+}
+
+function isEventActive(event) {
+  if (event.status === "disabled" || event.status === "expired") return false;
+  const start = new Date(event.start_time).getTime();
+  const end = new Date(event.end_time).getTime();
+  const preBuffer = (Number(event.pre_buffer_hours) || 3) * 3600_000;
+  const postBuffer = (Number(event.post_buffer_hours) || 3) * 3600_000;
+  const now = Date.now();
+  return now >= (start - preBuffer) && now <= (end + postBuffer);
+}
+
+function renderEventChannels() {
+  const container = $("#eventsList");
+  if (!container) return;
+
+  const query = eventSearchQuery.toLowerCase();
+  const filtered = (state.events || []).filter((event) => {
+    if (!query) return true;
+    const searchStr = `${event.title} ${event.sport_league} ${event.tvg_id} ${event.group_title}`.toLowerCase();
+    return searchStr.includes(query);
+  });
+
+  const activeCount = (state.events || []).filter(isEventActive).length;
+  if ($("#eventCount")) $("#eventCount").textContent = state.events.length;
+  if ($("#activeEventCount")) $("#activeEventCount").textContent = activeCount;
+
+  if ($("#eventsEmpty")) $("#eventsEmpty").classList.toggle("hidden", state.events.length > 0);
+  if (!filtered.length && state.events.length > 0) {
+    container.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:30px;">No live events match "${escapeHtml(eventSearchQuery)}".</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map((event) => {
+    const active = isEventActive(event);
+    const startDate = new Date(event.start_time);
+    const endDate = new Date(event.end_time);
+
+    let statusBadge = `<span class="policy-badge allow">ACTIVE ON TVs</span>`;
+    if (event.status === "disabled") {
+      statusBadge = `<span class="policy-badge block">DISABLED</span>`;
+    } else if (event.status === "expired" || Date.now() > endDate.getTime() + (event.post_buffer_hours * 3600_000)) {
+      statusBadge = `<span class="meta-pill">EXPIRED</span>`;
+    } else if (!active) {
+      statusBadge = `<span class="meta-pill">SCHEDULED</span>`;
+    }
+
+    const healthText = event.health_status || (event.is_online === false ? "Offline" : "Unknown");
+    const healthClass = event.is_online !== false ? "policy-badge allow" : "policy-badge block";
+    const healthBadge = `<span class="${healthClass}">${escapeHtml(healthText)}</span>`;
+
+    const leagueBadge = `<span class="meta-pill" style="font-weight:700;color:var(--accent);">${escapeHtml(event.sport_league || "SPORTS")}</span>`;
+    const chnoBadge = `<span class="meta-pill" style="font-weight:700;background:rgba(196,255,77,0.15);color:var(--accent-emerald, #c4ff4d);">CH ${escapeHtml(event.channel_number || "30-01")}</span>`;
+
+    return `
+      <article class="group-card" data-id="${event.id}">
+        <div class="card-main-info">
+          <div class="group-glyph">⚡</div>
+          <div class="card-details">
+            <h4>${chnoBadge} ${escapeHtml(event.title)} ${leagueBadge}</h4>
+            <p>${escapeHtml(event.group_title || "Major League Sports (Events)")} · tvg-id: <code>${escapeHtml(event.tvg_id)}</code></p>
+            <div class="card-meta-pills" style="margin-top:6px;">
+              ${statusBadge}
+              ${healthBadge}
+              <span class="meta-pill">Game: ${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - ${endDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+              <span class="meta-pill">Window: -${event.pre_buffer_hours}h / +${event.post_buffer_hours}h</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-action-bar">
+          <button type="button" class="secondary extend-event-btn" data-id="${event.id}">+1h Window</button>
+          <button type="button" class="secondary edit-event-btn" data-id="${event.id}">Edit</button>
+          <button type="button" class="danger-button delete-event-btn" data-id="${event.id}">Delete</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  $$(".edit-event-btn").forEach((btn) => btn.addEventListener("click", () => openEventDialog(btn.dataset.id)));
+  $$(".delete-event-btn").forEach((btn) => btn.addEventListener("click", () => deleteEventChannel(btn.dataset.id)));
+  $$(".extend-event-btn").forEach((btn) => btn.addEventListener("click", () => extendEventWindow(btn.dataset.id)));
+}
+
+async function ingestConMeFeed() {
+  const btn = $("#syncConMeFeedBtn");
+  if (btn) btn.disabled = true;
+  showToast("Syncing provider feed from starlite.best…", "info");
+  try {
+    const res = await api("/api/v1/admin/event-channels/ingest", { method: "POST", body: JSON.stringify({}) });
+    showToast(`Successfully ingested ${res.ingestedCount} live event channels from provider!`, "success");
+    await loadEventChannels();
+  } catch (err) {
+    showToast(`Sync failed: ${err.message}`, "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function checkAllStreamHealth() {
+  const btn = $("#checkStreamHealthBtn");
+  if (btn) btn.disabled = true;
+  showToast("Checking live stream health across channels…", "info");
+  try {
+    const res = await api("/api/v1/admin/event-channels/check-health", { method: "POST", body: JSON.stringify({}) });
+    showToast(`Stream Health Check Complete: ${res.onlineCount} Online, ${res.offlineCount} Offline`, res.offlineCount > 0 ? "warning" : "success");
+    await loadEventChannels();
+  } catch (err) {
+    showToast(`Health check failed: ${err.message}`, "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function extendEventWindow(eventId) {
+  const event = state.events.find((e) => e.id === eventId);
+  if (!event) return;
+  const currentEnd = new Date(event.end_time);
+  const newEnd = new Date(currentEnd.getTime() + 60 * 60_000).toISOString();
+  try {
+    await api(`/api/v1/admin/event-channels/${eventId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ endTime: newEnd, status: "active" })
+    });
+    showToast("Event window extended by 1 hour.", "success");
+    await loadEventChannels();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
+function openEventDialog(id = "") {
+  const event = state.events.find((e) => e.id === id);
+  $("#eventId").value = event?.id || "";
+  $("#eventTitle").value = event?.title || "";
+  $("#eventSportLeague").value = event?.sport_league || "MLB";
+  $("#eventGroupTitle").value = event?.group_title || "Major League Sports (Events)";
+  if ($("#eventChannelNumber")) $("#eventChannelNumber").value = event?.channel_number || `30-${String((state.events || []).length + 1).padStart(2, "0")}`;
+  $("#eventStreamUrl").value = event?.stream_url || "";
+  $("#eventLogoUrl").value = event?.logo_url || "";
+
+  const now = new Date();
+  const defaultStart = event?.start_time ? new Date(event.start_time) : now;
+  const defaultEnd = event?.end_time ? new Date(event.end_time) : new Date(now.getTime() + 4 * 3600_000);
+
+  $("#eventStartTime").value = localInputValue(defaultStart);
+  $("#eventEndTime").value = localInputValue(defaultEnd);
+  $("#eventPreBuffer").value = event?.pre_buffer_hours ?? 3;
+  $("#eventPostBuffer").value = event?.post_buffer_hours ?? 3;
+  $("#eventStatus").value = event?.status || "active";
+
+  $("#eventDialogTitle").textContent = event ? "Edit Event Channel" : "Add Custom Event Channel";
+  $("#deleteEventBtn").classList.toggle("hidden", !event);
+  $("#eventError").textContent = "";
+  $("#eventDialog").showModal();
+}
+
+async function saveEventChannel(e) {
+  e.preventDefault();
+  const id = $("#eventId").value;
+  const payload = {
+    title: $("#eventTitle").value.trim(),
+    sportLeague: $("#eventSportLeague").value,
+    groupTitle: $("#eventGroupTitle").value.trim(),
+    channelNumber: $("#eventChannelNumber") ? $("#eventChannelNumber").value.trim() : "30-01",
+    streamUrl: $("#eventStreamUrl").value.trim(),
+    logoUrl: $("#eventLogoUrl").value.trim(),
+    startTime: new Date($("#eventStartTime").value).toISOString(),
+    endTime: new Date($("#eventEndTime").value).toISOString(),
+    preBufferHours: Number($("#eventPreBuffer").value),
+    postBufferHours: Number($("#eventPostBuffer").value),
+    status: $("#eventStatus").value
+  };
+
+  try {
+    if (id) {
+      await api(`/api/v1/admin/event-channels/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      showToast("Event channel updated.", "success");
+    } else {
+      await api("/api/v1/admin/event-channels", { method: "POST", body: JSON.stringify(payload) });
+      showToast("Event channel added.", "success");
+    }
+    $("#eventDialog").close();
+    await loadEventChannels();
+  } catch (err) {
+    $("#eventError").textContent = err.message;
+  }
+}
+
+async function deleteEventChannel(id) {
+  if (!confirm("Delete this temporary event channel?")) return;
+  try {
+    await api(`/api/v1/admin/event-channels/${id}`, { method: "DELETE" });
+    showToast("Event channel deleted.", "success");
+    if ($("#eventDialog").open) $("#eventDialog").close();
+    await loadEventChannels();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
+$("#syncConMeFeedBtn")?.addEventListener("click", ingestConMeFeed);
+$("#checkStreamHealthBtn")?.addEventListener("click", checkAllStreamHealth);
+$("#syncEventsEmptyBtn")?.addEventListener("click", ingestConMeFeed);
+$("#addEventChannelBtn")?.addEventListener("click", () => openEventDialog());
+$$("[data-close-event]").forEach((btn) => btn.addEventListener("click", () => $("#eventDialog").close()));
+$("#eventForm")?.addEventListener("submit", saveEventChannel);
+$("#deleteEventBtn")?.addEventListener("click", () => deleteEventChannel($("#eventId").value));
+

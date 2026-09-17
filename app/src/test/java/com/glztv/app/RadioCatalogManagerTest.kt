@@ -17,8 +17,17 @@ class RadioCatalogManagerTest {
     }
 
     @Test
-    fun ignoresStationsWithoutStreams() {
-        val stations = RadioCatalogManager.parseCatalog("""{"stations":[{"code":"EMPTY"}]}""")
-        assertTrue(stations.isEmpty())
+    fun parsesMultipleStationsIncludingDuplicatesOrMissingCodes() {
+        val json = """{"stations":[
+            {"code":"DUPLICATE","name":"Station 1","streamUrl":"https://example.com/1"},
+            {"code":"DUPLICATE","name":"Station 2","streamUrl":"https://example.com/2"},
+            {"name":"No Code Station","streamUrl":"https://example.com/3"}
+        ]}"""
+        val stations = RadioCatalogManager.parseCatalog(json)
+        assertEquals(3, stations.size)
+        assertEquals("DUPLICATE", stations[0].code)
+        assertEquals("DUPLICATE", stations[1].code)
+        assertEquals("", stations[2].code)
     }
 }
+

@@ -1415,6 +1415,166 @@ function managedGuideResponse(body: string | ReadableStream, playlistId: string,
   return new Response(responseBody, { headers });
 }
 
+function cleanText(value: unknown): string {
+  return String(value ?? "").replace(/[\r\n]+/g, " ").trim();
+}
+
+function cleanAttribute(value: unknown): string {
+  return cleanText(value).replace(/"/g, "'");
+}
+
+function formatXmlTvDate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())} +0000`;
+}
+
+async function checkSingleStreamHealth(streamUrl: string): Promise<{ ok: boolean; statusText: string }> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+
+    let res = await fetch(streamUrl, {
+      method: "HEAD",
+      signal: controller.signal,
+      headers: {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    }).catch(() => null);
+
+    if (!res || !res.ok) {
+      const controller2 = new AbortController();
+      const timeout2 = setTimeout(() => controller2.abort(), 3500);
+      res = await fetch(streamUrl, {
+        method: "GET",
+        signal: controller2.signal,
+        headers: {
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "range": "bytes=0-512"
+        }
+      }).catch(() => null);
+      clearTimeout(timeout2);
+    }
+    clearTimeout(timeout);
+
+    if (!res) return { ok: false, statusText: "Offline (Timeout)" };
+    if (res.ok || res.status === 206 || res.status === 302 || res.status === 301) {
+      return { ok: true, statusText: `Online (${res.status})` };
+    }
+    return { ok: false, statusText: `Offline (HTTP ${res.status})` };
+  } catch (err) {
+    return { ok: false, statusText: `Offline (${(err as Error).message})` };
+  }
+}
+
+async function checkEventChannelsHealth(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const rows = await supabaseJson(env,
+    `/rest/v1/event_channels?status=neq.disabled&select=id,title,stream_url,is_online,health_status`
+  ).catch(() => null) as Record<string, unknown>[] | null;
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return json({ ok: true, checkedCount: 0, onlineCount: 0, offlineCount: 0 });
+  }
+
+  let onlineCount = 0;
+  let offlineCount = 0;
+  const nowIso = new Date().toISOString();
+
+  for (let i = 0; i < rows.length; i += 5) {
+    const chunk = rows.slice(i, i + 5);
+    await Promise.all(chunk.map(async (row) => {
+      const id = String(row.id);
+      const url = String(row.stream_url || "");
+      const health = await checkSingleStreamHealth(url);
+      if (health.ok) onlineCount++; else offlineCount++;
+
+      await supabaseJson(env, `/rest/v1/event_channels?id=eq.${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          is_online: health.ok,
+          health_status: health.statusText,
+          last_checked_at: nowIso,
+          updated_at: nowIso
+        })
+      }).catch(() => undefined);
+    }));
+  }
+
+  return json({ ok: true, checkedCount: rows.length, onlineCount, offlineCount });
+}
+
+function escapeXml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+    .replace(/[\r\n]+/g, " ")
+    .trim();
+}
+
+async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<string> {
+  if (!xmlText || !xmlText.includes("</tv>")) return xmlText;
+
+  const eventChannels = await supabaseJson(env,
+    `/rest/v1/event_channels?status=neq.disabled&is_online=neq.false&select=*`
+  ).catch(() => null) as Record<string, unknown>[] | null;
+
+  if (!Array.isArray(eventChannels) || eventChannels.length === 0) return xmlText;
+  const sortedEvents = sortEventChannels(eventChannels);
+
+  let channelNodes = "";
+  let programmeNodes = "";
+  let index = 1;
+
+  for (const event of sortedEvents) {
+    if (String(event.status) === "disabled" || String(event.status) === "expired" || event.is_online === false) continue;
+
+    const tvgId = escapeXml(String(event.tvg_id || `event.channel.${index}`));
+    const channelNumber = escapeXml(String(event.channel_number || `30-${String(index).padStart(2, "0")}`));
+    const eventTitle = escapeXml(cleanText(String(event.title || "Live Sports Event")));
+    const sportLeague = escapeXml(cleanText(String(event.sport_league || "SPORTS")));
+    const logoUrl = event.logo_url ? escapeXml(String(event.logo_url)) : "";
+
+    const startTime = new Date(String(event.start_time));
+    const endTime = new Date(String(event.end_time));
+    const preBuffer = (Number(event.pre_buffer_hours) || 3) * 3600_000;
+    const postBuffer = (Number(event.post_buffer_hours) || 3) * 3600_000;
+
+    const winStart = new Date(startTime.getTime() - preBuffer);
+    const winEnd = new Date(endTime.getTime() + postBuffer);
+
+    channelNodes += `  <channel id="${tvgId}">\n`;
+    channelNodes += `    <display-name>SPORTS PPV</display-name>\n`;
+    channelNodes += `    <display-name>CH ${channelNumber}</display-name>\n`;
+    if (logoUrl) {
+      channelNodes += `    <icon src="${logoUrl}" />\n`;
+    }
+    channelNodes += `  </channel>\n`;
+
+    programmeNodes += `  <programme start="${formatXmlTvDate(winStart)}" stop="${formatXmlTvDate(winEnd)}" channel="${tvgId}">\n`;
+    programmeNodes += `    <title lang="en">${eventTitle}</title>\n`;
+    programmeNodes += `    <desc lang="en">Live ${sportLeague} Event - ${eventTitle}</desc>\n`;
+    programmeNodes += `    <category lang="en">Sports</category>\n`;
+    programmeNodes += `    <category lang="en">Pay Per View</category>\n`;
+    programmeNodes += `  </programme>\n`;
+
+    index++;
+  }
+
+  let updatedXml = xmlText;
+  const firstProgIndex = updatedXml.indexOf("<programme");
+  if (firstProgIndex !== -1) {
+    updatedXml = updatedXml.slice(0, firstProgIndex) + channelNodes + updatedXml.slice(firstProgIndex);
+  } else {
+    updatedXml = updatedXml.replace("</tv>", channelNodes + "</tv>");
+  }
+
+  updatedXml = updatedXml.replace("</tv>", programmeNodes + "</tv>");
+  return updatedXml;
+}
+
 async function exportManagedGuide(
   request: Request,
   env: Env,
@@ -1459,7 +1619,10 @@ async function exportManagedGuide(
   } else {
     guideBody = String(row.xml_content);
   }
-  const response = managedGuideResponse(guideBody, playlistId, gzip);
+
+  let rawXml = typeof guideBody === "string" ? guideBody : await new Response(guideBody).text();
+  const guideXml = await injectEventChannelsXmlTv(env, rawXml);
+  const response = managedGuideResponse(guideXml, playlistId, gzip);
   if (!requireAdmin) {
     const cacheResponse = response.clone();
     cacheResponse.headers.set("x-glzhub-cache", "MISS");
@@ -1496,6 +1659,314 @@ async function pushPlaylist(request: Request, env: Env, playlistId: string): Pro
     }) }
   )));
   return json({ ok: true, pushedDevices: onlineDevices.length, totalDevices: devices.length });
+}
+
+interface ParsedEventChannel {
+  tvgId: string;
+  tvgName: string;
+  title: string;
+  sportLeague: string;
+  groupTitle: string;
+  logoUrl: string;
+  streamUrl: string;
+  channelNumber: string;
+  startTime: string;
+  endTime: string;
+}
+
+function parseSubChannelNumber(chno: unknown): number {
+  const str = String(chno ?? "").trim();
+  const match = str.match(/(\d+)\s*[-._:]?\s*(\d+)?/);
+  if (!match) return 999999;
+  const major = parseInt(match[1], 10) || 0;
+  const minor = match[2] ? parseInt(match[2], 10) : 0;
+  return major * 100000 + minor;
+}
+
+function sortEventChannels<T extends { channel_number?: unknown; channelNumber?: unknown; start_time?: unknown; startTime?: unknown }>(events: T[]): T[] {
+  return [...events].sort((a, b) => {
+    const numA = parseSubChannelNumber(a.channel_number || a.channelNumber);
+    const numB = parseSubChannelNumber(b.channel_number || b.channelNumber);
+    if (numA !== numB) return numA - numB;
+    const timeA = new Date(String(a.start_time || a.startTime || 0)).getTime();
+    const timeB = new Date(String(b.start_time || b.startTime || 0)).getTime();
+    return timeA - timeB;
+  });
+}
+
+function parseInlineEventTime(title: string): { startTime: Date; endTime: Date } {
+  const atMatch = title.match(/@\s*([A-Za-z]{3})\s+(\d{1,2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (atMatch) {
+    const months: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    };
+    const monthStr = atMatch[1].toLowerCase();
+    const day = parseInt(atMatch[2], 10);
+    let hours = parseInt(atMatch[3], 10);
+    const minutes = parseInt(atMatch[4], 10);
+    const ampm = atMatch[5].toUpperCase();
+
+    if (ampm === "PM" && hours < 12) hours += 12;
+    if (ampm === "AM" && hours === 12) hours = 0;
+
+    if (monthStr in months) {
+      const now = new Date();
+      let year = now.getFullYear();
+      const month = months[monthStr];
+      const start = new Date(Date.UTC(year, month, day, hours, minutes));
+      const end = new Date(start.getTime() + 3.5 * 3600_000);
+      return { startTime: start, endTime: end };
+    }
+  }
+
+  const now = new Date();
+  const start = new Date(now.getTime() - 30 * 60_000);
+  const end = new Date(now.getTime() + 3.5 * 3600_000);
+  return { startTime: start, endTime: end };
+}
+
+function detectSportLeague(tvgId: string, groupTitle: string, title: string): string {
+  const text = `${tvgId} ${groupTitle} ${title}`.toUpperCase();
+  if (text.includes("MLB")) return "MLB";
+  if (text.includes("NFL")) return "NFL";
+  if (text.includes("NBA")) return "NBA";
+  if (text.includes("MLS")) return "MLS";
+  if (text.includes("UFC") || text.includes("COMBAT") || text.includes("PFL") || text.includes("BOXING")) return "UFC";
+  if (text.includes("NHL")) return "NHL";
+  return "SPORTS";
+}
+
+function isLiveEventChannel(groupTitle: string, title: string, tvgId: string): boolean {
+  const groupUpper = groupTitle.toUpperCase();
+  const titleUpper = title.toUpperCase();
+  const tvgIdUpper = tvgId.toUpperCase();
+
+  // 1. Explicit "(Events)" or "PPV" group in M3U
+  if (groupUpper.includes("EVENTS") || groupUpper.includes("PPV")) return true;
+
+  // 2. Matchup patterns in title (e.g. "Yankees vs. Mets", "Lakers @ Celtics", "MLB: ...")
+  const containsMatchup = /\b(vs\.?|@)\b/i.test(titleUpper) || /\b(vs\.?|@)\b/i.test(tvgIdUpper);
+  const containsLeagueKey = /\b(MLB|NFL|NBA|MLS|NHL|UFC|PFL|WWE|BOXING|NCAA|SOCCER)\b/i.test(titleUpper) ||
+                            /\b(MLB|NFL|NBA|MLS|NHL|UFC|PFL|WWE|BOXING|NCAA|SOCCER)\b/i.test(groupUpper);
+
+  if (containsMatchup && containsLeagueKey) return true;
+
+  return false;
+}
+
+function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
+  const lines = m3uText.split(/\r?\n/);
+  const events: ParsedEventChannel[] = [];
+  let pendingExtInf: string | null = null;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("#EXTINF:")) {
+      pendingExtInf = line;
+      continue;
+    }
+    if (line.startsWith("#") || !pendingExtInf) continue;
+
+    const streamUrl = line;
+    const tvgIdMatch = pendingExtInf.match(/tvg-id="([^"]+)"/i);
+    const tvgNameMatch = pendingExtInf.match(/tvg-name="([^"]+)"/i);
+    const groupTitleMatch = pendingExtInf.match(/group-title="([^"]+)"/i);
+    const tvgLogoMatch = pendingExtInf.match(/tvg-logo="([^"]+)"/i);
+    const commaIndex = pendingExtInf.indexOf(",");
+    const title = commaIndex >= 0 ? pendingExtInf.substring(commaIndex + 1).trim() : "Live Event";
+
+    const tvgId = tvgIdMatch ? tvgIdMatch[1] : `event.${events.length + 1}`;
+    const tvgName = tvgNameMatch ? tvgNameMatch[1] : tvgId;
+    const groupTitle = groupTitleMatch ? groupTitleMatch[1] : "Major League Sports (Events)";
+    const logoUrl = tvgLogoMatch ? tvgLogoMatch[1] : "";
+
+    // Strictly filter: only ingest live event and live sports streams!
+    if (!isLiveEventChannel(groupTitle, title, tvgId)) {
+      pendingExtInf = null;
+      continue;
+    }
+
+    const parsedTimes = parseInlineEventTime(title);
+    const sportLeague = detectSportLeague(tvgId, groupTitle, title);
+
+    events.push({
+      tvgId,
+      tvgName,
+      title,
+      sportLeague,
+      groupTitle,
+      logoUrl,
+      streamUrl,
+      channelNumber: "",
+      startTime: parsedTimes.startTime.toISOString(),
+      endTime: parsedTimes.endTime.toISOString()
+    });
+
+    pendingExtInf = null;
+  }
+
+  events.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  return events.map((item, index) => ({
+    ...item,
+    channelNumber: `30-${String(index + 1).padStart(2, "0")}`
+  }));
+}
+
+async function listEventChannels(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const rows = await supabaseJson(env,
+    "/rest/v1/event_channels?select=*"
+  ) as Record<string, unknown>[];
+  return json({ events: sortEventChannels(rows || []) });
+}
+
+async function ingestEventChannels(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  try {
+    const bodyData = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const providerUrl = typeof bodyData.url === "string" && bodyData.url.startsWith("http")
+      ? bodyData.url
+      : "https://starlite.best/api/list/mygbb8/167848";
+
+    const response = await fetch(providerUrl, {
+      headers: {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+    if (!response.ok) throw new Error(`Provider feed returned HTTP status ${response.status}`);
+    const text = await response.text();
+    const parsed = parseConMeM3u(text);
+
+    if (parsed.length === 0) return json({ ok: true, ingestedCount: 0, events: [] });
+
+    // Deduplicate by tvgId in memory to prevent Postgres payload conflict errors
+    const uniqueMap = new Map<string, typeof parsed[0]>();
+    for (const item of parsed) {
+      if (!uniqueMap.has(item.tvgId)) {
+        uniqueMap.set(item.tvgId, item);
+      }
+    }
+    const deduplicated = sortEventChannels(Array.from(uniqueMap.values()));
+    const renumbered = deduplicated.map((item, idx) => ({
+      ...item,
+      channelNumber: `30-${String(idx + 1).padStart(2, "0")}`
+    }));
+
+    const upsertBody = renumbered.map((item) => ({
+      tvg_id: item.tvgId,
+      tvg_name: item.tvgName,
+      title: item.title,
+      sport_league: item.sportLeague,
+      group_title: item.groupTitle,
+      logo_url: item.logoUrl,
+      stream_url: item.streamUrl,
+      channel_number: item.channelNumber,
+      start_time: item.startTime,
+      end_time: item.endTime,
+      pre_buffer_hours: 3,
+      post_buffer_hours: 3,
+      status: "active",
+      auto_ingested: true,
+      updated_at: new Date().toISOString()
+    }));
+
+    let result: unknown;
+    try {
+      result = await supabaseJson(env, "/rest/v1/event_channels?on_conflict=tvg_id&select=*", {
+        method: "POST",
+        headers: { prefer: "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify(upsertBody)
+      });
+    } catch (upsertErr) {
+      // Fallback if unique constraint on tvg_id isn't created yet: plain POST insert ignoring duplicates
+      result = await supabaseJson(env, "/rest/v1/event_channels?select=*", {
+        method: "POST",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify(upsertBody)
+      }).catch((fallbackErr) => {
+        throw new Error(`Database save failed: ${(upsertErr as Error).message} | Fallback: ${(fallbackErr as Error).message}`);
+      });
+    }
+
+    return json({ ok: true, ingestedCount: deduplicated.length, events: result });
+  } catch (err) {
+    return json({ ok: false, error: (err as Error).message }, 400);
+  }
+}
+
+async function createEventChannel(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const input = await body(request);
+  const title = requiredString(input.title, "title", 180);
+  const streamUrl = requiredString(input.streamUrl, "streamUrl", 2048);
+  const tvgId = optionalString(input.tvgId, "tvgId", 120) || `custom.${Date.now()}`;
+  const sportLeague = optionalString(input.sportLeague, "sportLeague", 40) || "SPORTS";
+  const groupTitle = optionalString(input.groupTitle, "groupTitle", 120) || "Major League Sports (Events)";
+  const logoUrl = optionalString(input.logoUrl, "logoUrl", 2048);
+  const channelNumber = optionalString(input.channelNumber, "channelNumber", 20) || "30-01";
+  const startTime = optionalString(input.startTime, "startTime", 60) || new Date().toISOString();
+  const endTime = optionalString(input.endTime, "endTime", 60) || new Date(Date.now() + 4 * 3600_000).toISOString();
+  const preBufferHours = Number(input.preBufferHours || 3);
+  const postBufferHours = Number(input.postBufferHours || 3);
+
+  const rows = await supabaseJson(env, "/rest/v1/event_channels?select=*", {
+    method: "POST",
+    headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      tvg_id: tvgId,
+      title,
+      sport_league: sportLeague,
+      group_title: groupTitle,
+      logo_url: logoUrl,
+      stream_url: streamUrl,
+      channel_number: channelNumber,
+      start_time: startTime,
+      end_time: endTime,
+      pre_buffer_hours: preBufferHours,
+      post_buffer_hours: postBufferHours,
+      status: "active",
+      auto_ingested: false,
+      updated_at: new Date().toISOString()
+    })
+  }) as Record<string, unknown>[];
+
+  return json({ event: rows[0] }, 201);
+}
+
+async function updateEventChannel(request: Request, env: Env, eventId: string): Promise<Response> {
+  await adminUser(request, env);
+  const input = await body(request);
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (typeof input.title === "string") updates.title = input.title.trim();
+  if (typeof input.channelNumber === "string") updates.channel_number = input.channelNumber.trim();
+  if (typeof input.startTime === "string") updates.start_time = input.startTime;
+  if (typeof input.endTime === "string") updates.end_time = input.endTime;
+  if (typeof input.preBufferHours === "number") updates.pre_buffer_hours = input.preBufferHours;
+  if (typeof input.postBufferHours === "number") updates.post_buffer_hours = input.postBufferHours;
+  if (typeof input.status === "string" && ["scheduled", "active", "expired", "disabled"].includes(input.status)) {
+    updates.status = input.status;
+  }
+
+  const rows = await supabaseJson(env,
+    `/rest/v1/event_channels?id=eq.${encodeURIComponent(eventId)}&select=*`,
+    {
+      method: "PATCH",
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify(updates)
+    }
+  ) as Record<string, unknown>[];
+
+  return json({ event: rows[0] });
+}
+
+async function deleteEventChannel(request: Request, env: Env, eventId: string): Promise<Response> {
+  await adminUser(request, env);
+  await supabaseJson(env, `/rest/v1/event_channels?id=eq.${encodeURIComponent(eventId)}`, {
+    method: "DELETE"
+  });
+  return json({ ok: true });
 }
 
 async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Response> {
@@ -1555,6 +2026,36 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
 
       const channelGroup = cleanAttribute(metadata.group || groupTitle);
       m3uContent += `#EXTINF:${duration}${tvgId}${tvgChno}${tvgLogo}${isRadio} group-title="${channelGroup}",${title}\n${mediaUrl}\n\n`;
+    }
+  }
+
+  // Inject active temporary event channels (within start - pre_buffer to end + post_buffer)
+  const eventChannels = await supabaseJson(env,
+    `/rest/v1/event_channels?status=neq.disabled&select=*`
+  ).catch(() => null) as Record<string, unknown>[] | null;
+
+  if (Array.isArray(eventChannels)) {
+    const sortedEvents = sortEventChannels(eventChannels);
+    const now = Date.now();
+    let activeIndex = 1;
+    for (const event of sortedEvents) {
+      if (String(event.status) === 'disabled' || String(event.status) === 'expired' || event.is_online === false) continue;
+      const startTime = new Date(String(event.start_time)).getTime();
+      const endTime = new Date(String(event.end_time)).getTime();
+      const preBuffer = (Number(event.pre_buffer_hours) || 3) * 3600_000;
+      const postBuffer = (Number(event.post_buffer_hours) || 3) * 3600_000;
+      if (now >= (startTime - preBuffer) && now <= (endTime + postBuffer)) {
+        const channelDisplayName = "SPORTS PPV";
+        const mediaUrl = String(event.stream_url || "");
+        const tvgId = event.tvg_id ? ` tvg-id="${cleanAttribute(event.tvg_id)}"` : "";
+        const tvgName = ` tvg-name="SPORTS PPV"`;
+        const chnoValue = String(event.channel_number || `30-${String(activeIndex).padStart(2, '0')}`);
+        const tvgChno = ` tvg-chno="${cleanAttribute(chnoValue)}"`;
+        const tvgLogo = event.logo_url ? ` tvg-logo="${cleanAttribute(event.logo_url)}"` : "";
+        const channelGroup = cleanAttribute(event.group_title || "Major League Sports (Events)");
+        m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
+        activeIndex++;
+      }
     }
   }
 
@@ -1642,6 +2143,15 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   const adminRadio = path.match(/^\/api\/v1\/admin\/radio-stations\/([0-9a-f-]+)$/i);
   if (adminRadio && request.method === "PATCH") return updateRadioStation(request, env, adminRadio[1]);
   if (adminRadio && request.method === "DELETE") return deleteRadioStation(request, env, adminRadio[1]);
+
+  // Live Event Channels API endpoints
+  if (path === "/api/v1/admin/event-channels" && request.method === "GET") return listEventChannels(request, env);
+  if (path === "/api/v1/admin/event-channels/ingest" && request.method === "POST") return ingestEventChannels(request, env);
+  if (path === "/api/v1/admin/event-channels/check-health" && request.method === "POST") return checkEventChannelsHealth(request, env);
+  if (path === "/api/v1/admin/event-channels" && request.method === "POST") return createEventChannel(request, env);
+  const adminEvent = path.match(/^\/api\/v1\/admin\/event-channels\/([0-9a-f-]+)$/i);
+  if (adminEvent && request.method === "PATCH") return updateEventChannel(request, env, adminEvent[1]);
+  if (adminEvent && request.method === "DELETE") return deleteEventChannel(request, env, adminEvent[1]);
 
   if (path === "/api/v1/admin/playlists" && request.method === "GET") return listPlaylists(request, env);
   if (path === "/api/v1/admin/epg/fetch" && request.method === "GET") return fetchGuidePreview(request, env);

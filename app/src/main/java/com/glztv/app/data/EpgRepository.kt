@@ -29,15 +29,11 @@ class EpgRepository(
         var lastError: Throwable? = null
         repeat(if (forceRefresh) 3 else 1) { attempt ->
             runCatching {
-                val xml = sourceClient.fetchText(
-                    sourceUrl,
-                    preferences.requestHeaders
-                )
-                check(xml.trimStart().startsWith("<")) {
-                    "EPG server returned a non-XML response"
-                }
-                EpgParser.parse(xml).also {
-                    check(it.programmeCount > 0) { "EPG did not contain programmes" }
+                val cutoff = System.currentTimeMillis() - 2L * 3600_000L
+                sourceClient.fetchStream(sourceUrl, preferences.requestHeaders) { stream ->
+                    EpgParser.parse(stream, cutoffMillis = cutoff).also {
+                        check(it.programmeCount > 0) { "EPG did not contain programmes" }
+                    }
                 }
             }.onSuccess { guide ->
                 EpgCache.write(appContext, sourceUrl, guide)
