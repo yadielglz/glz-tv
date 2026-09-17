@@ -1539,8 +1539,8 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
 
     const startTime = new Date(String(event.start_time));
     const endTime = new Date(String(event.end_time));
-    const preBuffer = (Number(event.pre_buffer_hours) || 3) * 3600_000;
-    const postBuffer = (Number(event.post_buffer_hours) || 3) * 3600_000;
+    const preBuffer = (Number(event.pre_buffer_hours) || 2) * 3600_000;
+    const postBuffer = (Number(event.post_buffer_hours) || 2) * 3600_000;
 
     const winStart = new Date(startTime.getTime() - preBuffer);
     const winEnd = new Date(endTime.getTime() + postBuffer);
@@ -1879,8 +1879,8 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
       channel_number: item.channelNumber,
       start_time: item.startTime,
       end_time: item.endTime,
-      pre_buffer_hours: 3,
-      post_buffer_hours: 3,
+      pre_buffer_hours: 2,
+      post_buffer_hours: 2,
       status: "active",
       auto_ingested: true,
       updated_at: new Date().toISOString()
@@ -2056,8 +2056,8 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
       if (String(event.status) === 'disabled' || String(event.status) === 'expired' || event.is_online === false) continue;
       const startTime = new Date(String(event.start_time)).getTime();
       const endTime = new Date(String(event.end_time)).getTime();
-      const preBuffer = (Number(event.pre_buffer_hours) || 3) * 3600_000;
-      const postBuffer = (Number(event.post_buffer_hours) || 3) * 3600_000;
+      const preBuffer = (Number(event.pre_buffer_hours) || 2) * 3600_000;
+      const postBuffer = (Number(event.post_buffer_hours) || 2) * 3600_000;
       if (now >= (startTime - preBuffer) && now <= (endTime + postBuffer)) {
         const channelDisplayName = "SPORTS PPV";
         const mediaUrl = String(event.stream_url || "");
