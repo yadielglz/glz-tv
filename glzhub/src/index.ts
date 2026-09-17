@@ -1896,6 +1896,82 @@ async function listEventChannels(request: Request, env: Env): Promise<Response> 
   return json({ events: sortEventChannels(rows || []) });
 }
 
+async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChannel[]): Promise<unknown> {
+  const existingRows = await supabaseJson(env,
+    "/rest/v1/event_channels?select=id,tvg_id"
+  ).catch(() => []) as Record<string, unknown>[];
+
+  const existingMap = new Map<string, string>();
+  if (Array.isArray(existingRows)) {
+    for (const row of existingRows) {
+      if (row.tvg_id && row.id) existingMap.set(String(row.tvg_id), String(row.id));
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  const toUpdate: { id: string; body: Record<string, unknown> }[] = [];
+  const toInsert: Record<string, unknown>[] = [];
+
+  for (const item of renumbered) {
+    const existingId = existingMap.get(item.tvgId);
+    const payload = {
+      tvg_id: item.tvgId,
+      tvg_name: item.tvgName,
+      title: item.title,
+      sport_league: item.sportLeague,
+      group_title: item.groupTitle,
+      logo_url: item.logoUrl,
+      stream_url: item.streamUrl,
+      channel_number: item.channelNumber,
+      start_time: item.startTime,
+      end_time: item.endTime,
+      pre_buffer_hours: 1,
+      post_buffer_hours: 2,
+      status: "active",
+      auto_ingested: true,
+      updated_at: nowIso
+    };
+
+    if (existingId) {
+      toUpdate.push({ id: existingId, body: payload });
+    } else {
+      toInsert.push(payload);
+    }
+  }
+
+  // 1. Try fast PostgREST bulk upsert (if unique constraint exists)
+  const fullPayload = [...toUpdate.map(u => u.body), ...toInsert];
+  try {
+    return await supabaseJson(env, "/rest/v1/event_channels?on_conflict=tvg_id&select=*", {
+      method: "POST",
+      headers: { prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify(fullPayload)
+    });
+  } catch (_err) {
+    // 2. Fail-safe fallback: perform explicit PATCH for existing rows and POST for new rows
+    const results: unknown[] = [];
+    if (toUpdate.length > 0) {
+      await Promise.all(toUpdate.map(async ({ id, body }) => {
+        const res = await supabaseJson(env, `/rest/v1/event_channels?id=eq.${id}&select=*`, {
+          method: "PATCH",
+          headers: { prefer: "return=representation" },
+          body: JSON.stringify(body)
+        }).catch(() => null);
+        if (res && Array.isArray(res)) results.push(...res);
+      }));
+    }
+    if (toInsert.length > 0) {
+      const res = await supabaseJson(env, "/rest/v1/event_channels?select=*", {
+        method: "POST",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify(toInsert)
+      }).catch(() => null);
+      if (res && Array.isArray(res)) results.push(...res);
+    }
+    return results;
+  }
+}
+
 async function ingestEventChannels(request: Request, env: Env): Promise<Response> {
   await adminUser(request, env);
   try {
@@ -1928,42 +2004,7 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
       channelNumber: `30-${String(idx + 1).padStart(2, "0")}`
     }));
 
-    const upsertBody = renumbered.map((item) => ({
-      tvg_id: item.tvgId,
-      tvg_name: item.tvgName,
-      title: item.title,
-      sport_league: item.sportLeague,
-      group_title: item.groupTitle,
-      logo_url: item.logoUrl,
-      stream_url: item.streamUrl,
-      channel_number: item.channelNumber,
-      start_time: item.startTime,
-      end_time: item.endTime,
-      pre_buffer_hours: 1,
-      post_buffer_hours: 1.5,
-      status: "active",
-      auto_ingested: true,
-      updated_at: new Date().toISOString()
-    }));
-
-    let result: unknown;
-    try {
-      result = await supabaseJson(env, "/rest/v1/event_channels?on_conflict=tvg_id&select=*", {
-        method: "POST",
-        headers: { prefer: "resolution=merge-duplicates,return=representation" },
-        body: JSON.stringify(upsertBody)
-      });
-    } catch (upsertErr) {
-      // Fallback if unique constraint on tvg_id isn't created yet: plain POST insert ignoring duplicates
-      result = await supabaseJson(env, "/rest/v1/event_channels?select=*", {
-        method: "POST",
-        headers: { prefer: "return=representation" },
-        body: JSON.stringify(upsertBody)
-      }).catch((fallbackErr) => {
-        throw new Error(`Database save failed: ${(upsertErr as Error).message} | Fallback: ${(fallbackErr as Error).message}`);
-      });
-    }
-
+    const result = await saveIngestedEventChannels(env, renumbered);
     return json({ ok: true, ingestedCount: deduplicated.length, events: result });
   } catch (err) {
     return json({ ok: false, error: (err as Error).message }, 400);
@@ -2277,28 +2318,7 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
           ...item,
           channelNumber: `30-${String(idx + 1).padStart(2, "0")}`
         }));
-        const upsertBody = renumbered.map((item) => ({
-          tvg_id: item.tvgId,
-          tvg_name: item.tvgName,
-          title: item.title,
-          sport_league: item.sportLeague,
-          group_title: item.groupTitle,
-          logo_url: item.logoUrl,
-          stream_url: item.streamUrl,
-          channel_number: item.channelNumber,
-          start_time: item.startTime,
-          end_time: item.endTime,
-          pre_buffer_hours: 1,
-          post_buffer_hours: 1.5,
-          status: "active",
-          auto_ingested: true,
-          updated_at: new Date().toISOString()
-        }));
-        await supabaseJson(env, "/rest/v1/event_channels?on_conflict=tvg_id&select=*", {
-          method: "POST",
-          headers: { prefer: "resolution=merge-duplicates,return=representation" },
-          body: JSON.stringify(upsertBody)
-        }).catch(() => undefined);
+        await saveIngestedEventChannels(env, renumbered).catch((err) => console.error("Auto-ingest save error:", err));
         ingested = deduplicated.length;
       }
     }
