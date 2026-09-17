@@ -725,7 +725,8 @@
               <p class="field-help">Auto-syncs live event streams from your provider (<code>starlite.best</code>). Schedules game active windows (game start ± 3h buffer) and injects XMLTV EPG data.</p>
             </div>
             <div class="header-actions">
-              <button id="syncConMeFeedBtn" type="button" class="primary">⚡ <span>Sync Provider Feed</span></button>
+              <button id="browseProviderStreamsBtn" type="button" class="primary" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🔍 <span>Browse &amp; Inject Streams</span></button>
+              <button id="syncConMeFeedBtn" type="button" class="secondary">⚡ <span>Sync Feed</span></button>
               <button id="checkStreamHealthBtn" type="button" class="secondary">🩺 <span>Check Stream Health</span></button>
               <button id="addEventChannelBtn" type="button" class="secondary">＋ <span>Add Custom Event</span></button>
             </div>
@@ -752,9 +753,20 @@
             </article>
           </div>
 
-          <div class="device-toolbar">
-            <div class="search-wrap">
+          <div class="device-toolbar" style="flex-direction:column; align-items:stretch; gap:12px;">
+            <div class="search-wrap" style="width:100%;">
               <input id="eventSearchInput" type="search" placeholder="⌕ Search live events by title, team, league (MLB, NFL, NBA, MLS, UFC)…" autocomplete="off">
+            </div>
+
+            <div id="eventSportFilterBar" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <button type="button" class="meta-pill active-sport-pill" data-sport-filter="ALL" style="cursor:pointer; font-weight:700;">All Sports</button>
+              <button type="button" class="meta-pill" data-sport-filter="MLB" style="cursor:pointer; font-weight:700;">⚾ MLB</button>
+              <button type="button" class="meta-pill" data-sport-filter="NFL" style="cursor:pointer; font-weight:700;">🏈 NFL</button>
+              <button type="button" class="meta-pill" data-sport-filter="NBA" style="cursor:pointer; font-weight:700;">🏀 NBA</button>
+              <button type="button" class="meta-pill" data-sport-filter="NHL" style="cursor:pointer; font-weight:700;">🏒 NHL</button>
+              <button type="button" class="meta-pill" data-sport-filter="UFC" style="cursor:pointer; font-weight:700;">🥊 UFC / Combat</button>
+              <button type="button" class="meta-pill" data-sport-filter="PPV" style="cursor:pointer; font-weight:700;">⭐ PPV / Specials</button>
+              <button type="button" class="meta-pill" data-sport-filter="CUSTOM" style="cursor:pointer; font-weight:700;">✍ Custom Events</button>
             </div>
           </div>
 
@@ -762,8 +774,11 @@
           <div id="eventsEmpty" class="empty hidden">
             <div class="empty-icon">⚡</div>
             <h3>No Live Events Scheduled</h3>
-            <p>Click "Sync Provider Feed" to automatically discover live MLB, NFL, NBA, MLS, and UFC game channels from your provider.</p>
-            <button type="button" class="primary" id="syncEventsEmptyBtn">⚡ Sync Provider Feed</button>
+            <p>Click "Sync Provider Feed" or "Browse &amp; Inject Streams" to discover live MLB, NFL, NBA, MLS, and UFC game channels from your provider.</p>
+            <div style="display:flex; gap:10px; justify-content:center; margin-top:12px;">
+              <button type="button" class="primary" id="browseEventsEmptyBtn" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🔍 Browse &amp; Inject Streams</button>
+              <button type="button" class="secondary" id="syncEventsEmptyBtn">⚡ Sync Provider Feed</button>
+            </div>
           </div>
         </section>
       </section>
@@ -818,6 +833,40 @@
         <button class="primary" type="submit">Save Event Schedule</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Browse Provider Streams Explorer Dialog -->
+  <dialog id="browseProviderDialog" style="max-width: 880px; width: 94vw;">
+    <div class="dialog-head">
+      <div>
+        <div class="eyebrow">PROVIDER FEED EXPLORER</div>
+        <h3>Browse &amp; Inject Live Streams</h3>
+      </div>
+      <button class="icon-button" type="button" data-close-browse-provider>✕</button>
+    </div>
+
+    <div style="padding: 12px 0 0 0;">
+      <p class="field-help" style="margin-bottom:12px;">Browse all live game streams directly from your provider feed (<code>starlite.best</code>). Select a sport category and click <strong>Inject Stream</strong> on any individual game to instantly add it to GLZ TV!</p>
+
+      <div id="providerSportFilterBar" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
+        <button type="button" class="meta-pill active-prov-pill" data-prov-sport="ALL" style="cursor:pointer; font-weight:700;">All Sports</button>
+        <button type="button" class="meta-pill" data-prov-sport="MLB" style="cursor:pointer; font-weight:700;">⚾ MLB</button>
+        <button type="button" class="meta-pill" data-prov-sport="NFL" style="cursor:pointer; font-weight:700;">🏈 NFL</button>
+        <button type="button" class="meta-pill" data-prov-sport="NBA" style="cursor:pointer; font-weight:700;">🏀 NBA</button>
+        <button type="button" class="meta-pill" data-prov-sport="NHL" style="cursor:pointer; font-weight:700;">🏒 NHL</button>
+        <button type="button" class="meta-pill" data-prov-sport="UFC" style="cursor:pointer; font-weight:700;">🥊 UFC / Combat</button>
+        <button type="button" class="meta-pill" data-prov-sport="OTHER" style="cursor:pointer; font-weight:700;">Other Sports</button>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
+        <input id="providerStreamSearch" type="search" placeholder="⌕ Filter provider streams by team, title, or matchup…" style="flex:1; min-width:260px;" autocomplete="off">
+        <button id="injectAllVisibleBtn" type="button" class="primary small-btn" style="background:linear-gradient(135deg,#10b981,#059669); font-weight:700; white-space:nowrap;">⚡ Inject All Visible</button>
+      </div>
+
+      <div id="providerStreamsList" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
+        <div style="text-align:center; padding:30px; color:var(--text-muted);">Loading provider feed…</div>
+      </div>
+    </div>
   </dialog>
 
   <!-- Box Group Dialog -->

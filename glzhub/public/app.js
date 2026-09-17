@@ -2542,9 +2542,29 @@ $("#epgDeleteProgramme")?.addEventListener("click", () => { const node = [...epg
 
 // Event Channels UI logic
 let eventSearchQuery = "";
+let activeSportFilter = "ALL";
+let activeProvSport = "ALL";
+let providerStreamsData = [];
+let providerSearchQuery = "";
+
 $("#eventSearchInput")?.addEventListener("input", (e) => {
   eventSearchQuery = e.target.value.trim().toLowerCase();
   renderEventChannels();
+});
+
+$$("[data-sport-filter]").forEach((pill) => {
+  pill.addEventListener("click", () => {
+    $$("[data-sport-filter]").forEach((p) => {
+      p.classList.remove("active-sport-pill");
+      p.style.opacity = "0.7";
+      p.style.border = "none";
+    });
+    pill.classList.add("active-sport-pill");
+    pill.style.opacity = "1";
+    pill.style.border = "1px solid var(--accent)";
+    activeSportFilter = pill.dataset.sportFilter;
+    renderEventChannels();
+  });
 });
 
 async function loadEventChannels() {
@@ -2573,6 +2593,17 @@ function renderEventChannels() {
 
   const query = eventSearchQuery.toLowerCase();
   const filtered = (state.events || []).filter((event) => {
+    if (activeSportFilter !== "ALL") {
+      const sp = String(event.sport_league || "").toUpperCase();
+      const title = String(event.title || "").toUpperCase();
+      if (activeSportFilter === "MLB" && !sp.includes("MLB") && !title.includes("MLB")) return false;
+      if (activeSportFilter === "NFL" && !sp.includes("NFL") && !title.includes("NFL")) return false;
+      if (activeSportFilter === "NBA" && !sp.includes("NBA") && !title.includes("NBA")) return false;
+      if (activeSportFilter === "NHL" && !sp.includes("NHL") && !title.includes("NHL")) return false;
+      if (activeSportFilter === "UFC" && !["UFC", "MMA", "PFL", "BOXING"].some(k => sp.includes(k) || title.includes(k))) return false;
+      if (activeSportFilter === "PPV" && !sp.includes("PPV") && !title.includes("PPV")) return false;
+      if (activeSportFilter === "CUSTOM" && event.auto_ingested !== false) return false;
+    }
     if (!query) return true;
     const searchStr = `${event.title} ${event.sport_league} ${event.tvg_id} ${event.group_title}`.toLowerCase();
     return searchStr.includes(query);
@@ -2637,6 +2668,154 @@ function renderEventChannels() {
   $$(".delete-event-btn").forEach((btn) => btn.addEventListener("click", () => deleteEventChannel(btn.dataset.id)));
   $$(".extend-event-btn").forEach((btn) => btn.addEventListener("click", () => extendEventWindow(btn.dataset.id)));
 }
+
+async function openBrowseProviderDialog() {
+  const dialog = $("#browseProviderDialog");
+  if (!dialog) return;
+  $("#providerStreamsList").innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-muted);">Loading provider feed from starlite.best…</div>`;
+  dialog.showModal();
+
+  try {
+    const res = await api("/api/v1/admin/event-channels/provider-feed");
+    providerStreamsData = res.streams || [];
+    renderProviderStreams();
+  } catch (err) {
+    $("#providerStreamsList").innerHTML = `<div style="text-align:center; padding:30px; color:var(--danger,#ef4444);">Failed to load provider feed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function getVisibleProviderStreams() {
+  const query = providerSearchQuery.toLowerCase();
+  return providerStreamsData.filter((stream) => {
+    if (activeProvSport !== "ALL") {
+      const sp = String(stream.sportLeague || "").toUpperCase();
+      const title = String(stream.title || "").toUpperCase();
+      if (activeProvSport === "MLB" && !sp.includes("MLB") && !title.includes("MLB")) return false;
+      if (activeProvSport === "NFL" && !sp.includes("NFL") && !title.includes("NFL")) return false;
+      if (activeProvSport === "NBA" && !sp.includes("NBA") && !title.includes("NBA")) return false;
+      if (activeProvSport === "NHL" && !sp.includes("NHL") && !title.includes("NHL")) return false;
+      if (activeProvSport === "UFC" && !["UFC", "MMA", "PFL", "BOXING"].some(k => sp.includes(k) || title.includes(k))) return false;
+      if (activeProvSport === "OTHER" && ["MLB", "NFL", "NBA", "NHL", "UFC"].some(k => sp.includes(k) || title.includes(k))) return false;
+    }
+    if (!query) return true;
+    return `${stream.title} ${stream.sportLeague} ${stream.tvgId} ${stream.groupTitle}`.toLowerCase().includes(query);
+  });
+}
+
+function renderProviderStreams() {
+  const container = $("#providerStreamsList");
+  if (!container) return;
+
+  const filtered = getVisibleProviderStreams();
+  const existingTvgIds = new Set((state.events || []).map(e => e.tvg_id));
+
+  if (!filtered.length) {
+    container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-muted);">No provider streams match this filter.</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map((stream, idx) => {
+    const alreadyInjected = stream.alreadyInjected || existingTvgIds.has(stream.tvgId);
+    const startDate = new Date(stream.startTime);
+
+    const leagueBadge = `<span class="meta-pill" style="font-weight:700;color:var(--accent);">${escapeHtml(stream.sportLeague || "SPORTS")}</span>`;
+    const chnoBadge = `<span class="meta-pill" style="font-weight:700;background:rgba(196,255,77,0.15);color:var(--accent-emerald, #c4ff4d);">CH ${escapeHtml(stream.channelNumber || "30-01")}</span>`;
+
+    const injectBtn = alreadyInjected
+      ? `<button type="button" class="secondary small-btn" disabled style="opacity:0.7; font-weight:700;">✓ Injected</button>`
+      : `<button type="button" class="primary small-btn inject-single-btn" data-idx="${idx}" style="font-weight:700; background:linear-gradient(135deg,#6366f1,#8b5cf6);">💉 Inject Stream</button>`;
+
+    return `
+      <div class="channel-item-row" style="padding:10px 14px; background:var(--surface-variant, rgba(255,255,255,0.03)); border-radius:8px;">
+        <div class="channel-info-meta" style="flex:1;">
+          <strong style="font-size:14px;">${chnoBadge} ${escapeHtml(stream.title)} ${leagueBadge}</strong>
+          <small style="margin-top:4px;">
+            <span>${escapeHtml(stream.groupTitle)}</span> · 
+            <span>tvg-id: <code>${escapeHtml(stream.tvgId)}</code></span> · 
+            <span>Game: ${startDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ET</span>
+          </small>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button type="button" class="secondary small-btn preview-prov-stream" data-url="${escapeHtml(stream.streamUrl)}" data-title="${escapeHtml(stream.title)}">▶ Test</button>
+          ${injectBtn}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  $$(".preview-prov-stream").forEach((btn) => btn.addEventListener("click", () => previewStream(btn.dataset.url, btn.dataset.title, false)));
+  $$(".inject-single-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idx = Number(btn.dataset.idx);
+      const stream = filtered[idx];
+      if (!stream) return;
+      btn.disabled = true;
+      btn.textContent = "Injecting…";
+      try {
+        await api("/api/v1/admin/event-channels/inject-single", {
+          method: "POST",
+          body: JSON.stringify({ stream })
+        });
+        showToast(`Successfully injected "${stream.title}" into live channels!`, "success");
+        stream.alreadyInjected = true;
+        renderProviderStreams();
+        await loadEventChannels();
+      } catch (err) {
+        showToast(`Injection failed: ${err.message}`, "error");
+        btn.disabled = false;
+        btn.textContent = "💉 Inject Stream";
+      }
+    });
+  });
+}
+
+$("#providerStreamSearch")?.addEventListener("input", (e) => {
+  providerSearchQuery = e.target.value.trim().toLowerCase();
+  renderProviderStreams();
+});
+
+$$("[data-prov-sport]").forEach((pill) => {
+  pill.addEventListener("click", () => {
+    $$("[data-prov-sport]").forEach((p) => p.classList.remove("active-prov-pill"));
+    pill.classList.add("active-prov-pill");
+    activeProvSport = pill.dataset.provSport;
+    renderProviderStreams();
+  });
+});
+
+$("#injectAllVisibleBtn")?.addEventListener("click", async () => {
+  const visible = getVisibleProviderStreams();
+  const existingTvgIds = new Set((state.events || []).map(e => e.tvg_id));
+  const toInject = visible.filter(s => !s.alreadyInjected && !existingTvgIds.has(s.tvgId));
+
+  if (!toInject.length) {
+    showToast("All visible streams in this filter are already injected!", "info");
+    return;
+  }
+
+  const btn = $("#injectAllVisibleBtn");
+  if (btn) btn.disabled = true;
+  showToast(`Injecting ${toInject.length} streams...`, "info");
+
+  let successCount = 0;
+  for (const stream of toInject) {
+    try {
+      await api("/api/v1/admin/event-channels/inject-single", {
+        method: "POST",
+        body: JSON.stringify({ stream })
+      });
+      stream.alreadyInjected = true;
+      successCount++;
+    } catch (err) {
+      console.error("Single stream injection failed:", err);
+    }
+  }
+
+  showToast(`Successfully injected ${successCount} streams into GLZ TV!`, "success");
+  if (btn) btn.disabled = false;
+  renderProviderStreams();
+  await loadEventChannels();
+});
 
 async function ingestConMeFeed() {
   const btn = $("#syncConMeFeedBtn");
@@ -2755,6 +2934,10 @@ async function deleteEventChannel(id) {
   }
 }
 
+$("#browseProviderStreamsBtn")?.addEventListener("click", openBrowseProviderDialog);
+$("#browseEventsEmptyBtn")?.addEventListener("click", openBrowseProviderDialog);
+$$("[data-close-browse-provider]").forEach((btn) => btn.addEventListener("click", () => $("#browseProviderDialog").close()));
+
 $("#syncConMeFeedBtn")?.addEventListener("click", ingestConMeFeed);
 $("#checkStreamHealthBtn")?.addEventListener("click", checkAllStreamHealth);
 $("#syncEventsEmptyBtn")?.addEventListener("click", ingestConMeFeed);
@@ -2762,4 +2945,5 @@ $("#addEventChannelBtn")?.addEventListener("click", () => openEventDialog());
 $$("[data-close-event]").forEach((btn) => btn.addEventListener("click", () => $("#eventDialog").close()));
 $("#eventForm")?.addEventListener("submit", saveEventChannel);
 $("#deleteEventBtn")?.addEventListener("click", () => deleteEventChannel($("#eventId").value));
+
 

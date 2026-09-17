@@ -2085,6 +2085,131 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
   }
 }
 
+function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
+  const lines = m3uText.split(/\r?\n/);
+  const events: ParsedEventChannel[] = [];
+  let pendingExtInf: string | null = null;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("#EXTINF:")) {
+      pendingExtInf = line;
+      continue;
+    }
+    if (line.startsWith("#") || !pendingExtInf) continue;
+
+    const streamUrl = line;
+    const tvgIdMatch = pendingExtInf.match(/tvg-id="([^"]+)"/i);
+    const tvgNameMatch = pendingExtInf.match(/tvg-name="([^"]+)"/i);
+    const groupTitleMatch = pendingExtInf.match(/group-title="([^"]+)"/i);
+    const tvgLogoMatch = pendingExtInf.match(/tvg-logo="([^"]+)"/i);
+    const commaIndex = pendingExtInf.indexOf(",");
+    const title = commaIndex >= 0 ? pendingExtInf.substring(commaIndex + 1).trim() : "Live Event";
+
+    const tvgId = tvgIdMatch ? tvgIdMatch[1] : `event.${events.length + 1}`;
+    const tvgName = tvgNameMatch ? tvgNameMatch[1] : tvgId;
+    const groupTitle = groupTitleMatch ? groupTitleMatch[1] : "Major League Sports (Events)";
+    const logoUrl = tvgLogoMatch ? tvgLogoMatch[1] : "";
+
+    const fullText = `${groupTitle} ${title} ${tvgId}`.toUpperCase();
+    const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(fullText) || /^(DE|GER):/i.test(title);
+    if (isGerman) {
+      pendingExtInf = null;
+      continue;
+    }
+
+    const parsedTimes = parseInlineEventTime(title);
+    const sportLeague = detectSportLeague(tvgId, groupTitle, title);
+
+    events.push({
+      tvgId,
+      tvgName,
+      title,
+      sportLeague,
+      groupTitle,
+      logoUrl,
+      streamUrl,
+      channelNumber: "",
+      startTime: parsedTimes.startTime.toISOString(),
+      endTime: parsedTimes.endTime.toISOString()
+    });
+
+    pendingExtInf = null;
+  }
+
+  return assignCategoryChannelNumbers(events);
+}
+
+async function fetchProviderFeed(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const response = await fetch("https://starlite.best/api/list/mygbb8/167848", {
+    headers: {
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+  });
+  if (!response.ok) throw new Error(`Provider feed returned HTTP status ${response.status}`);
+  const text = await response.text();
+  const allParsed = parseAllProviderStreams(text);
+
+  const existing = await supabaseJson(env, "/rest/v1/event_channels?select=tvg_id").catch(() => []) as Record<string, unknown>[];
+  const existingSet = new Set((existing || []).map(row => String(row.tvg_id)));
+
+  const streams = allParsed.map(item => ({
+    ...item,
+    alreadyInjected: existingSet.has(item.tvgId)
+  }));
+
+  return json({ ok: true, count: streams.length, streams });
+}
+
+async function injectSingleStream(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const input = await body(request);
+  const stream = input.stream as ParsedEventChannel;
+  if (!stream || !stream.title || !stream.streamUrl) {
+    throw new Error("Invalid stream payload");
+  }
+
+  if (!stream.channelNumber) {
+    const prefix = getChannelPrefix(stream.sportLeague || "SPORTS", stream.title, stream.groupTitle || "", stream.tvgId || "");
+    stream.channelNumber = `${prefix}-01`;
+  }
+
+  const payload = {
+    tvg_id: stream.tvgId,
+    title: stream.title,
+    sport_league: stream.sportLeague || "SPORTS",
+    group_title: stream.groupTitle || "Major League Sports (Events)",
+    logo_url: stream.logoUrl || null,
+    stream_url: stream.streamUrl,
+    channel_number: stream.channelNumber,
+    start_time: stream.startTime || new Date().toISOString(),
+    end_time: stream.endTime || new Date(Date.now() + 4 * 3600_000).toISOString(),
+    pre_buffer_hours: 1,
+    post_buffer_hours: 2,
+    status: "active",
+    auto_ingested: false,
+    is_online: true,
+    updated_at: new Date().toISOString()
+  };
+
+  const rows = await supabaseJson(env, "/rest/v1/event_channels?on_conflict=tvg_id&select=*", {
+    method: "POST",
+    headers: { prefer: "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify([payload])
+  }).catch(async () => {
+    return await supabaseJson(env, "/rest/v1/event_channels?select=*", {
+      method: "POST",
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify([payload])
+    });
+  }) as Record<string, unknown>[];
+
+  await pushConfigUpdateToAllDevices(env);
+  return json({ ok: true, event: rows[0] || payload });
+}
+
 async function createEventChannel(request: Request, env: Env): Promise<Response> {
   await adminUser(request, env);
   const input = await body(request);
@@ -2330,6 +2455,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
 
   // Live Event Channels API endpoints
   if (path === "/api/v1/admin/event-channels" && request.method === "GET") return listEventChannels(request, env);
+  if (path === "/api/v1/admin/event-channels/provider-feed" && request.method === "GET") return fetchProviderFeed(request, env);
+  if (path === "/api/v1/admin/event-channels/inject-single" && request.method === "POST") return injectSingleStream(request, env);
   if (path === "/api/v1/admin/event-channels/ingest" && request.method === "POST") return ingestEventChannels(request, env);
   if (path === "/api/v1/admin/event-channels/check-health" && request.method === "POST") return checkEventChannelsHealth(request, env);
   if (path === "/api/v1/admin/event-channels" && request.method === "POST") return createEventChannel(request, env);
