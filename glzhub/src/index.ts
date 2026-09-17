@@ -1539,8 +1539,8 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
 
     const startTime = new Date(String(event.start_time));
     const endTime = new Date(String(event.end_time));
-    const preBuffer = (Number(event.pre_buffer_hours) || 2) * 3600_000;
-    const postBuffer = (Number(event.post_buffer_hours) || 2) * 3600_000;
+    const preBuffer = (Number(event.pre_buffer_hours) || 1) * 3600_000;
+    const postBuffer = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
 
     const winStart = new Date(startTime.getTime() - preBuffer);
     const winEnd = new Date(endTime.getTime() + postBuffer);
@@ -1753,7 +1753,7 @@ function isLiveEventChannel(groupTitle: string, title: string, tvgId: string): b
   if (isGerman) return false;
 
   // 2. Exclude empty or unadvertised placeholder / offline feeds
-  const isPlaceholder = /\b(WILL START SOON|OFFLINE|NO EVENT|STREAM UNAVAILABLE|TEST|EMPTY|FEED OFFLINE|STANDBY|CHANNEL UNAVAILABLE)\b/i.test(titleUpper);
+  const isPlaceholder = /\b(WILL START SOON|OFFLINE|OFF-LINE|NO EVENT|STREAM UNAVAILABLE|TEST|EMPTY|FEED OFFLINE|STANDBY|CHANNEL UNAVAILABLE|TEMPORARILY OFFLINE|NOT AVAILABLE|NO BROADCAST|NO SIGNAL|STREAM DOWN|OFF AIR|SIGN OFF|CHANNEL OFFLINE|STREAMING SOON|EVENT ENDED|FEED DOWN|TBD)\b/i.test(fullText);
   if (isPlaceholder) return false;
 
   // 3. Target major sports & leagues: MLB, NBA, NFL, College Football (SEC, Big10, ACC, CFB), UFC/MMA/Boxing, Tennis
@@ -1879,8 +1879,8 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
       channel_number: item.channelNumber,
       start_time: item.startTime,
       end_time: item.endTime,
-      pre_buffer_hours: 2,
-      post_buffer_hours: 2,
+      pre_buffer_hours: 1,
+      post_buffer_hours: 1.5,
       status: "active",
       auto_ingested: true,
       updated_at: new Date().toISOString()
@@ -1922,8 +1922,8 @@ async function createEventChannel(request: Request, env: Env): Promise<Response>
   const channelNumber = optionalString(input.channelNumber, "channelNumber", 20) || "30-01";
   const startTime = optionalString(input.startTime, "startTime", 60) || new Date().toISOString();
   const endTime = optionalString(input.endTime, "endTime", 60) || new Date(Date.now() + 4 * 3600_000).toISOString();
-  const preBufferHours = Number(input.preBufferHours || 3);
-  const postBufferHours = Number(input.postBufferHours || 3);
+  const preBufferHours = Number(input.preBufferHours || 1);
+  const postBufferHours = Number(input.postBufferHours || 1.5);
 
   const rows = await supabaseJson(env, "/rest/v1/event_channels?select=*", {
     method: "POST",
@@ -2056,8 +2056,8 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
       if (String(event.status) === 'disabled' || String(event.status) === 'expired' || event.is_online === false) continue;
       const startTime = new Date(String(event.start_time)).getTime();
       const endTime = new Date(String(event.end_time)).getTime();
-      const preBuffer = (Number(event.pre_buffer_hours) || 2) * 3600_000;
-      const postBuffer = (Number(event.post_buffer_hours) || 2) * 3600_000;
+      const preBuffer = (Number(event.pre_buffer_hours) || 1) * 3600_000;
+      const postBuffer = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
       if (now >= (startTime - preBuffer) && now <= (endTime + postBuffer)) {
         const channelDisplayName = "SPORTS PPV";
         const mediaUrl = String(event.stream_url || "");

@@ -2561,8 +2561,8 @@ function isEventActive(event) {
   if (event.status === "disabled" || event.status === "expired") return false;
   const start = new Date(event.start_time).getTime();
   const end = new Date(event.end_time).getTime();
-  const preBuffer = (Number(event.pre_buffer_hours) || 3) * 3600_000;
-  const postBuffer = (Number(event.post_buffer_hours) || 3) * 3600_000;
+  const preBuffer = (Number(event.pre_buffer_hours) || 1) * 3600_000;
+  const postBuffer = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
   const now = Date.now();
   return now >= (start - preBuffer) && now <= (end + postBuffer);
 }
@@ -2701,8 +2701,8 @@ function openEventDialog(id = "") {
 
   $("#eventStartTime").value = localInputValue(defaultStart);
   $("#eventEndTime").value = localInputValue(defaultEnd);
-  $("#eventPreBuffer").value = event?.pre_buffer_hours ?? 3;
-  $("#eventPostBuffer").value = event?.post_buffer_hours ?? 3;
+  $("#eventPreBuffer").value = event?.pre_buffer_hours ?? 1;
+  $("#eventPostBuffer").value = event?.post_buffer_hours ?? 1.5;
   $("#eventStatus").value = event?.status || "active";
 
   $("#eventDialogTitle").textContent = event ? "Edit Event Channel" : "Add Custom Event Channel";
