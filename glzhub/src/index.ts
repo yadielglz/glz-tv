@@ -1694,35 +1694,95 @@ function sortEventChannels<T extends { channel_number?: unknown; channelNumber?:
   });
 }
 
+function getEasternOffsetHours(date: Date): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      timeZoneName: 'shortOffset'
+    }).formatToParts(date);
+    const offsetStr = parts.find(p => p.type === 'timeZoneName')?.value || '-4';
+    const match = offsetStr.match(/GMT([+-]\d+)/);
+    if (match) return parseInt(match[1], 10);
+  } catch {
+    const month = date.getUTCMonth();
+    return (month >= 2 && month <= 10) ? -4 : -5;
+  }
+  return -4;
+}
+
 function parseInlineEventTime(title: string): { startTime: Date; endTime: Date } {
-  const atMatch = title.match(/@\s*([A-Za-z]{3})\s+(\d{1,2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-  if (atMatch) {
-    const months: Record<string, number> = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-    };
-    const monthStr = atMatch[1].toLowerCase();
-    const day = parseInt(atMatch[2], 10);
-    let hours = parseInt(atMatch[3], 10);
-    const minutes = parseInt(atMatch[4], 10);
-    const ampm = atMatch[5].toUpperCase();
+  const months: Record<string, number> = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  };
+  const now = new Date();
+  const etOffset = getEasternOffsetHours(now);
+
+  // 1. Matches `@ Sep 16 7:10 PM` or `@ Sep 16 7:10PM` or `@ 09/16 7:10 PM`
+  const matchWithMonth = title.match(/@\s*([A-Za-z]{3}|\d{1,2}[\/-]\d{1,2})\s+(\d{1,2})?\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (matchWithMonth) {
+    const monthPart = matchWithMonth[1].toLowerCase();
+    const dayPart = matchWithMonth[2];
+    let hours = parseInt(matchWithMonth[3], 10);
+    const minutes = parseInt(matchWithMonth[4], 10);
+    const ampm = matchWithMonth[5]?.toUpperCase();
 
     if (ampm === "PM" && hours < 12) hours += 12;
     if (ampm === "AM" && hours === 12) hours = 0;
 
-    if (monthStr in months) {
-      const now = new Date();
-      let year = now.getFullYear();
-      const month = months[monthStr];
-      const start = new Date(Date.UTC(year, month, day, hours, minutes));
-      const end = new Date(start.getTime() + 3.5 * 3600_000);
-      return { startTime: start, endTime: end };
+    let month = now.getMonth();
+    let day = now.getDate();
+
+    if (monthPart in months) {
+      month = months[monthPart];
+      if (dayPart) day = parseInt(dayPart, 10);
+    } else if (monthPart.includes("/") || monthPart.includes("-")) {
+      const [m, d] = monthPart.split(/[\/-]/).map(n => parseInt(n, 10));
+      if (m > 0 && m <= 12) month = m - 1;
+      if (d > 0 && d <= 31) day = d;
     }
+
+    const year = now.getFullYear();
+    const start = new Date(Date.UTC(year, month, day, hours - etOffset, minutes));
+    const end = new Date(start.getTime() + 3.25 * 3600_000);
+    return { startTime: start, endTime: end };
   }
 
-  const now = new Date();
-  const start = new Date(now.getTime() - 30 * 60_000);
-  const end = new Date(now.getTime() + 3.5 * 3600_000);
+  // 2. Matches `7:10 PM ET`, `(7:10 PM)`, `@ 7:10 PM`, `7:10PM`
+  const matchTimeOnly = title.match(/(?:@|\(|\b)\s*(\d{1,2}):(\d{2})\s*(AM|PM)?\s*(?:ET|EDT|EST)?(?:\)|\b)/i);
+  if (matchTimeOnly) {
+    let hours = parseInt(matchTimeOnly[1], 10);
+    const minutes = parseInt(matchTimeOnly[2], 10);
+    const ampm = matchTimeOnly[3]?.toUpperCase();
+
+    if (ampm === "PM" && hours < 12) hours += 12;
+    if (ampm === "AM" && hours === 12) hours = 0;
+
+    const etNowParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric', month: 'numeric', day: 'numeric'
+    }).formatToParts(now);
+    const year = parseInt(etNowParts.find(p => p.type === 'year')?.value || String(now.getFullYear()), 10);
+    const month = parseInt(etNowParts.find(p => p.type === 'month')?.value || String(now.getMonth() + 1), 10) - 1;
+    const day = parseInt(etNowParts.find(p => p.type === 'day')?.value || String(now.getDate()), 10);
+
+    const start = new Date(Date.UTC(year, month, day, hours - etOffset, minutes));
+    const end = new Date(start.getTime() + 3.25 * 3600_000);
+    return { startTime: start, endTime: end };
+  }
+
+  // 3. Fallback when title does not state an explicit time: align start to Eastern Time for today
+  const etNowParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', hour12: false
+  }).formatToParts(now);
+  const year = parseInt(etNowParts.find(p => p.type === 'year')?.value || String(now.getFullYear()), 10);
+  const month = parseInt(etNowParts.find(p => p.type === 'month')?.value || String(now.getMonth() + 1), 10) - 1;
+  const day = parseInt(etNowParts.find(p => p.type === 'day')?.value || String(now.getDate()), 10);
+  const curHour = parseInt(etNowParts.find(p => p.type === 'hour')?.value || String(now.getHours()), 10);
+
+  const start = new Date(Date.UTC(year, month, day, curHour - etOffset, 0));
+  const end = new Date(start.getTime() + 3.25 * 3600_000);
   return { startTime: start, endTime: end };
 }
 
@@ -2195,6 +2255,91 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   return env.ASSETS.fetch(request);
 }
 
+async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: number; online: number; offline: number }> {
+  let ingested = 0;
+  try {
+    const providerUrl = "https://starlite.best/api/list/mygbb8/167848";
+    const response = await fetch(providerUrl, {
+      headers: {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+    if (response.ok) {
+      const text = await response.text();
+      const parsed = parseConMeM3u(text);
+      if (parsed.length > 0) {
+        const uniqueMap = new Map<string, typeof parsed[0]>();
+        for (const item of parsed) {
+          if (!uniqueMap.has(item.tvgId)) uniqueMap.set(item.tvgId, item);
+        }
+        const deduplicated = sortEventChannels(Array.from(uniqueMap.values()));
+        const renumbered = deduplicated.map((item, idx) => ({
+          ...item,
+          channelNumber: `30-${String(idx + 1).padStart(2, "0")}`
+        }));
+        const upsertBody = renumbered.map((item) => ({
+          tvg_id: item.tvgId,
+          tvg_name: item.tvgName,
+          title: item.title,
+          sport_league: item.sportLeague,
+          group_title: item.groupTitle,
+          logo_url: item.logoUrl,
+          stream_url: item.streamUrl,
+          channel_number: item.channelNumber,
+          start_time: item.startTime,
+          end_time: item.endTime,
+          pre_buffer_hours: 1,
+          post_buffer_hours: 1.5,
+          status: "active",
+          auto_ingested: true,
+          updated_at: new Date().toISOString()
+        }));
+        await supabaseJson(env, "/rest/v1/event_channels?on_conflict=tvg_id&select=*", {
+          method: "POST",
+          headers: { prefer: "resolution=merge-duplicates,return=representation" },
+          body: JSON.stringify(upsertBody)
+        }).catch(() => undefined);
+        ingested = deduplicated.length;
+      }
+    }
+  } catch (err) {
+    console.error("Auto-ingest background error:", err);
+  }
+
+  let online = 0;
+  let offline = 0;
+  try {
+    const rows = await supabaseJson(env,
+      `/rest/v1/event_channels?status=neq.disabled&select=id,stream_url`
+    ).catch(() => null) as Record<string, unknown>[] | null;
+    if (Array.isArray(rows) && rows.length > 0) {
+      const nowIso = new Date().toISOString();
+      for (let i = 0; i < rows.length; i += 5) {
+        const chunk = rows.slice(i, i + 5);
+        await Promise.all(chunk.map(async (row) => {
+          const id = String(row.id);
+          const url = String(row.stream_url || "");
+          const health = await checkSingleStreamHealth(url);
+          if (health.ok) online++; else offline++;
+          await supabaseJson(env, `/rest/v1/event_channels?id=eq.${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              is_online: health.ok,
+              health_status: health.statusText,
+              last_checked_at: nowIso,
+              updated_at: nowIso
+            })
+          }).catch(() => undefined);
+        }));
+      }
+    }
+  } catch (err) {
+    console.error("Auto health check background error:", err);
+  }
+
+  return { ingested, online, offline };
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
@@ -2208,5 +2353,11 @@ export default {
       const status = isInputError ? 400 : isPublishError ? 502 : 500;
       return json({ error: status === 500 ? "Service unavailable." : message }, status);
     }
+  },
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil((async () => {
+      console.log("Running 15-minute scheduled event sync & stream health check...");
+      await performAutoIngestAndHealthCheck(env);
+    })());
   }
 } satisfies ExportedHandler<Env>;
