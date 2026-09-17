@@ -1825,6 +1825,23 @@ function detectSportLeague(tvgId: string, groupTitle: string, title: string): st
   return "SPORTS";
 }
 
+const DEFAULT_EVENT_LOGOS: Record<string, string> = {
+  MLB: "https://i.ibb.co/P0Gr6v6/mlb.png",
+  NFL: "https://i.ibb.co/WNJnTdTH/nfl.png",
+  UFC: "https://i.ibb.co/zW8RRPKF/specevent.png"
+};
+
+// Named channels that keep their own scraped logo instead of the generic MLB default
+const MLB_LOGO_EXCLUSIONS = ["MLB NETWORK", "STRIKE ZONE", "STRIKEZONE"];
+
+function resolveEventLogoUrl(sportLeague: string, title: string, tvgName: string): string | null {
+  const nameText = `${title} ${tvgName}`.toUpperCase();
+  if (sportLeague === "MLB" && MLB_LOGO_EXCLUSIONS.some(exclusion => nameText.includes(exclusion))) {
+    return null;
+  }
+  return DEFAULT_EVENT_LOGOS[sportLeague] ?? null;
+}
+
 function isLiveEventChannel(groupTitle: string, title: string, tvgId: string): boolean {
   const groupUpper = groupTitle.toUpperCase();
   const titleUpper = title.toUpperCase();
@@ -1880,7 +1897,7 @@ function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
     const tvgId = tvgIdMatch ? tvgIdMatch[1] : `event.${events.length + 1}`;
     const tvgName = tvgNameMatch ? tvgNameMatch[1] : tvgId;
     const groupTitle = groupTitleMatch ? groupTitleMatch[1] : "Major League Sports (Events)";
-    const logoUrl = tvgLogoMatch ? tvgLogoMatch[1] : "";
+    const scrapedLogoUrl = tvgLogoMatch ? tvgLogoMatch[1] : "";
 
     // Strictly filter: only ingest live event and live sports streams!
     if (!isLiveEventChannel(groupTitle, title, tvgId)) {
@@ -1890,6 +1907,7 @@ function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
 
     const parsedTimes = parseInlineEventTime(title);
     const sportLeague = detectSportLeague(tvgId, groupTitle, title);
+    const logoUrl = resolveEventLogoUrl(sportLeague, title, tvgName) ?? scrapedLogoUrl;
 
     events.push({
       tvgId,
@@ -2110,7 +2128,7 @@ function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
     const tvgId = tvgIdMatch ? tvgIdMatch[1] : `event.${events.length + 1}`;
     const tvgName = tvgNameMatch ? tvgNameMatch[1] : tvgId;
     const groupTitle = groupTitleMatch ? groupTitleMatch[1] : "Major League Sports (Events)";
-    const logoUrl = tvgLogoMatch ? tvgLogoMatch[1] : "";
+    const scrapedLogoUrl = tvgLogoMatch ? tvgLogoMatch[1] : "";
 
     const fullText = `${groupTitle} ${title} ${tvgId}`.toUpperCase();
     const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(fullText) || /^(DE|GER):/i.test(title);
@@ -2121,6 +2139,7 @@ function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
 
     const parsedTimes = parseInlineEventTime(title);
     const sportLeague = detectSportLeague(tvgId, groupTitle, title);
+    const logoUrl = resolveEventLogoUrl(sportLeague, title, tvgName) ?? scrapedLogoUrl;
 
     events.push({
       tvgId,
