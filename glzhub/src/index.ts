@@ -1731,8 +1731,10 @@ function detectSportLeague(tvgId: string, groupTitle: string, title: string): st
   if (text.includes("MLB")) return "MLB";
   if (text.includes("NFL")) return "NFL";
   if (text.includes("NBA")) return "NBA";
+  if (text.includes("NCAA") || text.includes("SEC") || text.includes("BIG10") || text.includes("BIG 10") || text.includes("ACC") || text.includes("CFB")) return "NCAA";
   if (text.includes("MLS")) return "MLS";
-  if (text.includes("UFC") || text.includes("COMBAT") || text.includes("PFL") || text.includes("BOXING")) return "UFC";
+  if (text.includes("UFC") || text.includes("MMA") || text.includes("PFL") || text.includes("BOXING")) return "UFC";
+  if (text.includes("TENNIS") || text.includes("ATP") || text.includes("WTA") || text.includes("WIMBLEDON")) return "TENNIS";
   if (text.includes("NHL")) return "NHL";
   return "SPORTS";
 }
@@ -1741,16 +1743,28 @@ function isLiveEventChannel(groupTitle: string, title: string, tvgId: string): b
   const groupUpper = groupTitle.toUpperCase();
   const titleUpper = title.toUpperCase();
   const tvgIdUpper = tvgId.toUpperCase();
+  const fullText = `${groupUpper} ${titleUpper} ${tvgIdUpper}`;
 
-  // 1. Explicit "(Events)" or "PPV" group in M3U
-  if (groupUpper.includes("EVENTS") || groupUpper.includes("PPV")) return true;
+  // 1. Strictly exclude DE (German) channels & non-US / foreign German feeds
+  const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(groupUpper) ||
+                   /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(tvgIdUpper) ||
+                   /^(DE|GER):/i.test(titleUpper) ||
+                   /\[DE\]|\(DE\)|\|DE\|/i.test(fullText);
+  if (isGerman) return false;
 
-  // 2. Matchup patterns in title (e.g. "Yankees vs. Mets", "Lakers @ Celtics", "MLB: ...")
+  // 2. Exclude empty or unadvertised placeholder / offline feeds
+  const isPlaceholder = /\b(WILL START SOON|OFFLINE|NO EVENT|STREAM UNAVAILABLE|TEST|EMPTY|FEED OFFLINE|STANDBY|CHANNEL UNAVAILABLE)\b/i.test(titleUpper);
+  if (isPlaceholder) return false;
+
+  // 3. Target major sports & leagues: MLB, NBA, NFL, College Football (SEC, Big10, ACC, CFB), UFC/MMA/Boxing, Tennis
+  const isTargetLeague = /\b(MLB|NFL|NBA|MLS|NHL|UFC|MMA|PFL|WWE|BOXING|NCAA|SEC|BIG10|BIG\s*10|BIG12|BIG\s*12|ACC|PAC-12|CFB|COLLEGE\s*FOOTBALL|TENNIS|ATP|WTA|WIMBLEDON|US\s*OPEN)\b/i.test(fullText);
+
+  // 4. Match explicit Event/PPV groups or matchup patterns (vs / @)
+  const isEventGroup = groupUpper.includes("EVENTS") || groupUpper.includes("PPV") || groupUpper.includes("SPORTS");
   const containsMatchup = /\b(vs\.?|@)\b/i.test(titleUpper) || /\b(vs\.?|@)\b/i.test(tvgIdUpper);
-  const containsLeagueKey = /\b(MLB|NFL|NBA|MLS|NHL|UFC|PFL|WWE|BOXING|NCAA|SOCCER)\b/i.test(titleUpper) ||
-                            /\b(MLB|NFL|NBA|MLS|NHL|UFC|PFL|WWE|BOXING|NCAA|SOCCER)\b/i.test(groupUpper);
 
-  if (containsMatchup && containsLeagueKey) return true;
+  if (isTargetLeague && (containsMatchup || isEventGroup)) return true;
+  if (containsMatchup && isEventGroup) return true;
 
   return false;
 }
