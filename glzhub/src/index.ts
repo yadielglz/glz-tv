@@ -1403,7 +1403,7 @@ async function refreshManagedGuideSource(env: Env, row: Record<string, unknown>,
 function managedGuideResponse(body: string | ReadableStream, playlistId: string, gzip: boolean): Response {
   const headers = new Headers({
     "content-type": "application/xml; charset=utf-8",
-    "cache-control": "public, max-age=300",
+    "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
     "content-disposition": `attachment; filename="guide-${playlistId}.xml${gzip ? ".gz" : ""}"`
   });
   let responseBody: BodyInit = body;
@@ -1620,16 +1620,6 @@ async function exportManagedGuide(
   gzip: boolean,
   requireAdmin = false
 ): Promise<Response> {
-  const cacheKey = new Request(request.url, { method: "GET" });
-  if (!requireAdmin) {
-    const cached = await caches.default.match(cacheKey);
-    if (cached) {
-      const headers = new Headers(cached.headers);
-      headers.set("x-glzhub-cache", "HIT");
-      return new Response(cached.body, { status: cached.status, headers });
-    }
-  }
-
   let ownerFilter = "";
   if (requireAdmin) {
     const { user } = await ownedPlaylist(request, env, playlistId);
@@ -1660,18 +1650,7 @@ async function exportManagedGuide(
   let rawXml = typeof guideBody === "string" ? guideBody : await new Response(guideBody).text();
   const guideXml = await injectEventChannelsXmlTv(env, rawXml);
   const response = managedGuideResponse(guideXml, playlistId, gzip);
-  if (!requireAdmin) {
-    const cacheResponse = response.clone();
-    cacheResponse.headers.set("x-glzhub-cache", "MISS");
-    ctx.waitUntil(caches.default.put(cacheKey, cacheResponse).catch((error) => {
-      console.error(JSON.stringify({
-        event: "managed_epg_cache_write_failed",
-        playlistId,
-        error: error instanceof Error ? error.message : String(error)
-      }));
-    }));
-  }
-  response.headers.set("x-glzhub-cache", requireAdmin ? "BYPASS" : "MISS");
+  response.headers.set("x-glzhub-cache", "BYPASS");
   return response;
 }
 
