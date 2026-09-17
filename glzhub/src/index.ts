@@ -1538,11 +1538,14 @@ function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now())
   const sportLeague = String(event.sport_league || "").toUpperCase();
   const fullText = `${sportLeague} ${title} ${group} ${tvgId}`;
 
-  // Strictly target MLB & NFL ONLY!
-  const isMlbOrNfl = /\b(MLB|NFL)\b/i.test(fullText) ||
-                     /^(MLB|NFL):/i.test(title) ||
-                     /\b(BASEBALL|FOOTBALL)\b/i.test(fullText);
-  if (!isMlbOrNfl) return false;
+  // For auto-ingested channels, strictly target MLB & NFL ONLY!
+  // Manually created channels (auto_ingested === false) bypass league filtering.
+  if (event.auto_ingested !== false) {
+    const isMlbOrNfl = /\b(MLB|NFL)\b/i.test(fullText) ||
+                       /^(MLB|NFL):/i.test(title) ||
+                       /\b(BASEBALL|FOOTBALL)\b/i.test(fullText);
+    if (!isMlbOrNfl) return false;
+  }
 
   // Check offline / placeholder / German feed keywords
   const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(group) ||
