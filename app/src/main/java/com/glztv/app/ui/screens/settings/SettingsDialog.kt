@@ -46,6 +46,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.nativeKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -466,8 +467,6 @@ fun SettingsDialog(
     updateChannel: String,
     sourceStatus: String,
     hubStatus: String,
-    client: OkHttpClient,
-    prefs: android.content.SharedPreferences,
     screensaverTimeoutMinutes: Int = 5,
     appLanguage: String = "en",
     onOpenSpeedTest: () -> Unit,
@@ -816,7 +815,7 @@ fun SettingsDialog(
 }
 
 @Composable
-private fun TvSettingsButton(
+fun TvSettingsButton(
     label: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
