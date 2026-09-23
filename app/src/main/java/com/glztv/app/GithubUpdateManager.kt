@@ -197,8 +197,8 @@ object GithubUpdateManager {
     }
 
     internal fun compareVersions(left: String, right: String): Int {
-        val leftParts = left.split('.').map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
-        val rightParts = right.split('.').map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
+        val leftParts = left.split('.').map { it.filter(Char::isDigit).toIntOrNull() ?: 0 }
+        val rightParts = right.split('.').map { it.filter(Char::isDigit).toIntOrNull() ?: 0 }
         return (0 until maxOf(leftParts.size, rightParts.size))
             .firstNotNullOfOrNull { index ->
                 val comparison = (leftParts.getOrNull(index) ?: 0)
