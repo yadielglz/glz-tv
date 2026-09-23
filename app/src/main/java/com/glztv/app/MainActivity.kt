@@ -1,29 +1,20 @@
-@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-
 package com.glztv.app
 
 import android.Manifest
 import android.app.Activity
 import android.content.Context
-import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.graphics.Bitmap
-import android.graphics.drawable.AdaptiveIconDrawable
-import android.graphics.drawable.Drawable
-import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.view.KeyEvent
-import android.view.WindowManager
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
-import androidx.lifecycle.lifecycleScope
+import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -34,75 +25,15 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -114,86 +45,44 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import android.view.SurfaceView
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.Tracks
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.PlayerView
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.session.MediaSession
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.network.NetworkHeaders
-import coil3.network.httpHeaders
+import androidx.lifecycle.lifecycleScope
 import com.glztv.app.data.EpgRepository
 import com.glztv.app.data.PlaylistRepository
 import com.glztv.app.data.PreferencesRepository
 import com.glztv.app.data.WeatherRepository
 import com.glztv.app.data.createPermissiveOkHttpClient
-import com.glztv.app.player.RecentChannelManager
-import com.glztv.app.player.PlaybackControlState
-import com.glztv.app.player.PlaybackDiagnostics
-import com.glztv.app.player.PlaybackErrorCategorizer
-import com.glztv.app.player.PlaybackErrorCategory
-import com.glztv.app.player.TrackOption
-import com.glztv.app.player.TrackPreferenceManager
-import com.glztv.app.player.PlaybackPerformance
-import com.glztv.app.player.PlaybackDiagnosticsPanel
-import com.glztv.app.player.SpeedTestResult
-import com.glztv.app.player.StreamSpeedTester
-import com.glztv.app.ui.components.StreamSpeedTestDialog
-import com.glztv.app.ui.screens.AmbientScreensaverScreen
-import com.glztv.app.ui.theme.GlzTheme
-import com.glztv.app.ui.theme.AmbientBackground
-import com.glztv.app.ui.components.tvFocusableWithPhysics
-import com.glztv.app.ui.components.GlzFocusCard
-import com.glztv.app.ui.components.GlzPanel
-import com.glztv.app.ui.components.GlzCardDefaults
-import com.glztv.app.ui.navigation.AppSection
-import com.glztv.app.ui.navigation.ExpressiveNavigationRail
-import com.glztv.app.ui.components.SlimHeader
+import com.glztv.app.model.DefaultEntertainmentApps
 import com.glztv.app.model.NetworkInfo
 import com.glztv.app.model.WeatherInfo
+import com.glztv.app.player.PlaybackPerformance
+import com.glztv.app.player.RecentChannelManager
+import com.glztv.app.player.SpeedTestResult
 import com.glztv.app.ui.GlzTvApp
-import com.glztv.app.ui.i18n.GlzStrings
+import com.glztv.app.ui.components.SlimHeader
+import com.glztv.app.ui.components.StreamSpeedTestDialog
 import com.glztv.app.ui.i18n.LocalGlzStrings
-import com.glztv.app.ui.WeatherFormatter
+import com.glztv.app.ui.navigation.AppSection
+import com.glztv.app.ui.navigation.ExpressiveNavigationRail
+import com.glztv.app.ui.screens.AmbientScreensaverScreen
 import com.glztv.app.ui.screens.RadioScreen
 import com.glztv.app.ui.screens.WeatherScreen
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
+import com.glztv.app.ui.screens.guide.GuideSection
+import com.glztv.app.ui.screens.home.GuestHubHome
+import com.glztv.app.ui.screens.home.handleManagedHubCommand
+import com.glztv.app.ui.screens.player.ImmersivePlayerScreen
+import com.glztv.app.ui.screens.player.MultiViewScreen
+import com.glztv.app.ui.screens.player.SportsBarKioskScreen
+import com.glztv.app.ui.screens.settings.SettingsDialog
+import com.glztv.app.ui.screens.settings.UpdateNotificationBanner
+import com.glztv.app.ui.screens.you.GuestYouSection
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -201,8 +90,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
-import java.text.DateFormat
-import java.util.Date
 import java.util.Locale
 import java.util.zip.GZIPInputStream
 
@@ -210,7 +97,6 @@ private const val PREFS = "glz_tv"
 private const val PLAYLIST_URL = "playlist_url"
 private const val EPG_URL = "epg_url"
 private const val REQUEST_HEADERS = "request_headers"
-private const val CHANNEL_FALLBACKS = "channel_fallbacks"
 private const val FAVORITES = "favorites"
 private const val THEME_MODE = "theme_mode"
 private const val CAPTIONS_ENABLED = "captions_enabled"
@@ -218,8 +104,6 @@ private const val CAPTION_LANGUAGE = "captions_language"
 private const val LEGACY_CAPTION_LANGUAGE = "caption_language"
 private const val KEEP_AWAKE_HOME = "keep_awake_home"
 private const val HOME_PREVIEW_CHANNEL_ID = "home_preview_channel_id"
-private const val SPORTS_BAR_KIOSK_CHANNEL_ID = "sports_bar_kiosk_channel_id"
-private const val SPORTS_BAR_KIOSK_RADIO_CODE = "sports_bar_kiosk_radio_code"
 private const val AUTO_UPDATE_CHECK = "auto_update"
 private const val LEGACY_AUTO_UPDATE_CHECK = "auto_update_check"
 private const val WIFI_ONLY_UPDATES = "wifi_only"
@@ -237,40 +121,8 @@ private const val DEFAULT_PLAYLIST_URL = "http://play.glztech.com/list.m3u"
 private const val DEFAULT_EPG_URL = "https://play.glztech.com/epg.xml.gz"
 private const val DEFAULT_WEATHER_LOCATION = "San Juan"
 
-// Shared slide+fade motion for Home section switches and every edge panel.
 private const val PANEL_ANIM_IN = 240
 private const val PANEL_ANIM_OUT = 170
-
-/** Enter transition for an edge panel: slide in from its own screen edge + fade. */
-private fun panelEnter(fromLeft: Boolean) =
-    fadeIn(tween(PANEL_ANIM_IN)) +
-        slideInHorizontally(tween(PANEL_ANIM_IN)) { width -> if (fromLeft) -width else width }
-
-/** Exit transition mirroring [panelEnter]. */
-private fun panelExit(fromLeft: Boolean) =
-    fadeOut(tween(PANEL_ANIM_OUT)) +
-        slideOutHorizontally(tween(PANEL_ANIM_OUT)) { width -> if (fromLeft) -width else width }
-
-private enum class PlayerDrawer { None, Channels, Services, Recent }
-
-private data class EntertainmentApp(
-    val name: String,
-    val packageName: String,
-    val accent: Color
-)
-
-private val EntertainmentApps = listOf(
-    EntertainmentApp("YouTube", "com.google.android.youtube.tv", Color(0xFFFF2020)),
-    EntertainmentApp("Netflix", "com.netflix.ninja", Color(0xFFE50914)),
-    EntertainmentApp("MLB", "com.bamnetworks.mobile.android.gameday.atbat", Color(0xFF17408B)),
-    EntertainmentApp("OleadaTV", "com.android.mgsandroid", Color(0xFF6E55FF)),
-    EntertainmentApp("GLZ Radio", "com.glztech.radiostream", Color(0xFFFF6B2C)),
-    EntertainmentApp("GeeSports", "com.live.geesports", Color(0xFF00A86B)),
-    EntertainmentApp("Paramount+", "com.cbs.ott", Color(0xFF0064FF)),
-    EntertainmentApp("Disney+", "com.disney.disneyplus", Color(0xFF1234B8)),
-    EntertainmentApp("Peacock", "com.peacocktv.peacockandroid", Color(0xFF5D2B86)),
-    EntertainmentApp("Spectrum TV", "com.TWCableTV", Color(0xFF0073CF))
-)
 
 class MainActivity : ComponentActivity() {
     private val deepLinkChannelId = mutableStateOf<String?>(null)
@@ -313,8 +165,6 @@ class MainActivity : ComponentActivity() {
 
     private fun requestWifiIdentityPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
-        // A TV does not need an SSID badly enough to interrupt first launch with a
-        // location permission dialog (and Fire TV may not provide one at all).
         if (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK ==
             Configuration.UI_MODE_TYPE_TELEVISION) return
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -346,7 +196,6 @@ internal fun TvScreen(
     var appLanguage by remember {
         mutableStateOf(prefs.getString(GlzHubManager.APP_LANGUAGE, "en") ?: "en")
     }
-    val strings = LocalGlzStrings.current
     val client = remember { createPermissiveOkHttpClient() }
     val sourcePreferences = remember { PreferencesRepository(context) }
     val playlistRepository = remember { PlaylistRepository(context, sourcePreferences, client) }
@@ -511,7 +360,14 @@ internal fun TvScreen(
             }
             onProgress(90, "Publishing Android TV home channels")
             withContext(Dispatchers.IO) {
-                TvHomePublisher.publish(context.applicationContext, parsed, parsedGuide)
+                val radioStations = runCatching { RadioCatalogManager.load(prefs, client).stations }.getOrDefault(emptyList())
+                TvHomePublisher.publish(
+                    context = context.applicationContext,
+                    channels = parsed,
+                    guide = parsedGuide,
+                    favorites = favorites,
+                    radioStations = radioStations
+                )
             }
         }.onFailure { error ->
             if (forceRefresh) guide = EpgGuide.Empty
@@ -534,47 +390,47 @@ internal fun TvScreen(
             reportHubSync(percent, message, syncStatus)
         }
         return try {
-        report(5, "Contacting GLZ Hub")
-        val syncResult = withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
-        report(20, "Configuration received")
-        val radioCount = withContext(Dispatchers.IO) {
-            RadioCatalogManager.load(prefs, client).stations.size
-        }
-        report(35, "Radio stations updated")
-        for (command in syncResult.commands) {
-            handleManagedHubCommand(context, prefs, client, command) {
-                loadSources(forceRefresh = true)
+            report(5, "Contacting GLZ Hub")
+            val syncResult = withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
+            report(20, "Configuration received")
+            val radioCount = withContext(Dispatchers.IO) {
+                RadioCatalogManager.load(prefs, client).stations.size
             }
-        }
-        guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
-        guestExperience = GuestExperience.from(prefs)
-        weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
-            ?: DEFAULT_WEATHER_LOCATION
-        visibleAppPackages = GlzHubManager.visibleApps(prefs)
-        appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
-        networkOverrideRevision++
-        onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
-        val syncedLang = prefs.getString(GlzHubManager.APP_LANGUAGE, appLanguage) ?: appLanguage
-        if (syncedLang != appLanguage) {
-            appLanguage = syncedLang
-            onLanguageChanged(syncedLang)
-        }
-        captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
-        captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
-        keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
-        homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
-        sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
-        osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
-        loadSources(forceRefresh = true) { percent, message -> report(percent, message) }
-        val matchedChannels = channels.count { guide.forChannel(it).isNotEmpty() }
-        val result = if (BuildConfig.DEBUG) {
-            "Synced now · ${channels.size} TV channels · $radioCount radio stations · " +
-                "${guide.programmeCount} guide entries · $matchedChannels EPG matches"
-        } else {
-            "Synced · ${channels.size} channels · $radioCount radio stations"
-        }
-        report(100, result, "complete")
-        result
+            report(35, "Radio stations updated")
+            for (command in syncResult.commands) {
+                handleManagedHubCommand(context, prefs, client, command) {
+                    loadSources(forceRefresh = true)
+                }
+            }
+            guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+            guestExperience = GuestExperience.from(prefs)
+            weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
+                ?: DEFAULT_WEATHER_LOCATION
+            visibleAppPackages = GlzHubManager.visibleApps(prefs)
+            appVisibilityManaged = prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
+            networkOverrideRevision++
+            onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
+            val syncedLang = prefs.getString(GlzHubManager.APP_LANGUAGE, appLanguage) ?: appLanguage
+            if (syncedLang != appLanguage) {
+                appLanguage = syncedLang
+                onLanguageChanged(syncedLang)
+            }
+            captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
+            captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
+            keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
+            homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
+            sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
+            osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
+            loadSources(forceRefresh = true) { percent, message -> report(percent, message) }
+            val matchedChannels = channels.count { guide.forChannel(it).isNotEmpty() }
+            val result = if (BuildConfig.DEBUG) {
+                "Synced now · ${channels.size} TV channels · $radioCount radio stations · " +
+                    "${guide.programmeCount} guide entries · $matchedChannels EPG matches"
+            } else {
+                "Synced · ${channels.size} channels · $radioCount radio stations"
+            }
+            report(100, result, "complete")
+            result
         } catch (error: Throwable) {
             runCatching {
                 report(
@@ -639,9 +495,6 @@ internal fun TvScreen(
         } else {
             loadSources()
         }
-        // Config is durable and versioned; polling it every five seconds creates needless
-        // Hub load. Keep an unclaimed pairing responsive, but otherwise separate the light
-        // heartbeat from the config/command check.
         var nextConfigSyncAt = System.currentTimeMillis() + 5 * 60_000L
         var nextHeartbeatAt = System.currentTimeMillis() + 90_000L
         var nextCommandCheckAt = System.currentTimeMillis() + 30_000L
@@ -705,13 +558,12 @@ internal fun TvScreen(
                     ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
                     else "Not connected"
             }.onFailure {
-                // Claiming a new pairing needs a quicker retry. Established devices retain
-                // their cached configuration and retry on the normal cadence.
                 nextConfigSyncAt = now + if (pendingEnrollment) 15_000L else 5 * 60_000L
                 hubStatus = "GLZ Hub sync unavailable · using saved settings"
             }
         }
     }
+
     val autoUpdateEnabled = (prefs.all[AUTO_UPDATE_CHECK] as? Boolean)
         ?: prefs.getBoolean(LEGACY_AUTO_UPDATE_CHECK, true)
     LaunchedEffect(autoUpdateEnabled) {
@@ -722,6 +574,7 @@ internal fun TvScreen(
             delay(6 * 60 * 60 * 1000L)
         }
     }
+
     LaunchedEffect(weatherLocation) {
         while (true) {
             weatherLoading = true
@@ -735,6 +588,7 @@ internal fun TvScreen(
             delay(30 * 60 * 1000L)
         }
     }
+
     LaunchedEffect(networkPermissionRevision, networkOverrideRevision) {
         while (true) {
             networkInfo = withContext(Dispatchers.IO) {
@@ -743,6 +597,7 @@ internal fun TvScreen(
             delay(30 * 60 * 1000L)
         }
     }
+
     LaunchedEffect(deepLinkChannelId, channels.size) {
         if (!deepLinkChannelId.isNullOrBlank() && channels.isNotEmpty()) {
             channels.firstOrNull { it.id == deepLinkChannelId }?.let {
@@ -761,17 +616,24 @@ internal fun TvScreen(
                 .thenBy { it.name.lowercase(Locale.ROOT) }
         )
     }
+
     val tuneChannel: (Channel) -> Unit = {
         if (selected?.id != it.id) {
             PlaybackPerformance.channelSelected(it.id)
             recentChannelManager.record(it.id)
             recentRevision++
+            val nowTime = System.currentTimeMillis()
+            val currentProg = guide.forChannel(it).firstOrNull { prog -> prog.startMillis <= nowTime && prog.endMillis > nowTime }
+            scope.launch(Dispatchers.IO) {
+                TvHomePublisher.recordWatchNext(context.applicationContext, it, currentProg)
+            }
         }
         selected = it
         playerActive = true
         GlzHubManager.reportActivity(prefs, "channel", it.name)
         prefs.edit().putString(LAST_CHANNEL_ID, it.id).apply()
     }
+
     val immersive = (section == AppSection.Live && selected != null && playerActive) ||
         section == AppSection.SportsBarKiosk
 
@@ -794,12 +656,14 @@ internal fun TvScreen(
             }
         }
     }
+
     val resumeChannel = remember(ordered, recentRevision) {
         prefs.getString(LAST_CHANNEL_ID, null)?.let { id -> ordered.firstOrNull { it.id == id } }
     }
+
     val managedEntertainmentApps = remember(visibleAppPackages, appVisibilityManaged) {
-        if (!appVisibilityManaged) EntertainmentApps
-        else EntertainmentApps.filter { it.packageName in visibleAppPackages }
+        if (!appVisibilityManaged) DefaultEntertainmentApps
+        else DefaultEntertainmentApps.filter { it.packageName in visibleAppPackages }
     }
 
     BackHandler(enabled = !showSettings && !immersive) {
@@ -822,5168 +686,368 @@ internal fun TvScreen(
     ) {
         Scaffold(
             containerColor = Color.Transparent,
-        topBar = {
-            if (!immersive) {
-            SlimHeader(
-                loading = loading,
-                    contentLoaded = channels.isNotEmpty(),
-                    weather = weather,
-                    networkInfo = networkInfo,
-                    onWeatherClick = { section = AppSection.Weather },
-                    onRefresh = { scope.launch { loadSources(forceRefresh = true) } },
-                    onSettings = { showSettings = true },
-                    onScreensaver = { showScreensaver = true },
-                    minimal = section == AppSection.Home
-                )
-            }
-        }
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(if (immersive) PaddingValues(0.dp) else padding)) {
-            if (immersive) {
-                if (section == AppSection.SportsBarKiosk) {
-                    SportsBarKioskScreen(
-                        channels = ordered,
-                        prefs = prefs,
-                        client = client,
-                        captionLanguage = captionLanguage,
-                        onExit = { section = AppSection.Home }
+            topBar = {
+                if (!immersive) {
+                    SlimHeader(
+                        loading = loading,
+                        contentLoaded = channels.isNotEmpty(),
+                        weather = weather,
+                        networkInfo = networkInfo,
+                        onWeatherClick = { section = AppSection.Weather },
+                        onRefresh = { scope.launch { loadSources(forceRefresh = true) } },
+                        onSettings = { showSettings = true },
+                        onScreensaver = { showScreensaver = true },
+                        minimal = section == AppSection.Home
                     )
-                } else if (multiViewSecondary != null) MultiViewScreen(
-                    primary = selected!!,
-                    secondary = multiViewSecondary!!,
-                    guide = guide,
-                    captionsEnabled = captionsEnabled,
-                    captionLanguage = captionLanguage,
-                    onExpand = {
-                        multiViewSecondary = null
-                        tuneChannel(it)
-                    },
-                    onExit = { multiViewSecondary = null }
-                ) else ImmersivePlayerScreen(
-                    channel = selected!!,
-                    channels = ordered,
-                    guide = guide,
-                    captionsEnabled = captionsEnabled,
-                    captionLanguage = captionLanguage,
-                    speedTestResult = lastSpeedTestResult,
-                    onRunSpeedTest = { url ->
-                        speedTestTargetUrl = url
-                        showSpeedTestDialog = true
-                    },
-                    onCaptionsChanged = { enabled, language ->
-                        captionsEnabled = enabled
-                        captionLanguage = language
-                        prefs.edit()
-                            .putBoolean(CAPTIONS_ENABLED, enabled)
-                            .putString(CAPTION_LANGUAGE, language)
-                            .apply()
-                    },
-                    osdTimeoutSeconds = osdTimeoutSeconds,
-                    entertainmentApps = managedEntertainmentApps,
-                    recentChannels = remember(recentRevision, channels.toList()) {
-                        recentChannelManager.recentIds().mapNotNull { id ->
-                            channels.firstOrNull { it.id == id }
-                        }
-                    },
-                    onPreviousChannel = {
-                        recentChannelManager.previousId(selected!!.id)
-                            ?.let { id -> channels.firstOrNull { it.id == id } }
-                            ?.let(tuneChannel)
-                    },
-                    onAddToMultiView = { multiViewSecondary = it },
-                    onTune = tuneChannel,
-                    onExit = {
-                        playerActive = false
-                        GlzHubManager.reportActivity(prefs, "idle")
-                        section = AppSection.Home
-                    }
-                )
-            } else {
-                Row(
-                    Modifier.fillMaxSize()
-                        .padding(horizontal = safeHorizontalPadding, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp)
-                ) {
-                    ExpressiveNavigationRail(
-                        section = section,
-                        onSection = {
-                            if (it == AppSection.Live) {
+                }
+            }
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(if (immersive) PaddingValues(0.dp) else padding)) {
+                if (immersive) {
+                    if (section == AppSection.SportsBarKiosk) {
+                        SportsBarKioskScreen(
+                            channels = ordered,
+                            prefs = prefs,
+                            client = client,
+                            captionLanguage = captionLanguage,
+                            onExit = { section = AppSection.Home }
+                        )
+                    } else if (multiViewSecondary != null) {
+                        MultiViewScreen(
+                            primary = selected!!,
+                            secondary = multiViewSecondary!!,
+                            guide = guide,
+                            captionsEnabled = captionsEnabled,
+                            captionLanguage = captionLanguage,
+                            onExpand = {
+                                multiViewSecondary = null
+                                tuneChannel(it)
+                            },
+                            onExit = { multiViewSecondary = null }
+                        )
+                    } else {
+                        ImmersivePlayerScreen(
+                            channel = selected!!,
+                            channels = ordered,
+                            guide = guide,
+                            captionsEnabled = captionsEnabled,
+                            captionLanguage = captionLanguage,
+                            speedTestResult = lastSpeedTestResult,
+                            onRunSpeedTest = { url ->
+                                speedTestTargetUrl = url
+                                showSpeedTestDialog = true
+                            },
+                            onCaptionsChanged = { enabled, language ->
+                                captionsEnabled = enabled
+                                captionLanguage = language
+                                prefs.edit()
+                                    .putBoolean(CAPTIONS_ENABLED, enabled)
+                                    .putString(CAPTION_LANGUAGE, language)
+                                    .apply()
+                            },
+                            osdTimeoutSeconds = osdTimeoutSeconds,
+                            entertainmentApps = managedEntertainmentApps,
+                            recentChannels = remember(recentRevision, channels.toList()) {
+                                recentChannelManager.recentIds().mapNotNull { id ->
+                                    channels.firstOrNull { it.id == id }
+                                }
+                            },
+                            onPreviousChannel = {
+                                recentChannelManager.previousId(selected!!.id)
+                                    ?.let { id -> channels.firstOrNull { it.id == id } }
+                                    ?.let(tuneChannel)
+                            },
+                            onAddToMultiView = { multiViewSecondary = it },
+                            onTune = tuneChannel,
+                            onExit = {
                                 playerActive = false
                                 GlzHubManager.reportActivity(prefs, "idle")
+                                section = AppSection.Home
                             }
-                            section = it
-                        }
-                    )
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        AnimatedContent(
-                            targetState = section,
-                            transitionSpec = {
-                                (fadeIn(tween(PANEL_ANIM_IN)) +
-                                    slideInHorizontally(tween(PANEL_ANIM_IN)) { it / 14 })
-                                    .togetherWith(
-                                        fadeOut(tween(PANEL_ANIM_OUT)) +
-                                            slideOutHorizontally(tween(PANEL_ANIM_OUT)) { -it / 14 }
+                        )
+                    }
+                } else {
+                    Row(
+                        Modifier.fillMaxSize()
+                            .padding(horizontal = safeHorizontalPadding, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        ExpressiveNavigationRail(
+                            section = section,
+                            onSection = {
+                                if (it == AppSection.Live) {
+                                    playerActive = false
+                                    GlzHubManager.reportActivity(prefs, "idle")
+                                }
+                                section = it
+                            }
+                        )
+                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                            AnimatedContent(
+                                targetState = section,
+                                transitionSpec = {
+                                    (fadeIn(tween(PANEL_ANIM_IN)) +
+                                        slideInHorizontally(tween(PANEL_ANIM_IN)) { it / 14 })
+                                        .togetherWith(
+                                            fadeOut(tween(PANEL_ANIM_OUT)) +
+                                                slideOutHorizontally(tween(PANEL_ANIM_OUT)) { -it / 14 }
+                                        )
+                                },
+                                label = "section"
+                            ) { visibleSection ->
+                                when (visibleSection) {
+                                    AppSection.Home -> GuestHubHome(
+                                        guestName = guestName,
+                                        experience = guestExperience,
+                                        entertainmentApps = managedEntertainmentApps,
+                                        previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
+                                        resumeChannel = resumeChannel,
+                                        weather = weather,
+                                        networkInfo = networkInfo,
+                                        captionLanguage = captionLanguage,
+                                        channels = ordered,
+                                        guide = guide,
+                                        onWatchChannel = { channel ->
+                                            section = AppSection.Live
+                                            tuneChannel(channel)
+                                        },
+                                        sportsBarKioskEnabled = sportsBarKioskEnabled,
+                                        onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
+                                        modifier = Modifier.fillMaxSize()
                                     )
-                            },
-                            label = "section"
-                        ) { visibleSection ->
-                        when (visibleSection) {
-                            AppSection.Home -> GuestHubHome(
-                                guestName = guestName,
-                                experience = guestExperience,
-                                entertainmentApps = managedEntertainmentApps,
-                                previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
-                                resumeChannel = resumeChannel,
-                                weather = weather,
-                                networkInfo = networkInfo,
-                                captionLanguage = captionLanguage,
-                                channels = ordered,
-                                guide = guide,
-                                onWatchChannel = { channel ->
-                                    section = AppSection.Live
-                                    tuneChannel(channel)
-                                },
-                                sportsBarKioskEnabled = sportsBarKioskEnabled,
-                                onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            AppSection.Live -> GuideSection(
-                                channels = ordered,
-                                guide = guide,
-                                previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
-                                captionLanguage = captionLanguage,
-                                favorites = favorites,
-                                onWatch = tuneChannel,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            AppSection.Radio -> RadioScreen(
-                                prefs = prefs,
-                                client = client,
-                                onPlayingChanged = { isPlaying, station ->
-                                    radioPlaying = isPlaying
-                                    currentRadioStation = station
-                                },
-                                onScreensaverTriggered = {
-                                    showScreensaver = true
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            AppSection.Weather -> WeatherScreen(
-                                weather = weather,
-                                location = weatherLocation,
-                                loading = weatherLoading,
-                                error = weatherError,
-                                onRefresh = {
-                                    scope.launch {
-                                        weatherLoading = true
-                                        runCatching {
-                                            withContext(Dispatchers.IO) {
-                                                weatherRepository.load(weatherLocation)
+                                    AppSection.Live -> GuideSection(
+                                        channels = ordered,
+                                        guide = guide,
+                                        previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
+                                        captionLanguage = captionLanguage,
+                                        favorites = favorites,
+                                        onWatch = tuneChannel,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    AppSection.Radio -> RadioScreen(
+                                        prefs = prefs,
+                                        client = client,
+                                        onPlayingChanged = { isPlaying, station ->
+                                            radioPlaying = isPlaying
+                                            currentRadioStation = station
+                                            if (isPlaying && station != null) {
+                                                scope.launch(Dispatchers.IO) {
+                                                    TvHomePublisher.recordWatchNextStation(context.applicationContext, station)
+                                                }
                                             }
-                                        }.onSuccess {
-                                            weather = it
-                                            weatherError = null
-                                        }.onFailure {
-                                            weatherError = it.message ?: "Weather service unavailable"
-                                        }
-                                        weatherLoading = false
-                                    }
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            AppSection.You -> GuestYouSection(
-                                guestName = guestName,
-                                experience = guestExperience,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            AppSection.SportsBarKiosk -> Unit
-                        }
+                                        },
+                                        onScreensaverTriggered = {
+                                            showScreensaver = true
+                                        },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    AppSection.Weather -> WeatherScreen(
+                                        weather = weather,
+                                        location = weatherLocation,
+                                        loading = weatherLoading,
+                                        error = weatherError,
+                                        onRefresh = {
+                                            scope.launch {
+                                                weatherLoading = true
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        weatherRepository.load(weatherLocation)
+                                                    }
+                                                }.onSuccess {
+                                                    weather = it
+                                                    weatherError = null
+                                                }.onFailure {
+                                                    weatherError = it.message ?: "Weather service unavailable"
+                                                }
+                                                weatherLoading = false
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    AppSection.You -> GuestYouSection(
+                                        guestName = guestName,
+                                        experience = guestExperience,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    AppSection.SportsBarKiosk -> Unit
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    if (showSettings) {
-        SettingsDialog(
-            playlist = prefs.getString(PLAYLIST_URL, DEFAULT_PLAYLIST_URL)
-                .orEmpty().ifBlank { DEFAULT_PLAYLIST_URL },
-            epg = prefs.getString(EPG_URL, DEFAULT_EPG_URL)
-                .orEmpty().ifBlank { DEFAULT_EPG_URL },
-            headers = prefs.getString(REQUEST_HEADERS, "").orEmpty(),
-            weatherLocation = weatherLocation,
-            guestName = guestName,
-            customConnectionLabel = prefs.getString("custom_connection_label", "").orEmpty(),
-            customIspName = prefs.getString("custom_isp_name", "").orEmpty(),
-            themeMode = themeMode,
-            captionsEnabled = captionsEnabled,
-            captionLanguage = captionLanguage,
-            osdTimeoutSeconds = osdTimeoutSeconds,
-            autoUpdate = (prefs.all[AUTO_UPDATE_CHECK] as? Boolean)
-                ?: prefs.getBoolean(LEGACY_AUTO_UPDATE_CHECK, true),
-            wifiOnly = (prefs.all[WIFI_ONLY_UPDATES] as? Boolean)
-                ?: prefs.getBoolean(LEGACY_WIFI_ONLY_UPDATES, false),
-            autoStart = prefs.getBoolean(AUTO_START, false),
-            resumeLast = prefs.getBoolean(RESUME_LAST_CHANNEL, true),
-            startDestination = prefs.getString(START_DESTINATION, AppSection.Home.name)
-                ?: AppSection.Home.name,
-            updateChannel = prefs.getString(UPDATE_CHANNEL, null)
-                ?: GithubUpdateManager.UpdateChannel.PRODUCTION.id,
-            sourceStatus = status,
-            hubStatus = hubStatus,
-            screensaverTimeoutMinutes = screensaverTimeoutMinutes,
-            appLanguage = appLanguage,
-            onOpenSpeedTest = {
-                speedTestTargetUrl = null
-                showSpeedTestDialog = true
-            },
-            onSyncNow = { progress -> syncEverythingNow(progress) },
-            onCheckForUpdate = { checkForAppUpdate() },
-            onBeginHubEnrollment = {
-                withContext(Dispatchers.IO) {
-                    GlzHubManager.beginEnrollment(prefs, client)
-                }.also { code ->
-                    hubStatus = "Pairing code: $code"
-                }
-            },
-            onDismiss = { showSettings = false },
-            onSave = { playlist, epg, headers, location, name, connectionLabel, ispName, theme,
-                       captions, language, osdTimeout, screensaverTimeout, autoUpdate, wifiOnly, autoStart, resumeLast,
-                       startDestination, updateChannel, chosenLang ->
-                prefs.edit().putString(PLAYLIST_URL, playlist).putString(EPG_URL, epg)
-                    .putString(REQUEST_HEADERS, headers)
-                    .putString(WEATHER_LOCATION, location)
-                    .putString(GUEST_NAME, name)
-                    .putString("custom_connection_label", connectionLabel)
-                    .putString("custom_isp_name", ispName)
-                    .putBoolean(CAPTIONS_ENABLED, captions)
-                    .putString(CAPTION_LANGUAGE, language)
-                    .putInt(OSD_TIMEOUT_SECONDS, osdTimeout)
-                    .putInt(SCREENSAVER_TIMEOUT_MINUTES, screensaverTimeout)
-                    .putBoolean(AUTO_UPDATE_CHECK, autoUpdate)
-                    .remove(LEGACY_AUTO_UPDATE_CHECK)
-                    .putBoolean(WIFI_ONLY_UPDATES, wifiOnly)
-                    .remove(LEGACY_WIFI_ONLY_UPDATES)
-                    .putBoolean(AUTO_START, autoStart)
-                    .putBoolean(RESUME_LAST_CHANNEL, resumeLast)
-                    .putString(START_DESTINATION, startDestination)
-                    .putString(UPDATE_CHANNEL, updateChannel)
-                    .putString(GlzHubManager.APP_LANGUAGE, chosenLang)
-                    .apply()
-                onThemeMode(theme)
-                if (chosenLang != appLanguage) {
-                    appLanguage = chosenLang
-                    onLanguageChanged(chosenLang)
-                }
-                captionsEnabled = captions
-                captionLanguage = language
-                osdTimeoutSeconds = osdTimeout
-                screensaverTimeoutMinutes = screensaverTimeout
-                weatherLocation = location
-                guestName = name
-                networkOverrideRevision++
-                showSettings = false
-                scope.launch { loadSources() }
-            }
-        )
-    }
-
-    if (showSpeedTestDialog) {
-        StreamSpeedTestDialog(
-            client = client,
-            targetUrl = speedTestTargetUrl,
-            onDismiss = { showSpeedTestDialog = false }
-        )
-    }
-
-    AnimatedVisibility(
-        visible = showScreensaver,
-        enter = fadeIn(tween(400)),
-        exit = fadeOut(tween(300))
-    ) {
-        AmbientScreensaverScreen(
-            weather = weather,
-            guestName = guestName,
-            radioPlaying = radioPlaying,
-            radioStationName = currentRadioStation?.name,
-            radioGenre = currentRadioStation?.genre,
-            radioLogoUrl = currentRadioStation?.logoUrl,
-            onDismiss = {
-                lastUserInteractionTime = System.currentTimeMillis()
-                showScreensaver = false
-            }
-        )
-    }
-
-    BackHandler(enabled = availableUpdate != null && !updateDownloading) {
-        availableUpdate = null
-        updateDownloadStatus = null
-    }
-
-    AnimatedVisibility(
-        visible = availableUpdate != null,
-        enter = slideInVertically(initialOffsetY = { it * 2 }, animationSpec = tween(350)) + fadeIn(animationSpec = tween(300)),
-        exit = slideOutVertically(targetOffsetY = { it * 2 }, animationSpec = tween(300)) + fadeOut(animationSpec = tween(250)),
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(horizontal = safeHorizontalPadding, vertical = 24.dp)
-    ) {
-        availableUpdate?.let { update ->
-            UpdateNotificationBanner(
-                update = update,
-                downloading = updateDownloading,
-                downloadStatus = updateDownloadStatus,
-                onUpdateNow = {
-                    if (!GithubUpdateManager.canInstall(context)) {
-                        updateDownloadStatus =
-                            "Allow GLZ TV to install unknown apps, then choose Update Now again."
-                        GithubUpdateManager.requestInstallPermission(context)
-                    } else {
-                        updateDownloading = true
-                        updateDownloadStatus = "Downloading update…"
-                        scope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    GithubUpdateManager.download(context, client, update)
-                                }
-                            }.onSuccess { apk ->
-                                updateDownloadStatus = "Opening system installer…"
-                                GithubUpdateManager.launchInstaller(context, apk)
-                            }.onFailure {
-                                updateDownloadStatus = "Download failed: ${it.message}"
-                            }
-                            updateDownloading = false
-                        }
+        if (showSettings) {
+            SettingsDialog(
+                playlist = prefs.getString(PLAYLIST_URL, DEFAULT_PLAYLIST_URL)
+                    .orEmpty().ifBlank { DEFAULT_PLAYLIST_URL },
+                epg = prefs.getString(EPG_URL, DEFAULT_EPG_URL)
+                    .orEmpty().ifBlank { DEFAULT_EPG_URL },
+                headers = prefs.getString(REQUEST_HEADERS, "").orEmpty(),
+                weatherLocation = weatherLocation,
+                guestName = guestName,
+                customConnectionLabel = prefs.getString("custom_connection_label", "").orEmpty(),
+                customIspName = prefs.getString("custom_isp_name", "").orEmpty(),
+                themeMode = themeMode,
+                captionsEnabled = captionsEnabled,
+                captionLanguage = captionLanguage,
+                osdTimeoutSeconds = osdTimeoutSeconds,
+                autoUpdate = (prefs.all[AUTO_UPDATE_CHECK] as? Boolean)
+                    ?: prefs.getBoolean(LEGACY_AUTO_UPDATE_CHECK, true),
+                wifiOnly = (prefs.all[WIFI_ONLY_UPDATES] as? Boolean)
+                    ?: prefs.getBoolean(LEGACY_WIFI_ONLY_UPDATES, false),
+                autoStart = prefs.getBoolean(AUTO_START, false),
+                resumeLast = prefs.getBoolean(RESUME_LAST_CHANNEL, true),
+                startDestination = prefs.getString(START_DESTINATION, AppSection.Home.name)
+                    ?: AppSection.Home.name,
+                updateChannel = prefs.getString(UPDATE_CHANNEL, null)
+                    ?: GithubUpdateManager.UpdateChannel.PRODUCTION.id,
+                sourceStatus = status,
+                hubStatus = hubStatus,
+                screensaverTimeoutMinutes = screensaverTimeoutMinutes,
+                appLanguage = appLanguage,
+                onOpenSpeedTest = {
+                    speedTestTargetUrl = null
+                    showSpeedTestDialog = true
+                },
+                onSyncNow = { progress -> syncEverythingNow(progress) },
+                onCheckForUpdate = { checkForAppUpdate() },
+                onBeginHubEnrollment = {
+                    withContext(Dispatchers.IO) {
+                        GlzHubManager.beginEnrollment(prefs, client)
+                    }.also { code ->
+                        hubStatus = "Pairing code: $code"
                     }
                 },
-                onNotNow = {
-                    availableUpdate = null
-                    updateDownloadStatus = null
+                onDismiss = { showSettings = false },
+                onSave = { playlist, epg, headers, location, name, connectionLabel, ispName, theme,
+                           captions, language, osdTimeout, screensaverTimeout, autoUpdate, wifiOnly, autoStart, resumeLast,
+                           startDestination, updateChannel, chosenLang ->
+                    prefs.edit().putString(PLAYLIST_URL, playlist).putString(EPG_URL, epg)
+                        .putString(REQUEST_HEADERS, headers)
+                        .putString(WEATHER_LOCATION, location)
+                        .putString(GUEST_NAME, name)
+                        .putString("custom_connection_label", connectionLabel)
+                        .putString("custom_isp_name", ispName)
+                        .putBoolean(CAPTIONS_ENABLED, captions)
+                        .putString(CAPTION_LANGUAGE, language)
+                        .putInt(OSD_TIMEOUT_SECONDS, osdTimeout)
+                        .putInt(SCREENSAVER_TIMEOUT_MINUTES, screensaverTimeout)
+                        .putBoolean(AUTO_UPDATE_CHECK, autoUpdate)
+                        .remove(LEGACY_AUTO_UPDATE_CHECK)
+                        .putBoolean(WIFI_ONLY_UPDATES, wifiOnly)
+                        .remove(LEGACY_WIFI_ONLY_UPDATES)
+                        .putBoolean(AUTO_START, autoStart)
+                        .putBoolean(RESUME_LAST_CHANNEL, resumeLast)
+                        .putString(START_DESTINATION, startDestination)
+                        .putString(UPDATE_CHANNEL, updateChannel)
+                        .putString(GlzHubManager.APP_LANGUAGE, chosenLang)
+                        .apply()
+                    onThemeMode(theme)
+                    if (chosenLang != appLanguage) {
+                        appLanguage = chosenLang
+                        onLanguageChanged(chosenLang)
+                    }
+                    captionsEnabled = captions
+                    captionLanguage = language
+                    osdTimeoutSeconds = osdTimeout
+                    screensaverTimeoutMinutes = screensaverTimeout
+                    weatherLocation = location
+                    guestName = name
+                    networkOverrideRevision++
+                    showSettings = false
+                    scope.launch { loadSources() }
                 }
             )
         }
-    }
-    }
-}
 
-@Composable
-private fun UpdateNotificationBanner(
-    update: GithubUpdateManager.UpdateInfo,
-    downloading: Boolean,
-    downloadStatus: String?,
-    onUpdateNow: () -> Unit,
-    onNotNow: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val initialFocus = remember { FocusRequester() }
-    LaunchedEffect(update) {
-        delay(150L)
-        runCatching { initialFocus.requestFocus() }
-    }
+        if (showSpeedTestDialog) {
+            StreamSpeedTestDialog(
+                client = client,
+                targetUrl = speedTestTargetUrl,
+                onDismiss = { showSpeedTestDialog = false }
+            )
+        }
 
-    val accent = MaterialTheme.colorScheme.primary
-    val strings = LocalGlzStrings.current
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = Color(0xF20F1626),
-        border = BorderStroke(1.5.dp, accent.copy(alpha = 0.60f)),
-        tonalElevation = 16.dp,
-        shadowElevation = 24.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        AnimatedVisibility(
+            visible = showScreensaver,
+            enter = fadeIn(tween(400)),
+            exit = fadeOut(tween(300))
         ) {
-            // Left: Icon + Release details
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 24.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "GLZ TV v${update.version}",
-                        color = Color.White,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 17.sp,
-                        letterSpacing = 0.3.sp
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = accent.copy(alpha = 0.20f)
-                    ) {
-                        Text(
-                            strings.updateAvailableTitle.uppercase(),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 0.8.sp,
-                            color = accent
-                        )
-                    }
+            AmbientScreensaverScreen(
+                weather = weather,
+                guestName = guestName,
+                radioPlaying = radioPlaying,
+                radioStationName = currentRadioStation?.name,
+                radioGenre = currentRadioStation?.genre,
+                radioLogoUrl = currentRadioStation?.logoUrl,
+                onDismiss = {
+                    lastUserInteractionTime = System.currentTimeMillis()
+                    showScreensaver = false
                 }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = downloadStatus ?: update.notes.ifBlank {
-                        "A new version is ready from the official GLZ TV GitHub release."
+            )
+        }
+
+        BackHandler(enabled = availableUpdate != null && !updateDownloading) {
+            availableUpdate = null
+            updateDownloadStatus = null
+        }
+
+        AnimatedVisibility(
+            visible = availableUpdate != null,
+            enter = slideInVertically(initialOffsetY = { it * 2 }, animationSpec = tween(350)) + fadeIn(animationSpec = tween(300)),
+            exit = slideOutVertically(targetOffsetY = { it * 2 }, animationSpec = tween(300)) + fadeOut(animationSpec = tween(250)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = safeHorizontalPadding, vertical = 24.dp)
+        ) {
+            availableUpdate?.let { update ->
+                UpdateNotificationBanner(
+                    update = update,
+                    downloading = updateDownloading,
+                    downloadStatus = updateDownloadStatus,
+                    onUpdateNow = {
+                        if (!GithubUpdateManager.canInstall(context)) {
+                            updateDownloadStatus =
+                                "Allow GLZ TV to install unknown apps, then choose Update Now again."
+                            GithubUpdateManager.requestInstallPermission(context)
+                        } else {
+                            updateDownloading = true
+                            updateDownloadStatus = "Downloading update…"
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        GithubUpdateManager.download(context, client, update)
+                                    }
+                                }.onSuccess { apk ->
+                                    updateDownloadStatus = "Opening system installer…"
+                                    GithubUpdateManager.launchInstaller(context, apk)
+                                }.onFailure {
+                                    updateDownloadStatus = "Download failed: ${it.message}"
+                                }
+                                updateDownloading = false
+                            }
+                        }
                     },
-                    color = if (downloadStatus != null) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = if (downloadStatus != null) FontWeight.Bold else FontWeight.Normal,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            // Action Buttons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Update Now (Primary)
-                UpdateActionButton(
-                    label = if (downloading) strings.buffering else strings.updateNow,
-                    isPrimary = true,
-                    enabled = !downloading,
-                    loading = downloading,
-                    focusRequester = initialFocus,
-                    onClick = onUpdateNow
-                )
-
-                // Not Now (Secondary)
-                UpdateActionButton(
-                    label = strings.notNow,
-                    isPrimary = false,
-                    enabled = !downloading,
-                    loading = false,
-                    onClick = onNotNow
+                    onNotNow = {
+                        availableUpdate = null
+                        updateDownloadStatus = null
+                    }
                 )
             }
         }
     }
 }
-
-@Composable
-private fun UpdateActionButton(
-    label: String,
-    isPrimary: Boolean,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    loading: Boolean = false,
-    focusRequester: FocusRequester? = null,
-    modifier: Modifier = Modifier
-) {
-    var focused by remember { mutableStateOf(false) }
-    val accent = MaterialTheme.colorScheme.primary
-    val shape = RoundedCornerShape(14.dp)
-
-    // Contrast calculations:
-    // When focused: solid bright white with pure black bold text and luminous glow (maximum contrast)
-    // When unfocused & primary: solid accent fill with onAccent high-contrast dark text
-    // When unfocused & secondary: dark slate background with crisp white border and white text
-    val backgroundColor = when {
-        focused -> Color.White
-        !enabled -> if (isPrimary) accent.copy(alpha = 0.40f) else Color.White.copy(alpha = 0.05f)
-        isPrimary -> accent
-        else -> Color(0xFF1E283C)
-    }
-
-    val contentColor = when {
-        focused -> Color.Black
-        !enabled -> if (isPrimary) GlzCardDefaults.onAccent(accent).copy(alpha = 0.60f) else Color.White.copy(alpha = 0.35f)
-        isPrimary -> GlzCardDefaults.onAccent(accent)
-        else -> Color.White
-    }
-
-    val borderStroke = when {
-        focused -> BorderStroke(2.dp, Color.White)
-        !enabled -> BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-        isPrimary -> BorderStroke(1.5.dp, Color.White.copy(alpha = 0.50f))
-        else -> BorderStroke(1.5.dp, Color.White.copy(alpha = 0.50f))
-    }
-
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .tvFocusableWithPhysics(
-                shape = shape,
-                focusedScale = 1.08f,
-                glowColor = if (isPrimary) accent else Color.White,
-                onFocusChange = { focused = it }
-            ),
-        shape = shape,
-        color = backgroundColor,
-        contentColor = contentColor,
-        border = borderStroke
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
-                    color = contentColor
-                )
-            }
-            Text(
-                label,
-                fontWeight = FontWeight.Black,
-                fontSize = 14.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun GuestHubHome(
-    guestName: String,
-    experience: GuestExperience,
-    entertainmentApps: List<EntertainmentApp>,
-    previewChannel: Channel?,
-    resumeChannel: Channel?,
-    weather: WeatherInfo?,
-    networkInfo: NetworkInfo?,
-    captionLanguage: String,
-    channels: List<Channel>,
-    guide: EpgGuide,
-    onWatchChannel: (Channel) -> Unit,
-    sportsBarKioskEnabled: Boolean = false,
-    onStartSportsBarKiosk: () -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    var showQuickWatchDrawer by remember { mutableStateOf(false) }
-    var showAppsDrawer by remember { mutableStateOf(false) }
-
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(60_000L - (now % 60_000L))
-        }
-    }
-
-    val strings = LocalGlzStrings.current
-    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-    val timeGreeting = when (hour) {
-        in 5..11 -> strings.goodMorning
-        in 12..17 -> strings.goodAfternoon
-        else -> strings.goodEvening
-    }
-
-    Box(modifier.fillMaxSize()) {
-        BoxWithConstraints(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 8.dp)
-        ) {
-            val compactHeight = maxHeight < 440.dp
-
-            Column(Modifier.fillMaxSize()) {
-                // 1. HERO — fills everything above the pinned action row.
-                Card(
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ),
-                    elevation = CardDefaults.cardElevation(12.dp)
-                ) {
-                    Box(Modifier.fillMaxSize()) {
-                        val scrimColor = MaterialTheme.colorScheme.surface
-                        val hasPreview = previewChannel != null
-
-                        // Base layer: the hero background image whenever one is configured,
-                        // otherwise the ambient gradient. Drawn first so it shows while a
-                        // preview video is buffering or if playback fails.
-                        if (!experience.heroImageUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = experience.heroImageUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.linearGradient(
-                                            listOf(
-                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
-                                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.80f),
-                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                                            )
-                                        )
-                                    )
-                            )
-                        }
-
-                        // Live channel preview covers the base when a Home preview channel
-                        // is set.
-                        previewChannel?.let { channel ->
-                            VideoPlayer(
-                                channel = channel,
-                                captionsEnabled = false,
-                                captionLanguage = captionLanguage,
-                                modifier = Modifier.fillMaxSize(),
-                                muted = true,
-                                createMediaSession = false,
-                                keepScreenOn = false,
-                                cropVideo = true
-                            )
-                        }
-
-                        // Scrims — legibility for the identity + context text over an image
-                        // or video. Lighter over a still image so the backdrop still reads.
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        0f to scrimColor.copy(alpha = if (hasPreview) 0.96f else 0.82f),
-                                        0.34f to scrimColor.copy(alpha = if (hasPreview) 0.80f else 0.45f),
-                                        0.68f to scrimColor.copy(alpha = 0f)
-                                    )
-                                )
-                        )
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color.Black.copy(alpha = 0.10f),
-                                            Color.Black.copy(alpha = 0.48f)
-                                        )
-                                    )
-                                )
-                        )
-
-                        Column(
-                            Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 28.dp, vertical = if (compactHeight) 14.dp else 22.dp)
-                        ) {
-                            // Guest identity — narrowed when there's a backdrop (video or
-                            // image) so it clears the right side; full width otherwise.
-                            val hasBackdrop = previewChannel != null ||
-                                !experience.heroImageUrl.isNullOrBlank()
-                            Column(Modifier.fillMaxWidth(if (hasBackdrop) 0.60f else 1f)) {
-                                Text(
-                                    timeGreeting,
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = if (compactHeight) 14.sp else 20.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    letterSpacing = 0.5.sp,
-                                    maxLines = 1
-                                )
-                                Text(
-                                    guestName.ifBlank { strings.guest },
-                                    color = Color.White,
-                                    fontSize = if (compactHeight) 32.sp else 48.sp,
-                                    fontWeight = FontWeight.Black,
-                                    fontStyle = FontStyle.Italic,
-                                    letterSpacing = (-1).sp,
-                                    lineHeight = if (compactHeight) 34.sp else 50.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                if (experience.propertyName.isNotBlank()) {
-                                    Text(
-                                        experience.propertyName,
-                                        color = Color.White.copy(alpha = 0.90f),
-                                        fontSize = if (compactHeight) 13.sp else 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(top = 3.dp)
-                                    )
-                                }
-                                experience.roomNumber?.takeIf(String::isNotBlank)?.let {
-                                    Text(
-                                        "${strings.room} $it",
-                                        color = Color.White.copy(alpha = 0.78f),
-                                        fontSize = if (compactHeight) 13.sp else 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(top = 1.dp)
-                                    )
-                                }
-                                if (!compactHeight) {
-                                    val stayInfo = listOfNotNull(
-                                        experience.checkoutTime?.let { "${strings.checkout} $it" },
-                                        if (!experience.arrivalDate.isNullOrBlank() &&
-                                            !experience.departureDate.isNullOrBlank()
-                                        ) "${experience.arrivalDate} – ${experience.departureDate}" else null
-                                    ).joinToString("   ·   ")
-                                    if (stayInfo.isNotBlank()) {
-                                        Text(
-                                            stayInfo,
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(top = 2.dp),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(Modifier.weight(1f))
-
-                            // Live context — clock leads (bigger), then aligned metric
-                            // lines; channel tag anchors the right edge of the network line.
-                            val timeText = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(now))
-                            val meridiemSep = timeText.lastIndexOf(' ')
-                            Row(
-                                verticalAlignment = Alignment.Bottom,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    strings.now,
-                                    Modifier
-                                        .width(74.dp)
-                                        .padding(bottom = 3.dp),
-                                    color = Color.White.copy(alpha = 0.45f),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = 1.sp,
-                                    maxLines = 1
-                                )
-                                Text(
-                                    if (meridiemSep > 0) timeText.substring(0, meridiemSep) else timeText,
-                                    color = Color.White,
-                                    fontSize = if (compactHeight) 22.sp else 28.sp,
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = (-0.5).sp,
-                                    maxLines = 1
-                                )
-                                if (meridiemSep > 0) {
-                                    Text(
-                                        timeText.substring(meridiemSep + 1),
-                                        color = Color.White.copy(alpha = 0.70f),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                        modifier = Modifier.padding(bottom = 3.dp)
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.height(if (compactHeight) 6.dp else 10.dp))
-                            weather?.let {
-                                HeroInfoLine(
-                                    strings.weather,
-                                    it.location,
-                                    "${weatherGlyph(it.weatherCode)}  ${it.temperature}°F, ${weatherConditionText(it.weatherCode)}"
-                                )
-                                Spacer(Modifier.height(if (compactHeight) 3.dp else 6.dp))
-                            }
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                HeroInfoLine(
-                                    strings.network,
-                                    networkInfo?.connection ?: strings.offline,
-                                    networkInfo?.isp.orEmpty(),
-                                    modifier = Modifier.weight(1f, fill = false),
-                                    stacked = true
-                                )
-                                Spacer(Modifier.weight(1f))
-                                previewChannel?.let { channel ->
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = Color.Black.copy(alpha = 0.55f)
-                                    ) {
-                                        Row(
-                                            Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Box(
-                                                Modifier
-                                                    .size(6.dp)
-                                                    .background(Color(0xFFFF3B30), CircleShape)
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(
-                                                "${channel.number.ifBlank { strings.live }} · ${channel.name}",
-                                                color = Color.White,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(if (compactHeight) 10.dp else 16.dp))
-
-                // 2. ACTION ROW — pinned to the bottom (section nav lives in the rail;
-                // "Guide" is already there, so it's not repeated here).
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .focusGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (resumeChannel != null) {
-                        HomeNavActionButton(
-                            label = "${strings.continueWatching}  ·  ${resumeChannel.name.uppercase(Locale.getDefault())}",
-                            icon = Icons.Default.PlayArrow,
-                            isPrimary = true,
-                            accentColor = MaterialTheme.colorScheme.primary,
-                            onClick = { onWatchChannel(resumeChannel) },
-                            modifier = Modifier.weight(2f)
-                        )
-                        HomeNavActionButton(
-                            label = strings.liveTv,
-                            icon = Icons.Default.LiveTv,
-                            isPrimary = false,
-                            accentColor = MaterialTheme.colorScheme.primary,
-                            onClick = { showQuickWatchDrawer = true },
-                            modifier = Modifier.weight(1f)
-                        )
-                    } else {
-                        HomeNavActionButton(
-                            label = strings.liveTv,
-                            icon = Icons.Default.LiveTv,
-                            isPrimary = true,
-                            accentColor = MaterialTheme.colorScheme.primary,
-                            onClick = { showQuickWatchDrawer = true },
-                            modifier = Modifier.weight(1.6f)
-                        )
-                    }
-                    HomeNavActionButton(
-                        label = strings.apps,
-                        icon = Icons.Default.Apps,
-                        isPrimary = false,
-                        accentColor = MaterialTheme.colorScheme.secondary,
-                        onClick = { showAppsDrawer = true },
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (sportsBarKioskEnabled) {
-                        HomeNavActionButton(
-                            label = "Sports Bar",
-                            icon = Icons.Default.Radio,
-                            isPrimary = false,
-                            accentColor = MaterialTheme.colorScheme.tertiary,
-                            onClick = onStartSportsBarKiosk,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-        }
-
-        // 3. LIVE TV — QUICK CHANNEL SELECTION FLYOUT
-        if (showQuickWatchDrawer) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.65f))
-                    .clickable(onClick = { showQuickWatchDrawer = false })
-            ) {
-                AnimatedVisibility(
-                    visible = showQuickWatchDrawer,
-                    enter = panelEnter(fromLeft = false),
-                    exit = panelExit(fromLeft = false),
-                    modifier = Modifier.align(Alignment.CenterEnd)
-                ) {
-                    QuickWatchChannelDrawer(
-                        channels = channels,
-                        guide = guide,
-                        onSelectChannel = { channel ->
-                            showQuickWatchDrawer = false
-                            onWatchChannel(channel)
-                        },
-                        onClose = { showQuickWatchDrawer = false }
-                    )
-                }
-            }
-        }
-
-        // 4. APPS FLYOUT
-        if (showAppsDrawer) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.65f))
-                    .clickable(onClick = { showAppsDrawer = false })
-            ) {
-                AnimatedVisibility(
-                    visible = showAppsDrawer,
-                    enter = panelEnter(fromLeft = false),
-                    exit = panelExit(fromLeft = false),
-                    modifier = Modifier.align(Alignment.CenterEnd)
-                ) {
-                    HomeAppsDrawer(
-                        apps = entertainmentApps,
-                        onClose = { showAppsDrawer = false }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeAppsDrawer(
-    apps: List<EntertainmentApp>,
-    onClose: () -> Unit
-) {
-    BackHandler(onBack = onClose)
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
-    val client = remember { createPermissiveOkHttpClient() }
-    val scope = rememberCoroutineScope()
-    val firstItemFocus = remember { FocusRequester() }
-
-    LaunchedEffect(Unit) {
-        delay(120L)
-        runCatching { firstItemFocus.requestFocus() }
-    }
-
-    Surface(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(440.dp)
-            .clickable(enabled = false, onClick = {}),
-        color = Color(0xFF0A101C).copy(alpha = 0.96f),
-        shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
-    ) {
-        Column(Modifier.fillMaxSize().padding(20.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Apps,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        val drawerStrings = LocalGlzStrings.current
-                        Text(drawerStrings.apps, fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White)
-                        Text(
-                            "${apps.size} apps & services",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                val drawerStrings = LocalGlzStrings.current
-                TvSettingsButton(label = drawerStrings.close, onClick = onClose)
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            LazyColumn(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .focusGroup(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
-                    val launchIntent = remember(app.packageName) {
-                        findAppLaunchIntent(context, app.packageName)
-                    }
-                    val icon = remember(app.packageName, launchIntent) {
-                        if (launchIntent == null) null else runCatching {
-                            context.packageManager.getApplicationIcon(app.packageName)
-                        }.getOrNull()
-                    }
-                    GlzFocusCard(
-                        onClick = {
-                            GlzHubManager.reportLaunchedApp(prefs, app.name, app.packageName)
-                            scope.launch(Dispatchers.IO) {
-                                runCatching { GlzHubManager.heartbeat(prefs, client) }
-                            }
-                            launchEntertainmentApp(context, app.packageName, launchIntent)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(if (index == 0) Modifier.focusRequester(firstItemFocus) else Modifier),
-                        accent = app.accent,
-                        shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
-                        focusedScale = 1.03f
-                    ) { _ ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            AdaptiveAppIcon(
-                                icon = icon,
-                                appName = app.name,
-                                accent = app.accent,
-                                size = 46.dp
-                            )
-                            Spacer(Modifier.width(14.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    app.name,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 16.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    if (launchIntent == null) "Not installed · opens store" else "Installed",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            Icon(
-                                Icons.Default.ChevronRight,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun weatherGlyph(code: Int): String = WeatherFormatter.symbol(code)
-
-private fun weatherConditionText(code: Int): String = WeatherFormatter.description(code)
-
-@Composable
-private fun HeroInfoLine(
-    label: String,
-    value: String,
-    detail: String,
-    modifier: Modifier = Modifier,
-    stacked: Boolean = false
-) {
-    Row(
-        modifier,
-        verticalAlignment = if (stacked) Alignment.Top else Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            label,
-            Modifier.width(74.dp),
-            color = Color.White.copy(alpha = 0.45f),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 1.sp,
-            maxLines = 1
-        )
-        if (stacked) {
-            Column {
-                Text(
-                    value,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (detail.isNotBlank()) {
-                    Text(
-                        detail,
-                        color = Color.White.copy(alpha = 0.62f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        } else {
-            Text(
-                value,
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-            if (detail.isNotBlank()) {
-                Text(
-                    detail,
-                    color = Color.White.copy(alpha = 0.62f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeNavActionButton(
-    label: String,
-    icon: ImageVector,
-    isPrimary: Boolean,
-    accentColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    GlzFocusCard(
-        onClick = onClick,
-        modifier = modifier,
-        selected = isPrimary,
-        accent = accentColor,
-        shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
-        focusedScale = 1.06f
-    ) { _ ->
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                label,
-                fontWeight = FontWeight.Black,
-                fontSize = 13.sp,
-                letterSpacing = 0.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickWatchChannelDrawer(
-    channels: List<Channel>,
-    guide: EpgGuide,
-    onSelectChannel: (Channel) -> Unit,
-    onClose: () -> Unit
-) {
-    BackHandler(onBack = onClose)
-    val now = remember { System.currentTimeMillis() }
-    val firstItemFocus = remember { FocusRequester() }
-
-    LaunchedEffect(Unit) {
-        delay(120L)
-        runCatching { firstItemFocus.requestFocus() }
-    }
-
-    Surface(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(440.dp)
-            .clickable(enabled = false, onClick = {}),
-        color = Color(0xFF0A101C).copy(alpha = 0.96f),
-        shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
-    ) {
-        Column(Modifier.fillMaxSize().padding(20.dp)) {
-            // Header
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.LiveTv,
-                        contentDescription = null,
-                        tint = Color(0xFF00E5FF),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        val drawerStrings = LocalGlzStrings.current
-                        Text(drawerStrings.liveTv, fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White)
-                        Text("${channels.size} channels available", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                val drawerStrings = LocalGlzStrings.current
-                TvSettingsButton(
-                    label = drawerStrings.close,
-                    onClick = onClose
-                )
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // Channel List
-            LazyColumn(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .focusGroup(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                itemsIndexed(channels, key = { index, channel -> "$index:${channel.id}" }) { index, channel ->
-                    val currentProg = remember(channel, guide) {
-                        guide.forChannel(channel).firstOrNull { it.startMillis <= now && it.endMillis > now }
-                    }
-                    val progress = currentProg?.let {
-                        ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L)).coerceIn(0f, 1f)
-                    } ?: 0f
-                    var focused by remember { mutableStateOf(false) }
-
-                    Surface(
-                        onClick = { onSelectChannel(channel) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(if (index == 0) Modifier.focusRequester(firstItemFocus) else Modifier)
-                            .tvFocusableWithPhysics(
-                                shape = RoundedCornerShape(16.dp),
-                                focusedScale = 1.03f,
-                                glowColor = Color(0xFF00E5FF),
-                                onFocusChange = { focused = it }
-                            ),
-                        shape = RoundedCornerShape(16.dp),
-                        color = when {
-                            focused -> Color(0xFF00E5FF)
-                            else -> Color.White.copy(alpha = 0.05f)
-                        },
-                        contentColor = when {
-                            focused -> Color.Black
-                            else -> Color.White
-                        },
-                    ) {
-                        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Channel Number Badge
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (focused) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.10f),
-                                    modifier = Modifier.padding(end = 12.dp)
-                                ) {
-                                    Text(
-                                        channel.number?.let { "#$it" } ?: "#",
-                                        Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = if (focused) Color.Black else Color(0xFF00E5FF)
-                                    )
-                                }
-                                // Channel Logo
-                                ChannelLogo(channel, 38.dp, guide)
-                                Spacer(Modifier.width(12.dp))
-                                // Channel Name & Programme Info
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        channel.name,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    currentProg?.let { prog ->
-                                        Text(
-                                            prog.title,
-                                            fontSize = 12.sp,
-                                            color = if (focused) Color.Black.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            }
-                            if (currentProg != null) {
-                                Spacer(Modifier.height(8.dp))
-                                LinearProgressIndicator(
-                                    progress = { progress },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = if (focused) Color.Black else Color(0xFF00E5FF),
-                                    trackColor = if (focused) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.12f)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GuestYouSection(
-    guestName: String,
-    experience: GuestExperience,
-    modifier: Modifier = Modifier
-) {
-    val services = buildList {
-        experience.noticeTitle?.let {
-            add(GuestService(it, experience.noticeBody, null))
-        }
-        experience.frontDesk?.let {
-            add(GuestService("Front Desk", it, null))
-        }
-        addAll(experience.services)
-    }
-    val listState = rememberLazyListState()
-
-    BoxWithConstraints(
-        modifier
-            .background(
-                Brush.radialGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f),
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            )
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
-        val compact = maxWidth < 700.dp
-
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .focusGroup(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 32.dp)
-        ) {
-            // Header Row
-            item {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                        modifier = Modifier.size(46.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            "You",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Your stay at a glance, ${guestName.ifBlank { "Guest" }}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            // Stay Summary & Wi-Fi Access Cards
-            item {
-                if (compact) {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        StaySummaryCard(guestName, experience, Modifier.fillMaxWidth())
-                        WifiInformationCard(experience, Modifier.fillMaxWidth())
-                    }
-                } else {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        StaySummaryCard(guestName, experience, Modifier.weight(1f))
-                        WifiInformationCard(experience, Modifier.weight(1f))
-                    }
-                }
-            }
-
-            // Services & Visit Information
-            if (services.isNotEmpty()) {
-                item {
-                    HubSectionTitle("VISIT INFORMATION", "Helpful details & services for your stay")
-                }
-                items(services, key = { "${it.title}-${it.actionUrl}" }) { service ->
-                    GuestServiceCard(service)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StaySummaryCard(
-    guestName: String,
-    experience: GuestExperience,
-    modifier: Modifier = Modifier
-) {
-    var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(26.dp)
-    val primaryColor = MaterialTheme.colorScheme.primary
-
-    Card(
-        modifier = modifier
-            .heightIn(min = 210.dp)
-            .tvFocusableWithPhysics(
-                shape = shape,
-                focusedScale = 1.03f,
-                glowColor = primaryColor,
-                onFocusChange = { focused = it }
-            ),
-        shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-        )
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            primaryColor.copy(alpha = 0.18f),
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                        )
-                    )
-                )
-        ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(22.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Home,
-                            contentDescription = null,
-                            tint = primaryColor,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "YOUR STAY",
-                            color = primaryColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
-                        )
-                    }
-                    experience.roomNumber?.let { room ->
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = primaryColor.copy(alpha = 0.20f),
-                        ) {
-                            Text(
-                                "ROOM $room",
-                                color = primaryColor,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        experience.propertyName.ifBlank { "Guest Suite" },
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        guestName.ifBlank { "Guest" },
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                val stayPills = buildList {
-                    experience.arrivalDate?.let { add("Arrival: $it") }
-                    experience.departureDate?.let { add("Departure: $it") }
-                    experience.checkoutTime?.let { add("Checkout: $it") }
-                }
-                if (stayPills.isNotEmpty()) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        stayPills.take(2).forEach { info ->
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color.White.copy(alpha = 0.08f),
-                            ) {
-                                Text(
-                                    info,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White.copy(alpha = 0.90f),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WifiInformationCard(
-    experience: GuestExperience,
-    modifier: Modifier = Modifier
-) {
-    val wifiName = experience.wifiName.orEmpty()
-    val wifiPass = experience.wifiInstructions.orEmpty()
-    var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(26.dp)
-    val secondaryColor = MaterialTheme.colorScheme.secondary
-
-    Card(
-        modifier = modifier
-            .heightIn(min = 210.dp)
-            .tvFocusableWithPhysics(
-                shape = shape,
-                focusedScale = 1.03f,
-                glowColor = secondaryColor,
-                onFocusChange = { focused = it }
-            ),
-        shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-        )
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            secondaryColor.copy(alpha = 0.20f),
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                        )
-                    )
-                )
-        ) {
-            Row(
-                Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                if (wifiName.isNotBlank()) {
-                    WifiQrCode(wifiName, wifiPass, 130.dp)
-                } else {
-                    Box(
-                        Modifier
-                            .size(130.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color.White.copy(alpha = 0.08f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Wifi,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.40f),
-                            modifier = Modifier.size(48.dp)
-                        )
-                    }
-                }
-                Column(
-                    Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Wifi,
-                            contentDescription = null,
-                            tint = secondaryColor,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "WI-FI ACCESS",
-                            color = secondaryColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
-                        )
-                    }
-                    Text(
-                        wifiName.ifBlank { "Wi-Fi Details Unavailable" },
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (wifiPass.isNotBlank()) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = secondaryColor.copy(alpha = 0.20f),
-                        ) {
-                            Row(
-                                Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "Pass: ",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = secondaryColor
-                                )
-                                Text(
-                                    wifiPass,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        "Scan QR with phone camera to connect",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WifiQrCode(ssid: String, password: String?, size: androidx.compose.ui.unit.Dp) {
-    val bitmap = remember(ssid, password) {
-        val escape: (String) -> String = {
-            it.replace("\\", "\\\\")
-                .replace(";", "\\;")
-                .replace(",", "\\,")
-                .replace(":", "\\:")
-        }
-        val payload = "WIFI:T:WPA;S:${escape(ssid)};P:${escape(password.orEmpty())};;"
-        val matrix = QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, 384, 384)
-        val pixels = IntArray(matrix.width * matrix.height) { index ->
-            val x = index % matrix.width
-            val y = index / matrix.width
-            if (matrix[x, y]) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
-        }
-        Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.ARGB_8888).apply {
-            setPixels(pixels, 0, matrix.width, 0, 0, matrix.width, matrix.height)
-        }
-    }
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = Color.White,
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(size)
-    ) {
-        Image(
-            bitmap.asImageBitmap(),
-            contentDescription = "Wi-Fi QR code for $ssid",
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(10.dp)
-        )
-    }
-}
-
-@Composable
-private fun GuestServiceCard(service: GuestService) {
-    val context = LocalContext.current
-    var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(20.dp)
-    val serviceIcon = when {
-        service.title.contains("Front Desk", ignoreCase = true) -> Icons.Default.Person
-        service.title.contains("Notice", ignoreCase = true) || service.title.contains("Thank", ignoreCase = true) -> Icons.Default.Home
-        else -> Icons.Default.LiveTv
-    }
-
-    Card(
-        onClick = {
-            service.actionUrl?.let { url ->
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                }
-            }
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 74.dp)
-            .tvFocusableWithPhysics(
-                shape = shape,
-                focusedScale = 1.04f,
-                glowColor = MaterialTheme.colorScheme.primary,
-                onFocusChange = { focused = it }
-            ),
-        shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (focused) MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-        ),
-        elevation = CardDefaults.cardElevation(if (focused) 12.dp else 2.dp)
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                    else Color.White.copy(alpha = 0.08f),
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            serviceIcon,
-                            contentDescription = null,
-                            tint = if (focused) MaterialTheme.colorScheme.primary else Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.width(14.dp))
-                Column {
-                    Text(
-                        service.title,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 16.sp,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    service.subtitle?.let {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            it,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-            if (service.actionUrl != null) {
-                Icon(
-                    Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PremiumHero(
-    channel: Channel,
-    programme: Programme?,
-    guide: EpgGuide? = null,
-    onWatch: () -> Unit,
-    onGuide: () -> Unit,
-    onFocused: () -> Unit
-) {
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000L)
-            now = System.currentTimeMillis()
-        }
-    }
-    val progress = programme?.let {
-        ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
-            .coerceIn(0f, 1f)
-    } ?: 0f
-    Card(
-        Modifier.fillMaxWidth().height(245.dp),
-        shape = RoundedCornerShape(34.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        MaterialTheme.colorScheme.surface
-                    )
-                )
-            )
-        ) {
-            Row(
-                Modifier.fillMaxSize().padding(30.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ChannelLogo(channel, 112.dp, guide)
-                Spacer(Modifier.width(28.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "${channel.number} · LIVE",
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(channel.name, fontSize = 38.sp, fontWeight = FontWeight.Black)
-                    Text(
-                        programme?.title ?: "Live programming",
-                        fontSize = 21.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    programme?.description?.takeIf(String::isNotBlank)?.let {
-                        Text(
-                            it,
-                            Modifier.padding(top = 6.dp),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (programme != null) {
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth(.72f).padding(top = 14.dp).height(4.dp),
-                            color = MaterialTheme.colorScheme.secondary,
-                            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f)
-                        )
-                    }
-                    Row(
-                        Modifier.padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Button(
-                            onClick = onWatch,
-                            modifier = Modifier.onFocusChanged {
-                                if (it.isFocused) onFocused()
-                            }
-                        ) { Text("Watch now") }
-                        Button(
-                            onClick = onGuide,
-                            modifier = Modifier.onFocusChanged {
-                                if (it.isFocused) onFocused()
-                            }
-                        ) { Text("View guide") }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HubSectionTitle(title: String, subtitle: String) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
-        Spacer(Modifier.width(12.dp))
-        Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-    }
-}
-
-@Composable
-private fun LiveHubCard(
-    channel: Channel,
-    programmes: List<Programme>,
-    guide: EpgGuide? = null,
-    now: Long,
-    onClick: () -> Unit
-) {
-    val programme = programmes.firstOrNull { it.startMillis <= now && it.endMillis > now }
-    val progress = programme?.let {
-        ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
-            .coerceIn(0f, 1f)
-    } ?: 0f
-    PremiumFocusCard(
-        modifier = Modifier.width(252.dp).aspectRatio(16f / 9f),
-        onClick = onClick,
-        accent = MaterialTheme.colorScheme.primary
-    ) {
-        Row(Modifier.padding(start = 15.dp, top = 14.dp, end = 15.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            ChannelLogo(channel, 52.dp, guide)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(channel.number, color = MaterialTheme.colorScheme.secondary,
-                    fontWeight = FontWeight.Black)
-                Text(channel.name, fontWeight = FontWeight.Black, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
-            }
-        }
-        Text(
-            programme?.title ?: "Live programming",
-            Modifier.padding(horizontal = 15.dp, vertical = 8.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.weight(1f))
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(4.dp),
-            color = MaterialTheme.colorScheme.secondary,
-            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f)
-        )
-    }
-}
-
-private fun Color.toLuminousAccent(): Color {
-    val r = red
-    val g = green
-    val b = blue
-    val luminance = 0.2126f * r + 0.7152f * g + 0.0722f * b
-    return if (luminance < 0.38f) {
-        val factor = 0.50f / (luminance + 0.05f)
-        Color(
-            (r * factor).coerceAtMost(1f),
-            (g * factor).coerceAtMost(1f),
-            (b * factor).coerceAtMost(1f),
-            alpha
-        )
-    } else {
-        this
-    }
-}
-
-@Composable
-private fun LiveTvHubCard(
-    onClick: () -> Unit,
-    width: androidx.compose.ui.unit.Dp = 190.dp,
-    height: androidx.compose.ui.unit.Dp = 100.dp
-) {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val secondaryColor = MaterialTheme.colorScheme.secondary
-    PremiumFocusCard(
-        modifier = Modifier.width(width).height(height),
-        onClick = onClick,
-        accent = primaryColor
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            primaryColor,
-                            secondaryColor
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                Modifier.padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    Icons.Default.LiveTv,
-                    contentDescription = "Live TV",
-                    modifier = Modifier.size(34.dp),
-                    tint = Color.White
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "Live TV",
-                    color = Color.White,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EntertainmentAppCard(
-    app: EntertainmentApp,
-    width: androidx.compose.ui.unit.Dp = 190.dp,
-    height: androidx.compose.ui.unit.Dp = 100.dp
-) {
-    val context = LocalContext.current
-    val prefs = remember {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    }
-    val client = remember { createPermissiveOkHttpClient() }
-    val scope = rememberCoroutineScope()
-    val packageManager = context.packageManager
-    val launchIntent = remember(app.packageName) {
-        findAppLaunchIntent(context, app.packageName)
-    }
-    val installedIcon = remember(app.packageName, launchIntent) {
-        if (launchIntent != null) runCatching {
-            packageManager.getApplicationIcon(app.packageName)
-        }.getOrNull() else null
-    }
-
-    val isLightApp = app.name.equals("YouTube", ignoreCase = true) ||
-        app.name.equals("YouTube Music", ignoreCase = true)
-    val cardBackground = if (isLightApp) Color(0xFFF6F8FA) else Color(0xFF161C2C)
-
-    PremiumFocusCard(
-        modifier = Modifier.width(width).height(height),
-        onClick = {
-            GlzHubManager.reportLaunchedApp(prefs, app.name, app.packageName)
-            scope.launch(Dispatchers.IO) {
-                GlzHubManager.heartbeat(prefs, client)
-            }
-            launchEntertainmentApp(context, app.packageName, launchIntent)
-        },
-        accent = app.accent
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            cardBackground,
-                            cardBackground.copy(alpha = 0.95f),
-                            app.accent.copy(alpha = 0.25f)
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                AdaptiveAppIcon(
-                    icon = installedIcon,
-                    appName = app.name,
-                    accent = app.accent,
-                    size = 44.dp
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        app.name,
-                        color = Color.White,
-                        fontSize = if (app.name.length > 10) 14.sp else 16.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = (-0.3).sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        if (installedIcon != null) "INSTALLED" else "APP",
-                        color = app.accent,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.5.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AdaptiveAppIcon(
-    icon: Drawable?,
-    appName: String,
-    accent: Color,
-    size: androidx.compose.ui.unit.Dp
-) {
-    val shape = RoundedCornerShape(14.dp)
-    Surface(
-        Modifier.size(size),
-        shape = shape,
-        color = Color.White.copy(alpha = 0.08f),
-    ) {
-        when {
-            icon != null -> AsyncImage(
-                model = icon,
-                contentDescription = appName,
-                modifier = Modifier.fillMaxSize().padding(4.dp).clip(RoundedCornerShape(10.dp)),
-                contentScale = ContentScale.Fit
-            )
-            else -> Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.7f)))
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    appName.take(2).uppercase(),
-                    color = Color.White,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 16.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PremiumFocusCard(
-    modifier: Modifier,
-    onClick: () -> Unit,
-    accent: Color,
-    onFocusChange: ((Boolean) -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    GlzFocusCard(
-        onClick = onClick,
-        modifier = modifier,
-        accent = accent,
-        shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
-        focusedScale = 1.07f,
-        contentModifier = Modifier.fillMaxSize(),
-        onFocusChange = onFocusChange
-    ) { _ ->
-        content()
-    }
-}
-
-private fun launchEntertainmentApp(context: Context, packageName: String, launchIntent: Intent?) {
-    try {
-        if (launchIntent != null) {
-            context.startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } else {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        }
-    } catch (_: ActivityNotFoundException) {
-        context.startActivity(
-            Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
-            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-    }
-}
-
-private suspend fun handleManagedHubCommand(
-    context: Context,
-    prefs: SharedPreferences,
-    client: OkHttpClient,
-    command: GlzHubManager.HubCommand,
-    onForceRefresh: suspend () -> Unit
-) {
-    when (command) {
-        is GlzHubManager.ForceRefreshCommand -> {
-            onForceRefresh()
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    GlzHubManager.completeCommand(
-                        prefs, client, command.id, true, "EPG and M3U force refresh completed on TV"
-                    )
-                }
-            }
-        }
-        is GlzHubManager.AppCommand -> {
-            val result = runCatching {
-                if (command.sourceType == "repository") {
-                    val url = requireNotNull(command.sourceUrl) { "Repository URL is missing" }
-                    context.startActivity(
-                        ManagedInstallActivity.intent(
-                            context = context,
-                            sourceUrl = url,
-                            packageName = command.packageName,
-                            commandId = command.id
-                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                } else {
-                    val uri = Uri.parse("market://details?id=${command.packageName}")
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                }
-            }
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    GlzHubManager.completeCommand(
-                        prefs, client, command.id, result.isSuccess,
-                        if (result.isSuccess) "In-app installer opened on TV" else (result.exceptionOrNull()?.message ?: "Could not open installer")
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun findAppLaunchIntent(context: Context, packageName: String): Intent? {
-    val packageManager = context.packageManager
-    return packageManager.getLeanbackLaunchIntentForPackage(packageName)
-        ?: packageManager.getLaunchIntentForPackage(packageName)
-        ?: Intent(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
-            .setPackage(packageName)
-            .takeIf { it.resolveActivity(packageManager) != null }
-}
-
-@Composable
-private fun GuideSection(
-    channels: List<Channel>,
-    guide: EpgGuide,
-    previewChannel: Channel?,
-    captionLanguage: String,
-    favorites: Set<String> = emptySet(),
-    onWatch: (Channel) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    var timeOffsetMillis by remember { mutableStateOf(0L) }
-    var selectedCategory by remember { mutableStateOf("ALL") }
-    var focusedChannel by remember { mutableStateOf(previewChannel ?: channels.firstOrNull()) }
-    var focusedProgramme by remember { mutableStateOf<Programme?>(null) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000L)
-            now = System.currentTimeMillis()
-        }
-    }
-
-    // Categories derived from channels
-    val categories = remember(channels) {
-        val groups = channels.mapNotNull { it.group.takeIf { g -> g.isNotBlank() } }.distinct()
-        listOf("ALL", "FAVORITES") + groups
-    }
-
-    val filteredChannels = remember(channels, selectedCategory, favorites) {
-        when (selectedCategory) {
-            "ALL" -> channels
-            "FAVORITES" -> channels.filter { it.id in favorites }
-            else -> channels.filter { it.group.equals(selectedCategory, ignoreCase = true) }
-        }
-    }
-
-    val activeChannel = focusedChannel ?: previewChannel ?: filteredChannels.firstOrNull()
-
-    GlzPanel(
-        modifier = modifier,
-        shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
-        fill = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-    ) {
-        BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp)) {
-            if (guide.programmeCount == 0 && channels.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.CalendarMonth,
-                            contentDescription = null,
-                            Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text("Guide data is unavailable", fontSize = 20.sp, fontWeight = FontWeight.Black)
-                        Text(
-                            "Refresh the sources or check the XMLTV address in Settings.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-            } else {
-                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // 1. COMPACT PROGRAMME DETAIL & PREVIEW HEADER (Takes minimal vertical space)
-                    if (activeChannel != null) {
-                        EpgPreviewHeader(
-                            focusedChannel = activeChannel,
-                            focusedProgramme = focusedProgramme,
-                            previewChannel = previewChannel,
-                            guide = guide,
-                            now = now,
-                            captionLanguage = captionLanguage,
-                            onWatch = { onWatch(activeChannel) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    // 2. COMPACT CATEGORY FILTERS & TIME JUMP SHORTCUTS BAR
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .focusGroup(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        // Category Chips (Horizontal Scrollable)
-                        LazyRow(
-                            Modifier.weight(1f).padding(end = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            items(categories) { cat ->
-                                GlzFocusCard(
-                                    onClick = { selectedCategory = cat },
-                                    selected = selectedCategory == cat,
-                                    shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
-                                    focusedScale = 1.04f
-                                ) { _ ->
-                                    Text(
-                                        cat.uppercase(),
-                                        Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 10.sp,
-                                        letterSpacing = 0.5.sp,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-
-                        // Time Jump Buttons
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf(
-                                "NOW" to 0L,
-                                "+2H" to 2 * 3600 * 1000L,
-                                "TONIGHT" to calculateTonightOffset(now),
-                                "TOMORROW" to 24 * 3600 * 1000L
-                            ).forEach { (label, offset) ->
-                                GlzFocusCard(
-                                    onClick = { timeOffsetMillis = offset },
-                                    selected = timeOffsetMillis == offset,
-                                    accent = MaterialTheme.colorScheme.secondary,
-                                    shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
-                                    focusedScale = 1.04f
-                                ) { _ ->
-                                    Text(
-                                        label,
-                                        Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 9.sp,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // 3. HIGH DENSITY EPG TIMELINE GRID (Thinner rows for maximum channel visibility)
-                    EpgGrid(
-                        channels = filteredChannels,
-                        guide = guide,
-                        now = now,
-                        timeOffsetMillis = timeOffsetMillis,
-                        onFocusChannel = { ch ->
-                            focusedChannel = ch
-                            val progs = guide.forChannel(ch)
-                            focusedProgramme = progs.firstOrNull { it.startMillis <= now && it.endMillis > now }
-                        },
-                        onFocusProgramme = { ch, prog ->
-                            focusedChannel = ch
-                            focusedProgramme = prog
-                        },
-                        onWatch = onWatch,
-                        modifier = Modifier.weight(1f).fillMaxWidth()
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun calculateTonightOffset(now: Long): Long {
-    val cal = java.util.Calendar.getInstance().apply {
-        timeInMillis = now
-        set(java.util.Calendar.HOUR_OF_DAY, 20)
-        set(java.util.Calendar.MINUTE, 0)
-        set(java.util.Calendar.SECOND, 0)
-        set(java.util.Calendar.MILLISECOND, 0)
-    }
-    val tonightMillis = cal.timeInMillis
-    return if (tonightMillis > now) tonightMillis - now else 0L
-}
-
-@Composable
-private fun EpgPreviewHeader(
-    focusedChannel: Channel,
-    focusedProgramme: Programme?,
-    previewChannel: Channel?,
-    guide: EpgGuide,
-    now: Long,
-    captionLanguage: String,
-    onWatch: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val programmes = remember(focusedChannel, guide) { guide.forChannel(focusedChannel) }
-    val current = remember(programmes, now) {
-        programmes.firstOrNull { it.startMillis <= now && it.endMillis > now }
-    }
-    val activeProg = focusedProgramme ?: current
-    val next = remember(programmes, activeProg, now) {
-        val targetEnd = activeProg?.endMillis ?: now
-        programmes.firstOrNull { it.startMillis >= targetEnd }
-    }
-    val progress = activeProg?.let {
-        if (it.startMillis <= now && it.endMillis > now) {
-            ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L)).coerceIn(0f, 1f)
-        } else 0f
-    } ?: 0f
-
-    val isLive = activeProg != null && activeProg.startMillis <= now && activeProg.endMillis > now
-
-    Surface(
-        modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = Color.White.copy(alpha = 0.05f),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            ChannelLogo(focusedChannel, 34.dp, guide)
-
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "${focusedChannel.number.ifBlank { "TV" }} · ${focusedChannel.name}",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 13.sp,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = if (isLive) Color(0xFF00E5FF).copy(alpha = 0.20f) else Color.White.copy(alpha = 0.10f),
-                    ) {
-                        Text(
-                            if (isLive) "LIVE" else "UPCOMING",
-                            Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black,
-                            color = if (isLive) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.80f)
-                        )
-                    }
-                    activeProg?.let { prog ->
-                        val startStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))
-                        val endStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "$startStr – $endStr",
-                            color = MaterialTheme.colorScheme.secondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        activeProg?.title ?: "Live Broadcast",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 14.sp,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    next?.let { n ->
-                        Text(
-                            "Next: ${n.title}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.80f),
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = 10.dp)
-                        )
-                    }
-                }
-
-                if (isLive) {
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier.fillMaxWidth().height(2.5.dp).clip(RoundedCornerShape(1.dp)),
-                        color = Color(0xFF00E5FF),
-                        trackColor = Color.White.copy(alpha = 0.12f)
-                    )
-                }
-            }
-
-            // Fixed preview PIP video (stays on tuned channel without changing on focus)
-            previewChannel?.let { channel ->
-                Surface(
-                    Modifier
-                        .width(110.dp)
-                        .height(62.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color.Black,
-                ) {
-                    VideoPlayer(
-                        channel = channel,
-                        captionsEnabled = false,
-                        captionLanguage = captionLanguage,
-                        modifier = Modifier.fillMaxSize(),
-                        muted = true,
-                        keepScreenOn = false,
-                        cropVideo = true
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EpgGrid(
-    channels: List<Channel>,
-    guide: EpgGuide,
-    now: Long,
-    timeOffsetMillis: Long,
-    onFocusChannel: (Channel) -> Unit,
-    onFocusProgramme: (Channel, Programme) -> Unit,
-    onWatch: (Channel) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val halfHour = 30 * 60 * 1000L
-    val baseTime = now + timeOffsetMillis
-    val start = baseTime - (baseTime % halfHour)
-    val slots = 8
-    val slotWidth = 140.dp
-    val channelWidth = 180.dp
-    val timelineWidth = slotWidth * slots
-    val totalWidth = channelWidth + timelineWidth
-    val horizontal = rememberScrollState()
-
-    Column(modifier.horizontalScroll(horizontal)) {
-        Box(Modifier.width(totalWidth).fillMaxHeight()) {
-            Column(Modifier.fillMaxSize()) {
-                // Header Timeline Row (compact: 28.dp height)
-                Row(
-                    Modifier
-                        .height(28.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f), RoundedCornerShape(10.dp))
-                ) {
-                    Box(
-                        Modifier
-                            .width(channelWidth)
-                            .fillMaxHeight()
-                            .padding(horizontal = 10.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Text(
-                            "CHANNELS",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                    repeat(slots) { slot ->
-                        Box(
-                            Modifier
-                                .width(slotWidth)
-                                .fillMaxHeight()
-                                .border(0.5.dp, Color.White.copy(alpha = 0.08f)),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            Text(
-                                DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(start + slot * halfHour)),
-                                Modifier.padding(start = 8.dp),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.85f)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(4.dp))
-
-                // Channel Rows (thinner, more channels visible)
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().focusGroup(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    itemsIndexed(channels, key = { index, ch -> "grid-$index-${ch.streamUrl}" }) { _, channel ->
-                        EpgGridRow(
-                            channel = channel,
-                            programmes = guide.forChannel(channel),
-                            guide = guide,
-                            windowStart = start,
-                            windowEnd = start + slots * halfHour,
-                            channelWidth = channelWidth,
-                            timelineWidth = timelineWidth,
-                            slotWidth = slotWidth,
-                            onFocusChannel = { onFocusChannel(channel) },
-                            onFocusProgramme = { prog -> onFocusProgramme(channel, prog) },
-                            onWatch = { onWatch(channel) }
-                        )
-                    }
-                }
-            }
-
-            // Real-Time "NOW" Indicator Cursor
-            if (now in start..(start + slots * halfHour)) {
-                val elapsedRatio = (now - start).toFloat() / (slots * halfHour).toFloat()
-                val clockX = channelWidth + (timelineWidth * elapsedRatio)
-                Box(
-                    Modifier
-                        .offset(x = clockX - 1.dp)
-                        .width(2.dp)
-                        .fillMaxHeight()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color(0xFF00E5FF),
-                                    Color(0xFF00E5FF).copy(alpha = 0.70f),
-                                    Color(0xFF00E5FF).copy(alpha = 0.10f)
-                                )
-                            )
-                        )
-                )
-                Surface(
-                    modifier = Modifier.offset(x = clockX - 16.dp, y = 4.dp),
-                    shape = RoundedCornerShape(4.dp),
-                    color = Color(0xFF00E5FF),
-                    contentColor = Color.Black
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Box(Modifier.size(3.dp).background(Color.Red, CircleShape))
-                        Text("NOW", fontSize = 8.sp, fontWeight = FontWeight.Black)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EpgGridRow(
-    channel: Channel,
-    programmes: List<Programme>,
-    guide: EpgGuide? = null,
-    windowStart: Long,
-    windowEnd: Long,
-    channelWidth: androidx.compose.ui.unit.Dp,
-    timelineWidth: androidx.compose.ui.unit.Dp,
-    slotWidth: androidx.compose.ui.unit.Dp,
-    onFocusChannel: () -> Unit,
-    onFocusProgramme: (Programme) -> Unit,
-    onWatch: () -> Unit
-) {
-    val halfHour = 30 * 60 * 1000f
-    val visible = programmes.filter { it.endMillis > windowStart && it.startMillis < windowEnd }
-    val now = remember { System.currentTimeMillis() }
-    var channelFocused by remember { mutableStateOf(false) }
-
-    Row(
-        Modifier
-            .height(46.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-    ) {
-        // Channel Column Badge
-        Surface(
-            onClick = onWatch,
-            modifier = Modifier
-                .width(channelWidth)
-                .fillMaxHeight()
-                .tvFocusableWithPhysics(
-                    shape = RoundedCornerShape(10.dp),
-                    focusedScale = 1.02f,
-                    glowColor = MaterialTheme.colorScheme.primary,
-                    onFocusChange = {
-                        channelFocused = it
-                        if (it) onFocusChannel()
-                    }
-                ),
-            shape = RoundedCornerShape(10.dp),
-            color = if (channelFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
-            contentColor = if (channelFocused) Color.Black else Color.White
-        ) {
-            Row(
-                Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ChannelLogo(channel, 28.dp, guide)
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                    Text(
-                        channel.number.ifBlank { "TV" },
-                        color = if (channelFocused) Color.Black else MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        channel.name,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
-            }
-        }
-
-        // Timeline Program Blocks
-        Box(
-            Modifier
-                .width(timelineWidth)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(8.dp))
-        ) {
-            repeat(8) { slot ->
-                Box(
-                    Modifier
-                        .offset(x = slotWidth * slot)
-                        .width(slotWidth)
-                        .fillMaxHeight()
-                        .border(0.5.dp, Color.White.copy(alpha = 0.06f))
-                )
-            }
-            if (visible.isEmpty()) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Text(
-                        "No program information",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            } else {
-                visible.forEach { programme ->
-                    val clippedStart = maxOf(programme.startMillis, windowStart)
-                    val clippedEnd = minOf(programme.endMillis, windowEnd)
-                    val x = slotWidth * ((clippedStart - windowStart) / halfHour)
-                    val width = slotWidth * ((clippedEnd - clippedStart) / halfHour)
-                    val isCurrent = programme.startMillis <= now && programme.endMillis > now
-                    var progFocused by remember { mutableStateOf(false) }
-
-                    Surface(
-                        onClick = onWatch,
-                        modifier = Modifier
-                            .offset(x = x)
-                            .width(maxOf(width, 48.dp))
-                            .fillMaxHeight()
-                            .padding(2.dp)
-                            .tvFocusableWithPhysics(
-                                shape = RoundedCornerShape(8.dp),
-                                focusedScale = 1.03f,
-                                glowColor = Color(0xFF00E5FF),
-                                onFocusChange = {
-                                    progFocused = it
-                                    if (it) onFocusProgramme(programme)
-                                }
-                            ),
-                        shape = RoundedCornerShape(8.dp),
-                        color = when {
-                            progFocused -> Color(0xFF00E5FF)
-                            isCurrent -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
-                            else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.70f)
-                        },
-                        contentColor = when {
-                            progFocused -> Color.Black
-                            isCurrent -> Color.White
-                            else -> MaterialTheme.colorScheme.onSurface
-                        },
-                    ) {
-                        Column(
-                            Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                programme.title,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(programme.startMillis)),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 9.sp,
-                                color = if (progFocused) Color.Black.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChannelLogo(
-    channel: Channel,
-    size: androidx.compose.ui.unit.Dp,
-    guide: EpgGuide? = null,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val logoUrl = channel.logoUrl.takeIf { it.isNotBlank() } ?: guide?.logoForChannel(channel)
-    val model = remember(logoUrl, channel.headers) {
-        if (logoUrl.isNullOrBlank()) null
-        else if (channel.headers.isEmpty()) logoUrl
-        else {
-            val headersBuilder = NetworkHeaders.Builder()
-            channel.headers.forEach { (k, v) -> headersBuilder.set(k, v) }
-            ImageRequest.Builder(context)
-                .data(logoUrl)
-                .httpHeaders(headersBuilder.build())
-            .build()
-        }
-    }
-    var logoLoaded by remember(model) { mutableStateOf(false) }
-    val initials = remember(channel.name) {
-        channel.name.split(Regex("\\s+"))
-            .mapNotNull { word -> word.firstOrNull(Char::isLetterOrDigit) }
-            .take(2)
-            .joinToString("")
-            .uppercase()
-            .ifBlank { "TV" }
-    }
-    Surface(
-        modifier = modifier.then(Modifier.size(size)),
-        shape = CircleShape,
-        color = Color(0xFFF7F7F4),
-        shadowElevation = 3.dp
-    ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (!logoLoaded) {
-                Text(
-                    text = initials,
-                    color = Color(0xFF243447),
-                    fontSize = (size.value * .27f).sp,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1
-                )
-            }
-            if (model != null) {
-                AsyncImage(
-                    model = model,
-                    contentDescription = "${channel.name} logo",
-                    modifier = Modifier.fillMaxSize().padding(size * .14f),
-                    contentScale = ContentScale.Fit,
-                    onSuccess = { logoLoaded = true },
-                    onError = { logoLoaded = false }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChannelPane(
-    channels: List<Channel>,
-    selected: Channel?,
-    favorites: Set<String>,
-    guide: EpgGuide? = null,
-    onSelect: (Channel) -> Unit,
-    onFavorite: (Channel) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(modifier, shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.fillMaxSize().padding(14.dp)) {
-            Text("${channels.size} channels", modifier = Modifier.padding(10.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            LazyColumn(
-                contentPadding = PaddingValues(bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(channels, key = { index, ch -> "$index-${ch.streamUrl}" }) { _, channel ->
-                    ChannelCard(channel, channel == selected, channel.id in favorites,
-                        guide, { onSelect(channel) }, { onFavorite(channel) })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChannelCard(
-    channel: Channel, selected: Boolean, favorite: Boolean,
-    guide: EpgGuide? = null,
-    onClick: () -> Unit, onFavorite: () -> Unit
-) {
-    var focused by remember(channel.id) { mutableStateOf(false) }
-    val container = if (focused) MaterialTheme.colorScheme.surfaceContainerHighest
-    else if (selected) MaterialTheme.colorScheme.primaryContainer
-    else MaterialTheme.colorScheme.surfaceVariant
-    Card(
-        Modifier.fillMaxWidth()
-            .clickable(onClick = onClick)
-            .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(20.dp),
-                focusedScale = 1.03f,
-                glowColor = MaterialTheme.colorScheme.secondary,
-                onFocusChange = { focused = it }
-            ),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = container),
-        elevation = CardDefaults.cardElevation(if (focused) 8.dp else 0.dp)
-    ) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            ChannelLogo(channel, 48.dp, guide)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(channel.name, fontWeight = FontWeight.Bold, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
-                Text(
-                    "${channel.number.takeIf { it.isNotBlank() }?.let { "$it · " }.orEmpty()}${channel.group}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
-            IconButton(onClick = onFavorite) {
-                Icon(if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    "Favorite", tint = MaterialTheme.colorScheme.primary)
-            }
-        }
-    }
-}
-
-@Composable
-private fun DrawerSectionLabel(text: String) {
-    Text(
-        text,
-        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
-        color = Color.White.copy(alpha = .55f),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 0.5.sp
-    )
-}
-
-@Composable
-private fun TvOptionButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    selected: Boolean = false
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    Surface(
-        onClick = onClick,
-        modifier = modifier
-            .onFocusChanged { isFocused = it.isFocused }
-            .padding(vertical = 2.dp),
-        shape = RoundedCornerShape(14.dp),
-        color = when {
-            isFocused -> Color(0xFFC4FF4D)
-            selected -> Color(0xFF23405F)
-            else -> Color.White.copy(alpha = 0.12f)
-        },
-        contentColor = when {
-            isFocused -> Color.Black
-            selected -> Color(0xFFC4FF4D)
-            else -> Color.White
-        },
-        shadowElevation = if (isFocused) 8.dp else 0.dp
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            fontWeight = if (isFocused || selected) FontWeight.Black else FontWeight.SemiBold,
-            fontSize = 14.sp
-        )
-    }
-}
-
-@Composable
-private fun ImmersivePlayerScreen(
-    channel: Channel,
-    channels: List<Channel>,
-    guide: EpgGuide,
-    captionsEnabled: Boolean,
-    captionLanguage: String,
-    onCaptionsChanged: (Boolean, String) -> Unit,
-    osdTimeoutSeconds: Int = 8,
-    entertainmentApps: List<EntertainmentApp>,
-    recentChannels: List<Channel>,
-    speedTestResult: SpeedTestResult? = null,
-    onRunSpeedTest: ((String) -> Unit)? = null,
-    onPreviousChannel: () -> Unit,
-    onAddToMultiView: (Channel) -> Unit,
-    onTune: (Channel) -> Unit,
-    onExit: () -> Unit
-) {
-    val context = LocalContext.current
-    val prefs = remember {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    }
-    val client = remember { createPermissiveOkHttpClient() }
-    val trackPreferences = remember { TrackPreferenceManager(prefs) }
-    val playbackControls = remember { PlaybackControlState() }
-    val scope = rememberCoroutineScope()
-    var drawer by remember { mutableStateOf(PlayerDrawer.None) }
-    var showOsd by remember { mutableStateOf(false) }
-    var selectingMultiViewChannel by remember { mutableStateOf(false) }
-    var showDiagnostics by remember { mutableStateOf(false) }
-    val playerFocus = remember { FocusRequester() }
-    val selectedChannelFocus = remember { FocusRequester() }
-    val firstServiceFocus = remember { FocusRequester() }
-    val selectedIndex = channels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
-    val channelListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = (selectedIndex - 2).coerceAtLeast(0)
-    )
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    val channelProgrammes = guide.forChannel(channel)
-    val currentProgramme = channelProgrammes
-        .firstOrNull { it.startMillis <= now && it.endMillis > now }
-    val nextProgramme = channelProgrammes
-        .firstOrNull { it.startMillis >= (currentProgramme?.endMillis ?: now) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1_000)
-            now = System.currentTimeMillis()
-        }
-    }
-    LaunchedEffect(showOsd, channel.id, osdTimeoutSeconds) {
-        if (showOsd) {
-            delay(osdTimeoutSeconds * 1_000L)
-            showOsd = false
-        }
-    }
-    LaunchedEffect(channel.id) {
-        // The ready callback below turns this on at the exact point playback starts.
-        showOsd = false
-    }
-
-    fun stepChannel(direction: Int) {
-        val currentIndex = channels.indexOfFirst { it.id == channel.id }
-        if (currentIndex >= 0 && channels.isNotEmpty()) {
-            onTune(channels[(currentIndex + direction + channels.size) % channels.size])
-        }
-    }
-
-    BackHandler {
-        if (drawer != PlayerDrawer.None) drawer = PlayerDrawer.None else onExit()
-    }
-    LaunchedEffect(channel.id, drawer) {
-        when (drawer) {
-            PlayerDrawer.None -> playerFocus.requestFocus()
-            PlayerDrawer.Channels -> {
-                runCatching { channelListState.scrollToItem((selectedIndex - 2).coerceAtLeast(0)) }
-                delay(PANEL_ANIM_IN.toLong())
-                runCatching { selectedChannelFocus.requestFocus() }
-            }
-            PlayerDrawer.Services -> {
-                delay(PANEL_ANIM_IN.toLong())
-                runCatching { firstServiceFocus.requestFocus() }
-            }
-            PlayerDrawer.Recent -> Unit
-        }
-    }
-
-    BoxWithConstraints(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .focusRequester(playerFocus)
-            .focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
-                when (event.nativeKeyEvent.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (drawer == PlayerDrawer.None) {
-                            drawer = PlayerDrawer.Channels
-                            true
-                        } else false
-                    }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (drawer == PlayerDrawer.None) {
-                            drawer = PlayerDrawer.Services
-                            true
-                        } else false
-                    }
-                    KeyEvent.KEYCODE_DPAD_CENTER,
-                    KeyEvent.KEYCODE_ENTER,
-                    KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        if (drawer == PlayerDrawer.None) {
-                            showOsd = !showOsd
-                            true
-                        } else false
-                    }
-                    // Up = next channel in list order, Down = previous. CHANNEL_UP/DOWN match.
-                    KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (drawer == PlayerDrawer.None) {
-                            stepChannel(1)
-                            showOsd = true
-                            true
-                        } else false
-                    }
-                    KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (drawer == PlayerDrawer.None) {
-                            stepChannel(-1)
-                            showOsd = true
-                            true
-                        } else false
-                    }
-                    // Some full remotes still have MENU — send it to the same panel as ▶.
-                    KeyEvent.KEYCODE_MENU -> {
-                        if (drawer == PlayerDrawer.None) {
-                            showOsd = false
-                            drawer = PlayerDrawer.Services
-                            true
-                        } else false
-                    }
-                    else -> false
-                }
-            }
-    ) {
-        VideoPlayer(
-            channel,
-            captionsEnabled,
-            captionLanguage,
-            Modifier.fillMaxSize(),
-            controlState = playbackControls,
-            preferredAudioLanguage = trackPreferences.audioLanguage,
-            onAudioLanguageChanged = { trackPreferences.audioLanguage = it },
-            onSubtitleChanged = { enabled, language ->
-                trackPreferences.subtitlesEnabled = enabled
-                trackPreferences.subtitleLanguage = language
-                onCaptionsChanged(enabled, language ?: captionLanguage)
-            },
-            onPlaybackError = { category ->
-                val report = PlaybackErrorCategorizer.sanitizedReport(
-                    category, channel.name, System.currentTimeMillis()
-                )
-                scope.launch(Dispatchers.IO) {
-                    runCatching { GlzHubManager.heartbeat(prefs, client, lastError = report) }
-                }
-            },
-            onPlaybackReady = { readyChannelId ->
-                if (readyChannelId == channel.id) showOsd = true
-            }
-        )
-
-        AnimatedVisibility(
-            visible = drawer == PlayerDrawer.None && showOsd,
-            modifier = Modifier.align(Alignment.TopCenter),
-            enter = fadeIn(animationSpec = tween(180)),
-            exit = fadeOut(animationSpec = tween(650))
-        ) {
-            PlayerOsd(
-                channel = channel,
-                currentProgramme = currentProgramme,
-                nextProgramme = nextProgramme,
-                guide = guide,
-                now = now
-            )
-        }
-
-        AnimatedVisibility(
-            visible = drawer == PlayerDrawer.None && showOsd,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp),
-            enter = fadeIn(animationSpec = tween(180)),
-            exit = fadeOut(animationSpec = tween(650))
-        ) {
-            Surface(
-                color = Color.Black.copy(alpha = .58f),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text(
-                    "▲ Next   ▼ Previous      ◀ Guide      ▶ Apps · Audio · CC      OK Info",
-                    Modifier.padding(horizontal = 22.dp, vertical = 11.dp),
-                    color = Color.White.copy(alpha = .86f),
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
-        }
-
-        AnimatedVisibility(
-            visible = drawer == PlayerDrawer.Channels,
-            enter = panelEnter(fromLeft = true),
-            exit = panelExit(fromLeft = true),
-            modifier = Modifier.align(Alignment.TopStart)
-        ) {
-            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .88f else 420.dp
-            // Flush to the left screen edge; only the inner (right) corners are rounded.
-            Surface(
-                Modifier.width(drawerWidth).fillMaxHeight(),
-                color = Color(0xF20B1114),
-                contentColor = Color.White,
-                shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
-                tonalElevation = 18.dp,
-                shadowElevation = 24.dp
-            ) {
-                Column(Modifier.fillMaxSize().padding(top = 22.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 22.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        ChannelLogo(channel, 66.dp, guide)
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(channel.number.ifBlank { "LIVE" },
-                                color = Color(0xFFC4FF4D),
-                                fontWeight = FontWeight.Black)
-                            Text(channel.name, color = Color.White, fontSize = 24.sp,
-                                fontWeight = FontWeight.Black, maxLines = 1,
-                                overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                    Surface(
-                        Modifier.fillMaxWidth().padding(22.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = .18f),
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("ON NOW", color = MaterialTheme.colorScheme.secondary,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Black)
-                            Text(currentProgramme?.title ?: "Live programming",
-                                color = Color.White, fontSize = 19.sp,
-                                fontWeight = FontWeight.Bold, maxLines = 2,
-                                overflow = TextOverflow.Ellipsis)
-                            currentProgramme?.let {
-                                Text(
-                                    "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.startMillis))} – " +
-                                        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.endMillis)),
-                                    color = Color.White.copy(alpha = .68f)
-                                )
-                            }
-                        }
-                    }
-                    Text(if (selectingMultiViewChannel) "SELECT SECOND CHANNEL" else "CHANNELS",
-                        Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
-                        color = Color.White.copy(alpha = .56f),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Black)
-                    LazyColumn(
-                        Modifier.fillMaxSize(),
-                        state = channelListState,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        itemsIndexed(channels, key = { index, ch -> "drawer-$index-${ch.streamUrl}" }) { _, item ->
-                            val isSelected = item.id == channel.id
-                            var isFocused by remember(item.id) { mutableStateOf(false) }
-                            val itemProgramme = guide.forChannel(item)
-                                .firstOrNull { it.startMillis <= now && it.endMillis > now }
-                            Surface(
-                                Modifier.fillMaxWidth()
-                                    .then(if (isSelected) Modifier.focusRequester(selectedChannelFocus)
-                                    else Modifier)
-                                    .onFocusChanged { isFocused = it.isFocused }
-                                    .clickable {
-                                        if (selectingMultiViewChannel) {
-                                            onAddToMultiView(item)
-                                            selectingMultiViewChannel = false
-                                        } else {
-                                            onTune(item)
-                                        }
-                                        drawer = PlayerDrawer.None
-                                    }
-                                    .focusable(),
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isFocused)
-                                    Color(0xFF23405F)
-                                else if (isSelected)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = .35f)
-                                else Color.Transparent
-                            ) {
-                                Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    ChannelLogo(item, 42.dp, guide)
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(item.number.ifBlank { "—" }, Modifier.width(45.dp),
-                                        color = if (isSelected) Color(0xFFC4FF4D)
-                                        else Color.White.copy(alpha = .62f),
-                                        fontWeight = FontWeight.Black)
-                                    Column(Modifier.weight(1f)) {
-                                        Text(item.name, color = Color.White,
-                                            fontWeight = FontWeight.Bold, maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis)
-                                        Text(itemProgramme?.title ?: "Guide unavailable",
-                                            color = Color.White.copy(alpha = .58f),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        AnimatedVisibility(
-            visible = drawer == PlayerDrawer.Services,
-            enter = panelEnter(fromLeft = false),
-            exit = panelExit(fromLeft = false),
-            modifier = Modifier.align(Alignment.CenterEnd)
-        ) {
-            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .92f else 440.dp
-            // Flush to the right screen edge; only the inner (left) corners are rounded.
-            Surface(
-                Modifier.width(drawerWidth).fillMaxHeight(),
-                color = Color(0xF20B1114),
-                contentColor = Color.White,
-                shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
-                tonalElevation = 18.dp,
-                shadowElevation = 24.dp
-            ) {
-                LazyColumn(
-                    Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 22.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp)
-                ) {
-                    item {
-                        Column(Modifier.padding(bottom = 6.dp)) {
-                            Text("ENTERTAINMENT", color = Color.White, fontSize = 24.sp,
-                                fontWeight = FontWeight.Black)
-                            Text("Playback options and other apps",
-                                color = Color.White.copy(alpha = .6f))
-                        }
-                    }
-
-                    // --- PLAYBACK CONTROLS (folded in from the old MENU drawer) ---
-                    item { DrawerSectionLabel("PLAYBACK") }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TvOptionButton(
-                                text = "Previous channel",
-                                onClick = { onPreviousChannel(); drawer = PlayerDrawer.None },
-                                modifier = Modifier.fillMaxWidth().focusRequester(firstServiceFocus)
-                            )
-                            TvOptionButton(
-                                text = "Recent channels",
-                                onClick = { drawer = PlayerDrawer.Recent },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            TvOptionButton(
-                                text = "Add to MultiView",
-                                onClick = { selectingMultiViewChannel = true; drawer = PlayerDrawer.Channels },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            TvOptionButton(
-                                text = if (showDiagnostics) "Hide stream info" else "Stream info",
-                                selected = showDiagnostics,
-                                onClick = { showDiagnostics = !showDiagnostics },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-
-                    if (playbackControls.audioTracks.isNotEmpty()) {
-                        item { DrawerSectionLabel("AUDIO") }
-                        item {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                playbackControls.audioTracks.forEach { track ->
-                                    TvOptionButton(
-                                        text = if (track.selected) "✓ ${track.label}" else track.label,
-                                        selected = track.selected,
-                                        onClick = { playbackControls.chooseAudio(track.id) },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    item { DrawerSectionLabel("SUBTITLES / CC") }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TvOptionButton(
-                                text = if (!captionsEnabled) "✓ Off" else "Off",
-                                selected = !captionsEnabled,
-                                onClick = { playbackControls.chooseSubtitle(null) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            playbackControls.subtitleTracks.forEach { track ->
-                                val isSelected = track.selected && captionsEnabled
-                                TvOptionButton(
-                                    text = if (isSelected) "✓ ${track.label}" else track.label,
-                                    selected = isSelected,
-                                    onClick = { playbackControls.chooseSubtitle(track.id) },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                    }
-
-                    // --- OTHER APPS ---
-                    item { DrawerSectionLabel("APPS") }
-                    items(entertainmentApps, key = { "service-${it.packageName}" }) { app ->
-                        val launchIntent = remember(app.packageName) {
-                            findAppLaunchIntent(context, app.packageName)
-                        }
-                        val icon = remember(app.packageName, launchIntent) {
-                            if (launchIntent == null) null else runCatching {
-                                context.packageManager.getApplicationIcon(app.packageName)
-                            }.getOrNull()
-                        }
-                        var isFocused by remember(app.packageName) { mutableStateOf(false) }
-                        Surface(
-                            Modifier.fillMaxWidth()
-                                .onFocusChanged { isFocused = it.isFocused }
-                                .clickable {
-                                    GlzHubManager.reportLaunchedApp(
-                                        prefs, app.name, app.packageName
-                                    )
-                                    scope.launch(Dispatchers.IO) {
-                                        GlzHubManager.heartbeat(prefs, client)
-                                    }
-                                    launchEntertainmentApp(context, app.packageName, launchIntent)
-                                }
-                                .focusable(),
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isFocused) app.accent
-                            else Color.White.copy(alpha = .08f),
-                            shadowElevation = 0.dp
-                        ) {
-                            Row(Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                AdaptiveAppIcon(
-                                    icon = icon,
-                                    appName = app.name,
-                                    accent = app.accent,
-                                    size = 54.dp
-                                )
-                                Spacer(Modifier.width(14.dp))
-                                Column {
-                                    Text(app.name, color = Color.White, fontSize = 18.sp,
-                                        fontWeight = FontWeight.Black)
-                                    Text(if (launchIntent == null) "Install" else "Open",
-                                        color = Color.White.copy(alpha = .7f))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (showDiagnostics && drawer == PlayerDrawer.Services) {
-            PlaybackDiagnosticsPanel(
-                diagnostics = playbackControls.diagnostics,
-                speedTestResult = speedTestResult,
-                onRunSpeedTest = onRunSpeedTest?.let { action -> { action(channel.streamUrl) } },
-                modifier = Modifier.align(Alignment.TopStart).padding(30.dp)
-            )
-        }
-
-        if (drawer == PlayerDrawer.Recent) {
-            Surface(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .padding(horizontal = 48.dp, vertical = 30.dp),
-                color = Color(0xF20B1114), contentColor = Color.White,
-                shape = RoundedCornerShape(24.dp),
-                tonalElevation = 18.dp
-            ) {
-                Column(Modifier.padding(22.dp)) {
-                    Text("RECENT CHANNELS", color = Color(0xFFC4FF4D),
-                        fontWeight = FontWeight.Black)
-                    Spacer(Modifier.height(12.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(recentChannels, key = { "recent-${it.id}" }) { recent ->
-                            val programme = guide.forChannel(recent)
-                                .firstOrNull { it.startMillis <= now && it.endMillis > now }
-                            var isFocused by remember(recent.id) { mutableStateOf(false) }
-                            Surface(
-                                onClick = {
-                                    onTune(recent)
-                                    drawer = PlayerDrawer.None
-                                },
-                                modifier = Modifier
-                                    .onFocusChanged { isFocused = it.isFocused }
-                                    .padding(vertical = 2.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isFocused) Color(0xFFC4FF4D) else Color.White.copy(alpha = 0.12f),
-                                contentColor = if (isFocused) Color.Black else Color.White,
-                                shadowElevation = if (isFocused) 8.dp else 0.dp
-                            ) {
-                                Column(Modifier.width(180.dp).padding(14.dp)) {
-                                    Text(recent.name, maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isFocused) Color.Black else Color.White)
-                                    Text(programme?.title ?: "Live programming", maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isFocused) Color.Black.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.6f))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MultiViewScreen(
-    primary: Channel,
-    secondary: Channel,
-    guide: EpgGuide,
-    captionsEnabled: Boolean,
-    captionLanguage: String,
-    onExpand: (Channel) -> Unit,
-    onExit: () -> Unit
-) {
-    var activePane by remember { mutableStateOf(0) }
-    val focusRequester = remember { FocusRequester() }
-    BackHandler(onBack = onExit)
-    LaunchedEffect(Unit) {
-        delay(60)
-        focusRequester.requestFocus()
-    }
-
-    Row(
-        Modifier.fillMaxSize().background(Color.Black).focusRequester(focusRequester).focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
-                when (event.nativeKeyEvent.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> { activePane = 0; true }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> { activePane = 1; true }
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
-                    KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        onExpand(if (activePane == 0) primary else secondary)
-                        true
-                    }
-                    KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
-                        onExit()
-                        true
-                    }
-                    else -> false
-                }
-            }
-    ) {
-        listOf(primary, secondary).forEachIndexed { index, paneChannel ->
-            val isFocused = activePane == index
-            val programme = guide.forChannel(paneChannel).firstOrNull {
-                it.startMillis <= System.currentTimeMillis() && it.endMillis > System.currentTimeMillis()
-            }
-            Box(
-                Modifier.weight(1f).fillMaxHeight().padding(6.dp)
-                    .clickable {
-                        if (activePane == index) {
-                            onExpand(paneChannel)
-                        } else {
-                            activePane = index
-                        }
-                    }
-                    .border(
-                        if (isFocused) 4.5.dp else 1.dp,
-                        if (isFocused) Color(0xFFC4FF4D)
-                        else Color.White.copy(alpha = .18f),
-                        RoundedCornerShape(18.dp)
-                    ).clip(RoundedCornerShape(18.dp))
-            ) {
-                VideoPlayer(
-                    channel = paneChannel,
-                    captionsEnabled = captionsEnabled,
-                    captionLanguage = captionLanguage,
-                    modifier = Modifier.fillMaxSize(),
-                    muted = !isFocused,
-                    createMediaSession = isFocused,
-                    zOrderMediaOverlay = true
-                )
-                Surface(
-                    Modifier.align(Alignment.BottomStart).fillMaxWidth(),
-                    color = Color.Black.copy(alpha = .78f)
-                ) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ChannelLogo(paneChannel, 42.dp, guide)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(paneChannel.name, color = Color.White,
-                                fontWeight = FontWeight.Black, maxLines = 1,
-                                overflow = TextOverflow.Ellipsis)
-                            Text(programme?.title ?: "Live programming",
-                                color = Color.White.copy(alpha = .7f), maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodySmall)
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isFocused) Color(0xFFC4FF4D) else Color.White.copy(alpha = .15f)
-                        ) {
-                            Text(
-                                if (isFocused) "AUDIO ACTIVE" else "MUTED",
-                                Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                color = if (isFocused) Color.Black else Color.White.copy(alpha = .6f),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlayerOsd(
-    channel: Channel,
-    currentProgramme: Programme?,
-    nextProgramme: Programme?,
-    guide: EpgGuide? = null,
-    now: Long,
-    modifier: Modifier = Modifier
-) {
-    val remainingMinutes = currentProgramme?.let {
-        ((it.endMillis - now).coerceAtLeast(0L) + 59_999L) / 60_000L
-    }
-    val progress = currentProgramme?.let {
-        ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
-            .coerceIn(0f, 1f)
-    } ?: 0f
-
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
-        color = Color(0xF5080C10),
-        shadowElevation = 24.dp
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 32.dp, vertical = 16.dp)
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Channel Logo & Full Channel Name
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(0.42f)
-                ) {
-                    ChannelLogo(channel, 58.dp, guide)
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.secondary,
-                            contentColor = MaterialTheme.colorScheme.onSecondary
-                        ) {
-                            Text(
-                                "CH ${channel.number.ifBlank { "LIVE" }}",
-                                Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            channel.name,
-                            color = Color.White,
-                            fontSize = if (channel.name.length > 22) 17.sp else 20.sp,
-                            lineHeight = 22.sp,
-                            fontWeight = FontWeight.Black,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Spacer(Modifier.width(24.dp))
-
-                // Programme Title & Progress
-                Column(Modifier.weight(0.58f)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            currentProgramme?.title ?: "Live Broadcast",
-                            color = Color.White,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        remainingMinutes?.let {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color.White.copy(alpha = 0.12f)
-                            ) {
-                                Text(
-                                    "$it min left",
-                                    Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    currentProgramme?.let { prog ->
-                        Text(
-                            "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))} – ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))}",
-                            color = Color.White.copy(alpha = 0.70f),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = MaterialTheme.colorScheme.secondary,
-                        trackColor = Color.White.copy(alpha = 0.18f)
-                    )
-                }
-            }
-
-            // Up Next Footer Snippet
-            nextProgramme?.let { next ->
-                Spacer(Modifier.height(12.dp))
-                Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.10f)))
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ) {
-                        Text(
-                            "UP NEXT",
-                            Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(next.startMillis)),
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        next.title,
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlayerAndGuide(
-    channel: Channel?,
-    guide: EpgGuide,
-    captionsEnabled: Boolean,
-    captionLanguage: String,
-    modifier: Modifier = Modifier
-) {
-    if (channel == null) {
-        Card(modifier, shape = RoundedCornerShape(32.dp)) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.LiveTv, null, Modifier.size(72.dp),
-                        tint = MaterialTheme.colorScheme.primary)
-                    Text("Choose a channel", fontSize = 28.sp, fontWeight = FontWeight.Black)
-                    Text("Live playback and the programme guide will appear here.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-        return
-    }
-    val programmes = guide.forChannel(channel)
-    val now = System.currentTimeMillis()
-    val upcoming = programmes.filter { it.endMillis > now }.take(6)
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        AnimatedContent(channel, transitionSpec = {
-            fadeIn(tween(180)).togetherWith(fadeOut(tween(140)))
-        }, label = "channel") { animatedChannel ->
-            VideoPlayer(
-                animatedChannel,
-                captionsEnabled,
-                captionLanguage,
-                Modifier.fillMaxWidth().aspectRatio(16 / 9f)
-            )
-        }
-        Card(
-            Modifier.fillMaxWidth().weight(1f),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(Modifier.fillMaxSize().padding(18.dp)) {
-                Text(channel.name, fontSize = 28.sp, fontWeight = FontWeight.Black)
-                Text(channel.group, color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(12.dp))
-                Text("ON NOW & NEXT", style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.secondary)
-                if (upcoming.isEmpty()) {
-                    Text("No EPG information is available for this channel.",
-                        Modifier.padding(top = 14.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(upcoming) { programme -> ProgrammeCard(programme, programme.startMillis <= now) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProgrammeCard(programme: Programme, isNow: Boolean) {
-    Surface(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(if (isNow) 22.dp else 14.dp),
-        color = if (isNow) MaterialTheme.colorScheme.secondary.copy(alpha = .14f)
-        else MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
-            Text(
-                if (isNow) "NOW" else DateFormat.getTimeInstance(DateFormat.SHORT)
-                    .format(Date(programme.startMillis)),
-                Modifier.width(62.dp), color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.Black
-            )
-            Column {
-                Text(programme.title, fontWeight = FontWeight.Bold)
-                if (programme.description.isNotBlank()) {
-                    Text(programme.description, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
-                        overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-    }
-}
-
-/** Min position advance (ms) over a 1 s tick that counts as "still playing". */
-private const val PLAYBACK_PROGRESS_EPSILON_MS = 250L
-/** Continuous stall (ms) before rolling over to the next source. */
-private const val PLAYBACK_STALL_LIMIT_MS = 12_000L
-/** Delay (ms) before re-probing when the last source is also dead. */
-private const val DEAD_SOURCE_REPROBE_MS = 30_000L
-
-@Composable
-private fun SportsBarKioskScreen(
-    channels: List<Channel>,
-    prefs: SharedPreferences,
-    client: OkHttpClient,
-    captionLanguage: String,
-    onExit: () -> Unit
-) {
-    val context = LocalContext.current
-    var selectedChannelId by remember {
-        mutableStateOf(prefs.getString(SPORTS_BAR_KIOSK_CHANNEL_ID, null))
-    }
-    var stations by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
-    var selectedStationCode by remember {
-        mutableStateOf(prefs.getString(SPORTS_BAR_KIOSK_RADIO_CODE, null))
-    }
-    var chooser by remember { mutableStateOf<String?>(null) }
-    var radioStatus by remember { mutableStateOf("Loading GLZ Radio…") }
-    val channel = channels.firstOrNull { it.id == selectedChannelId } ?: channels.firstOrNull()
-    val station = stations.firstOrNull { it.code == selectedStationCode } ?: stations.firstOrNull()
-    val radioFactory = remember {
-        DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-SportsBar/${BuildConfig.VERSION_NAME}")
-    }
-    val radioPlayer = remember {
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(radioFactory))
-            .build()
-            .apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder().setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                        .setUsage(C.USAGE_MEDIA).build(),
-                    true
-                )
-                setHandleAudioBecomingNoisy(true)
-                setWakeMode(C.WAKE_MODE_LOCAL)
-            }
-    }
-    val chooserFocusRequester = remember { FocusRequester() }
-
-    BackHandler(enabled = chooser == null) { onExit() }
-
-    LaunchedEffect(Unit) {
-        runCatching { withContext(Dispatchers.IO) { RadioCatalogManager.load(prefs, client) } }
-            .onSuccess {
-                stations = it.stations
-                radioStatus = if (it.fromCache) "Saved GLZ Radio stations" else "GLZ Radio live"
-            }
-            .onFailure { radioStatus = "GLZ Radio is temporarily unavailable" }
-    }
-    LaunchedEffect(channels, selectedChannelId) {
-        channel?.let {
-            if (it.id != selectedChannelId) selectedChannelId = it.id
-            prefs.edit().putString(SPORTS_BAR_KIOSK_CHANNEL_ID, it.id).apply()
-            GlzHubManager.reportActivity(prefs, "sports_bar", it.name)
-        }
-    }
-    LaunchedEffect(station?.code, station?.streamUrl) {
-        val activeStation = station ?: return@LaunchedEffect
-        if (activeStation.code != selectedStationCode) selectedStationCode = activeStation.code
-        prefs.edit().putString(SPORTS_BAR_KIOSK_RADIO_CODE, activeStation.code).apply()
-        radioPlayer.stop()
-        radioFactory.setDefaultRequestProperties(activeStation.requestHeaders)
-        radioPlayer.setMediaItem(
-            MediaItem.Builder().setUri(activeStation.streamUrl)
-                .setMediaMetadata(
-                    MediaMetadata.Builder().setTitle(activeStation.name)
-                        .setArtist(activeStation.genre).build()
-                ).build()
-        )
-        radioPlayer.prepare()
-        radioPlayer.play()
-    }
-    LaunchedEffect(chooser) {
-        if (chooser != null) {
-            chooserFocusRequester.requestFocus()
-        }
-    }
-    DisposableEffect(radioPlayer) {
-        onDispose {
-            radioPlayer.release()
-            GlzHubManager.reportActivity(prefs, "idle")
-        }
-    }
-
-    Box(
-        Modifier.fillMaxSize().background(Color.Black)
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
-                when (event.nativeKeyEvent.keyCode) {
-                    KeyEvent.KEYCODE_MENU -> { chooser = "channel"; true }
-                    else -> false
-                }
-            }
-    ) {
-        channel?.let {
-            VideoPlayer(
-                channel = it,
-                captionsEnabled = false,
-                captionLanguage = captionLanguage,
-                modifier = Modifier.fillMaxSize(),
-                muted = true,
-                createMediaSession = false,
-                cropVideo = true
-            )
-        } ?: Surface(Modifier.align(Alignment.Center), color = Color.Black.copy(alpha = .72f)) {
-            Text("No TV channels are available", Modifier.padding(24.dp), color = Color.White)
-        }
-
-        Surface(
-            modifier = Modifier.align(Alignment.TopStart).padding(22.dp),
-            color = Color.Black.copy(alpha = .68f),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 11.dp)) {
-                Text("SPORTS BAR", color = Color(0xFFC4FF4D), fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp)
-                Text("TV is muted · GLZ Radio is playing", color = Color.White.copy(alpha = .88f),
-                    style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Row(
-            Modifier.align(Alignment.BottomCenter).padding(24.dp).focusGroup(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            TvOptionButton(
-                "TV: ${channel?.name ?: "Choose channel"}",
-                onClick = { if (chooser == null) chooser = "channel" }
-            )
-            TvOptionButton(
-                "RADIO: ${station?.name ?: radioStatus}",
-                onClick = { if (chooser == null) chooser = "radio" }
-            )
-            TvOptionButton("Exit", onClick = { if (chooser == null) onExit() })
-        }
-
-        chooser?.let { type ->
-            BackHandler { chooser = null }
-            Surface(
-                modifier = Modifier.align(Alignment.Center).fillMaxWidth(.82f).fillMaxHeight(.78f),
-                color = Color(0xF20B1114), contentColor = Color.White,
-                shape = RoundedCornerShape(24.dp), tonalElevation = 18.dp
-            ) {
-                Column(Modifier.fillMaxSize().padding(22.dp)) {
-                    Text(
-                        if (type == "channel") "Choose background channel" else "Choose GLZ Radio station",
-                        fontSize = 24.sp, fontWeight = FontWeight.Black
-                    )
-                    Text("Changes stay on this TV", color = Color.White.copy(alpha = .65f),
-                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
-                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (type == "channel") {
-                            itemsIndexed(
-                                channels,
-                                key = { index, item -> "${item.id.ifBlank { "chan" }}_$index" }
-                            ) { index, item ->
-                                TvOptionButton(
-                                    "${item.number.takeIf { it.isNotBlank() }?.plus(" · ").orEmpty()}${item.name}",
-                                    onClick = { selectedChannelId = item.id; chooser = null },
-                                    selected = item.id == channel?.id,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .then(if (index == 0) Modifier.focusRequester(chooserFocusRequester) else Modifier)
-                                )
-                            }
-                        } else {
-                            itemsIndexed(
-                                stations,
-                                key = { index, item -> "${item.code.ifBlank { "stat" }}_$index" }
-                            ) { index, item ->
-                                TvOptionButton(
-                                    item.name,
-                                    onClick = { selectedStationCode = item.code; chooser = null },
-                                    selected = item.code == station?.code,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .then(if (index == 0) Modifier.focusRequester(chooserFocusRequester) else Modifier)
-                                )
-                            }
-                        }
-                    }
-                    TvOptionButton("Close", onClick = { chooser = null }, modifier = Modifier.align(Alignment.End))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun VideoPlayer(
-    channel: Channel,
-    captionsEnabled: Boolean,
-    captionLanguage: String,
-    modifier: Modifier = Modifier,
-    muted: Boolean = false,
-    createMediaSession: Boolean = true,
-    keepScreenOn: Boolean = true,
-    cropVideo: Boolean = false,
-    zOrderMediaOverlay: Boolean = false,
-    controlState: PlaybackControlState? = null,
-    preferredAudioLanguage: String? = null,
-    onAudioLanguageChanged: (String?) -> Unit = {},
-    onSubtitleChanged: (Boolean, String?) -> Unit = { _, _ -> },
-    onPlaybackError: (PlaybackErrorCategory) -> Unit = {},
-    onPlaybackReady: (String) -> Unit = {}
-) {
-    val context = LocalContext.current
-    val httpFactory = remember {
-        DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
-    }
-    val player = remember {
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
-            .build()
-    }
-    val mediaSession = remember(createMediaSession, channel.id) {
-        if (createMediaSession) {
-            runCatching {
-                MediaSession.Builder(context, player)
-                    .setId("glz_tv_${channel.id}_${System.identityHashCode(player)}")
-                    .build()
-            }.getOrNull()
-        } else null
-    }
-    var retryAttempt by remember(channel.id) { mutableStateOf(0) }
-    var sourceIndex by remember(channel.id) { mutableStateOf(0) }
-    var playbackMessage by remember(channel.id) { mutableStateOf<String?>("Connecting…") }
-    var lastPlaybackError by remember(channel.id) { mutableStateOf<PlaybackErrorCategory?>(null) }
-    // Primary URL plus any GLZ Hub-provisioned fallbacks for this channel, in priority order.
-    val streamUrls = remember(channel.id, channel.streamUrl) {
-        val overrides = PreferencesRepository.parseChannelFallbacks(
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(CHANNEL_FALLBACKS, "").orEmpty()
-        )
-        val backups = overrides[channel.number.trim()] ?: overrides[channel.id] ?: emptyList()
-        (listOf(channel.streamUrl) + backups).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-    }
-    val activeUrl = streamUrls.getOrElse(sourceIndex) { channel.streamUrl }
-    // Advance to the next configured fallback URL. Returns false when none is left.
-    val switchToNextSource = switch@{
-        if (sourceIndex >= streamUrls.lastIndex) return@switch false
-        sourceIndex += 1
-        retryAttempt = 0
-        playbackMessage = "Switching to backup source…"
-        true
-    }
-    DisposableEffect(player, channel.id, streamUrls) {
-        val listener = object : Player.Listener {
-            override fun onPlayerError(error: PlaybackException) {
-                val category = PlaybackErrorCategorizer.categorize(error)
-                lastPlaybackError = category
-                onPlaybackError(category)
-                if (retryAttempt < 3) {
-                    retryAttempt += 1
-                    playbackMessage = if (retryAttempt >= 2) "Trying compatibility mode…"
-                    else "Retrying stream…"
-                } else if (!switchToNextSource()) {
-                    playbackMessage = "Stream unavailable"
-                }
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) {
-                    playbackMessage = null
-                } else if (playbackState == Player.STATE_BUFFERING && retryAttempt == 0) {
-                    playbackMessage = "Connecting…"
-                } else if (playbackState == Player.STATE_ENDED && !switchToNextSource()) {
-                    playbackMessage = "Stream unavailable"
-                }
-            }
-
-            override fun onRenderedFirstFrame() {
-                PlaybackPerformance.firstFrameRendered(channel.id)
-                onPlaybackReady(channel.id)
-            }
-
-            override fun onTracksChanged(tracks: Tracks) {
-                val audioSelections = mutableMapOf<String, Pair<Tracks.Group, Int>>()
-                val subtitleSelections = mutableMapOf<String, Pair<Tracks.Group, Int>>()
-                val audio = mutableListOf<TrackOption>()
-                val subtitles = mutableListOf<TrackOption>()
-                tracks.groups.forEachIndexed { groupIndex, group ->
-                    for (trackIndex in 0 until group.length) {
-                        if (!group.isTrackSupported(trackIndex)) continue
-                        val format = group.getTrackFormat(trackIndex)
-                        val id = "$groupIndex:$trackIndex"
-                        val option = TrackOption(
-                            id = id,
-                            label = trackLabel(format.label, format.language, format.channelCount),
-                            language = format.language,
-                            selected = group.isTrackSelected(trackIndex)
-                        )
-                        when (group.type) {
-                            C.TRACK_TYPE_AUDIO -> {
-                                audio += option
-                                audioSelections[id] = group to trackIndex
-                            }
-                            C.TRACK_TYPE_TEXT -> {
-                                subtitles += option
-                                subtitleSelections[id] = group to trackIndex
-                            }
-                        }
-                    }
-                }
-                controlState?.audioTracks = audio
-                controlState?.subtitleTracks = subtitles
-                controlState?.selectAudio = { id ->
-                    audioSelections[id]?.let { (group, index) ->
-                        val language = group.getTrackFormat(index).language
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                            .addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(index)))
-                            .build()
-                        onAudioLanguageChanged(language)
-                    }
-                }
-                controlState?.selectSubtitle = { id ->
-                    if (id == null) {
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
-                        onSubtitleChanged(false, null)
-                    } else subtitleSelections[id]?.let { (group, index) ->
-                        val language = group.getTrackFormat(index).language
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                            .addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(index)))
-                            .build()
-                        onSubtitleChanged(true, language)
-                    }
-                }
-            }
-        }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
-    }
-    LaunchedEffect(activeUrl, captionsEnabled, captionLanguage, preferredAudioLanguage, retryAttempt) {
-        if (retryAttempt > 0) delay((1L shl (retryAttempt - 1)) * 1_000L)
-        httpFactory
-            .setDefaultRequestProperties(channel.headers)
-            .setUserAgent(channel.headers["User-Agent"] ?: "GLZ-TV/2.0")
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !captionsEnabled)
-            .setPreferredTextLanguage(captionLanguage.ifBlank { null })
-            .setPreferredAudioLanguage(preferredAudioLanguage)
-            .setSelectUndeterminedTextLanguage(captionsEnabled)
-            .build()
-        player.stop()
-        player.setMediaItem(
-            MediaItem.Builder()
-                .setUri(activeUrl)
-                .setMediaId(channel.id)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(channel.name)
-                        .setArtist(channel.group)
-                        .setArtworkUri(channel.logoUrl.takeIf { it.isNotBlank() }?.let(Uri::parse))
-                        .build()
-                )
-                .build(),
-            true
-        )
-        player.prepare()
-        player.playWhenReady = true
-    }
-    LaunchedEffect(player, channel.id, controlState, sourceIndex) {
-        if (controlState == null) return@LaunchedEffect
-        while (true) {
-            val video = player.videoFormat
-            val audio = player.audioFormat
-            controlState.diagnostics = PlaybackDiagnostics(
-                channelName = if (sourceIndex > 0) "${channel.name} (backup ${sourceIndex})" else channel.name,
-                protocol = PlaybackErrorCategorizer.protocol(activeUrl),
-                resolution = if (video != null && video.width > 0 && video.height > 0)
-                    "${video.width} × ${video.height}" else null,
-                videoCodec = video?.codecs ?: video?.sampleMimeType,
-                audioCodec = audio?.codecs ?: audio?.sampleMimeType,
-                bitrate = listOfNotNull(video?.bitrate, audio?.bitrate)
-                    .filter { it > 0 }.takeIf { it.isNotEmpty() }?.sum(),
-                bufferDurationMs = player.totalBufferedDuration.coerceAtLeast(0),
-                droppedFrames = player.videoDecoderCounters?.droppedBufferCount?.toLong() ?: 0,
-                networkTransport = currentNetworkTransport(context),
-                playbackState = playbackStateLabel(player.playbackState),
-                lastError = lastPlaybackError
-            )
-            delay(1_000)
-        }
-    }
-    // Detects a frozen / endlessly-buffering feed (connection loss with no hard error)
-    // and rolls over to the next configured source, or re-probes a dead last source.
-    LaunchedEffect(player, channel.id, streamUrls, sourceIndex) {
-        var lastPosition = -1L
-        var stalledMs = 0L
-        var reprobeArmed = false
-        while (true) {
-            delay(1_000)
-            val state = player.playbackState
-            val position = player.currentPosition
-            val advancing = lastPosition >= 0 && position - lastPosition >= PLAYBACK_PROGRESS_EPSILON_MS
-            lastPosition = position
-            val watching = player.playWhenReady &&
-                (state == Player.STATE_READY || state == Player.STATE_BUFFERING)
-            if (watching && !advancing) {
-                stalledMs += 1_000
-            } else {
-                stalledMs = 0
-                reprobeArmed = false
-            }
-            if (stalledMs >= PLAYBACK_STALL_LIMIT_MS) {
-                if (switchToNextSource()) {
-                    stalledMs = 0
-                } else if (!reprobeArmed) {
-                    reprobeArmed = true
-                    playbackMessage = "Stream unavailable"
-                    launch {
-                        delay(DEAD_SOURCE_REPROBE_MS)
-                        player.prepare()
-                        player.playWhenReady = true
-                    }
-                }
-            }
-        }
-    }
-    LaunchedEffect(muted) { player.volume = if (muted) 0f else 1f }
-    DisposableEffect(mediaSession) { onDispose { mediaSession?.release() } }
-    DisposableEffect(player) { onDispose { player.release() } }
-    Box(modifier.background(Color.Black, RoundedCornerShape(24.dp))) {
-        AndroidView(
-            factory = {
-                PlayerView(it).apply {
-                    this.player = player
-                    this.keepScreenOn = keepScreenOn
-                    resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    useController = false
-                    controllerAutoShow = false
-                    isFocusable = false
-                    isFocusableInTouchMode = false
-                    if (zOrderMediaOverlay) {
-                        (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
-                    }
-                }
-            },
-            update = {
-                it.player = player
-                it.keepScreenOn = keepScreenOn
-                it.resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                if (zOrderMediaOverlay) {
-                    (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-        playbackMessage?.let { message ->
-            Surface(
-                color = Color.Black.copy(alpha = .82f),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.align(Alignment.Center)
-            ) {
-                Column(
-                    Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (retryAttempt in 1..3) LinearProgressIndicator(Modifier.width(180.dp))
-                    Text(message, Modifier.padding(top = 10.dp), fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}
-
-private fun trackLabel(label: String?, language: String?, channelCount: Int): String {
-    val languageLabel = language?.let { code ->
-        runCatching { Locale.forLanguageTag(code).getDisplayLanguage(Locale.getDefault()) }
-            .getOrNull()?.takeIf(String::isNotBlank)
-    }
-    val base = label?.takeIf(String::isNotBlank) ?: languageLabel ?: "Original"
-    val layout = when {
-        channelCount >= 6 -> "5.1"
-        channelCount == 2 -> "Stereo"
-        channelCount == 1 -> "Mono"
-        else -> null
-    }
-    return listOfNotNull(base, layout).distinct().joinToString(" · ")
-}
-
-private fun playbackStateLabel(state: Int) = when (state) {
-    Player.STATE_IDLE -> "Idle"
-    Player.STATE_BUFFERING -> "Buffering"
-    Player.STATE_READY -> "Playing"
-    Player.STATE_ENDED -> "Ended"
-    else -> "Unavailable"
-}
-
-private fun currentNetworkTransport(context: Context): String? {
-    val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        ?: return null
-    val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return null
-    return when {
-        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
-        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
-        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Cellular"
-        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "VPN"
-        else -> "Other"
-    }
-}
-
-private val THEME_VALUES = listOf(
-    "dark" to "GLZ Dark",
-    "ocean" to "Ocean Breeze",
-    "sunset" to "Sunset Glow",
-    "emerald" to "Emerald Forest",
-    "cyberpunk" to "Neon Cyberpunk",
-    "midnight" to "Midnight Gold",
-    "arctic" to "Arctic Frost",
-    "crimson" to "Crimson Eclipse",
-    "amethyst" to "Amethyst Neon",
-    "synthwave" to "Tokyo Synthwave",
-    "solar" to "Solar Flare",
-    "stealth" to "Carbon Stealth"
-)
-
-private val THEME_LABELS_ES = mapOf(
-    "dark" to "GLZ Oscuro",
-    "ocean" to "Brisa Marina",
-    "sunset" to "Resplandor del Atardecer",
-    "emerald" to "Bosque Esmeralda",
-    "cyberpunk" to "Cyberpunk Neón",
-    "midnight" to "Oro de Medianoche",
-    "arctic" to "Escarcha Ártica",
-    "crimson" to "Eclipse Carmesí",
-    "amethyst" to "Amatista Neón",
-    "synthwave" to "Tokyo Synthwave",
-    "solar" to "Llamarada Solar",
-    "stealth" to "Carbono Sigilo"
-)
-private val OSD_VALUES = listOf(5, 7, 8, 10)
-private val START_DESTINATIONS = listOf(
-    AppSection.Home to "Home Screen",
-    AppSection.Live to "Live TV",
-    AppSection.Radio to "Radio",
-    AppSection.Weather to "Weather",
-    AppSection.You to "You & Apps"
-)
-
-private val UPDATE_CHANNEL_IDS = GithubUpdateManager.UpdateChannel.values().map { it.id }
-
-private fun onOff(value: Boolean, language: String = "en") =
-    if (language.startsWith("es", ignoreCase = true)) {
-        if (value) "Activado" else "Desactivado"
-    } else {
-        if (value) "On" else "Off"
-    }
-
-private fun themeLabel(value: String, language: String = "en") =
-    if (language.startsWith("es", ignoreCase = true)) {
-        THEME_LABELS_ES[value] ?: THEME_VALUES.firstOrNull { it.first == value }?.second ?: "GLZ Oscuro"
-    } else {
-        THEME_VALUES.firstOrNull { it.first == value }?.second ?: "GLZ Dark"
-    }
-
-private fun startDestinationLabel(name: String, language: String = "en"): String {
-    val isEs = language.startsWith("es", ignoreCase = true)
-    return when (name) {
-        AppSection.Home.name -> if (isEs) "Pantalla de Inicio" else "Home Screen"
-        AppSection.Live.name -> if (isEs) "TV en Vivo" else "Live TV"
-        AppSection.Radio.name -> "Radio"
-        AppSection.Weather.name -> if (isEs) "Clima" else "Weather"
-        AppSection.You.name -> if (isEs) "Tú y Apps" else "You & Apps"
-        else -> if (isEs) "Pantalla de Inicio" else "Home Screen"
-    }
-}
-private fun updateChannelLabel(id: String) = GithubUpdateManager.UpdateChannel.from(id).label
-
-/** Wrap-around step through [values]; returns [current] unchanged if it is not in the list and the list is empty. */
-private fun <T> cycleList(values: List<T>, current: T, direction: Int): T {
-    if (values.isEmpty()) return current
-    val index = values.indexOf(current).let { if (it < 0) 0 else it }
-    val next = ((index + direction) % values.size + values.size) % values.size
-    return values[next]
-}
-
-/**
- * One settings row: NAME on the left, a value between chevrons on the right.
- * D-Pad Left / Right (or OK = next) changes the value without moving focus.
- */
-@Composable
-private fun SettingsChoiceRow(
-    name: String,
-    valueText: String,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
-    modifier: Modifier = Modifier,
-    first: Boolean = false,
-    focusRequester: FocusRequester? = null
-) {
-    var focused by remember { mutableStateOf(false) }
-    val accent = MaterialTheme.colorScheme.primary
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (first && focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(16.dp),
-                focusedScale = 1.02f,
-                glowColor = accent,
-                onFocusChange = { focused = it }
-            )
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
-                when (event.nativeKeyEvent.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> { onPrev(); true }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> { onNext(); true }
-                    else -> false
-                }
-            }
-            .clickable { onNext() },
-        shape = RoundedCornerShape(16.dp),
-        color = if (focused) accent.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                name,
-                Modifier.weight(1f),
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = Color.White
-            )
-            Text(
-                "‹",
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-                color = if (focused) accent else Color.White.copy(alpha = 0.45f)
-            )
-            Text(
-                valueText,
-                Modifier.padding(horizontal = 14.dp),
-                fontWeight = FontWeight.Black,
-                fontSize = 15.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = if (focused) accent else Color.White
-            )
-            Text(
-                "›",
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-                color = if (focused) accent else Color.White.copy(alpha = 0.45f)
-            )
-        }
-    }
-}
-
-/** A settings row that runs an action on OK. Shows [valueText] as a status subtitle. */
-@Composable
-private fun SettingsActionRow(
-    name: String,
-    valueText: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    first: Boolean = false,
-    focusRequester: FocusRequester? = null
-) {
-    var focused by remember { mutableStateOf(false) }
-    val accent = MaterialTheme.colorScheme.primary
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (first && focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(16.dp),
-                focusedScale = 1.02f,
-                glowColor = accent,
-                onFocusChange = { focused = it }
-            )
-            .clickable(enabled = enabled, onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = if (focused) accent.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                if (valueText.isNotBlank()) {
-                    Text(
-                        valueText,
-                        fontSize = 12.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Text(
-                "OK ▸",
-                fontWeight = FontWeight.Black,
-                fontSize = 13.sp,
-                color = if (focused) accent else Color.White.copy(alpha = 0.55f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsDialog(
-    playlist: String,
-    epg: String,
-    headers: String,
-    weatherLocation: String,
-    guestName: String,
-    customConnectionLabel: String,
-    customIspName: String,
-    themeMode: String,
-    captionsEnabled: Boolean,
-    captionLanguage: String,
-    osdTimeoutSeconds: Int = 8,
-    autoUpdate: Boolean,
-    wifiOnly: Boolean,
-    autoStart: Boolean,
-    resumeLast: Boolean,
-    startDestination: String,
-    updateChannel: String,
-    sourceStatus: String,
-    hubStatus: String,
-    screensaverTimeoutMinutes: Int = 5,
-    appLanguage: String = "en",
-    onOpenSpeedTest: () -> Unit,
-    onSyncNow: suspend ((Int, String) -> Unit) -> String,
-    onCheckForUpdate: suspend () -> String,
-    onBeginHubEnrollment: suspend () -> String,
-    onDismiss: () -> Unit,
-    onSave: (
-        String, String, String, String, String, String, String, String, Boolean, String, Int, Int,
-        Boolean, Boolean, Boolean, Boolean, String, String, String
-    ) -> Unit
-) {
-    var showAdvanced by remember { mutableStateOf(false) }
-    var playlistValue by remember { mutableStateOf(playlist) }
-    var epgValue by remember { mutableStateOf(epg) }
-    var headerValue by remember { mutableStateOf(headers) }
-    var weatherLocationValue by remember { mutableStateOf(weatherLocation) }
-    var guestNameValue by remember { mutableStateOf(guestName) }
-    var connectionLabelValue by remember { mutableStateOf(customConnectionLabel) }
-    var ispNameValue by remember { mutableStateOf(customIspName) }
-    // Legacy light/adaptive selections collapse into the dark palette (GLZ TV is dark-only).
-    var themeValue by remember {
-        mutableStateOf(if (themeMode == "light" || themeMode == "adaptive") "dark" else themeMode)
-    }
-    var appLanguageValue by remember { mutableStateOf(appLanguage) }
-    val strings = GlzStrings.get(appLanguageValue)
-    var captionsValue by remember { mutableStateOf(captionsEnabled) }
-    var languageValue by remember { mutableStateOf(captionLanguage) }
-    var osdTimeoutValue by remember { mutableStateOf(osdTimeoutSeconds) }
-    var screensaverTimeoutValue by remember { mutableStateOf(screensaverTimeoutMinutes) }
-    var autoUpdateValue by remember { mutableStateOf(autoUpdate) }
-    var wifiOnlyValue by remember { mutableStateOf(wifiOnly) }
-    var autoStartValue by remember { mutableStateOf(autoStart) }
-    var resumeLastValue by remember { mutableStateOf(resumeLast) }
-    var startDestinationValue by remember { mutableStateOf(startDestination) }
-    var updateChannelValue by remember { mutableStateOf(updateChannel) }
-    var updateStatus by remember { mutableStateOf("Version ${BuildConfig.VERSION_NAME}") }
-    var hubMessage by remember(hubStatus) { mutableStateOf(hubStatus) }
-    var hubLoading by remember { mutableStateOf(false) }
-    var syncLoading by remember { mutableStateOf(false) }
-    var syncProgress by remember { mutableStateOf(0) }
-    var syncMessage by remember(sourceStatus) { mutableStateOf(sourceStatus) }
-    val settingsScope = rememberCoroutineScope()
-    val initialFocus = remember { FocusRequester() }
-    val bodyScrollState = rememberScrollState()
-
-    LaunchedEffect(showAdvanced) {
-        bodyScrollState.scrollTo(0)
-        delay(80)
-        runCatching { initialFocus.requestFocus() }
-    }
-
-    BackHandler(onBack = onDismiss)
-    BackHandler(enabled = showAdvanced) { showAdvanced = false }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(Color(0xFF10192A), Color(0xFF070B14), Color.Black)
-                )
-            )
-    ) {
-        Column(Modifier.fillMaxSize()) {
-            // Header Bar
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Color.Black.copy(alpha = 0.40f),
-            ) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 36.dp, vertical = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            if (showAdvanced) "ADVANCED · TEXT & URLS" else "SETTINGS",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp,
-                            color = Color.White
-                        )
-                        Text(
-                            if (showAdvanced) "Playlist, EPG, headers, names & network labels"
-                            else "Scroll · press Left / Right to change a value",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    ) {
-                        Text(
-                            "v${BuildConfig.VERSION_NAME}",
-                            Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                            fontWeight = FontWeight.Black,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-
-            // Main Body — one scrolling column. Left / Right changes a value.
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(bodyScrollState)
-                    .padding(horizontal = 36.dp, vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Column(
-                    Modifier.widthIn(max = 760.dp).fillMaxWidth().focusGroup(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (showAdvanced) {
-                        SettingsActionRow(
-                            name = "‹  Back to Settings",
-                            valueText = "",
-                            onClick = { showAdvanced = false },
-                            first = true,
-                            focusRequester = initialFocus
-                        )
-                        SettingsLabel("PLAYLIST & EPG")
-                        ProtectedSourceField(playlistValue, { playlistValue = it }, "M3U Playlist URL")
-                        ProtectedSourceField(epgValue, { epgValue = it }, "XMLTV EPG URL")
-                        ProtectedSourceField(
-                            headerValue, { headerValue = it },
-                            "Request Headers", "One Name: value header per line",
-                            singleLine = false, minLines = 3
-                        )
-                        SettingsLabel("CAPTIONS")
-                        ProtectedSourceField(
-                            languageValue, { languageValue = it },
-                            "Preferred Caption Language", "Examples: en, es, fr",
-                            enabled = captionsValue
-                        )
-                        SettingsLabel("GUEST & NETWORK LABELS")
-                        ProtectedSourceField(guestNameValue, { guestNameValue = it }, "Welcome Guest Name", "Shown on the Home welcome card")
-                        ProtectedSourceField(weatherLocationValue, { weatherLocationValue = it }, "Weather Location", "City or municipality used by Open-Meteo")
-                        ProtectedSourceField(connectionLabelValue, { connectionLabelValue = it }, "Connection Label", "Example: Resort Ethernet or Guest Wi-Fi")
-                        ProtectedSourceField(ispNameValue, { ispNameValue = it }, "ISP or Network Name", "Example: GLZ Fiber or Charter Spectrum")
-                    } else {
-                        SettingsLabel(strings.sectionAppearance.uppercase())
-                        SettingsChoiceRow(
-                            name = strings.theme,
-                            valueText = themeLabel(themeValue, appLanguageValue),
-                            onPrev = { themeValue = cycleList(THEME_VALUES.map { it.first }, themeValue, -1) },
-                            onNext = { themeValue = cycleList(THEME_VALUES.map { it.first }, themeValue, 1) },
-                            first = true,
-                            focusRequester = initialFocus
-                        )
-                        SettingsChoiceRow(
-                            name = strings.appLanguage,
-                            valueText = if (appLanguageValue == "es") "Español" else "English",
-                            onPrev = { appLanguageValue = if (appLanguageValue == "es") "en" else "es" },
-                            onNext = { appLanguageValue = if (appLanguageValue == "es") "en" else "es" }
-                        )
-
-                        SettingsLabel(strings.sectionPlayer.uppercase())
-                        SettingsChoiceRow(
-                            name = strings.osdTimeout,
-                            valueText = "$osdTimeoutValue ${strings.seconds}" + if (osdTimeoutValue == 8) " (default)" else "",
-                            onPrev = { osdTimeoutValue = cycleList(OSD_VALUES, osdTimeoutValue, -1) },
-                            onNext = { osdTimeoutValue = cycleList(OSD_VALUES, osdTimeoutValue, 1) }
-                        )
-                        SettingsChoiceRow(
-                            name = strings.screensaverTimeout,
-                            valueText = when (screensaverTimeoutValue) {
-                                0 -> strings.off
-                                2 -> "2 ${strings.minutes}"
-                                5 -> "5 ${strings.minutes} (default)"
-                                10 -> "10 ${strings.minutes}"
-                                15 -> "15 ${strings.minutes}"
-                                else -> "$screensaverTimeoutValue ${strings.minutes}"
-                            },
-                            onPrev = { screensaverTimeoutValue = cycleList(listOf(0, 2, 5, 10, 15), screensaverTimeoutValue, -1) },
-                            onNext = { screensaverTimeoutValue = cycleList(listOf(0, 2, 5, 10, 15), screensaverTimeoutValue, 1) }
-                        )
-                        SettingsChoiceRow(
-                            name = strings.closedCaptions,
-                            valueText = onOff(captionsValue, appLanguageValue),
-                            onPrev = { captionsValue = !captionsValue },
-                            onNext = { captionsValue = !captionsValue }
-                        )
-
-                        SettingsLabel(strings.sectionStartup.uppercase())
-                        SettingsChoiceRow(
-                            name = strings.startDestination,
-                            valueText = startDestinationLabel(startDestinationValue, appLanguageValue),
-                            onPrev = { startDestinationValue = cycleList(START_DESTINATIONS.map { it.first.name }, startDestinationValue, -1) },
-                            onNext = { startDestinationValue = cycleList(START_DESTINATIONS.map { it.first.name }, startDestinationValue, 1) }
-                        )
-                        SettingsChoiceRow(
-                            name = strings.autoStart,
-                            valueText = onOff(autoStartValue, appLanguageValue),
-                            onPrev = { autoStartValue = !autoStartValue },
-                            onNext = { autoStartValue = !autoStartValue }
-                        )
-                        SettingsChoiceRow(
-                            name = strings.resumeLast,
-                            valueText = onOff(resumeLastValue, appLanguageValue),
-                            onPrev = { resumeLastValue = !resumeLastValue },
-                            onNext = { resumeLastValue = !resumeLastValue }
-                        )
-
-                        SettingsLabel(strings.sectionUpdates.uppercase())
-                        SettingsChoiceRow(
-                            name = strings.updateChannel,
-                            valueText = updateChannelLabel(updateChannelValue),
-                            onPrev = { updateChannelValue = cycleList(UPDATE_CHANNEL_IDS, updateChannelValue, -1) },
-                            onNext = { updateChannelValue = cycleList(UPDATE_CHANNEL_IDS, updateChannelValue, 1) }
-                        )
-                        SettingsChoiceRow(
-                            name = strings.autoUpdateCheck,
-                            valueText = onOff(autoUpdateValue, appLanguageValue),
-                            onPrev = { autoUpdateValue = !autoUpdateValue },
-                            onNext = { autoUpdateValue = !autoUpdateValue }
-                        )
-                        SettingsChoiceRow(
-                            name = strings.wifiOnly,
-                            valueText = onOff(wifiOnlyValue, appLanguageValue),
-                            onPrev = { wifiOnlyValue = !wifiOnlyValue },
-                            onNext = { wifiOnlyValue = !wifiOnlyValue }
-                        )
-                        SettingsActionRow(
-                            name = strings.checkUpdates,
-                            valueText = updateStatus,
-                            onClick = {
-                                updateStatus = strings.checkingUpdate
-                                settingsScope.launch { updateStatus = onCheckForUpdate() }
-                            }
-                        )
-
-                        SettingsLabel(strings.sectionSources.uppercase())
-                        SettingsActionRow(
-                            name = if (syncLoading) "${strings.buffering}  $syncProgress%" else strings.syncNow,
-                            valueText = syncMessage,
-                            enabled = !syncLoading,
-                            onClick = {
-                                syncLoading = true
-                                syncProgress = 0
-                                syncMessage = "Contacting GLZ Hub and refreshing all managed data…"
-                                settingsScope.launch {
-                                    syncMessage = runCatching {
-                                        onSyncNow { percent, message ->
-                                            syncProgress = percent
-                                            syncMessage = message
-                                        }
-                                    }.getOrElse { "Sync failed · ${it.message}" }
-                                    syncLoading = false
-                                }
-                            }
-                        )
-                        SettingsActionRow(
-                            name = if (hubLoading) "Connecting to GLZ Hub…" else strings.hubStatus,
-                            valueText = hubMessage,
-                            enabled = !hubLoading,
-                            onClick = {
-                                hubLoading = true
-                                settingsScope.launch {
-                                    runCatching { onBeginHubEnrollment() }
-                                        .onSuccess { hubMessage = "Pairing code: $it · expires in 1 hour" }
-                                        .onFailure { hubMessage = "Could not reach GLZ Hub: ${it.message}" }
-                                    hubLoading = false
-                                }
-                            }
-                        )
-                        SettingsActionRow(
-                            name = strings.advancedOptions,
-                            valueText = "Playlist, EPG, headers, guest & network labels",
-                            onClick = { showAdvanced = true }
-                        )
-
-                        SettingsLabel("NETWORK & DIAGNOSTICS")
-                        SettingsActionRow(
-                            name = "Stream & Network Speed Test",
-                            valueText = "Benchmark latency, jitter & download throughput",
-                            onClick = onOpenSpeedTest
-                        )
-                    }
-                }
-                Spacer(Modifier.height(24.dp))
-            }
-
-            // Sticky Bottom Action Bar
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Color.Black.copy(alpha = 0.65f),
-            ) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 36.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        if (appLanguageValue == "es") "Arriba / Abajo para mover · Izq / Der para cambiar · Atrás para salir"
-                        else "Up / Down to move · Left / Right to change · Back to exit",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        TvSettingsButton(
-                            label = strings.close,
-                            onClick = onDismiss
-                        )
-                        TvSettingsButton(
-                            label = strings.saveAndApply,
-                            onClick = {
-                                onSave(
-                                    playlistValue.trim(), epgValue.trim(), headerValue.trim(),
-                                    weatherLocationValue.trim().ifBlank { DEFAULT_WEATHER_LOCATION },
-                                    guestNameValue.trim().ifBlank { "Guest" },
-                                    connectionLabelValue.trim(), ispNameValue.trim(),
-                                    themeValue, captionsValue, languageValue.trim(), osdTimeoutValue,
-                                    screensaverTimeoutValue,
-                                    autoUpdateValue, wifiOnlyValue, autoStartValue, resumeLastValue,
-                                    startDestinationValue, updateChannelValue,
-                                    appLanguageValue
-                                )
-                            },
-                            enabled = playlistValue.startsWith("http")
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TvSettingsButton(
-    label: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    modifier: Modifier = Modifier
-) {
-    var focused by remember { mutableStateOf(false) }
-    val isPrimary = label.contains("Save") || label.contains("Sync") || label.contains("Generate")
-
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier
-            .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(16.dp),
-                focusedScale = 1.05f,
-                glowColor = if (isPrimary) MaterialTheme.colorScheme.primary else Color.White,
-                onFocusChange = { focused = it }
-            ),
-        shape = RoundedCornerShape(16.dp),
-        color = when {
-            focused && isPrimary -> MaterialTheme.colorScheme.primary
-            focused -> Color.White
-            isPrimary -> MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-            else -> Color.White.copy(alpha = 0.08f)
-        },
-        contentColor = when {
-            focused -> Color.Black
-            isPrimary -> MaterialTheme.colorScheme.primary
-            else -> Color.White
-        },
-    ) {
-        Text(
-            label,
-            Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
-            fontWeight = FontWeight.Black,
-            fontSize = 14.sp
-        )
-    }
-}
-
-@Composable
-private fun ProtectedSourceField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    help: String = "",
-    enabled: Boolean = true,
-    singleLine: Boolean = true,
-    minLines: Int = 1,
-    modifier: Modifier = Modifier
-) {
-    var editing by remember { mutableStateOf(false) }
-    var focused by remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-
-    LaunchedEffect(editing) {
-        if (editing) {
-            runCatching { focusRequester.requestFocus() }
-            keyboard?.show()
-        }
-    }
-
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(16.dp),
-                focusedScale = 1.02f,
-                glowColor = MaterialTheme.colorScheme.secondary,
-                onFocusChange = {
-                    focused = it
-                    if (!it) editing = false
-                }
-            )
-            .clickable(enabled = enabled) { editing = true },
-        shape = RoundedCornerShape(16.dp),
-        color = when {
-            focused -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
-            else -> Color.White.copy(alpha = 0.05f)
-        },
-    ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .focusProperties { canFocus = editing },
-            label = { Text(label, fontWeight = FontWeight.Bold) },
-            readOnly = !editing,
-            enabled = enabled,
-            singleLine = singleLine,
-            minLines = minLines,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.secondary,
-                focusedLabelColor = MaterialTheme.colorScheme.secondary,
-                cursorColor = MaterialTheme.colorScheme.secondary,
-                unfocusedBorderColor = Color.Transparent
-            ),
-            supportingText = {
-                Text(
-                    when {
-                        editing -> "Keyboard active · Press Back when done editing"
-                        focused -> "Press OK to edit${help.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}"
-                        help.isNotBlank() -> help
-                        else -> "Press OK to edit"
-                    },
-                    color = if (focused) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        )
-    }
-}
-
-@Composable
-private fun SettingsLabel(value: String) {
-    Text(
-        value,
-        Modifier.padding(top = 10.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Black,
-        letterSpacing = 1.2.sp
-    )
-}
-
-private fun toggleFavorite(values: Set<String>, id: String) =
-    if (id in values) values - id else values + id
 
 private fun channelNumberValue(value: String): Double =
     value.trim().toDoubleOrNull()
         ?: Regex("\\d+(?:\\.\\d+)?").find(value)?.value?.toDoubleOrNull()
         ?: Double.MAX_VALUE
 
-private fun parseHeaders(source: String): Map<String, String> = buildMap {
-    source.lineSequence().forEach { line ->
-        val separator = line.indexOf(':')
-        if (separator > 0) put(line.take(separator).trim(), line.drop(separator + 1).trim())
-    }
-}
-
 private fun fetchNetworkInfo(
     context: Context,
-    prefs: SharedPreferences,
+    prefs: android.content.SharedPreferences,
     client: OkHttpClient
 ): NetworkInfo {
     val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
