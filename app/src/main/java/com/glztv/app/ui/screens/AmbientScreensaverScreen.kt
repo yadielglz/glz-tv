@@ -502,6 +502,18 @@ fun AmbientScreensaverScreen(
                                 }
 
                                 // Station Details
+                                val formattedStationName = remember(radioStationName) {
+                                    radioStationName?.replace(Regex("(?i)^online\\s*[|·\\-–/:]?\\s*"), "")?.trim()
+                                }
+                                val formattedRadioSubtitle = remember(radioGenre) {
+                                    radioGenre?.let { raw ->
+                                        var text = raw.trim()
+                                        text = text.replace(Regex("(?i)^online\\s*[|·\\-–/:]?\\s*"), "").trim()
+                                        text = text.replace(Regex("(?i)\\s*[|·\\-–/:]?\\s*online$"), "").trim()
+                                        if (text.equals("online", ignoreCase = true)) "" else text
+                                    }?.takeIf { it.isNotBlank() }
+                                }
+
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -525,16 +537,16 @@ fun AmbientScreensaverScreen(
                                     }
                                     Spacer(Modifier.height(1.dp))
                                     Text(
-                                        radioStationName,
+                                        formattedStationName ?: radioStationName,
                                         fontSize = if (isVeryCompactHeight) 14.sp else if (isCompactHeight) 16.sp else 19.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    if (!radioGenre.isNullOrBlank()) {
+                                    if (!formattedRadioSubtitle.isNullOrBlank()) {
                                         Text(
-                                            radioGenre,
+                                            formattedRadioSubtitle,
                                             fontSize = if (isCompactHeight) 10.5.sp else 12.sp,
                                             color = Color.White.copy(alpha = 0.65f),
                                             maxLines = 1,
