@@ -469,6 +469,7 @@ fun SettingsDialog(
     hubStatus: String,
     screensaverTimeoutMinutes: Int = 5,
     appLanguage: String = "en",
+    onOpenChannelEditor: () -> Unit = {},
     onOpenSpeedTest: () -> Unit,
     onSyncNow: suspend ((Int, String) -> Unit) -> String,
     onCheckForUpdate: suspend () -> String,
@@ -749,6 +750,11 @@ fun SettingsDialog(
                                     hubLoading = false
                                 }
                             }
+                        )
+                        SettingsActionRow(
+                            name = "Channel Manager & Playlist Editor",
+                            valueText = "Reorder channels, custom numbers, names & channel visibility",
+                            onClick = onOpenChannelEditor
                         )
                         SettingsActionRow(
                             name = strings.advancedOptions,

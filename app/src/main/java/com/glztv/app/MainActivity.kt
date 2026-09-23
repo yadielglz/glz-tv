@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.glztv.app.data.ChannelCustomizationManager
 import com.glztv.app.data.EpgRepository
 import com.glztv.app.data.PlaylistRepository
 import com.glztv.app.data.PreferencesRepository
@@ -72,6 +73,7 @@ import com.glztv.app.ui.navigation.ExpressiveNavigationRail
 import com.glztv.app.ui.screens.AmbientScreensaverScreen
 import com.glztv.app.ui.screens.RadioScreen
 import com.glztv.app.ui.screens.WeatherScreen
+import com.glztv.app.ui.screens.editor.ChannelEditorDialog
 import com.glztv.app.ui.screens.guide.GuideSection
 import com.glztv.app.ui.screens.home.GuestHubHome
 import com.glztv.app.ui.screens.home.handleManagedHubCommand
@@ -240,6 +242,9 @@ internal fun TvScreen(
     var updateDownloadStatus by remember { mutableStateOf<String?>(null) }
     var updateDownloading by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    val channelCustomizationManager = remember { ChannelCustomizationManager(context) }
+    var channelCustomizationRevision by remember { mutableStateOf(0) }
+    var showChannelEditor by remember { mutableStateOf(false) }
     var captionsEnabled by remember {
         mutableStateOf(prefs.getBoolean(CAPTIONS_ENABLED, false))
     }
@@ -364,7 +369,7 @@ internal fun TvScreen(
                 val radioStations = runCatching { RadioCatalogManager.load(prefs, client).stations }.getOrDefault(emptyList())
                 TvHomePublisher.publish(
                     context = context.applicationContext,
-                    channels = parsed,
+                    channels = channelCustomizationManager.apply(parsed, includeHidden = false),
                     guide = parsedGuide,
                     favorites = favorites,
                     radioStations = radioStations
@@ -610,12 +615,8 @@ internal fun TvScreen(
         }
     }
 
-    val ordered = remember(channels.toList()) {
-        channels.sortedWith(
-            compareBy<Channel> { channelNumberValue(it.number) }
-                .thenBy { it.number }
-                .thenBy { it.name.lowercase(Locale.ROOT) }
-        )
+    val ordered = remember(channels.toList(), channelCustomizationRevision) {
+        channelCustomizationManager.apply(channels.toList(), includeHidden = false)
     }
 
     val tuneChannel: (Channel) -> Unit = {
@@ -644,13 +645,13 @@ internal fun TvScreen(
         }
     }
 
-    LaunchedEffect(screensaverTimeoutMinutes, showScreensaver, immersive, radioPlaying, showSettings, showSpeedTestDialog) {
+    LaunchedEffect(screensaverTimeoutMinutes, showScreensaver, immersive, radioPlaying, showSettings, showSpeedTestDialog, showChannelEditor) {
         if (screensaverTimeoutMinutes <= 0) return@LaunchedEffect
         while (true) {
             delay(5_000L)
             val idleTime = System.currentTimeMillis() - lastUserInteractionTime
             val timeoutMillis = screensaverTimeoutMinutes * 60 * 1000L
-            if (idleTime >= timeoutMillis && !showScreensaver && !showSettings && !showSpeedTestDialog) {
+            if (idleTime >= timeoutMillis && !showScreensaver && !showSettings && !showSpeedTestDialog && !showChannelEditor) {
                 if (!immersive || radioPlaying) {
                     showScreensaver = true
                 }
@@ -667,7 +668,7 @@ internal fun TvScreen(
         else DefaultEntertainmentApps.filter { it.packageName in visibleAppPackages }
     }
 
-    BackHandler(enabled = !showSettings && !immersive) {
+    BackHandler(enabled = !showSettings && !showChannelEditor && !immersive) {
         if (section != AppSection.Home) {
             section = AppSection.Home
         } else {
@@ -822,6 +823,7 @@ internal fun TvScreen(
                                         previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
                                         captionLanguage = captionLanguage,
                                         favorites = favorites,
+                                        onOpenChannelEditor = { showChannelEditor = true },
                                         onWatch = tuneChannel,
                                         modifier = Modifier.fillMaxSize()
                                     )
@@ -908,6 +910,10 @@ internal fun TvScreen(
                 hubStatus = hubStatus,
                 screensaverTimeoutMinutes = screensaverTimeoutMinutes,
                 appLanguage = appLanguage,
+                onOpenChannelEditor = {
+                    showSettings = false
+                    showChannelEditor = true
+                },
                 onOpenSpeedTest = {
                     speedTestTargetUrl = null
                     showSpeedTestDialog = true
@@ -959,6 +965,20 @@ internal fun TvScreen(
                     networkOverrideRevision++
                     showSettings = false
                     scope.launch { loadSources() }
+                }
+            )
+        }
+
+        if (showChannelEditor) {
+            ChannelEditorDialog(
+                rawChannels = channels.toList(),
+                customizationManager = channelCustomizationManager,
+                onDismiss = { showChannelEditor = false },
+                onChannelsUpdated = { updated ->
+                    channelCustomizationRevision++
+                    if (selected != null && updated.none { it.id == selected?.id }) {
+                        selected = updated.firstOrNull()
+                    }
                 }
             )
         }

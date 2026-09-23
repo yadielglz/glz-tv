@@ -78,6 +78,7 @@ fun GuideSection(
     previewChannel: Channel?,
     captionLanguage: String,
     favorites: Set<String> = emptySet(),
+    onOpenChannelEditor: (() -> Unit)? = null,
     onWatch: (Channel) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -198,6 +199,34 @@ fun GuideSection(
                                         fontSize = 9.sp,
                                         maxLines = 1
                                     )
+                                }
+                            }
+                            if (onOpenChannelEditor != null) {
+                                GlzFocusCard(
+                                    onClick = onOpenChannelEditor,
+                                    accent = MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
+                                    focusedScale = 1.04f
+                                ) { _ ->
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Edit,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(11.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            "EDIT",
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 9.sp,
+                                            maxLines = 1,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 }
                             }
                         }
