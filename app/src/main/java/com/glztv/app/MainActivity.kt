@@ -186,6 +186,7 @@ import com.glztv.app.model.WeatherInfo
 import com.glztv.app.ui.GlzTvApp
 import com.glztv.app.ui.i18n.GlzStrings
 import com.glztv.app.ui.i18n.LocalGlzStrings
+import com.glztv.app.ui.WeatherFormatter
 import com.glztv.app.ui.screens.RadioScreen
 import com.glztv.app.ui.screens.WeatherScreen
 import com.google.zxing.BarcodeFormat
@@ -219,8 +220,10 @@ private const val KEEP_AWAKE_HOME = "keep_awake_home"
 private const val HOME_PREVIEW_CHANNEL_ID = "home_preview_channel_id"
 private const val SPORTS_BAR_KIOSK_CHANNEL_ID = "sports_bar_kiosk_channel_id"
 private const val SPORTS_BAR_KIOSK_RADIO_CODE = "sports_bar_kiosk_radio_code"
-private const val AUTO_UPDATE_CHECK = "auto_update_check"
-private const val WIFI_ONLY_UPDATES = "wifi_only_updates"
+private const val AUTO_UPDATE_CHECK = "auto_update"
+private const val LEGACY_AUTO_UPDATE_CHECK = "auto_update_check"
+private const val WIFI_ONLY_UPDATES = "wifi_only"
+private const val LEGACY_WIFI_ONLY_UPDATES = "wifi_only_updates"
 private const val UPDATE_CHANNEL = "update_channel"
 private const val AUTO_START = "auto_start"
 private const val RESUME_LAST_CHANNEL = "resume_last_channel"
@@ -709,8 +712,10 @@ internal fun TvScreen(
             }
         }
     }
-    LaunchedEffect(prefs.getBoolean(AUTO_UPDATE_CHECK, true)) {
-        if (!prefs.getBoolean(AUTO_UPDATE_CHECK, true)) return@LaunchedEffect
+    val autoUpdateEnabled = (prefs.all[AUTO_UPDATE_CHECK] as? Boolean)
+        ?: prefs.getBoolean(LEGACY_AUTO_UPDATE_CHECK, true)
+    LaunchedEffect(autoUpdateEnabled) {
+        if (!autoUpdateEnabled) return@LaunchedEffect
         delay(6_000L)
         while (true) {
             checkForAppUpdate()
@@ -1015,8 +1020,10 @@ internal fun TvScreen(
             captionsEnabled = captionsEnabled,
             captionLanguage = captionLanguage,
             osdTimeoutSeconds = osdTimeoutSeconds,
-            autoUpdate = prefs.getBoolean(AUTO_UPDATE_CHECK, true),
-            wifiOnly = prefs.getBoolean(WIFI_ONLY_UPDATES, true),
+            autoUpdate = (prefs.all[AUTO_UPDATE_CHECK] as? Boolean)
+                ?: prefs.getBoolean(LEGACY_AUTO_UPDATE_CHECK, true),
+            wifiOnly = (prefs.all[WIFI_ONLY_UPDATES] as? Boolean)
+                ?: prefs.getBoolean(LEGACY_WIFI_ONLY_UPDATES, false),
             autoStart = prefs.getBoolean(AUTO_START, false),
             resumeLast = prefs.getBoolean(RESUME_LAST_CHANNEL, true),
             startDestination = prefs.getString(START_DESTINATION, AppSection.Home.name)
@@ -1055,7 +1062,9 @@ internal fun TvScreen(
                     .putInt(OSD_TIMEOUT_SECONDS, osdTimeout)
                     .putInt(SCREENSAVER_TIMEOUT_MINUTES, screensaverTimeout)
                     .putBoolean(AUTO_UPDATE_CHECK, autoUpdate)
+                    .remove(LEGACY_AUTO_UPDATE_CHECK)
                     .putBoolean(WIFI_ONLY_UPDATES, wifiOnly)
+                    .remove(LEGACY_WIFI_ONLY_UPDATES)
                     .putBoolean(AUTO_START, autoStart)
                     .putBoolean(RESUME_LAST_CHANNEL, resumeLast)
                     .putString(START_DESTINATION, startDestination)
@@ -1873,29 +1882,9 @@ private fun HomeAppsDrawer(
     }
 }
 
-private fun weatherGlyph(code: Int): String = when (code) {
-    0 -> "☀"
-    1, 2 -> "⛅"
-    3 -> "☁"
-    45, 48 -> "≋"
-    in 51..67, in 80..82 -> "☂"
-    in 71..77, 85, 86 -> "❄"
-    in 95..99 -> "ϟ"
-    else -> "•"
-}
+private fun weatherGlyph(code: Int): String = WeatherFormatter.symbol(code)
 
-private fun weatherConditionText(code: Int): String = when (code) {
-    0 -> "Sunny"
-    1 -> "Mostly Clear"
-    2 -> "Partly Cloudy"
-    3 -> "Overcast"
-    45, 48 -> "Fog"
-    in 51..57 -> "Drizzle"
-    in 61..67, in 80..82 -> "Rain"
-    in 71..77, 85, 86 -> "Snow"
-    in 95..99 -> "Thunderstorms"
-    else -> "—"
-}
+private fun weatherConditionText(code: Int): String = WeatherFormatter.description(code)
 
 @Composable
 private fun HeroInfoLine(
@@ -4470,7 +4459,8 @@ private fun MultiViewScreen(
                     captionLanguage = captionLanguage,
                     modifier = Modifier.fillMaxSize(),
                     muted = !isFocused,
-                    createMediaSession = isFocused
+                    createMediaSession = isFocused,
+                    zOrderMediaOverlay = true
                 )
                 Surface(
                     Modifier.align(Alignment.BottomStart).fillMaxWidth(),
@@ -4962,6 +4952,7 @@ private fun VideoPlayer(
     createMediaSession: Boolean = true,
     keepScreenOn: Boolean = true,
     cropVideo: Boolean = false,
+    zOrderMediaOverlay: Boolean = false,
     controlState: PlaybackControlState? = null,
     preferredAudioLanguage: String? = null,
     onAudioLanguageChanged: (String?) -> Unit = {},
@@ -5202,7 +5193,9 @@ private fun VideoPlayer(
                     controllerAutoShow = false
                     isFocusable = false
                     isFocusableInTouchMode = false
-                    (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+                    if (zOrderMediaOverlay) {
+                        (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+                    }
                 }
             },
             update = {
@@ -5210,7 +5203,9 @@ private fun VideoPlayer(
                 it.keepScreenOn = keepScreenOn
                 it.resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+                if (zOrderMediaOverlay) {
+                    (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+                }
             },
             modifier = Modifier.fillMaxSize()
         )

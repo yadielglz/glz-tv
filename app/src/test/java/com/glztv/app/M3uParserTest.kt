@@ -83,4 +83,22 @@ class M3uParserTest {
         assertEquals("Local", channel.group)
         assertEquals("2.1", channel.number)
     }
+
+    @Test
+    fun fallsBackToNameWhenTvgIdIsEmptyString() {
+        val channels = M3uParser.parse(
+            """
+                #EXTM3U
+                #EXTINF:-1 tvg-id="" tvg-name="",Sports HD
+                https://example.com/sports.m3u8
+            """.trimIndent(),
+            "https://example.com/list.m3u",
+            emptyMap()
+        )
+
+        val channel = channels.single()
+        assertEquals("Sports HD", channel.id)
+        assertEquals("Sports HD", channel.name)
+    }
 }
+

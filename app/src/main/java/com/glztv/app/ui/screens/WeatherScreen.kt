@@ -54,6 +54,7 @@ import com.glztv.app.model.WeatherInfo
 import com.glztv.app.ui.components.tvFocusableWithPhysics
 import com.glztv.app.ui.components.GlzPanel
 import com.glztv.app.ui.components.GlzCardDefaults
+import com.glztv.app.ui.WeatherFormatter
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -598,32 +599,8 @@ private fun uvRiskLabel(uv: Double): String = when {
     else -> "Extreme"
 }
 
-private fun dayLabel(value: String): String = runCatching {
-    val input = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    val output = SimpleDateFormat("EEE", Locale.getDefault())
-    output.format(requireNotNull(input.parse(value))).uppercase(Locale.getDefault())
-}.getOrDefault(value)
+private fun dayLabel(value: String): String = WeatherFormatter.dayLabel(value)
 
-private fun weatherSymbol(code: Int): String = when (code) {
-    0 -> "☀"
-    1, 2 -> "⛅"
-    3 -> "☁"
-    45, 48 -> "≋"
-    in 51..67, in 80..82 -> "☂"
-    in 71..77, 85, 86 -> "❄"
-    in 95..99 -> "ϟ"
-    else -> "°"
-}
+private fun weatherSymbol(code: Int): String = WeatherFormatter.symbol(code)
 
-private fun weatherDescription(code: Int): String = when (code) {
-    0 -> "Clear Sky"
-    1 -> "Mostly Clear"
-    2 -> "Partly Cloudy"
-    3 -> "Overcast"
-    45, 48 -> "Foggy"
-    in 51..57 -> "Light Drizzle"
-    in 61..67, in 80..82 -> "Rain Showers"
-    in 71..77, 85, 86 -> "Snowfall"
-    in 95..99 -> "Thunderstorms"
-    else -> "Mixed Conditions"
-}
+private fun weatherDescription(code: Int): String = WeatherFormatter.description(code)

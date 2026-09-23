@@ -165,4 +165,27 @@ class EpgParserTest {
         assertEquals(1, progs.size)
         assertEquals("Telenoticias", progs.single().title)
     }
+
+    @Test
+    fun testMatchesAccentedAndSpanishChannelNames() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tv>
+              <channel id="cine.es">
+                <display-name>Películas Acción</display-name>
+              </channel>
+              <programme channel="cine.es" start="20260729180000 +0000" stop="20260729190000 +0000">
+                <title>Gran Película</title>
+                <desc>Acción y drama</desc>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        val guide = EpgParser.parse(xml)
+        val channelWithoutAccents = Channel("other_id", "Peliculas Accion", "TV", "5", "", "", emptyMap())
+        val progs = guide.forChannel(channelWithoutAccents)
+        assertEquals(1, progs.size)
+        assertEquals("Gran Película", progs.single().title)
+    }
 }
+

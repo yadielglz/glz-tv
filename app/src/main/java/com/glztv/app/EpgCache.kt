@@ -13,7 +13,7 @@ object EpgCache {
         if (!file.isFile) return null
         DataInputStream(BufferedInputStream(file.inputStream())).use { input ->
             val version = input.readInt()
-            if ((version != 1 && version != 2) || input.readString() != sourceUrl) return null
+            if (version !in 1..3 || input.readString() != sourceUrl) return null
             input.readLong() // Saved timestamp is informational; retain last-known-good data.
             val names = buildMap {
                 repeat(input.readInt()) { put(input.readString(), input.readString()) }
@@ -21,6 +21,16 @@ object EpgCache {
             val logos = if (version >= 2) {
                 buildMap {
                     repeat(input.readInt()) { put(input.readString(), input.readString()) }
+                }
+            } else emptyMap()
+            val allNames = if (version >= 3) {
+                buildMap {
+                    repeat(input.readInt()) {
+                        val id = input.readString()
+                        val altCount = input.readInt()
+                        val set = buildSet { repeat(altCount) { add(input.readString()) } }
+                        put(id, set)
+                    }
                 }
             } else emptyMap()
             val programmes = buildMap {
@@ -41,7 +51,7 @@ object EpgCache {
                     })
                 }
             }
-            EpgGuide(programmes, names, logos)
+            EpgGuide(programmes, names, logos, allNames)
         }
     }.getOrNull()
 
@@ -56,7 +66,7 @@ object EpgCache {
             val target = context.cacheDir.resolve(EPG_CACHE_FILE)
             val temporary = context.cacheDir.resolve("$EPG_CACHE_FILE.tmp")
             DataOutputStream(BufferedOutputStream(temporary.outputStream())).use { output ->
-                output.writeInt(2)
+                output.writeInt(3)
                 output.writeString(sourceUrl)
                 output.writeLong(System.currentTimeMillis())
                 output.writeInt(guide.channelNames.size)
@@ -68,6 +78,12 @@ object EpgCache {
                 guide.channelLogos.forEach { (id, logoUrl) ->
                     output.writeString(id)
                     output.writeString(logoUrl)
+                }
+                output.writeInt(guide.allChannelNames.size)
+                guide.allChannelNames.forEach { (id, altNames) ->
+                    output.writeString(id)
+                    output.writeInt(altNames.size)
+                    altNames.forEach { output.writeString(it) }
                 }
                 output.writeInt(activeProgrammes.size)
                 activeProgrammes.forEach { (channelId, entries) ->

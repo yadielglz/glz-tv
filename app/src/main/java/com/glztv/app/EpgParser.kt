@@ -321,5 +321,8 @@ object EpgParser {
 private fun cleanChannelName(value: String): String =
     value.replace(Regex("^(?:ch\\s*)?\\d+\\s*[·\\.\\-\\:\\|\\s]\\s*", RegexOption.IGNORE_CASE), "").trim()
 
-private fun normalize(value: String) =
-    value.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
+private fun normalize(value: String): String {
+    val unaccented = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}"), "")
+    return unaccented.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
+}

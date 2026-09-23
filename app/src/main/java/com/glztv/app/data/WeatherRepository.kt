@@ -23,15 +23,20 @@ class WeatherRepository(client: OkHttpClient) {
     }
 
     fun load(location: String): WeatherInfo {
+        val trimmedLocation = location.trim().ifBlank { "San Juan" }
         val geocodingJson = fetchTextWithFallback(
             "https://geocoding-api.open-meteo.com/v1/search" +
-                "?name=${Uri.encode(location)}&count=1&language=en&format=json"
+                "?name=${Uri.encode(trimmedLocation)}&count=1&language=en&format=json"
         )
         val geocoding = JSONObject(geocodingJson)
-        val place = geocoding.getJSONArray("results").getJSONObject(0)
+        val results = geocoding.optJSONArray("results")
+        if (results == null || results.length() == 0) {
+            throw IllegalArgumentException("Location \"$trimmedLocation\" not found")
+        }
+        val place = results.getJSONObject(0)
         val latitude = place.getDouble("latitude")
         val longitude = place.getDouble("longitude")
-        val displayName = place.optString("name", location)
+        val displayName = place.optString("name", trimmedLocation)
         val forecastJson = fetchTextWithFallback(
             "https://api.open-meteo.com/v1/forecast?latitude=$latitude&longitude=$longitude" +
                 "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure" +
