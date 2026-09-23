@@ -345,17 +345,10 @@ fun ChannelEditorDialog(
                                     Spacer(Modifier.width(12.dp))
 
                                     // Logo
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = Color.Black.copy(alpha = 0.3f),
-                                        modifier = Modifier.size(38.dp)
-                                    ) {
-                                        ChannelLogo(
-                                            logoUrl = channel.logoUrl,
-                                            channelName = channel.name,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
+                                    ChannelLogo(
+                                        channel = channel,
+                                        size = 38.dp
+                                    )
 
                                     Spacer(Modifier.width(14.dp))
 
@@ -458,17 +451,10 @@ fun ChannelEditorDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = Color.Black.copy(alpha = 0.40f),
-                                    modifier = Modifier.size(54.dp)
-                                ) {
-                                    ChannelLogo(
-                                        logoUrl = currentChannel.logoUrl,
-                                        channelName = currentChannel.name,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
+                                ChannelLogo(
+                                    channel = currentChannel,
+                                    size = 54.dp
+                                )
                                 Spacer(Modifier.width(14.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
