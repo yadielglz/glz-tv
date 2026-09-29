@@ -37,7 +37,7 @@ object M3uParser {
 
             val info = pendingInfo ?: return@forEach
             val attributes = parseAttributes(info)
-            val comma = info.indexOf(',')
+            val comma = titleSeparator(info)
             var name = if (comma >= 0) info.substring(comma + 1).trim() else "Channel"
             if (name.isBlank()) {
                 name = attributes["tvg-name"]?.takeIf { it.isNotBlank() } ?: "Channel"
@@ -75,6 +75,17 @@ object M3uParser {
             }
         }
         return values
+    }
+
+    private fun titleSeparator(line: String): Int {
+        var inQuotes = false
+        for (index in line.indices) {
+            when (line[index]) {
+                '"' -> inQuotes = !inQuotes
+                ',' -> if (!inQuotes) return index
+            }
+        }
+        return -1
     }
 
     private fun first(values: Map<String, String>, vararg keys: String): String {
