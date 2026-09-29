@@ -171,10 +171,29 @@ fun ImmersivePlayerScreen(
     val playerFocus = remember { FocusRequester() }
     val selectedChannelFocus = remember { FocusRequester() }
     val firstServiceFocus = remember { FocusRequester() }
-    val selectedIndex = channels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
-    val channelListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = (selectedIndex - 2).coerceAtLeast(0)
-    )
+    fun isPpvChannel(item: Channel): Boolean =
+        item.number.substringBefore('-').toIntOrNull() in 29..31
+    val ppvCount = channels.count(::isPpvChannel)
+    var ppvExpanded by remember { mutableStateOf(false) }
+    val drawerRows = remember(channels, ppvExpanded) {
+        buildList<Channel?> {
+            var addedPpvHeader = false
+            channels.forEach { item ->
+                if (isPpvChannel(item)) {
+                    if (!addedPpvHeader) {
+                        add(null) // PPV section header at its original lineup position.
+                        addedPpvHeader = true
+                    }
+                    if (ppvExpanded) add(item)
+                } else {
+                    add(item)
+                }
+            }
+        }
+    }
+    val selectedIndex = drawerRows.indexOfFirst { it?.id == channel.id }
+        .let { if (it >= 0) it else drawerRows.indexOf(null).coerceAtLeast(0) }
+    val channelListState = rememberLazyListState()
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     val channelProgrammes = guide.forChannel(channel)
     val currentProgramme = channelProgrammes
@@ -402,7 +421,32 @@ fun ImmersivePlayerScreen(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        itemsIndexed(channels, key = { index, ch -> "drawer-$index-${ch.streamUrl}" }) { _, item ->
+                        itemsIndexed(drawerRows, key = { index, item ->
+                            item?.let { "drawer-$index-${it.streamUrl}" } ?: "drawer-ppv-group"
+                        }) { _, item ->
+                            if (item == null) {
+                                val selectedPpvIsHidden = !ppvExpanded && isPpvChannel(channel)
+                                var headerFocused by remember { mutableStateOf(false) }
+                                Surface(
+                                    Modifier.fillMaxWidth()
+                                        .then(if (selectedPpvIsHidden) Modifier.focusRequester(selectedChannelFocus) else Modifier)
+                                        .onFocusChanged { headerFocused = it.isFocused }
+                                        .clickable { ppvExpanded = !ppvExpanded }
+                                        .focusable(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (headerFocused) Color(0xFF23405F) else MaterialTheme.colorScheme.primary.copy(alpha = .20f)
+                                ) {
+                                    Row(
+                                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(if (ppvExpanded) "▾" else "▸", color = Color(0xFFC4FF4D))
+                                        Spacer(Modifier.width(12.dp))
+                                        Text("PPV · CH 29–31", Modifier.weight(1f), color = Color.White, fontWeight = FontWeight.Black)
+                                        Text("$ppvCount", color = Color.White.copy(alpha = .68f))
+                                    }
+                                }
+                            } else {
                             val isSelected = item.id == channel.id
                             var isFocused by remember(item.id) { mutableStateOf(false) }
                             val itemProgramme = guide.forChannel(item)
@@ -447,6 +491,7 @@ fun ImmersivePlayerScreen(
                                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
+                            }
                             }
                         }
                     }
