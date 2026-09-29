@@ -133,6 +133,13 @@ jobs:
             --generate-notes --title "GLZ TV ${{ steps.version.outputs.name }}")
           if [[ "${{ steps.version.outputs.name }}" == *-beta* ]]; then
             args+=(--prerelease --latest=false)
+            # A repeated Beta build replaces only this exact Beta version's assets.
+            if gh release view "$tag" >/dev/null 2>&1; then
+              gh release upload "$tag" "GLZ-TV-${{ steps.version.outputs.name }}.apk" "GLZ-TV-${{ steps.version.outputs.name }}.apk.sha256" --clobber
+              gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$tag" -f sha="$GITHUB_SHA" -F force=true
+              gh release edit "$tag" --prerelease --latest=false --title "GLZ TV ${{ steps.version.outputs.name }}"
+              exit 0
+            fi
           fi
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             gh release create "${args[@]}" --verify-tag
