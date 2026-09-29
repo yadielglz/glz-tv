@@ -82,6 +82,7 @@ import com.glztv.app.ui.screens.player.SportsBarKioskScreen
 import com.glztv.app.ui.screens.settings.SettingsDialog
 import com.glztv.app.ui.screens.settings.UpdateNotificationBanner
 import com.glztv.app.ui.screens.you.GuestYouSection
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -491,80 +492,93 @@ internal fun TvScreen(
                 ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
                 else "Not connected"
         }
-        if (initialSync?.changed == true || initialSync?.forceRefreshTriggered == true) {
-            reportHubSync(35, "Configuration received")
-            loadSources(forceRefresh = true) { percent, message ->
-                reportHubSync(percent, message)
+        try {
+            if (initialSync?.changed == true || initialSync?.forceRefreshTriggered == true) {
+                reportHubSync(35, "Configuration received")
+                loadSources(forceRefresh = true) { percent, message ->
+                    reportHubSync(percent, message)
+                }
+                reportHubSync(100, "Sync complete", "complete")
+            } else {
+                loadSources()
             }
-            reportHubSync(100, "Sync complete", "complete")
-        } else {
-            loadSources()
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            loading = false
+            hubStatus = "GLZ Hub refresh unavailable · using saved settings"
         }
         var nextConfigSyncAt = System.currentTimeMillis() + 5 * 60_000L
         var nextHeartbeatAt = System.currentTimeMillis() + 90_000L
         var nextCommandCheckAt = System.currentTimeMillis() + 30_000L
         while (true) {
             delay(15_000L)
-            val pendingEnrollment = GlzHubManager.pairingCode(prefs) != null
-            val now = System.currentTimeMillis()
-            if (!pendingEnrollment && now >= nextHeartbeatAt) {
-                runCatching { withContext(Dispatchers.IO) { GlzHubManager.heartbeat(prefs, client) } }
-                nextHeartbeatAt = now + 90_000L
-            }
-            if (!pendingEnrollment && now >= nextCommandCheckAt) {
-                runCatching { withContext(Dispatchers.IO) { GlzHubManager.commands(prefs, client) } }
-                    .onSuccess { commands ->
-                        for (command in commands) {
-                            handleManagedHubCommand(context, prefs, client, command) {
-                                loadSources(forceRefresh = true)
+            try {
+                val pendingEnrollment = GlzHubManager.pairingCode(prefs) != null
+                val now = System.currentTimeMillis()
+                if (!pendingEnrollment && now >= nextHeartbeatAt) {
+                    runCatching { withContext(Dispatchers.IO) { GlzHubManager.heartbeat(prefs, client) } }
+                    nextHeartbeatAt = now + 90_000L
+                }
+                if (!pendingEnrollment && now >= nextCommandCheckAt) {
+                    runCatching { withContext(Dispatchers.IO) { GlzHubManager.commands(prefs, client) } }
+                        .onSuccess { commands ->
+                            for (command in commands) {
+                                handleManagedHubCommand(context, prefs, client, command) {
+                                    loadSources(forceRefresh = true)
+                                }
                             }
                         }
-                    }
-                nextCommandCheckAt = now + 30_000L
-            }
-            if (!pendingEnrollment && now < nextConfigSyncAt) continue
-            runCatching {
-                withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
-            }.onSuccess { result ->
-                nextConfigSyncAt = now + 5 * 60_000L
-                nextHeartbeatAt = minOf(nextHeartbeatAt, now + 90_000L)
-                for (command in result.commands) {
-                    handleManagedHubCommand(context, prefs, client, command) {
-                        loadSources(forceRefresh = true)
-                    }
+                    nextCommandCheckAt = now + 30_000L
                 }
-                if (result.changed || result.forceRefreshTriggered) {
-                    guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
-                    guestExperience = GuestExperience.from(prefs)
-                    weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
-                        ?: DEFAULT_WEATHER_LOCATION
-                    visibleAppPackages = GlzHubManager.visibleApps(prefs)
-                    appVisibilityManaged =
-                        prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
-                    networkOverrideRevision++
-                    onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
-                    val loopSyncedLang = prefs.getString(GlzHubManager.APP_LANGUAGE, appLanguage) ?: appLanguage
-                    if (loopSyncedLang != appLanguage) {
-                        appLanguage = loopSyncedLang
-                        onLanguageChanged(loopSyncedLang)
+                if (!pendingEnrollment && now < nextConfigSyncAt) continue
+                runCatching {
+                    withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
+                }.onSuccess { result ->
+                    nextConfigSyncAt = now + 5 * 60_000L
+                    nextHeartbeatAt = minOf(nextHeartbeatAt, now + 90_000L)
+                    for (command in result.commands) {
+                        handleManagedHubCommand(context, prefs, client, command) {
+                            loadSources(forceRefresh = true)
+                        }
                     }
-                    captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
-                    captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
-                    keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
-                    homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
-                    sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
-                    reportHubSync(35, "Configuration received")
-                    loadSources(forceRefresh = true) { percent, message ->
-                        reportHubSync(percent, message)
+                    if (result.changed || result.forceRefreshTriggered) {
+                        guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
+                        guestExperience = GuestExperience.from(prefs)
+                        weatherLocation = prefs.getString(WEATHER_LOCATION, DEFAULT_WEATHER_LOCATION)
+                            ?: DEFAULT_WEATHER_LOCATION
+                        visibleAppPackages = GlzHubManager.visibleApps(prefs)
+                        appVisibilityManaged =
+                            prefs.getBoolean(GlzHubManager.VISIBLE_APPS_MANAGED, false)
+                        networkOverrideRevision++
+                        onThemeMode(prefs.getString(THEME_MODE, themeMode) ?: themeMode)
+                        val loopSyncedLang = prefs.getString(GlzHubManager.APP_LANGUAGE, appLanguage) ?: appLanguage
+                        if (loopSyncedLang != appLanguage) {
+                            appLanguage = loopSyncedLang
+                            onLanguageChanged(loopSyncedLang)
+                        }
+                        captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
+                        captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
+                        keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
+                        homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
+                        sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
+                        reportHubSync(35, "Configuration received")
+                        loadSources(forceRefresh = true) { percent, message ->
+                            reportHubSync(percent, message)
+                        }
+                        reportHubSync(100, "Sync complete", "complete")
                     }
-                    reportHubSync(100, "Sync complete", "complete")
+                    hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
+                        ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
+                        else "Not connected"
+                }.onFailure {
+                    nextConfigSyncAt = now + if (pendingEnrollment) 15_000L else 5 * 60_000L
+                    hubStatus = "GLZ Hub sync unavailable · using saved settings"
                 }
-                hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
-                    ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
-                    else "Not connected"
-            }.onFailure {
-                nextConfigSyncAt = now + if (pendingEnrollment) 15_000L else 5 * 60_000L
-                hubStatus = "GLZ Hub sync unavailable · using saved settings"
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                loading = false
+                hubStatus = "GLZ Hub refresh unavailable · using saved settings"
+                nextConfigSyncAt = System.currentTimeMillis() + 5 * 60_000L
             }
         }
     }
