@@ -57,6 +57,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -1186,6 +1187,9 @@ fun VideoPlayer(
         } else null
     }
     var retryAttempt by remember(channel.id) { mutableStateOf(0) }
+    var recoveryGeneration by remember(channel.id) { mutableStateOf(0) }
+    var recoveryDelayMs by remember(channel.id) { mutableStateOf(0L) }
+    var recoveryPending by remember(channel.id) { mutableStateOf(false) }
     var sourceIndex by remember(channel.id) { mutableStateOf(0) }
     var playbackMessage by remember(channel.id) { mutableStateOf<String?>("Connecting…") }
     var lastPlaybackError by remember(channel.id) { mutableStateOf<PlaybackErrorCategory?>(null) }
@@ -1198,35 +1202,39 @@ fun VideoPlayer(
         (listOf(channel.streamUrl) + backups).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
     }
     val activeUrl = streamUrls.getOrElse(sourceIndex) { channel.streamUrl }
-    val switchToNextSource = switch@{
-        if (sourceIndex >= streamUrls.lastIndex) return@switch false
-        sourceIndex += 1
-        retryAttempt = 0
-        playbackMessage = "Switching to backup source…"
-        true
+    // Every recovery gets its own effect key; resetting the retry budget must not restart video.
+    val requestRecovery = recover@{
+        if (recoveryPending) return@recover
+        recoveryPending = true
+        if (retryAttempt < 3) {
+            retryAttempt += 1
+            recoveryDelayMs = (1L shl (retryAttempt - 1)) * 1_000L
+            playbackMessage = "Reconnecting stream…"
+        } else {
+            sourceIndex = if (sourceIndex < streamUrls.lastIndex) sourceIndex + 1 else 0
+            retryAttempt = 0
+            recoveryDelayMs = DEAD_SOURCE_REPROBE_MS
+            playbackMessage = "Stream unavailable · retrying shortly…"
+        }
+        recoveryGeneration += 1
     }
+    val latestRecovery by rememberUpdatedState(requestRecovery)
     DisposableEffect(player, channel.id, streamUrls) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 val category = PlaybackErrorCategorizer.categorize(error)
                 lastPlaybackError = category
                 onPlaybackError(category)
-                if (retryAttempt < 3) {
-                    retryAttempt += 1
-                    playbackMessage = if (retryAttempt >= 2) "Trying compatibility mode…"
-                    else "Retrying stream…"
-                } else if (!switchToNextSource()) {
-                    playbackMessage = "Stream unavailable"
-                }
+                latestRecovery()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) {
+                if (playbackState == Player.STATE_READY && !recoveryPending) {
                     playbackMessage = null
-                } else if (playbackState == Player.STATE_BUFFERING && retryAttempt == 0) {
+                } else if (playbackState == Player.STATE_BUFFERING && !recoveryPending) {
                     playbackMessage = "Connecting…"
-                } else if (playbackState == Player.STATE_ENDED && !switchToNextSource()) {
-                    playbackMessage = "Stream unavailable"
+                } else if (playbackState == Player.STATE_ENDED) {
+                    latestRecovery()
                 }
             }
 
@@ -1296,17 +1304,19 @@ fun VideoPlayer(
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    LaunchedEffect(activeUrl, captionsEnabled, captionLanguage, preferredAudioLanguage, retryAttempt) {
-        if (retryAttempt > 0) delay((1L shl (retryAttempt - 1)) * 1_000L)
-        httpFactory
-            .setDefaultRequestProperties(channel.headers)
-            .setUserAgent(channel.headers["User-Agent"] ?: "GLZ-TV/2.0")
+    LaunchedEffect(player, captionsEnabled, captionLanguage, preferredAudioLanguage) {
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !captionsEnabled)
             .setPreferredTextLanguage(captionLanguage.ifBlank { null })
             .setPreferredAudioLanguage(preferredAudioLanguage)
             .setSelectUndeterminedTextLanguage(captionsEnabled)
             .build()
+    }
+    LaunchedEffect(player, channel.id, activeUrl, recoveryGeneration) {
+        if (recoveryPending) delay(recoveryDelayMs)
+        httpFactory
+            .setDefaultRequestProperties(channel.headers)
+            .setUserAgent(channel.headers["User-Agent"] ?: "GLZ-TV/2.0")
         player.stop()
         player.setMediaItem(
             MediaItem.Builder()
@@ -1322,6 +1332,7 @@ fun VideoPlayer(
                 .build(),
             true
         )
+        recoveryPending = false
         player.prepare()
         player.playWhenReady = true
     }
@@ -1348,35 +1359,30 @@ fun VideoPlayer(
             delay(1_000)
         }
     }
-    LaunchedEffect(player, channel.id, streamUrls, sourceIndex) {
+    LaunchedEffect(player, channel.id, activeUrl, recoveryGeneration) {
         var lastPosition = -1L
         var stalledMs = 0L
-        var reprobeArmed = false
+        var healthyMs = 0L
         while (true) {
             delay(1_000)
-            val state = player.playbackState
             val position = player.currentPosition
             val advancing = lastPosition >= 0 && position - lastPosition >= PLAYBACK_PROGRESS_EPSILON_MS
             lastPosition = position
-            val watching = player.playWhenReady &&
-                (state == Player.STATE_READY || state == Player.STATE_BUFFERING)
-            if (watching && !advancing) {
-                stalledMs += 1_000
-            } else {
+            if (recoveryPending || !player.playWhenReady) {
                 stalledMs = 0
-                reprobeArmed = false
+                healthyMs = 0
+                continue
             }
-            if (stalledMs >= PLAYBACK_STALL_LIMIT_MS) {
-                if (switchToNextSource()) {
+            if (player.playbackState == Player.STATE_READY && advancing) {
+                stalledMs = 0
+                healthyMs += 1_000
+                if (healthyMs >= 30_000L) retryAttempt = 0
+            } else {
+                healthyMs = 0
+                stalledMs += 1_000
+                if (stalledMs >= PLAYBACK_STALL_LIMIT_MS) {
+                    latestRecovery()
                     stalledMs = 0
-                } else if (!reprobeArmed) {
-                    reprobeArmed = true
-                    playbackMessage = "Stream unavailable"
-                    launch {
-                        delay(DEAD_SOURCE_REPROBE_MS)
-                        player.prepare()
-                        player.playWhenReady = true
-                    }
                 }
             }
         }
