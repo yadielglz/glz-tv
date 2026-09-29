@@ -2664,8 +2664,8 @@ function renderEventChannels() {
     `;
   }).join("");
 
-  $(".guide-event-btn").forEach((btn) => btn.addEventListener("click", () => toggleEventGuide(btn.dataset.id, btn)));
-  $(".edit-event-btn").forEach((btn) => btn.addEventListener("click", () => openEventDialog(btn.dataset.id)));
+  $$(".guide-event-btn").forEach((btn) => btn.addEventListener("click", () => toggleEventGuide(btn.dataset.id, btn)));
+  $$(".edit-event-btn").forEach((btn) => btn.addEventListener("click", () => openEventDialog(btn.dataset.id)));
   $$(".delete-event-btn").forEach((btn) => btn.addEventListener("click", () => deleteEventChannel(btn.dataset.id)));
   $$(".extend-event-btn").forEach((btn) => btn.addEventListener("click", () => extendEventWindow(btn.dataset.id)));
 }
