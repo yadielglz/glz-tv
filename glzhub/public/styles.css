@@ -2518,3 +2518,60 @@ dialog::backdrop {
   color: var(--text-muted);
   font-size: 13px;
 }
+
+
+/* Live events use the available workspace width and keep long matchups readable. */
+#eventsView {
+  width: 100%;
+  max-width: none;
+  margin: 24px 0;
+}
+#eventsView .editor-header > div:first-child {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+#eventsView .header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+#eventsView .stats {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+#eventsView .management-list {
+  width: 100%;
+}
+#eventsView .group-card {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+#eventsView .card-details {
+  flex: 1;
+}
+#eventsView .card-details h4,
+#eventsView .card-details p {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+#eventsView .event-title {
+  display: inline;
+  line-height: 1.5;
+}
+#eventsView .card-action-bar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 760px) {
+  #eventsView {
+    padding: 20px;
+  }
+  #eventsView .header-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  #eventsView .card-action-bar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
