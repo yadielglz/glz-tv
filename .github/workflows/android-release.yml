@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: android-release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ contains(github.ref_name, '-beta') }}
 
 jobs:
   release:
