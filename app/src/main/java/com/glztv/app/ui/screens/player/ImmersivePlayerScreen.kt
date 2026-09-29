@@ -171,8 +171,10 @@ fun ImmersivePlayerScreen(
     val playerFocus = remember { FocusRequester() }
     val selectedChannelFocus = remember { FocusRequester() }
     val firstServiceFocus = remember { FocusRequester() }
-    fun isPpvChannel(item: Channel): Boolean =
-        item.number.substringBefore('-').toIntOrNull() in 29..31
+    fun isPpvChannel(item: Channel): Boolean {
+        val major = item.number.substringBefore('-').toIntOrNull()
+        return major != null && major in 29..31
+    }
     val ppvCount = channels.count(::isPpvChannel)
     var ppvExpanded by remember { mutableStateOf(false) }
     val drawerRows = remember(channels, ppvExpanded) {
