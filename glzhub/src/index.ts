@@ -1992,13 +1992,16 @@ async function listEventChannels(request: Request, env: Env): Promise<Response> 
 
 async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChannel[]): Promise<unknown> {
   const existingRows = await supabaseJson(env,
-    "/rest/v1/event_channels?select=id,tvg_id"
+    "/rest/v1/event_channels?select=id,tvg_id,status"
   ).catch(() => []) as Record<string, unknown>[];
 
-  const existingMap = new Map<string, string>();
+  const existingMap = new Map<string, { id: string; status: string }>();
   if (Array.isArray(existingRows)) {
     for (const row of existingRows) {
-      if (row.tvg_id && row.id) existingMap.set(String(row.tvg_id), String(row.id));
+      if (row.tvg_id && row.id) existingMap.set(String(row.tvg_id), {
+        id: String(row.id),
+        status: String(row.status || "active")
+      });
     }
   }
 
@@ -2007,7 +2010,7 @@ async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChanne
   const toInsert: Record<string, unknown>[] = [];
 
   for (const item of renumbered) {
-    const existingId = existingMap.get(item.tvgId);
+    const existing = existingMap.get(item.tvgId);
     const payload = {
       tvg_id: item.tvgId,
       tvg_name: item.tvgName,
@@ -2021,13 +2024,13 @@ async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChanne
       end_time: item.endTime,
       pre_buffer_hours: 1,
       post_buffer_hours: 2,
-      status: "active",
+      status: existing?.status === "disabled" ? "disabled" : "active",
       auto_ingested: true,
       updated_at: nowIso
     };
 
-    if (existingId) {
-      toUpdate.push({ id: existingId, body: payload });
+    if (existing) {
+      toUpdate.push({ id: existing.id, body: payload });
     } else {
       toInsert.push(payload);
     }
@@ -2292,6 +2295,7 @@ async function updateEventChannel(request: Request, env: Env, eventId: string): 
     }
   ) as Record<string, unknown>[];
 
+  await pushConfigUpdateToAllDevices(env);
   return json({ event: rows[0] });
 }
 
