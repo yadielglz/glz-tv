@@ -1538,15 +1538,6 @@ function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now())
   const sportLeague = String(event.sport_league || "").toUpperCase();
   const fullText = `${sportLeague} ${title} ${group} ${tvgId}`;
 
-  // For auto-ingested channels, strictly target MLB & NFL ONLY!
-  // Manually created channels (auto_ingested === false) bypass league filtering.
-  if (event.auto_ingested !== false) {
-    const isMlbOrNfl = /\b(MLB|NFL)\b/i.test(fullText) ||
-                       /^(MLB|NFL):/i.test(title) ||
-                       /\b(BASEBALL|FOOTBALL)\b/i.test(fullText);
-    if (!isMlbOrNfl) return false;
-  }
-
   // Check offline / placeholder / German feed keywords
   const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(group) ||
                    /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(tvgId) ||
@@ -1593,7 +1584,7 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
     const winEnd = new Date(endTime.getTime() + postBuffer);
 
     channelNodes += `  <channel id="${tvgId}">\n`;
-    channelNodes += `    <display-name>SPORTS PPV</display-name>\n`;
+    channelNodes += `    <display-name>${eventTitle}</display-name>\n`;
     channelNodes += `    <display-name>CH ${channelNumber}</display-name>\n`;
     if (logoUrl) {
       channelNodes += `    <icon src="${logoUrl}" />\n`;
@@ -1859,15 +1850,9 @@ function isLiveEventChannel(groupTitle: string, title: string, tvgId: string): b
   const isPlaceholder = /\b(WILL START SOON|OFFLINE|OFF-LINE|NO EVENT|STREAM UNAVAILABLE|TEST|EMPTY|FEED OFFLINE|STANDBY|CHANNEL UNAVAILABLE|TEMPORARILY OFFLINE|NOT AVAILABLE|NO BROADCAST|NO SIGNAL|STREAM DOWN|OFF AIR|SIGN OFF|CHANNEL OFFLINE|STREAMING SOON|EVENT ENDED|FEED DOWN|TBD)\b/i.test(fullText);
   if (isPlaceholder) return false;
 
-  // 3. Strictly target MLB & NFL ONLY!
-  const isMlbOrNfl = /\b(MLB|NFL)\b/i.test(fullText) ||
-                     /^(MLB|NFL):/i.test(titleUpper) ||
-                     /\b(BASEBALL|FOOTBALL)\b/i.test(fullText);
-  if (!isMlbOrNfl) return false;
-
-  // 4. Match explicit Event/PPV groups or matchup patterns (vs / @)
-  const isEventGroup = groupUpper.includes("EVENTS") || groupUpper.includes("PPV") || groupUpper.includes("SPORTS");
-  const containsMatchup = /\b(vs\.?|@)\b/i.test(titleUpper) || /\b(vs\.?|@)\b/i.test(tvgIdUpper);
+  // Match explicit event/PPV groups or a matchup across any sport.
+  const isEventGroup = groupUpper.includes("EVENT") || groupUpper.includes("PPV");
+  const containsMatchup = /\bvs\.?\b|\s@\s/i.test(titleUpper) || /\bvs\.?\b|\s@\s/i.test(tvgIdUpper);
 
   return containsMatchup || isEventGroup;
 }
@@ -2084,7 +2069,7 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
     });
     if (!response.ok) throw new Error(`Provider feed returned HTTP status ${response.status}`);
     const text = await response.text();
-    const parsed = parseConMeM3u(text);
+    const parsed = parseAllProviderStreams(text);
 
     if (parsed.length === 0) return json({ ok: true, ingestedCount: 0, events: [] });
 
@@ -2095,10 +2080,11 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
         uniqueMap.set(item.tvgId, item);
       }
     }
-    const deduplicated = sortEventChannels(Array.from(uniqueMap.values()));
-    const renumbered = assignCategoryChannelNumbers(deduplicated);
-
-    const result = await saveIngestedEventChannels(env, renumbered);
+    const existing = await supabaseJson(env, "/rest/v1/event_channels?select=tvg_id") as Record<string, unknown>[];
+    const managedIds = new Set(existing.map((row) => String(row.tvg_id)));
+    const deduplicated = sortEventChannels(Array.from(uniqueMap.values()).filter((item) => managedIds.has(item.tvgId)));
+    if (!deduplicated.length) return json({ ok: true, ingestedCount: 0, events: [] });
+    const result = await saveIngestedEventChannels(env, deduplicated);
     await pushConfigUpdateToAllDevices(env);
     return json({ ok: true, ingestedCount: deduplicated.length, events: result });
   } catch (err) {
@@ -2140,6 +2126,11 @@ function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
       continue;
     }
 
+    if (!isLiveEventChannel(groupTitle, title, tvgId)) {
+      pendingExtInf = null;
+      continue;
+    }
+
     const parsedTimes = parseInlineEventTime(title);
     const sportLeague = detectSportLeague(tvgId, groupTitle, title);
     const logoUrl = resolveEventLogoUrl(sportLeague, title, tvgName) ?? scrapedLogoUrl;
@@ -2172,7 +2163,7 @@ async function fetchProviderFeed(request: Request, env: Env): Promise<Response> 
   });
   if (!response.ok) throw new Error(`Provider feed returned HTTP status ${response.status}`);
   const text = await response.text();
-  const allParsed = parseAllProviderStreams(text);
+  const allParsed = [...new Map(parseAllProviderStreams(text).map((item) => [item.tvgId, item])).values()];
 
   const existing = await supabaseJson(env, "/rest/v1/event_channels?select=tvg_id").catch(() => []) as Record<string, unknown>[];
   const existingSet = new Set((existing || []).map(row => String(row.tvg_id)));
@@ -2230,6 +2221,70 @@ async function injectSingleStream(request: Request, env: Env): Promise<Response>
 
   await pushConfigUpdateToAllDevices(env);
   return json({ ok: true, event: rows[0] || payload });
+}
+
+async function applyProviderEventSelection(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const input = await body(request);
+  if (!Array.isArray(input.tvgIds) || input.tvgIds.length > 500 ||
+      input.tvgIds.some((id) => typeof id !== "string" || id.length > 120)) {
+    throw new Error("Invalid event selection");
+  }
+  const selectedIds = new Set(input.tvgIds as string[]);
+  if (selectedIds.size === 0) throw new Error("Invalid event selection: choose at least one event");
+
+  // Resolve IDs against a fresh provider response; never trust client-supplied stream URLs.
+  const source = await fetch("https://starlite.best/api/list/mygbb8/167848", {
+    headers: { "user-agent": "Mozilla/5.0 (GLZ-Hub-PPV/1.0)" }
+  });
+  if (!source.ok) throw new Error(`Provider feed returned HTTP ${source.status}`);
+  const available = [...new Map(parseAllProviderStreams(await source.text()).map((item) => [item.tvgId, item])).values()];
+  const feedIds = new Set(available.map((item) => item.tvgId));
+  if ([...selectedIds].some((id) => !feedIds.has(id))) {
+    throw new Error("Invalid event selection: provider feed changed; reload and review events");
+  }
+
+  const existing = await supabaseJson(env, "/rest/v1/event_channels?select=id,tvg_id,auto_ingested") as Record<string, unknown>[];
+  const nowIso = new Date().toISOString();
+  const selected = available.filter((item) => selectedIds.has(item.tvgId));
+  const rows = selected.map((item) => ({
+    tvg_id: item.tvgId,
+    tvg_name: item.tvgName,
+    title: item.title,
+    sport_league: item.sportLeague,
+    group_title: item.groupTitle,
+    logo_url: item.logoUrl || null,
+    stream_url: item.streamUrl,
+    channel_number: item.channelNumber,
+    start_time: item.startTime,
+    end_time: item.endTime,
+    pre_buffer_hours: 1,
+    post_buffer_hours: 2,
+    status: "active",
+    auto_ingested: true,
+    is_online: true,
+    updated_at: nowIso
+  }));
+  // Upsert the selected provider events before disabling previous selections.
+  await supabaseJson(env, "/rest/v1/event_channels?on_conflict=tvg_id", {
+    method: "POST",
+    headers: { prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify(rows)
+  });
+  const toDisable = existing
+    .filter((row) => !selectedIds.has(String(row.tvg_id)) &&
+      (row.auto_ingested !== false || feedIds.has(String(row.tvg_id))))
+    .map((row) => String(row.id));
+  for (let i = 0; i < toDisable.length; i += 50) {
+    const ids = toDisable.slice(i, i + 50).map((id) => encodeURIComponent(String(id))).join(",");
+    await supabaseJson(env, `/rest/v1/event_channels?id=in.(${ids})`, {
+      method: "PATCH", body: JSON.stringify({ status: "disabled", updated_at: nowIso })
+    });
+  }
+
+  // The XMLTV export injects selected events on each request; queue TVs to fetch it again.
+  const pushedDevices = await pushConfigUpdateToAllDevices(env);
+  return json({ ok: true, selectedCount: selected.length, removedCount: toDisable.length, pushedDevices });
 }
 
 async function createEventChannel(request: Request, env: Env): Promise<Response> {
@@ -2378,10 +2433,10 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
     let activeIndex = 1;
     for (const event of sortedEvents) {
       if (!isEventActiveAndValid(event, now)) continue;
-      const channelDisplayName = "SPORTS PPV";
+      const channelDisplayName = cleanText(event.title || "SPORTS PPV");
         const mediaUrl = String(event.stream_url || "");
         const tvgId = event.tvg_id ? ` tvg-id="${cleanAttribute(event.tvg_id)}"` : "";
-        const tvgName = ` tvg-name="SPORTS PPV"`;
+        const tvgName = ` tvg-name="${cleanAttribute(channelDisplayName)}"`;
         const chnoValue = String(event.channel_number || `30-${String(activeIndex).padStart(2, '0')}`);
         const tvgChno = ` tvg-chno="${cleanAttribute(chnoValue)}"`;
         const tvgLogo = event.logo_url ? ` tvg-logo="${cleanAttribute(event.logo_url)}"` : "";
@@ -2480,6 +2535,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (path === "/api/v1/admin/event-channels" && request.method === "GET") return listEventChannels(request, env);
   if (path === "/api/v1/admin/event-channels/provider-feed" && request.method === "GET") return fetchProviderFeed(request, env);
   if (path === "/api/v1/admin/event-channels/inject-single" && request.method === "POST") return injectSingleStream(request, env);
+  if (path === "/api/v1/admin/event-channels/apply-selection" && request.method === "POST") return applyProviderEventSelection(request, env);
   if (path === "/api/v1/admin/event-channels/ingest" && request.method === "POST") return ingestEventChannels(request, env);
   if (path === "/api/v1/admin/event-channels/check-health" && request.method === "POST") return checkEventChannelsHealth(request, env);
   if (path === "/api/v1/admin/event-channels" && request.method === "POST") return createEventChannel(request, env);
@@ -2558,15 +2614,16 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
     });
     if (response.ok) {
       const text = await response.text();
-      const parsed = parseConMeM3u(text);
+      const parsed = parseAllProviderStreams(text);
       if (parsed.length > 0) {
         const uniqueMap = new Map<string, typeof parsed[0]>();
         for (const item of parsed) {
           if (!uniqueMap.has(item.tvgId)) uniqueMap.set(item.tvgId, item);
         }
-        const deduplicated = sortEventChannels(Array.from(uniqueMap.values()));
-        const renumbered = assignCategoryChannelNumbers(deduplicated);
-        await saveIngestedEventChannels(env, renumbered).catch((err) => console.error("Auto-ingest save error:", err));
+        const existing = await supabaseJson(env, "/rest/v1/event_channels?select=tvg_id") as Record<string, unknown>[];
+        const managedIds = new Set(existing.map((row) => String(row.tvg_id)));
+        const deduplicated = sortEventChannels(Array.from(uniqueMap.values()).filter((item) => managedIds.has(item.tvgId)));
+        if (deduplicated.length) await saveIngestedEventChannels(env, deduplicated).catch((err) => console.error("Auto-ingest save error:", err));
         ingested = deduplicated.length;
       }
     }
