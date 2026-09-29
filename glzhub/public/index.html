@@ -27,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=2.3.1">
+  <link rel="stylesheet" href="/styles.css?v=2.3.2">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 </head>
 
@@ -467,7 +467,7 @@
             </div>
           </div>
           <div class="studio-help">
-            <span><strong>Click to edit</strong> channel numbers and names directly in the table.</span>
+            <span><strong>Click to edit</strong> channel numbers and names. Changing CH automatically saves the lineup order.</span>
             <span><strong>Preview stream</strong> test any live HLS stream or video feed right in your browser.</span>
             <span><strong>EPG editor</strong> imports XML/XML.GZ or fetches a guide from epg.best and publishes it with the M3U.</span>
           </div>
@@ -1185,7 +1185,7 @@
         <label>EPG ID (tvg-id)<input id="itemTvgId" maxlength="120" placeholder="WKAQ.us"></label>
         <label>Channel Number (tvg-chno)<input id="itemTvgChno" maxlength="20" placeholder="2"></label>
         <label>Group<input id="itemGroup" maxlength="100" placeholder="Local / News / Sports"></label>
-        <label>Position / Order<input id="itemPosition" type="number" value="0"></label>
+        <p class="field-help wide">Channel Number sets the lineup order automatically. Channels without a number appear after numbered channels.</p>
         <label class="wide">Stream URL<input id="itemMediaUrl" type="url" required placeholder="https://nbculocallive.akamaized.net/…/master.m3u8"></label>
         <label class="wide">Channel Logo URL (tvg-logo)<input id="itemTvgLogo" type="url" placeholder="https://static.epg.best/us/WKAQ.us.png"></label>
         <label class="check wide"><input id="itemHidden" type="checkbox"> Hide this channel from the published lineup</label>
@@ -1206,7 +1206,7 @@
     <span id="toastMessage" class="toast-msg">Notification</span>
   </div>
 
-  <script type="module" src="/app.js?v=2.3.1"></script>
+  <script type="module" src="/app.js?v=2.3.2"></script>
 </body>
 
 </html>

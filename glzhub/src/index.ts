@@ -1516,6 +1516,7 @@ function escapeXml(value: unknown): string {
 }
 
 function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now()): boolean {
+  if (isRegularSportsChannel(String(event.title || ""), String(event.tvg_name || ""), String(event.tvg_id || ""))) return false;
   if (event.is_online === false || String(event.is_online) === "false") return false;
   const status = String(event.status || "active");
   if (status === "disabled" || status === "expired") return false;
@@ -1833,7 +1834,19 @@ function resolveEventLogoUrl(sportLeague: string, title: string, tvgName: string
   return DEFAULT_EVENT_LOGOS[sportLeague] ?? null;
 }
 
-function isLiveEventChannel(groupTitle: string, title: string, tvgId: string): boolean {
+function isRegularSportsChannel(title: string, tvgName = "", tvgId = ""): boolean {
+  const regularName = /^(?:NBA\s*(?:TV|NETWORK)|MLB\s*(?:TV|NETWORK|STRIKE\s*ZONE)|NFL\s*(?:TV|NETWORK|RED\s*ZONE)|NHL\s*(?:TV|NETWORK)|MLS\s*(?:TV|SEASON\s*PASS)|ESPN(?:\s*[234U]|\s*NEWS|\s*DEPORTES)?|FOX\s*SPORTS\s*[12]|FS[12]|CBS\s*SPORTS\s*NETWORK|GOLF\s*CHANNEL|TENNIS\s*CHANNEL|SKY\s*SPORTS(?:\s+(?:FOOTBALL|MAIN\s*EVENT|PREMIER\s*LEAGUE|CRICKET|F1|ARENA|GOLF|TENNIS))?)(?:\s+(?:HD|FHD|UHD|4K|SD|1080P|720P|24\s*7|EAST|WEST|US|USA))*$/;
+  return [title, tvgName, tvgId].some((value) => {
+    const name = String(value || "").toUpperCase()
+      .replace(/^(?:US|USA|UK|CA|CANADA)\s*[:|]\s*/, "")
+      .replace(/[._|:\[\]()/]+/g, " ")
+      .replace(/\s+/g, " ").trim();
+    return regularName.test(name);
+  });
+}
+
+function isLiveEventChannel(groupTitle: string, title: string, tvgId: string, tvgName = ""): boolean {
+  if (isRegularSportsChannel(title, tvgName, tvgId)) return false;
   const groupUpper = groupTitle.toUpperCase();
   const titleUpper = title.toUpperCase();
   const tvgIdUpper = tvgId.toUpperCase();
@@ -1885,7 +1898,7 @@ function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
     const scrapedLogoUrl = tvgLogoMatch ? tvgLogoMatch[1] : "";
 
     // Strictly filter: only ingest live event and live sports streams!
-    if (!isLiveEventChannel(groupTitle, title, tvgId)) {
+    if (!isLiveEventChannel(groupTitle, title, tvgId, tvgName)) {
       pendingExtInf = null;
       continue;
     }
@@ -1972,7 +1985,7 @@ async function listEventChannels(request: Request, env: Env): Promise<Response> 
   const rows = await supabaseJson(env,
     "/rest/v1/event_channels?select=*"
   ) as Record<string, unknown>[];
-  return json({ events: sortEventChannels(rows || []) });
+  return json({ events: sortEventChannels((rows || []).filter((row) => !isRegularSportsChannel(String(row.title || ""), String(row.tvg_name || ""), String(row.tvg_id || "")))) });
 }
 
 async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChannel[]): Promise<unknown> {
@@ -2126,7 +2139,7 @@ function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
       continue;
     }
 
-    if (!isLiveEventChannel(groupTitle, title, tvgId)) {
+    if (!isLiveEventChannel(groupTitle, title, tvgId, tvgName)) {
       pendingExtInf = null;
       continue;
     }
@@ -2182,6 +2195,9 @@ async function injectSingleStream(request: Request, env: Env): Promise<Response>
   const stream = input.stream as ParsedEventChannel;
   if (!stream || !stream.title || !stream.streamUrl) {
     throw new Error("Invalid stream payload");
+  }
+  if (isRegularSportsChannel(stream.title, stream.tvgName, stream.tvgId)) {
+    throw new Error("Regular sports channels belong in the standard TV lineup, not Live Events.");
   }
 
   if (!stream.channelNumber) {

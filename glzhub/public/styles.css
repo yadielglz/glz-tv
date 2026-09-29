@@ -867,6 +867,33 @@ p {
   margin-bottom: 0;
 }
 
+body.studio-fullscreen-open { overflow: hidden; }
+.studio-playlist-card.studio-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  margin: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--panel-bg-solid);
+}
+.studio-playlist-card.studio-fullscreen > :last-child {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.studio-playlist-card.studio-fullscreen .studio-table-wrap {
+  flex: 1;
+  max-height: none;
+}
+.studio-playlist-card.studio-fullscreen .studio-filter input.playlist-filter {
+  max-width: 720px;
+  width: 100%;
+}
+
 .studio-card-head {
   display: flex;
   justify-content: space-between;

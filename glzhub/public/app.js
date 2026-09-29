@@ -1423,6 +1423,55 @@ async function loadPlaylists() {
   }
 }
 
+let fullscreenPlaylistId = null;
+
+function setPlaylistFullscreen(id = null) {
+  fullscreenPlaylistId = id;
+  document.body.classList.toggle("studio-fullscreen-open", Boolean(id));
+  $$(".studio-playlist-card").forEach((card) => {
+    const expanded = card.dataset.playlistId === id;
+    card.classList.toggle("studio-fullscreen", expanded);
+    const button = card.querySelector(".fullscreen-playlist");
+    if (button) {
+      button.textContent = expanded ? "✕ Close editor" : "⛶ Full screen editor";
+      button.setAttribute("aria-expanded", String(expanded));
+    }
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && fullscreenPlaylistId && !document.querySelector("dialog[open]")) {
+    setPlaylistFullscreen();
+  }
+});
+
+function channelNumberParts(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const parts = text.match(/^\d+(?:\s*[-._:]\s*\d+)*$/)?.[0].split(/\s*[-._:]\s*/).map(Number);
+  return parts || null;
+}
+
+function compareChannelNumbers(left, right) {
+  const a = channelNumberParts(left);
+  const b = channelNumberParts(right);
+  if (!a || !b) return a ? -1 : b ? 1 : 0;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0);
+  }
+  return 0;
+}
+
+async function orderPlaylistByChannelNumber(playlist) {
+  const current = [...(playlist.playlist_items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+  const sorted = [...current].sort((a, b) => compareChannelNumbers(a.metadata?.tvg_chno, b.metadata?.tvg_chno));
+  if (sorted.every((item, index) => item.id === current[index].id)) return false;
+  await api(`/api/v1/admin/playlists/${playlist.id}/reorder`, {
+    method: "PATCH", body: JSON.stringify({ itemIds: sorted.map((item) => item.id) })
+  });
+  return true;
+}
+
 function renderPlaylists() {
   const container = $("#playlistList");
   const empty = $("#studioEmpty");
@@ -1459,6 +1508,8 @@ function renderPlaylists() {
           <button type="button" class="secondary push-playlist" data-id="${pl.id}">↻ Push to TVs</button>
           <button type="button" class="secondary toggle-playlist" data-id="${pl.id}">${pl.is_published ? "Unpublish" : "Publish"}</button>
           <button type="button" class="secondary edit-playlist" data-id="${pl.id}">Settings</button>
+          <button type="button" class="secondary sort-playlist-ch" data-id="${pl.id}">⇅ Sort by CH</button>
+          <button type="button" class="secondary fullscreen-playlist" data-id="${pl.id}" aria-expanded="${fullscreenPlaylistId === pl.id}">${fullscreenPlaylistId === pl.id ? "✕ Close editor" : "⛶ Full screen editor"}</button>
           <button type="button" class="primary add-channel-item" data-id="${pl.id}">＋ Channel</button>
           <button type="button" class="danger-button delete-playlist" data-id="${pl.id}" style="margin:0;">Delete</button>
         </div>
@@ -1508,6 +1559,7 @@ function renderPlaylists() {
     const wrap = container.querySelector(`.studio-playlist-card[data-playlist-id="${playlistId}"] .studio-table-wrap`);
     if (wrap) { wrap.scrollTop = position.top; wrap.scrollLeft = position.left; }
   });
+  setPlaylistFullscreen(fullscreenPlaylistId && state.playlists.some((pl) => pl.id === fullscreenPlaylistId) ? fullscreenPlaylistId : null);
   requestAnimationFrame(() => window.scrollTo(pageScroll.x, pageScroll.y));
 
   $$(".preview-channel-stream").forEach((btn) => btn.addEventListener("click", (e) => {
@@ -1515,6 +1567,22 @@ function renderPlaylists() {
     previewStream(btn.dataset.url, btn.dataset.title, false);
   }));
   $$(".edit-playlist").forEach((btn) => btn.addEventListener("click", () => openPlaylistDialog(btn.dataset.id)));
+  $$(".sort-playlist-ch").forEach((btn) => btn.addEventListener("click", async () => {
+    const playlist = state.playlists.find((pl) => pl.id === btn.dataset.id);
+    if (!playlist) return;
+    btn.disabled = true;
+    try {
+      const changed = await orderPlaylistByChannelNumber(playlist);
+      if (changed) await loadPlaylists();
+      toast(changed ? "Lineup sorted and saved by CH." : "Lineup is already in CH order.");
+    } catch (error) {
+      btn.disabled = false;
+      toast(error.message);
+    }
+  }));
+  $$(".fullscreen-playlist").forEach((btn) => btn.addEventListener("click", () => {
+    setPlaylistFullscreen(fullscreenPlaylistId === btn.dataset.id ? null : btn.dataset.id);
+  }));
   $$(".add-channel-item").forEach((btn) => btn.addEventListener("click", () => {
     $("#playlistId").value = btn.dataset.id;
     openPlaylistItemDialog();
@@ -1604,8 +1672,14 @@ async function saveInlineChannelField(input) {
     }
     const result = await api(`/api/v1/admin/playlists/${playlist.id}/items/${item.id}`, { method: "PATCH", body: JSON.stringify(payload) });
     if (result.item) Object.assign(item, result.item);
+    const reordered = input.classList.contains("inline-channel-number") && await orderPlaylistByChannelNumber(playlist);
     input.dataset.original = value;
     input.disabled = false;
+    if (reordered) {
+      await loadPlaylists();
+      toast("Channel number and lineup order saved.");
+      return;
+    }
     const row = input.closest(".studio-channel-row");
     if (row) {
       const meta = item.metadata || {};
@@ -1616,6 +1690,7 @@ async function saveInlineChannelField(input) {
     input.value = input.dataset.original;
     input.disabled = false;
     toast(error.message);
+    await loadPlaylists();
   }
 }
 
@@ -1777,6 +1852,8 @@ $("#m3uFileInput")?.addEventListener("change", async (event) => {
     });
     toast(`${result.imported} channels imported.`);
     await loadPlaylists();
+    const importedPlaylist = state.playlists.find((pl) => pl.id === playlistId);
+    if (importedPlaylist && await orderPlaylistByChannelNumber(importedPlaylist)) await loadPlaylists();
   } catch (error) {
     toast(error.message);
   }
@@ -1944,7 +2021,6 @@ function openPlaylistItemDialog(playlistId = $("#playlistId").value, itemId = nu
   $("#itemMediaUrl").value = item?.media_url || "";
   $("#itemTvgLogo").value = metadata.tvg_logo || "";
   $("#itemHidden").checked = metadata.hidden === true;
-  $("#itemPosition").value = String(item?.position || (playlist?.playlist_items?.length || 0) + 1);
   $("#playlistItemDialogTitle").textContent = item ? "Edit channel" : "Add channel to playlist";
   $("#deleteCurrentChannel").classList.toggle("hidden", !item);
   $("#itemError").textContent = "";
@@ -1967,7 +2043,7 @@ $("#playlistItemForm")?.addEventListener("submit", async (event) => {
   const payload = {
     title: $("#itemTitle").value,
     mediaUrl: $("#itemMediaUrl").value,
-    position: Number($("#itemPosition").value || 0),
+    position: itemId ? undefined : (state.playlists.find((pl) => pl.id === playlistId)?.playlist_items?.length || 0) + 1,
     metadata: {
       tvg_id: $("#itemTvgId").value || null,
       tvg_chno: $("#itemTvgChno").value || null,
@@ -1982,10 +2058,17 @@ $("#playlistItemForm")?.addEventListener("submit", async (event) => {
       ? `/api/v1/admin/playlists/${playlistId}/items/${itemId}`
       : `/api/v1/admin/playlists/${playlistId}/items`;
     await api(path, { method: itemId ? "PATCH" : "POST", body: JSON.stringify(payload) });
-    $("#playlistItemDialog").close();
-    toast(itemId ? "Channel updated." : "Channel added to playlist.");
     await loadPlaylists();
-    const updatedPl = state.playlists?.find((p) => p.id === playlistId);
+    let updatedPl = state.playlists?.find((p) => p.id === playlistId);
+    if (updatedPl) {
+      const reordered = await orderPlaylistByChannelNumber(updatedPl);
+      if (reordered) {
+        await loadPlaylists();
+        updatedPl = state.playlists?.find((p) => p.id === playlistId);
+      }
+    }
+    $("#playlistItemDialog").close();
+    toast(itemId ? "Channel updated and lineup ordered by CH." : "Channel added and lineup ordered by CH.");
     if (updatedPl) renderPlaylistItems(updatedPl);
   } catch (error) {
     $("#itemError").textContent = error.message;
@@ -2951,4 +3034,3 @@ $("#addEventChannelBtn")?.addEventListener("click", () => openEventDialog());
 $$("[data-close-event]").forEach((btn) => btn.addEventListener("click", () => $("#eventDialog").close()));
 $("#eventForm")?.addEventListener("submit", saveEventChannel);
 $("#deleteEventBtn")?.addEventListener("click", () => deleteEventChannel($("#eventId").value));
-
