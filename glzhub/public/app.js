@@ -2645,7 +2645,7 @@ function renderEventChannels() {
         <div class="card-main-info">
           <div class="group-glyph">⚡</div>
           <div class="card-details">
-            <h4>${chnoBadge} ${escapeHtml(event.title)} ${leagueBadge}</h4>
+            <h4>${chnoBadge} <span class="event-title">${escapeHtml(event.title)}</span> ${leagueBadge}</h4>
             <p>${escapeHtml(event.group_title || "Major League Sports (Events)")} · tvg-id: <code>${escapeHtml(event.tvg_id)}</code></p>
             <div class="card-meta-pills" style="margin-top:6px;">
               ${statusBadge}
@@ -2656,6 +2656,7 @@ function renderEventChannels() {
           </div>
         </div>
         <div class="card-action-bar">
+          <button type="button" class="secondary guide-event-btn" data-id="${event.id}" aria-pressed="${event.status !== "disabled"}">${event.status === "disabled" ? "Add to guide" : "Remove from guide"}</button>
           <button type="button" class="secondary extend-event-btn" data-id="${event.id}">+1h Window</button>
           <button type="button" class="secondary edit-event-btn" data-id="${event.id}">Edit</button>
           <button type="button" class="danger-button delete-event-btn" data-id="${event.id}">Delete</button>
@@ -2664,7 +2665,8 @@ function renderEventChannels() {
     `;
   }).join("");
 
-  $$(".edit-event-btn").forEach((btn) => btn.addEventListener("click", () => openEventDialog(btn.dataset.id)));
+  $(".guide-event-btn").forEach((btn) => btn.addEventListener("click", () => toggleEventGuide(btn.dataset.id, btn)));
+  $(".edit-event-btn").forEach((btn) => btn.addEventListener("click", () => openEventDialog(btn.dataset.id)));
   $$(".delete-event-btn").forEach((btn) => btn.addEventListener("click", () => deleteEventChannel(btn.dataset.id)));
   $$(".extend-event-btn").forEach((btn) => btn.addEventListener("click", () => extendEventWindow(btn.dataset.id)));
 }
@@ -2844,6 +2846,24 @@ async function checkAllStreamHealth() {
     showToast(`Health check failed: ${err.message}`, "error");
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+async function toggleEventGuide(eventId, button) {
+  const event = state.events.find((item) => item.id === eventId);
+  if (!event || button.disabled) return;
+  button.disabled = true;
+  const enable = event.status === "disabled";
+  try {
+    await api(`/api/v1/admin/event-channels/${eventId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: enable ? "active" : "disabled" })
+    });
+    showToast(enable ? "Event added to the TV guide." : "Event removed from the TV guide.", "success");
+    await loadEventChannels();
+  } catch (error) {
+    showToast(error.message, "error");
+    button.disabled = false;
   }
 }
 
