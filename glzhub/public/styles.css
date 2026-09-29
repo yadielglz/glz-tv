@@ -2575,3 +2575,24 @@ dialog::backdrop {
     justify-content: flex-start;
   }
 }
+
+.provider-flow-dialog { width: min(94vw, 940px); max-width: 940px; }
+.provider-flow-body { padding-top: 12px; }
+.provider-flow-body h4 { font-size: 18px; margin: 8px 0; }
+.provider-sport-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 18px 0; }
+.provider-sport-choice, .provider-stream-choice {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md);
+  background: var(--panel-card); cursor: pointer;
+}
+.provider-sport-choice:has(input:checked), .provider-stream-choice:has(input:checked) {
+  border-color: var(--accent); background: var(--accent-soft);
+}
+.provider-sport-choice input, .provider-stream-choice input { width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
+.provider-stream-choice { align-items: flex-start; min-width: 0; }
+.provider-stream-choice span { min-width: 0; overflow-wrap: anywhere; }
+.provider-stream-choice small { display: block; color: var(--text-muted); margin-top: 4px; }
+.provider-event-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.provider-event-tools input { flex: 1 1 260px; min-width: 0; }
+.provider-streams-list { display: grid; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.provider-flow-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
