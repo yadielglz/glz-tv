@@ -1870,6 +1870,15 @@ function isLiveEventChannel(groupTitle: string, title: string, tvgId: string, tv
   return containsMatchup || isEventGroup;
 }
 
+function m3uTitleSeparator(line: string): number {
+  let inQuotes = false;
+  for (let index = 0; index < line.length; index++) {
+    if (line[index] === '"') inQuotes = !inQuotes;
+    else if (line[index] === "," && !inQuotes) return index;
+  }
+  return -1;
+}
+
 function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
   const lines = m3uText.split(/\r?\n/);
   const events: ParsedEventChannel[] = [];
@@ -1889,7 +1898,7 @@ function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
     const tvgNameMatch = pendingExtInf.match(/tvg-name="([^"]+)"/i);
     const groupTitleMatch = pendingExtInf.match(/group-title="([^"]+)"/i);
     const tvgLogoMatch = pendingExtInf.match(/tvg-logo="([^"]+)"/i);
-    const commaIndex = pendingExtInf.indexOf(",");
+    const commaIndex = m3uTitleSeparator(pendingExtInf);
     const title = commaIndex >= 0 ? pendingExtInf.substring(commaIndex + 1).trim() : "Live Event";
 
     const tvgId = tvgIdMatch ? tvgIdMatch[1] : `event.${events.length + 1}`;
@@ -2124,7 +2133,7 @@ function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
     const tvgNameMatch = pendingExtInf.match(/tvg-name="([^"]+)"/i);
     const groupTitleMatch = pendingExtInf.match(/group-title="([^"]+)"/i);
     const tvgLogoMatch = pendingExtInf.match(/tvg-logo="([^"]+)"/i);
-    const commaIndex = pendingExtInf.indexOf(",");
+    const commaIndex = m3uTitleSeparator(pendingExtInf);
     const title = commaIndex >= 0 ? pendingExtInf.substring(commaIndex + 1).trim() : "Live Event";
 
     const tvgId = tvgIdMatch ? tvgIdMatch[1] : `event.${events.length + 1}`;

@@ -6,6 +6,24 @@ import org.junit.Test
 
 class M3uParserTest {
     @Test
+    fun parsesChannelNameAfterCommaInQuotedLogoUrl() {
+        val channels = M3uParser.parse(
+            """
+                #EXTINF:-1 tvg-id="music.tropical" tvg-logo="https://example.com/h_1330,al_c/894cc4.png" group-title="Music",Music Choice : Tropical
+                https://example.com/tropical.m3u8
+                #EXTINF:-1 tvg-id="music.jazz" tvg-logo="https://example.com/h_1330,al_c/894cc5.png" group-title="Music",Music Choice : Jazz
+                https://example.com/jazz.m3u8
+            """.trimIndent(),
+            "https://example.com/list.m3u",
+            emptyMap()
+        )
+
+        assertEquals(listOf("Music Choice : Tropical", "Music Choice : Jazz"), channels.map { it.name })
+        assertEquals("Music", channels.first().group)
+        assertEquals("https://example.com/h_1330,al_c/894cc4.png", channels.first().logoUrl)
+    }
+
+    @Test
     fun parsesAttributesRelativeUrlsAndPerChannelHeaders() {
         val channels = M3uParser.parse(
             """
@@ -101,4 +119,3 @@ class M3uParserTest {
         assertEquals("Sports HD", channel.name)
     }
 }
-

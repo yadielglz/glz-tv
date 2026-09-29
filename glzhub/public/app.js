@@ -1770,6 +1770,15 @@ $("#guideForm")?.addEventListener("submit", async (event) => {
 $("#downloadGuideXml")?.addEventListener("click", () => downloadGuide($("#guidePlaylistId").value, false).catch((error) => toast(error.message)));
 $("#downloadGuideGz")?.addEventListener("click", () => downloadGuide($("#guidePlaylistId").value, true).catch((error) => toast(error.message)));
 
+function m3uTitleSeparator(line) {
+  let inQuotes = false;
+  for (let index = 0; index < line.length; index++) {
+    if (line[index] === '"') inQuotes = !inQuotes;
+    else if (line[index] === "," && !inQuotes) return index;
+  }
+  return -1;
+}
+
 function parseM3u(text) {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
   const items = [];
@@ -1777,7 +1786,7 @@ function parseM3u(text) {
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (line.startsWith("#EXTINF:")) {
-      const comma = line.indexOf(",");
+      const comma = m3uTitleSeparator(line);
       const attributes = comma >= 0 ? line.slice(0, comma) : line;
       const metadata = {};
       for (const match of attributes.matchAll(/([\w-]+)="([^"]*)"/g)) {
