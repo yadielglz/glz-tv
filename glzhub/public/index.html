@@ -722,11 +722,11 @@
             <div>
               <div class="eyebrow">LIVE EVENT CHANNELS &amp; TEMPORARY SCHEDULE</div>
               <h2>Temporary Live Event Channels</h2>
-              <p class="field-help">Auto-syncs live event streams from your provider (<code>starlite.best</code>). Schedules game active windows (game start ± 3h buffer) and injects XMLTV EPG data.</p>
+              <p class="field-help">Choose provider PPV events for the guide. Selected streams stay current, appear during their scheduled window, and show the event name in the XMLTV EPG.</p>
             </div>
             <div class="header-actions">
-              <button id="browseProviderStreamsBtn" type="button" class="primary" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🔍 <span>Browse &amp; Inject Streams</span></button>
-              <button id="syncConMeFeedBtn" type="button" class="secondary">⚡ <span>Sync Feed</span></button>
+              <button id="browseProviderStreamsBtn" type="button" class="primary" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🔍 <span>Choose PPV Events</span></button>
+              <button id="syncConMeFeedBtn" type="button" class="secondary">⚡ <span>Refresh Selected</span></button>
               <button id="checkStreamHealthBtn" type="button" class="secondary">🩺 <span>Check Stream Health</span></button>
               <button id="addEventChannelBtn" type="button" class="secondary">＋ <span>Add Custom Event</span></button>
             </div>
@@ -774,10 +774,10 @@
           <div id="eventsEmpty" class="empty hidden">
             <div class="empty-icon">⚡</div>
             <h3>No Live Events Scheduled</h3>
-            <p>Click "Sync Provider Feed" or "Browse &amp; Inject Streams" to discover live MLB, NFL, NBA, MLS, and UFC game channels from your provider.</p>
+             <p>Browse provider events, choose sports, review the games, then add them to the TV guide.</p>
             <div style="display:flex; gap:10px; justify-content:center; margin-top:12px;">
-              <button type="button" class="primary" id="browseEventsEmptyBtn" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🔍 Browse &amp; Inject Streams</button>
-              <button type="button" class="secondary" id="syncEventsEmptyBtn">⚡ Sync Provider Feed</button>
+               <button type="button" class="primary" id="browseEventsEmptyBtn" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🔍 Choose PPV Events</button>
+               <button type="button" class="secondary" id="syncEventsEmptyBtn">⚡ Refresh Selected</button>
             </div>
           </div>
         </section>
@@ -835,36 +835,39 @@
     </form>
   </dialog>
 
-  <!-- Browse Provider Streams Explorer Dialog -->
-  <dialog id="browseProviderDialog" style="max-width: 880px; width: 94vw;">
+  <!-- Guided PPV event selection -->
+  <dialog id="browseProviderDialog" class="provider-flow-dialog">
     <div class="dialog-head">
       <div>
-        <div class="eyebrow">PROVIDER FEED EXPLORER</div>
-        <h3>Browse &amp; Inject Live Streams</h3>
+        <div class="eyebrow">PPV GUIDE SETUP</div>
+        <h3>Choose live events for the TV guide</h3>
       </div>
       <button class="icon-button" type="button" data-close-browse-provider>✕</button>
     </div>
-
-    <div style="padding: 12px 0 0 0;">
-      <p class="field-help" style="margin-bottom:12px;">Browse all live game streams directly from your provider feed (<code>starlite.best</code>). Select a sport category and click <strong>Inject Stream</strong> on any individual game to instantly add it to GLZ TV!</p>
-
-      <div id="providerSportFilterBar" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
-        <button type="button" class="meta-pill active-prov-pill" data-prov-sport="ALL" style="cursor:pointer; font-weight:700;">All Sports</button>
-        <button type="button" class="meta-pill" data-prov-sport="MLB" style="cursor:pointer; font-weight:700;">⚾ MLB</button>
-        <button type="button" class="meta-pill" data-prov-sport="NFL" style="cursor:pointer; font-weight:700;">🏈 NFL</button>
-        <button type="button" class="meta-pill" data-prov-sport="NBA" style="cursor:pointer; font-weight:700;">🏀 NBA</button>
-        <button type="button" class="meta-pill" data-prov-sport="NHL" style="cursor:pointer; font-weight:700;">🏒 NHL</button>
-        <button type="button" class="meta-pill" data-prov-sport="UFC" style="cursor:pointer; font-weight:700;">🥊 UFC / Combat</button>
-        <button type="button" class="meta-pill" data-prov-sport="OTHER" style="cursor:pointer; font-weight:700;">Other Sports</button>
-      </div>
-
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
-        <input id="providerStreamSearch" type="search" placeholder="⌕ Filter provider streams by team, title, or matchup…" style="flex:1; min-width:260px;" autocomplete="off">
-        <button id="injectAllVisibleBtn" type="button" class="primary small-btn" style="background:linear-gradient(135deg,#10b981,#059669); font-weight:700; white-space:nowrap;">⚡ Inject All Visible</button>
-      </div>
-
-      <div id="providerStreamsList" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
-        <div style="text-align:center; padding:30px; color:var(--text-muted);">Loading provider feed…</div>
+    <div class="provider-flow-body">
+      <p id="providerFlowStatus" class="field-help" role="status">Loading available PPV events…</p>
+      <section id="providerStepSports">
+        <h4>1 · Choose sports</h4>
+        <p class="field-help">Pick the leagues you want in the guide. You can review individual events next.</p>
+        <div id="providerSportChoices" class="provider-sport-choices"></div>
+      </section>
+      <section id="providerStepEvents" class="hidden">
+        <h4>2 · Review events</h4>
+        <div class="provider-event-tools">
+          <input id="providerStreamSearch" type="search" placeholder="Search team, title, or matchup…" autocomplete="off">
+          <button id="providerSelectVisible" type="button" class="secondary small-btn">Select shown</button>
+          <button id="providerClearVisible" type="button" class="secondary small-btn">Clear shown</button>
+        </div>
+        <div id="providerStreamsList" class="provider-streams-list"></div>
+      </section>
+      <section id="providerStepReview" class="hidden">
+        <h4>3 · Confirm guide selection</h4>
+        <p id="providerReviewSummary"></p>
+        <p class="field-help">This replaces the provider PPV selection. Custom events stay as they are. Events appear during their scheduled window when the stream is online.</p>
+      </section>
+      <div class="provider-flow-actions">
+        <button id="providerFlowBack" type="button" class="secondary hidden">Back</button>
+        <button id="providerFlowNext" type="button" class="primary" disabled>Continue</button>
       </div>
     </div>
   </dialog>
