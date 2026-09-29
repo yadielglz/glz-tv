@@ -3,7 +3,6 @@ package com.glztv.app.ui.components
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
@@ -32,54 +31,40 @@ import coil3.transform.Transformation
 import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 
-/**
- * Playlist artwork often has transparent margins or a white canvas around the actual logo.
- * Trim those margins before fitting the artwork into the shared circular badge.
- * Colored, full-bleed artwork is left intact.
- */
-private object TrimChannelLogoMargins : Transformation() {
-    override val cacheKey: String = "trim-channel-logo-margins-v1"
-
+/** Cache the complete badge so list scrolling never repeats pixel analysis. */
+private class BrandChannelLogo(private val style: com.glztv.app.ChannelLogoStyle, private val name: String) : Transformation() {
+    override val cacheKey = "brand-channel-logo-v1:$style:$name"
     override suspend fun transform(input: Bitmap, size: Size): Bitmap {
-        val width = input.width
-        val height = input.height
-        if (width == 0 || height == 0) return input
-
-        val pixels = IntArray(width * height)
-        input.getPixels(pixels, 0, width, 0, 0, width, height)
-        fun isWhite(pixel: Int): Boolean =
-            android.graphics.Color.alpha(pixel) >= 240 &&
-                android.graphics.Color.red(pixel) >= 245 &&
-                android.graphics.Color.green(pixel) >= 245 &&
-                android.graphics.Color.blue(pixel) >= 245
-
-        val whiteCanvas = isWhite(pixels[0]) && isWhite(pixels[width - 1]) &&
-            isWhite(pixels[(height - 1) * width]) && isWhite(pixels[pixels.lastIndex])
-        var left = width
-        var top = height
-        var right = -1
-        var bottom = -1
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                val pixel = pixels[y * width + x]
-                if (android.graphics.Color.alpha(pixel) > 16 &&
-                    (!whiteCanvas || !isWhite(pixel))) {
-                    left = minOf(left, x)
-                    top = minOf(top, y)
-                    right = maxOf(right, x)
-                    bottom = maxOf(bottom, y)
-                }
+        // Bound analysis memory even when a provider sends a large poster as artwork.
+        val scale = minOf(1f, 256f / maxOf(input.width, input.height))
+        val source = if (scale < 1f) Bitmap.createScaledBitmap(input, maxOf(1, (input.width * scale).toInt()), maxOf(1, (input.height * scale).toInt()), true) else input
+        val pixels = IntArray(source.width * source.height)
+        source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
+        val artwork = com.glztv.app.LogoArtworkProcessor.process(pixels, source.width, source.height, style, name)
+        val output = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(output)
+        canvas.drawColor(artwork.background)
+        if (artwork.right >= artwork.left && artwork.bottom >= artwork.top) {
+            val cleaned = Bitmap.createBitmap(artwork.pixels, source.width, source.height, Bitmap.Config.ARGB_8888)
+            val width = artwork.right - artwork.left + 1
+            val height = artwork.bottom - artwork.top + 1
+            val fit = minOf(184f / width, 164f / height)
+            val w = width * fit; val h = height * fit
+            canvas.drawBitmap(cleaned,
+                android.graphics.Rect(artwork.left, artwork.top, artwork.right + 1, artwork.bottom + 1),
+                android.graphics.RectF((256-w)/2, (256-h)/2, (256+w)/2, (256+h)/2),
+                android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
+            cleaned.recycle()
+        } else {
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                color = com.glztv.app.LogoArtworkProcessor.foreground(artwork.background)
+                textSize = 64f; textAlign = android.graphics.Paint.Align.CENTER
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
             }
+            canvas.drawText(name.take(2).uppercase(), 128f, 128f - (paint.ascent() + paint.descent())/2, paint)
         }
-        if (right < left || bottom < top) return input
-        // Keep a thin edge so anti-aliased outlines never touch the badge boundary.
-        val edge = maxOf(1, minOf(width, height) / 100)
-        left = (left - edge).coerceAtLeast(0)
-        top = (top - edge).coerceAtLeast(0)
-        right = (right + edge).coerceAtMost(width - 1)
-        bottom = (bottom + edge).coerceAtMost(height - 1)
-        if (left == 0 && top == 0 && right == width - 1 && bottom == height - 1) return input
-        return Bitmap.createBitmap(input, left, top, right - left + 1, bottom - top + 1)
+        if (source !== input) source.recycle()
+        return output
     }
 }
 
@@ -92,12 +77,13 @@ fun ChannelLogo(
 ) {
     val context = LocalContext.current
     val logoUrl = channel.logoUrl.takeIf { it.isNotBlank() } ?: guide?.logoForChannel(channel)
-    val model = remember(logoUrl, channel.headers) {
+    val model = remember(logoUrl, channel.headers, channel.logoStyle, channel.name) {
         if (logoUrl.isNullOrBlank()) null
         else {
             val request = ImageRequest.Builder(context)
                 .data(logoUrl)
-                .transformations(TrimChannelLogoMargins)
+                .size(256)
+                .transformations(BrandChannelLogo(channel.logoStyle, channel.name))
             if (channel.headers.isNotEmpty()) {
                 val headersBuilder = NetworkHeaders.Builder()
                 channel.headers.forEach { (k, v) -> headersBuilder.set(k, v) }
@@ -118,14 +104,14 @@ fun ChannelLogo(
     Surface(
         modifier = modifier.then(Modifier.size(size)),
         shape = CircleShape,
-        color = Color(0xFFF7F7F4),
+        color = Color(com.glztv.app.LogoArtworkProcessor.fallback(channel.logoStyle, channel.name)),
         shadowElevation = 3.dp
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (!logoLoaded) {
                 Text(
                     text = initials,
-                    color = Color(0xFF243447),
+                    color = Color(com.glztv.app.LogoArtworkProcessor.foreground(com.glztv.app.LogoArtworkProcessor.fallback(channel.logoStyle, channel.name))),
                     fontSize = (size.value * .27f).sp,
                     fontWeight = FontWeight.Black,
                     maxLines = 1
@@ -135,7 +121,7 @@ fun ChannelLogo(
                 AsyncImage(
                     model = model,
                     contentDescription = "${channel.name} logo",
-                    modifier = Modifier.fillMaxSize().padding(size * .14f),
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit,
                     onSuccess = { logoLoaded = true },
                     onError = { logoLoaded = false }

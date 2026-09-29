@@ -30,7 +30,11 @@ object ChannelCache {
                         item.optString("number"),
                         item.optString("logoUrl"),
                         item.optString("streamUrl"),
-                        headers
+                        headers,
+                        ChannelLogoStyle(
+                            item.optString("logoBackground"), item.optString("logoForeground"),
+                            item.optString("logoMode", "auto"), item.optBoolean("logoRemoveBackground", true)
+                        )
                     )
                 )
             }
@@ -52,6 +56,10 @@ object ChannelCache {
                         .put("logoUrl", channel.logoUrl)
                         .put("streamUrl", channel.streamUrl)
                         .put("headers", headers)
+                        .put("logoBackground", channel.logoStyle.background)
+                        .put("logoForeground", channel.logoStyle.foreground)
+                        .put("logoMode", channel.logoStyle.mode)
+                        .put("logoRemoveBackground", channel.logoStyle.removeBackground)
                 )
             }
             val root = JSONObject()

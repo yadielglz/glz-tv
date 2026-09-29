@@ -118,4 +118,13 @@ class M3uParserTest {
         assertEquals("Sports HD", channel.id)
         assertEquals("Sports HD", channel.name)
     }
+    @Test fun parsesLogoStylingWithoutChangingPlaybackHeaders() {
+        val playlist = """#EXTM3U
+#EXTINF:-1 tvg-id="espn" glz-logo-background="#E60012" glz-logo-foreground="#FFFFFF" glz-logo-mode="monochrome" glz-logo-remove-background="false",ESPN
+https://example.com/live.m3u8
+"""
+        val channel = M3uParser.parse(playlist, "https://example.com/list.m3u", mapOf("User-Agent" to "Test")).single()
+        assertEquals(ChannelLogoStyle("#E60012", "#FFFFFF", "monochrome", false), channel.logoStyle)
+        assertEquals("Test", channel.headers["User-Agent"])
+    }
 }

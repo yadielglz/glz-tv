@@ -55,7 +55,13 @@ object M3uParser {
                     number = number,
                     logoUrl = logoUrl,
                     streamUrl = resolveUrl(playlistUrl, line),
-                    headers = pendingHeaders.toMap()
+                    headers = pendingHeaders.toMap(),
+                    logoStyle = ChannelLogoStyle(
+                        background = attributes["glz-logo-background"].orEmpty(),
+                        foreground = attributes["glz-logo-foreground"].orEmpty(),
+                        mode = attributes["glz-logo-mode"] ?: "auto",
+                        removeBackground = attributes["glz-logo-remove-background"] != "false"
+                    )
                 )
             )
             pendingInfo = null

@@ -66,6 +66,21 @@ jobs:
           echo "name=$version" >> "$GITHUB_OUTPUT"
           echo "code=$version_code" >> "$GITHUB_OUTPUT"
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate GlzHub logo settings
+        working-directory: glzhub
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+          node logo-style.test.mjs
+
+      - name: Run Android unit tests
+        run: ./gradlew testDebugUnitTest
+
       - name: Restore signing keystore
         shell: bash
         env:
@@ -116,6 +131,9 @@ jobs:
           tag="v${{ steps.version.outputs.name }}"
           args=("$tag" "GLZ-TV-${{ steps.version.outputs.name }}.apk" "GLZ-TV-${{ steps.version.outputs.name }}.apk.sha256"
             --generate-notes --title "GLZ TV ${{ steps.version.outputs.name }}")
+          if [[ "${{ steps.version.outputs.name }}" == *-beta* ]]; then
+            args+=(--prerelease --latest=false)
+          fi
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             gh release create "${args[@]}" --verify-tag
           else

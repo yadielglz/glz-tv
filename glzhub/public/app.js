@@ -2029,6 +2029,12 @@ function openPlaylistItemDialog(playlistId = $("#playlistId").value, itemId = nu
   $("#itemGroup").value = metadata.group || "";
   $("#itemMediaUrl").value = item?.media_url || "";
   $("#itemTvgLogo").value = metadata.tvg_logo || "";
+  const logoStyle = metadata.beta_logo_style || {};
+  $("#itemLogoBackground").value = logoStyle.background || "";
+  $("#itemLogoForeground").value = logoStyle.foreground || "";
+  $("#itemLogoMode").value = logoStyle.mode || "auto";
+  $("#itemLogoCleanup").checked = logoStyle.removeBackground !== false;
+  $("#itemBetaLogoUrl").value = logoStyle.logoUrl || "";
   $("#itemHidden").checked = metadata.hidden === true;
   $("#playlistItemDialogTitle").textContent = item ? "Edit channel" : "Add channel to playlist";
   $("#deleteCurrentChannel").classList.toggle("hidden", !item);
@@ -2054,6 +2060,14 @@ $("#playlistItemForm")?.addEventListener("submit", async (event) => {
     mediaUrl: $("#itemMediaUrl").value,
     position: itemId ? undefined : (state.playlists.find((pl) => pl.id === playlistId)?.playlist_items?.length || 0) + 1,
     metadata: {
+      ...(state.playlists.find((pl) => pl.id === playlistId)?.playlist_items?.find((item) => item.id === itemId)?.metadata || {}),
+      beta_logo_style: {
+        background: $("#itemLogoBackground").value.trim(),
+        foreground: $("#itemLogoForeground").value.trim(),
+        mode: $("#itemLogoMode").value,
+        removeBackground: $("#itemLogoCleanup").checked,
+        logoUrl: $("#itemBetaLogoUrl").value.trim()
+      },
       tvg_id: $("#itemTvgId").value || null,
       tvg_chno: $("#itemTvgChno").value || null,
       tvg_logo: $("#itemTvgLogo").value || null,

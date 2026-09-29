@@ -141,3 +141,20 @@ and publishes TV channel lineups. Each paired television can be assigned one lin
 unassigned television receives all published TV playlists owned by its Hub
 administrator. Radio stations are managed separately and never enter the TV
 M3U output.
+
+## Beta logo styling (26.929.1800)
+
+Playlist Studio → channel Edit → Beta channel logo offers background/foreground
+hex colors, automatic/monochrome/original treatment, outer-background cleanup,
+and an optional replacement HTTPS logo. Settings are stored under
+`playlist_items.metadata.beta_logo_style`; no database migration is required.
+Save, then use Push to TVs (or refresh the playlist on the TV).
+
+Only devices reporting a `-beta` APK version receive these artwork overrides in
+managed M3U exports. Production artwork URLs remain unchanged. The Beta APK also
+styles external playlist logos automatically, with ESPN using a red circle.
+The replacement URL must point to an image reachable with the playlist's headers.
+
+Deploy this Worker and portal with `npm ci && npm run check && npm run deploy`
+from an authenticated Cloudflare environment. Validate metadata with
+`node logo-style.test.mjs`.

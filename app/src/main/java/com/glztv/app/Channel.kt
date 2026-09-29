@@ -7,5 +7,6 @@ data class Channel(
     val number: String,
     val logoUrl: String,
     val streamUrl: String,
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String> = emptyMap(),
+    val logoStyle: ChannelLogoStyle = ChannelLogoStyle()
 )

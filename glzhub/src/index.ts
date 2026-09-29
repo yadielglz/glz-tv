@@ -1106,6 +1106,34 @@ async function deletePlaylist(request: Request, env: Env, playlistId: string): P
   return json({ ok: true });
 }
 
+function validateBetaLogoStyle(metadata: Record<string, unknown>): void {
+  if (metadata.beta_logo_style == null) return;
+  const style = metadata.beta_logo_style;
+  if (!style || typeof style !== "object" || Array.isArray(style)) throw new Error("Invalid Beta logo style");
+  const value = style as Record<string, unknown>;
+  for (const key of ["background", "foreground"]) {
+    if (value[key] != null && value[key] !== "" &&
+        (typeof value[key] !== "string" || !/^#[0-9a-f]{6}$/i.test(String(value[key])))) {
+      throw new Error(`Invalid logo ${key}: use #RRGGBB`);
+    }
+  }
+  if (value.mode != null && !["auto", "monochrome", "original"].includes(String(value.mode))) throw new Error("Invalid logo mode");
+  if (value.removeBackground != null && typeof value.removeBackground !== "boolean") throw new Error("Invalid logo background cleanup");
+  if (value.logoUrl && (typeof value.logoUrl !== "string" || String(value.logoUrl).length > 2048 || !isHttpsUrl(String(value.logoUrl)))) throw new Error("Invalid Beta logo URL");
+}
+
+function betaLogoAttributes(metadata: Record<string, unknown>, beta: boolean): string {
+  if (!beta || !metadata.beta_logo_style) return "";
+  try { validateBetaLogoStyle(metadata); } catch { return ""; }
+  const style = metadata.beta_logo_style as Record<string, unknown>;
+  return [
+    style.background ? ` glz-logo-background="${style.background}"` : "",
+    style.foreground ? ` glz-logo-foreground="${style.foreground}"` : "",
+    ` glz-logo-mode="${style.mode || 'auto'}"`,
+    ` glz-logo-remove-background="${style.removeBackground !== false}"`
+  ].join("");
+}
+
 async function addPlaylistItem(request: Request, env: Env, playlistId: string): Promise<Response> {
   const user = await adminUser(request, env);
   const input = await body(request);
@@ -1120,6 +1148,7 @@ async function addPlaylistItem(request: Request, env: Env, playlistId: string): 
   if (input.tvgChno || input.tvg_chno) metadata.tvg_chno = input.tvgChno || input.tvg_chno;
   if (input.tvgLogo || input.tvg_logo) metadata.tvg_logo = input.tvgLogo || input.tvg_logo;
   if (input.isRadio || input.radio) metadata.radio = true;
+  validateBetaLogoStyle(metadata);
 
   const mediaUrl = requiredString(input.media_url || input.mediaUrl, "media URL", 2048);
   if (!isHttpsUrl(mediaUrl)) throw new Error("Invalid media URL");
@@ -1162,6 +1191,7 @@ async function updatePlaylistItem(
   }
   if (typeof input.position === "number") patch.position = Math.max(0, Math.trunc(input.position));
   if (input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)) {
+    validateBetaLogoStyle(input.metadata as Record<string, unknown>);
     patch.metadata = input.metadata;
   }
   if (!Object.keys(patch).length) throw new Error("Invalid playlist item update");
@@ -2389,6 +2419,8 @@ async function deleteEventChannel(request: Request, env: Env, eventId: string): 
 
 async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
+  // APK version is reported by heartbeat; stable APKs never receive Beta artwork overrides.
+  const betaLogos = /-beta(?:$|[.-])/i.test(String(device.app_version || ""));
 
   let playlistQuery = `/rest/v1/playlists?owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&is_published=eq.true&select=*,playlist_items(*)&order=created_at.asc`;
   let group: Record<string, unknown> | null = null;
@@ -2439,11 +2471,16 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
 
       const tvgId = metadata.tvg_id || metadata.tvgId ? ` tvg-id="${cleanAttribute(metadata.tvg_id || metadata.tvgId)}"` : "";
       const tvgChno = metadata.tvg_chno || metadata.tvgChno ? ` tvg-chno="${cleanAttribute(metadata.tvg_chno || metadata.tvgChno)}"` : "";
-      const tvgLogo = metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url ? ` tvg-logo="${cleanAttribute(metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url)}"` : "";
+      const betaStyle = betaLogos && metadata.beta_logo_style && typeof metadata.beta_logo_style === "object"
+        ? metadata.beta_logo_style as Record<string, unknown> : {};
+      const logoUrl = typeof betaStyle.logoUrl === "string" && isHttpsUrl(betaStyle.logoUrl)
+        ? betaStyle.logoUrl : metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url;
+      const tvgLogo = logoUrl ? ` tvg-logo="${cleanAttribute(logoUrl)}"` : "";
+      const logoAttributes = betaLogoAttributes(metadata, betaLogos);
       const isRadio = metadata.radio === true || metadata.radio === "true" ? ' radio="true"' : "";
 
       const channelGroup = cleanAttribute(metadata.group || groupTitle);
-      m3uContent += `#EXTINF:${duration}${tvgId}${tvgChno}${tvgLogo}${isRadio} group-title="${channelGroup}",${title}\n${mediaUrl}\n\n`;
+      m3uContent += `#EXTINF:${duration}${tvgId}${tvgChno}${tvgLogo}${logoAttributes}${isRadio} group-title="${channelGroup}",${title}\n${mediaUrl}\n\n`;
     }
   }
 

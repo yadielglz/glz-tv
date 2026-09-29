@@ -1188,6 +1188,17 @@
         <p class="field-help wide">Channel Number sets the lineup order automatically. Channels without a number appear after numbered channels.</p>
         <label class="wide">Stream URL<input id="itemMediaUrl" type="url" required placeholder="https://nbculocallive.akamaized.net/…/master.m3u8"></label>
         <label class="wide">Channel Logo URL (tvg-logo)<input id="itemTvgLogo" type="url" placeholder="https://static.epg.best/us/WKAQ.us.png"></label>
+        <fieldset class="wide" style="border:1px solid var(--line);padding:16px;border-radius:8px;">
+          <legend>Beta channel logo</legend>
+          <p class="field-help">These settings apply to Beta APKs. Save, then use Push to TVs to refresh the artwork.</p>
+          <div class="form-grid">
+            <label>Circle color<input id="itemLogoBackground" pattern="#[0-9a-fA-F]{6}" placeholder="Automatic / #E60012" maxlength="7"></label>
+            <label>Monochrome logo color<input id="itemLogoForeground" pattern="#[0-9a-fA-F]{6}" placeholder="Automatic / #FFFFFF" maxlength="7"></label>
+            <label>Logo treatment<select id="itemLogoMode"><option value="auto">Automatic contrast</option><option value="monochrome">Monochrome</option><option value="original">Preserve original colors</option></select></label>
+            <label class="check"><input id="itemLogoCleanup" type="checkbox" checked> Remove outer image background</label>
+            <label class="wide">Beta replacement logo URL<input id="itemBetaLogoUrl" type="url" placeholder="https://…/transparent-logo.png"></label>
+          </div>
+        </fieldset>
         <label class="check wide"><input id="itemHidden" type="checkbox"> Hide this channel from the published lineup</label>
       </div>
       <p id="itemError" class="error"></p>
@@ -1206,7 +1217,7 @@
     <span id="toastMessage" class="toast-msg">Notification</span>
   </div>
 
-  <script type="module" src="/app.js?v=2.3.2"></script>
+  <script type="module" src="/app.js?v=26.929.1800"></script>
 </body>
 
 </html>
