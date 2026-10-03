@@ -197,7 +197,8 @@ fun StreamSpeedTestDialog(
                                 color = when {
                                     result!!.speedMbps >= 25.0 -> Color(0xFF00FF9D).copy(alpha = 0.20f)
                                     result!!.speedMbps >= 12.0 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
-                                    result!!.speedMbps >= 5.0 -> Color(0xFFFFD700).copy(alpha = 0.20f)
+                                    result!!.speedMbps >= 6.0 -> Color(0xFF64B5F6).copy(alpha = 0.20f)
+                                    result!!.speedMbps >= 3.0 -> Color(0xFFFFD700).copy(alpha = 0.20f)
                                     else -> Color(0xFFFF4040).copy(alpha = 0.20f)
                                 }
                             ) {
@@ -209,7 +210,8 @@ fun StreamSpeedTestDialog(
                                     color = when {
                                         result!!.speedMbps >= 25.0 -> Color(0xFF00FF9D)
                                         result!!.speedMbps >= 12.0 -> MaterialTheme.colorScheme.primary
-                                        result!!.speedMbps >= 5.0 -> Color(0xFFFFD700)
+                                        result!!.speedMbps >= 6.0 -> Color(0xFF64B5F6)
+                                        result!!.speedMbps >= 3.0 -> Color(0xFFFFD700)
                                         else -> Color(0xFFFF6060)
                                     }
                                 )
