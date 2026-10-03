@@ -143,13 +143,12 @@ fun WeatherScreen(
                     }
                 }
             } else {
-                // Contained + D-pad scrollable, like the Guide panel.
+                // Contained + D-pad scrollable with focusable weather items
                 Column(
                     Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .focusable(),
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
@@ -225,7 +224,11 @@ private fun WeatherHeroCard(weather: WeatherInfo, modifier: Modifier = Modifier)
     val todayForecast = weather.forecast.firstOrNull()
 
     GlzPanel(
-        modifier = modifier,
+        modifier = modifier.tvFocusableWithPhysics(
+            shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge),
+            focusedScale = 1.03f,
+            glowColor = MaterialTheme.colorScheme.primary
+        ),
         shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge)
     ) {
         Box(
@@ -391,7 +394,13 @@ private fun MetricItem(
     modifier: Modifier = Modifier
 ) {
     GlzPanel(
-        modifier = modifier.fillMaxHeight(),
+        modifier = modifier
+            .fillMaxHeight()
+            .tvFocusableWithPhysics(
+                shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
+                focusedScale = 1.05f,
+                glowColor = accentColor
+            ),
         shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
         tonalElevation = 0.dp
     ) {
@@ -451,6 +460,11 @@ private fun HourlyForecastRow(hourly: List<HourlyForecast>) {
                 modifier = Modifier
                     .width(88.dp)
                     .height(130.dp)
+                    .tvFocusableWithPhysics(
+                        shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
+                        focusedScale = 1.08f,
+                        glowColor = MaterialTheme.colorScheme.primary
+                    )
             ) {
                 Column(
                     Modifier
@@ -501,7 +515,12 @@ private fun DailyForecastGrid(forecast: List<ForecastDay>) {
             GlzPanel(
                 modifier = Modifier
                     .weight(1f)
-                    .height(160.dp),
+                    .height(160.dp)
+                    .tvFocusableWithPhysics(
+                        shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
+                        focusedScale = 1.05f,
+                        glowColor = MaterialTheme.colorScheme.primary
+                    ),
                 shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium)
             ) {
                 Column(
