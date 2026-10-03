@@ -343,12 +343,15 @@ internal fun TvScreen(
                 val parsedDeferred = async(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
                 val guideDeferred = async(Dispatchers.IO) { epgRepository.load(forceRefresh) }
                 val parsed = parsedDeferred.await()
-                val parsedGuide = guideDeferred.await()
-                val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
-                check(parsedGuide.programmeCount == 0 || matchedChannels > 0) {
-                    "EPG downloaded ${parsedGuide.programmeCount} programmes but matched 0 of ${parsed.size} channels"
+                val parsedGuide = runCatching { guideDeferred.await() }.getOrElse {
+                    cached.second ?: EpgGuide.Empty
                 }
-                Triple(parsed, parsedGuide, Pair(cached.first != null && cached.second != null, matchedChannels))
+                val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
+                val effectiveGuide = if (parsedGuide.programmeCount > 0 && matchedChannels == 0 && cached.second != null) {
+                    cached.second ?: parsedGuide
+                } else parsedGuide
+                val finalMatches = parsed.count { effectiveGuide.forChannel(it).isNotEmpty() }
+                Triple(parsed, effectiveGuide, Pair(cached.first != null && cached.second != null, finalMatches))
             }
         }
         refreshResult.onSuccess { (parsed, parsedGuide, refreshInfo) ->
@@ -376,7 +379,7 @@ internal fun TvScreen(
                 )
             }
         }.onFailure { error ->
-            if (forceRefresh) guide = EpgGuide.Empty
+            if (guide == EpgGuide.Empty) guide = cached.second ?: EpgGuide.Empty
             status = if (channels.isNotEmpty()) {
                 if (BuildConfig.DEBUG) "${channels.size} saved channels · refresh failed: ${error.message}"
                 else "Showing your saved channels — couldn't refresh right now"

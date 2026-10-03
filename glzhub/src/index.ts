@@ -271,9 +271,12 @@ async function listDevices(request: Request, env: Env): Promise<Response> {
     `/rest/v1/devices?owner_id=eq.${user.id}&select=*&order=created_at.desc`
   ) as Record<string, unknown>[];
   const tenMinutesAgo = Date.now() - 10 * 60_000;
+  const threeMinutesAgo = Date.now() - 3 * 60_000;
   const sanitized = devices.map((d) => {
     const isOnline = d.last_seen_at && new Date(String(d.last_seen_at)).getTime() > tenMinutesAgo;
-    if (!isOnline && ["queued", "syncing"].includes(String(d.sync_status))) {
+    const syncUpdatedAt = d.sync_updated_at ? new Date(String(d.sync_updated_at)).getTime() : 0;
+    const isStaleSync = !d.sync_updated_at || syncUpdatedAt < threeMinutesAgo;
+    if (["queued", "syncing"].includes(String(d.sync_status)) && (!isOnline || isStaleSync)) {
       return { ...d, sync_status: "complete", sync_message: null, sync_progress: 0 };
     }
     return d;
@@ -878,6 +881,11 @@ async function heartbeat(request: Request, env: Env): Promise<Response> {
     patch.activity_label = optionalString(activity?.label, "activity label", 160);
     patch.activity_package = optionalString(activity?.packageName, "activity package", 180);
     patch.activity_updated_at = new Date().toISOString();
+    if (!sync && ["queued", "syncing"].includes(String(device.sync_status))) {
+      patch.sync_status = "complete";
+      patch.sync_message = null;
+      patch.sync_progress = 0;
+    }
   }
   await supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}`, {
     method: "PATCH",

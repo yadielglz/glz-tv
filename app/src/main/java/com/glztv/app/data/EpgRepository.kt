@@ -44,7 +44,8 @@ class EpgRepository(
                 if (attempt < 2) Thread.sleep(350L * (attempt + 1))
             }
         }
-        if (!forceRefresh) cached()?.let { return it }
+        cached()?.let { return it }
+        if (forceRefresh) return EpgGuide.Empty
         throw checkNotNull(lastError) { "EPG refresh failed" }
     }
 }

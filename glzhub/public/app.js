@@ -120,9 +120,16 @@ function isOnline(device) {
   return device.last_seen_at && Date.now() - new Date(device.last_seen_at).getTime() < 10 * 60_000;
 }
 
+function isSyncActive(device) {
+  if (!isOnline(device)) return false;
+  if (!["queued", "syncing"].includes(device.sync_status)) return false;
+  if (!device.sync_updated_at) return true;
+  return Date.now() - new Date(device.sync_updated_at).getTime() < 3 * 60_000;
+}
+
 function deviceActivity(device) {
   if (!isOnline(device)) return { label: "Offline", className: "offline" };
-  if (["queued", "syncing"].includes(device.sync_status)) {
+  if (isSyncActive(device)) {
     return {
       label: device.sync_message || (device.sync_status === "queued" ? "Waiting for TV" : "Syncing"),
       className: "syncing",
@@ -156,7 +163,7 @@ let deviceSearchQuery = "";
 function renderDevices() {
   const total = state.devices.length;
   const onlineCount = state.devices.filter(isOnline).length;
-  const syncingCount = state.devices.filter((d) => isOnline(d) && ["queued", "syncing"].includes(d.sync_status)).length;
+  const syncingCount = state.devices.filter(isSyncActive).length;
   const attentionCount = state.devices.filter((d) => Boolean(d.last_error)).length;
 
   $("#deviceCount").textContent = total;
@@ -173,7 +180,7 @@ function renderDevices() {
   const query = deviceSearchQuery.trim().toLowerCase();
   const filtered = state.devices.filter((device) => {
     const isDevOnline = isOnline(device);
-    const isDevSyncing = isDevOnline && ["queued", "syncing"].includes(device.sync_status);
+    const isDevSyncing = isSyncActive(device);
 
     if (activeDeviceFilter === "online" && !isDevOnline) return false;
     if (activeDeviceFilter === "syncing" && !isDevSyncing) return false;

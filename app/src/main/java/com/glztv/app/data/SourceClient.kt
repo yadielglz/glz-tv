@@ -29,9 +29,9 @@ fun createPermissiveOkHttpClient(): OkHttpClient {
         OkHttpClient.Builder()
             .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
             .hostnameVerifier(HostnameVerifier { _, _ -> true })
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .callTimeout(45, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(120, TimeUnit.SECONDS)
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
@@ -43,6 +43,9 @@ fun createPermissiveOkHttpClient(): OkHttpClient {
 internal class SourceClient(private val client: OkHttpClient) {
     fun <T> fetchStream(url: String, headers: Map<String, String>, block: (InputStream) -> T): T {
         val request = Request.Builder().url(url).apply {
+            if (!headers.keys.any { it.equals("Accept-Encoding", ignoreCase = true) }) {
+                header("Accept-Encoding", "gzip, deflate")
+            }
             headers.forEach { (name, value) -> header(name, value) }
         }.build()
         client.newCall(request).execute().use { response ->
