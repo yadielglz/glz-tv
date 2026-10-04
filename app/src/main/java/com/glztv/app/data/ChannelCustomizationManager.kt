@@ -25,6 +25,12 @@ class ChannelCustomizationManager(context: Context) {
 
         fun channelNumberValue(value: String): Double {
             val trimmed = value.trim()
+            val match = Regex("(\\d+)[\\-:_](\\d+)").find(trimmed)
+            if (match != null) {
+                val major = match.groupValues[1].toDoubleOrNull() ?: return Double.MAX_VALUE
+                val minor = match.groupValues[2].toDoubleOrNull() ?: 0.0
+                return major + (minor / 100000.0)
+            }
             return trimmed.toDoubleOrNull()
                 ?: Regex("\\d+(?:\\.\\d+)?").find(trimmed)?.value?.toDoubleOrNull()
                 ?: Double.MAX_VALUE

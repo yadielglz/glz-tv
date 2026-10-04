@@ -1076,9 +1076,7 @@ internal fun TvScreen(
 }
 
 private fun channelNumberValue(value: String): Double =
-    value.trim().toDoubleOrNull()
-        ?: Regex("\\d+(?:\\.\\d+)?").find(value)?.value?.toDoubleOrNull()
-        ?: Double.MAX_VALUE
+    ChannelCustomizationManager.channelNumberValue(value)
 
 private fun fetchNetworkInfo(
     context: Context,

@@ -1590,6 +1590,20 @@ function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now())
   return true;
 }
 
+function formatSportEventName(sportLeague: unknown): string {
+  const sp = String(sportLeague || "").trim().toUpperCase();
+  if (!sp || sp === "SPORTS") return "Sports";
+  if (sp === "PPV") return "PPV";
+  if (sp === "TENNIS") return "Tennis";
+  return sp;
+}
+
+function getEventChannelDisplayName(channelNumber: string, sportLeague: unknown): string {
+  const sport = formatSportEventName(sportLeague);
+  const chno = channelNumber ? `${channelNumber} ` : "";
+  return `${chno}${sport} Event`;
+}
+
 async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<string> {
   if (!xmlText || !xmlText.includes("</tv>")) return xmlText;
 
@@ -1598,20 +1612,20 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
   ).catch(() => null) as Record<string, unknown>[] | null;
 
   if (!Array.isArray(eventChannels) || eventChannels.length === 0) return xmlText;
-  const sortedEvents = sortEventChannels(eventChannels);
+  const now = Date.now();
+  const activeEvents = eventChannels.filter(event => isEventActiveAndValid(event, now));
+  const sortedEvents = sortEventChannels(activeEvents);
 
   let channelNodes = "";
   let programmeNodes = "";
   let index = 1;
-  const now = Date.now();
 
   for (const event of sortedEvents) {
-    if (!isEventActiveAndValid(event, now)) continue;
-
+    const channelNumber = String(event.channel_number || `30-${String(index).padStart(2, "0")}`);
     const tvgId = escapeXml(String(event.tvg_id || `event.channel.${index}`));
-    const channelNumber = escapeXml(String(event.channel_number || `30-${String(index).padStart(2, "0")}`));
     const eventTitle = escapeXml(cleanText(String(event.title || "Live Sports Event")));
     const sportLeague = escapeXml(cleanText(String(event.sport_league || "SPORTS")));
+    const channelDisplayName = escapeXml(getEventChannelDisplayName(channelNumber, event.sport_league));
     const logoUrl = event.logo_url ? escapeXml(String(event.logo_url)) : "";
 
     const startTime = new Date(String(event.start_time));
@@ -1623,8 +1637,8 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
     const winEnd = new Date(endTime.getTime() + postBuffer);
 
     channelNodes += `  <channel id="${tvgId}">\n`;
-    channelNodes += `    <display-name>${eventTitle}</display-name>\n`;
-    channelNodes += `    <display-name>CH ${channelNumber}</display-name>\n`;
+    channelNodes += `    <display-name>${channelDisplayName}</display-name>\n`;
+    channelNodes += `    <display-name>CH ${escapeXml(channelNumber)}</display-name>\n`;
     if (logoUrl) {
       channelNodes += `    <icon src="${logoUrl}" />\n`;
     }
@@ -1632,7 +1646,7 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
 
     programmeNodes += `  <programme start="${formatXmlTvDate(winStart)}" stop="${formatXmlTvDate(winEnd)}" channel="${tvgId}">\n`;
     programmeNodes += `    <title lang="en">${eventTitle}</title>\n`;
-    programmeNodes += `    <desc lang="en">Live ${sportLeague} Event - ${eventTitle}</desc>\n`;
+    programmeNodes += `    <desc lang="en">${eventTitle}</desc>\n`;
     programmeNodes += `    <category lang="en">Sports</category>\n`;
     programmeNodes += `    <category lang="en">Pay Per View</category>\n`;
     programmeNodes += `  </programme>\n`;
@@ -2327,7 +2341,8 @@ async function applyProviderEventSelection(request: Request, env: Env): Promise<
   const existing = await supabaseJson(env, "/rest/v1/event_channels?select=id,tvg_id,auto_ingested") as Record<string, unknown>[];
   const nowIso = new Date().toISOString();
   const selected = available.filter((item) => selectedIds.has(item.tvgId));
-  const rows = selected.map((item) => ({
+  const renumberedSelected = assignCategoryChannelNumbers(selected);
+  const rows = renumberedSelected.map((item) => ({
     tvg_id: item.tvgId,
     tvg_name: item.tvgName,
     title: item.title,
@@ -2515,21 +2530,21 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
   ).catch(() => null) as Record<string, unknown>[] | null;
 
   if (Array.isArray(eventChannels)) {
-    const sortedEvents = sortEventChannels(eventChannels);
     const now = Date.now();
+    const activeEvents = eventChannels.filter(event => isEventActiveAndValid(event, now));
+    const sortedEvents = sortEventChannels(activeEvents);
     let activeIndex = 1;
     for (const event of sortedEvents) {
-      if (!isEventActiveAndValid(event, now)) continue;
-      const channelDisplayName = cleanText(event.title || "SPORTS PPV");
-        const mediaUrl = String(event.stream_url || "");
-        const tvgId = event.tvg_id ? ` tvg-id="${cleanAttribute(event.tvg_id)}"` : "";
-        const tvgName = ` tvg-name="${cleanAttribute(channelDisplayName)}"`;
-        const chnoValue = String(event.channel_number || `30-${String(activeIndex).padStart(2, '0')}`);
-        const tvgChno = ` tvg-chno="${cleanAttribute(chnoValue)}"`;
-        const tvgLogo = event.logo_url ? ` tvg-logo="${cleanAttribute(event.logo_url)}"` : "";
-        const channelGroup = cleanAttribute(event.group_title || "Major League Sports (Events)");
-        m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
-        activeIndex++;
+      const chnoValue = String(event.channel_number || `30-${String(activeIndex).padStart(2, '0')}`);
+      const channelDisplayName = cleanText(getEventChannelDisplayName(chnoValue, event.sport_league));
+      const mediaUrl = String(event.stream_url || "");
+      const tvgId = event.tvg_id ? ` tvg-id="${cleanAttribute(event.tvg_id)}"` : "";
+      const tvgName = ` tvg-name="${cleanAttribute(channelDisplayName)}"`;
+      const tvgChno = ` tvg-chno="${cleanAttribute(chnoValue)}"`;
+      const tvgLogo = event.logo_url ? ` tvg-logo="${cleanAttribute(event.logo_url)}"` : "";
+      const channelGroup = cleanAttribute(event.group_title || "Major League Sports (Events)");
+      m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
+      activeIndex++;
     }
   }
 

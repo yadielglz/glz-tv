@@ -511,22 +511,25 @@ fun ChannelEditorDialog(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        StepperButton(label = "-10", onClick = {
-                                            val currentVal = ChannelCustomizationManager.channelNumberValue(editNumberText)
-                                            val newVal = if (currentVal != Double.MAX_VALUE) (currentVal - 10).coerceAtLeast(1.0) else 1.0
-                                            val formatted = if (newVal % 1.0 == 0.0) newVal.toInt().toString() else "%.1f".format(newVal)
+                                        val stepNumber: (Int) -> Unit = { delta ->
+                                            val subMatch = Regex("(\\d+)[\\-:_](\\d+)").find(editNumberText.trim())
+                                            val formatted = if (subMatch != null) {
+                                                val major = subMatch.groupValues[1].toIntOrNull() ?: 1
+                                                val minor = subMatch.groupValues[2].toIntOrNull() ?: 1
+                                                val newMinor = (minor + delta).coerceAtLeast(1)
+                                                "$major-${"%02d".format(newMinor)}"
+                                            } else {
+                                                val currentVal = ChannelCustomizationManager.channelNumberValue(editNumberText)
+                                                val newVal = if (currentVal != Double.MAX_VALUE) (currentVal + delta).coerceAtLeast(1.0) else 1.0
+                                                if (newVal % 1.0 == 0.0) newVal.toInt().toString() else "%.1f".format(newVal)
+                                            }
                                             editNumberText = formatted
                                             customizationManager.setChannelNumber(currentChannel.id, formatted)
                                             revision++
-                                        })
-                                        StepperButton(label = "-1", onClick = {
-                                            val currentVal = ChannelCustomizationManager.channelNumberValue(editNumberText)
-                                            val newVal = if (currentVal != Double.MAX_VALUE) (currentVal - 1).coerceAtLeast(1.0) else 1.0
-                                            val formatted = if (newVal % 1.0 == 0.0) newVal.toInt().toString() else "%.1f".format(newVal)
-                                            editNumberText = formatted
-                                            customizationManager.setChannelNumber(currentChannel.id, formatted)
-                                            revision++
-                                        })
+                                        }
+
+                                        StepperButton(label = "-10", onClick = { stepNumber(-10) })
+                                        StepperButton(label = "-1", onClick = { stepNumber(-1) })
 
                                         // Editable Text Box
                                         OutlinedTextField(
@@ -549,22 +552,8 @@ fun ChannelEditorDialog(
                                             modifier = Modifier.weight(1f)
                                         )
 
-                                        StepperButton(label = "+1", onClick = {
-                                            val currentVal = ChannelCustomizationManager.channelNumberValue(editNumberText)
-                                            val newVal = if (currentVal != Double.MAX_VALUE) (currentVal + 1) else 1.0
-                                            val formatted = if (newVal % 1.0 == 0.0) newVal.toInt().toString() else "%.1f".format(newVal)
-                                            editNumberText = formatted
-                                            customizationManager.setChannelNumber(currentChannel.id, formatted)
-                                            revision++
-                                        })
-                                        StepperButton(label = "+10", onClick = {
-                                            val currentVal = ChannelCustomizationManager.channelNumberValue(editNumberText)
-                                            val newVal = if (currentVal != Double.MAX_VALUE) (currentVal + 10) else 10.0
-                                            val formatted = if (newVal % 1.0 == 0.0) newVal.toInt().toString() else "%.1f".format(newVal)
-                                            editNumberText = formatted
-                                            customizationManager.setChannelNumber(currentChannel.id, formatted)
-                                            revision++
-                                        })
+                                        StepperButton(label = "+1", onClick = { stepNumber(1) })
+                                        StepperButton(label = "+10", onClick = { stepNumber(10) })
                                     }
                                 }
                             }
