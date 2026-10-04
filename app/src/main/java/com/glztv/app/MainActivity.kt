@@ -338,47 +338,45 @@ internal fun TvScreen(
             }
         }
         val refreshResult = runCatching {
-            onProgress(55, "Downloading TV lineup & programme guide")
-            coroutineScope {
-                val parsedDeferred = async(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
-                val guideDeferred = async(Dispatchers.IO) { epgRepository.load(forceRefresh) }
-                val parsed = parsedDeferred.await()
-                val parsedGuide = runCatching { guideDeferred.await() }.getOrElse {
-                    cached.second ?: EpgGuide.Empty
-                }
-                val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
-                val effectiveGuide = if (parsedGuide.programmeCount > 0 && matchedChannels == 0 && cached.second != null) {
-                    cached.second ?: parsedGuide
-                } else parsedGuide
-                val finalMatches = parsed.count { effectiveGuide.forChannel(it).isNotEmpty() }
-                Triple(parsed, effectiveGuide, Pair(cached.first != null && cached.second != null, finalMatches))
-            }
-        }
-        refreshResult.onSuccess { (parsed, parsedGuide, refreshInfo) ->
-            val (fromCache, matchedChannels) = refreshInfo
+            onProgress(50, "Updating TV lineup…")
+            val parsed = withContext(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
             channels.clear()
             channels.addAll(parsed)
-            guide = parsedGuide
-            status = if (BuildConfig.DEBUG) {
-                "${parsed.size} channels${if (fromCache) " · restored from storage" else ""} · " +
-                    "${parsedGuide.programmeCount} guide entries · $matchedChannels EPG matches"
-            } else "${parsed.size} channels ready"
             if (selected == null && prefs.getBoolean(RESUME_LAST_CHANNEL, true)) {
                 val lastId = prefs.getString(LAST_CHANNEL_ID, null)
                 selected = parsed.firstOrNull { it.id == lastId }
             }
+            onProgress(70, "Updating programme guide…")
+            val parsedGuide = runCatching {
+                withContext(Dispatchers.IO) { epgRepository.load(forceRefresh) }
+            }.getOrElse {
+                cached.second ?: EpgGuide.Empty
+            }
+            val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
+            val effectiveGuide = if (parsedGuide.programmeCount > 0 && matchedChannels == 0 && cached.second != null) {
+                cached.second ?: parsedGuide
+            } else parsedGuide
+            guide = effectiveGuide
+            val finalMatches = parsed.count { effectiveGuide.forChannel(it).isNotEmpty() }
+
+            status = if (BuildConfig.DEBUG) {
+                "${parsed.size} channels · ${effectiveGuide.programmeCount} guide entries · $finalMatches EPG matches"
+            } else "${parsed.size} channels ready"
+
             onProgress(90, "Publishing Android TV home channels")
             withContext(Dispatchers.IO) {
                 val radioStations = runCatching { RadioCatalogManager.load(prefs, client).stations }.getOrDefault(emptyList())
                 TvHomePublisher.publish(
                     context = context.applicationContext,
                     channels = channelCustomizationManager.apply(parsed, includeHidden = false),
-                    guide = parsedGuide,
+                    guide = effectiveGuide,
                     favorites = favorites,
                     radioStations = radioStations
                 )
             }
-        }.onFailure { error ->
+            parsed to effectiveGuide
+        }
+        refreshResult.onFailure { error ->
             if (guide == EpgGuide.Empty) guide = cached.second ?: EpgGuide.Empty
             status = if (channels.isNotEmpty()) {
                 if (BuildConfig.DEBUG) "${channels.size} saved channels · refresh failed: ${error.message}"
@@ -512,7 +510,7 @@ internal fun TvScreen(
         }
         var nextConfigSyncAt = System.currentTimeMillis() + 5 * 60_000L
         var nextHeartbeatAt = System.currentTimeMillis() + 90_000L
-        var nextCommandCheckAt = System.currentTimeMillis() + 30_000L
+        var nextCommandCheckAt = System.currentTimeMillis() + 15_000L
         while (true) {
             delay(15_000L)
             try {
@@ -531,7 +529,7 @@ internal fun TvScreen(
                                 }
                             }
                         }
-                    nextCommandCheckAt = now + 30_000L
+                    nextCommandCheckAt = now + 15_000L
                 }
                 if (!pendingEnrollment && now < nextConfigSyncAt) continue
                 runCatching {

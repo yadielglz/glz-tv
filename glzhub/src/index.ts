@@ -1678,6 +1678,11 @@ async function exportManagedGuide(
   const stale = row.source_url && Date.now() - new Date(String(row.updated_at)).getTime() >= 6 * 60 * 60_000;
   if (stale) ctx.waitUntil(refreshManagedGuideSource(env, row, new URL(request.url).origin));
 
+  const eTag = `"${playlistId}-${new Date(String(row.updated_at)).getTime()}"`;
+  if (request.headers.get("if-none-match") === eTag) {
+    return new Response(null, { status: 304, headers: { "etag": eTag, "cache-control": "no-cache" } });
+  }
+
   let guideBody: string | ReadableStream;
   if (row.object_key) {
     const object = await env.EPG_BUCKET.get(String(row.object_key));
@@ -1690,6 +1695,7 @@ async function exportManagedGuide(
   let rawXml = typeof guideBody === "string" ? guideBody : await new Response(guideBody).text();
   const guideXml = await injectEventChannelsXmlTv(env, rawXml);
   const response = managedGuideResponse(guideXml, playlistId, gzip);
+  response.headers.set("etag", eTag);
   response.headers.set("x-glzhub-cache", "BYPASS");
   return response;
 }
@@ -1706,14 +1712,25 @@ async function pushPlaylist(request: Request, env: Env, playlistId: string): Pro
     return device.last_seen_at && new Date(String(device.last_seen_at)).getTime() > tenMinutesAgo;
   });
 
-  await Promise.all(onlineDevices.map((device) => supabaseJson(env,
-    `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}&owner_id=eq.${user.id}`,
-    { method: "PATCH", body: JSON.stringify({
-      config_version: Number(device.config_version || 0) + 1,
-      force_refresh_token: token,
-      sync_status: "queued", sync_progress: 0, sync_message: "Waiting for TV", sync_updated_at: pushedAt
-    }) }
-  )));
+  await Promise.all(onlineDevices.map(async (device) => {
+    await supabaseJson(env,
+      `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}&owner_id=eq.${user.id}`,
+      { method: "PATCH", body: JSON.stringify({
+        config_version: Number(device.config_version || 0) + 1,
+        force_refresh_token: token,
+        sync_status: "queued", sync_progress: 0, sync_message: "Waiting for TV", sync_updated_at: pushedAt
+      }) }
+    ).catch(() => undefined);
+    await supabaseJson(env, "/rest/v1/device_commands", {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: user.id,
+        device_id: device.id,
+        action: "force_refresh",
+        payload: { timestamp: pushedAt }
+      })
+    }).catch(() => undefined);
+  }));
   return json({ ok: true, pushedDevices: onlineDevices.length, totalDevices: devices.length });
 }
 
@@ -2652,8 +2669,8 @@ async function pushConfigUpdateToAllDevices(env: Env): Promise<number> {
     const token = crypto.randomUUID();
     const pushedAt = new Date().toISOString();
 
-    await Promise.all(devices.map((device) =>
-      supabaseJson(env, `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}`, {
+    await Promise.all(devices.map(async (device) => {
+      await supabaseJson(env, `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}`, {
         method: "PATCH",
         body: JSON.stringify({
           config_version: Number(device.config_version || 0) + 1,
@@ -2663,8 +2680,17 @@ async function pushConfigUpdateToAllDevices(env: Env): Promise<number> {
           sync_message: "Auto-syncing live event guide",
           sync_updated_at: pushedAt
         })
-      }).catch(() => undefined)
-    ));
+      }).catch(() => undefined);
+      await supabaseJson(env, "/rest/v1/device_commands", {
+        method: "POST",
+        body: JSON.stringify({
+          owner_id: device.owner_id,
+          device_id: device.id,
+          action: "force_refresh",
+          payload: { timestamp: pushedAt }
+        })
+      }).catch(() => undefined);
+    }));
 
     return devices.length;
   } catch (err) {

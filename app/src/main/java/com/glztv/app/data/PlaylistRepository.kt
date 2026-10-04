@@ -26,15 +26,27 @@ class PlaylistRepository(
 
     fun load(forceRefresh: Boolean = false): List<Channel> {
         val sourceUrl = preferences.playlistUrl
+        if (sourceUrl.isBlank()) return emptyList()
         if (!forceRefresh) cached()?.let { return it }
         val globalHeaders = preferences.requestHeaders
         val sourceHeaders = GlzHubManager.sourceRequestHeaders(
             preferences.sharedPreferences, sourceUrl, globalHeaders
         )
-        return M3uParser.parse(
-            sourceClient.fetchText(sourceUrl, sourceHeaders), sourceUrl, globalHeaders
-        ).also {
+        val sharedPrefs = preferences.sharedPreferences
+        val lastEtag = sharedPrefs.getString("playlist_etag_${sourceUrl.hashCode()}", null)
+        val lastModified = sharedPrefs.getString("playlist_last_modified_${sourceUrl.hashCode()}", null)
+
+        val result = sourceClient.fetchTextConditional(
+            sourceUrl, sourceHeaders, eTag = if (forceRefresh) lastEtag else null, lastModified = if (forceRefresh) lastModified else null
+        )
+        if (result.isNotModified) {
+            return cached() ?: emptyList()
+        }
+        val text = checkNotNull(result.data)
+        return M3uParser.parse(text, sourceUrl, globalHeaders).also {
             check(it.isNotEmpty()) { "Playlist did not contain channels" }
+            result.eTag?.let { etag -> sharedPrefs.edit().putString("playlist_etag_${sourceUrl.hashCode()}", etag).apply() }
+            result.lastModified?.let { lm -> sharedPrefs.edit().putString("playlist_last_modified_${sourceUrl.hashCode()}", lm).apply() }
             ChannelCache.write(appContext, sourceUrl, it)
             ChannelMemoryCache.set(sourceUrl, it)
         }

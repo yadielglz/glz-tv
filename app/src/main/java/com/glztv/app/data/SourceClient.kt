@@ -40,25 +40,61 @@ fun createPermissiveOkHttpClient(): OkHttpClient {
     }
 }
 
+data class FetchResult<T>(
+    val data: T?,
+    val isNotModified: Boolean,
+    val eTag: String? = null,
+    val lastModified: String? = null
+)
+
 internal class SourceClient(private val client: OkHttpClient) {
     fun <T> fetchStream(url: String, headers: Map<String, String>, block: (InputStream) -> T): T {
+        return fetchStreamConditional(url, headers, eTag = null, lastModified = null, block).data!!
+    }
+
+    fun <T> fetchStreamConditional(
+        url: String,
+        headers: Map<String, String>,
+        eTag: String? = null,
+        lastModified: String? = null,
+        block: (InputStream) -> T
+    ): FetchResult<T> {
         val request = Request.Builder().url(url).apply {
+            if (!eTag.isNullOrBlank()) header("If-None-Match", eTag)
+            if (!lastModified.isNullOrBlank()) header("If-Modified-Since", lastModified)
             headers.forEach { (name, value) -> header(name, value) }
         }.build()
         client.newCall(request).execute().use { response ->
+            if (response.code == 304) {
+                return FetchResult(data = null, isNotModified = true, eTag = eTag, lastModified = lastModified)
+            }
             check(response.isSuccessful) { "Source returned ${response.code}" }
+            val newEtag = response.header("ETag")
+            val newLastModified = response.header("Last-Modified")
             val body = checkNotNull(response.body) { "Source returned no body" }
             val rawStream = body.byteStream()
             val buffered = BufferedInputStream(rawStream)
             val isGzip = response.header("Content-Encoding")?.equals("gzip", ignoreCase = true) == true ||
                     buffered.isGzipHeader()
             val finalStream = if (isGzip) GZIPInputStream(buffered) else buffered
-            return block(finalStream)
+            val data = block(finalStream)
+            return FetchResult(data = data, isNotModified = false, eTag = newEtag, lastModified = newLastModified)
         }
     }
 
     fun fetchText(url: String, headers: Map<String, String>): String {
         return fetchStream(url, headers) { stream ->
+            InputStreamReader(stream, Charsets.UTF_8).use { it.readText() }.removePrefix("\uFEFF")
+        }
+    }
+
+    fun fetchTextConditional(
+        url: String,
+        headers: Map<String, String>,
+        eTag: String? = null,
+        lastModified: String? = null
+    ): FetchResult<String> {
+        return fetchStreamConditional(url, headers, eTag, lastModified) { stream ->
             InputStreamReader(stream, Charsets.UTF_8).use { it.readText() }.removePrefix("\uFEFF")
         }
     }
