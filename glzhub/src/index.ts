@@ -1644,7 +1644,7 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
     }
     channelNodes += `  </channel>\n`;
 
-    programmeNodes += `  <programme start="${formatXmlTvDate(winStart)}" stop="${formatXmlTvDate(winEnd)}" channel="${tvgId}">\n`;
+    programmeNodes += `  <programme start="${formatXmlTvDate(startTime)}" stop="${formatXmlTvDate(endTime)}" channel="${tvgId}">\n`;
     programmeNodes += `    <title lang="en">${eventTitle}</title>\n`;
     programmeNodes += `    <desc lang="en">${eventTitle}</desc>\n`;
     programmeNodes += `    <category lang="en">Sports</category>\n`;
@@ -1799,76 +1799,91 @@ function getEasternOffsetHours(date: Date): number {
 
 function parseInlineEventTime(title: string): { startTime: Date; endTime: Date } {
   const months: Record<string, number> = {
-    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    jan: 0, january: 0,
+    feb: 1, february: 1,
+    mar: 2, march: 2,
+    apr: 3, april: 3,
+    may: 4,
+    jun: 5, june: 5,
+    jul: 6, july: 6,
+    aug: 7, august: 7,
+    sep: 8, sept: 8, september: 8,
+    oct: 9, october: 9,
+    nov: 10, november: 10,
+    dec: 11, december: 11
   };
   const now = new Date();
   const etOffset = getEasternOffsetHours(now);
 
-  // 1. Matches `@ Sep 16 7:10 PM` or `@ Sep 16 7:10PM` or `@ 09/16 7:10 PM`
-  const matchWithMonth = title.match(/@\s*([A-Za-z]{3}|\d{1,2}[\/-]\d{1,2})\s+(\d{1,2})?\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-  if (matchWithMonth) {
-    const monthPart = matchWithMonth[1].toLowerCase();
-    const dayPart = matchWithMonth[2];
-    let hours = parseInt(matchWithMonth[3], 10);
-    const minutes = parseInt(matchWithMonth[4], 10);
-    const ampm = matchWithMonth[5]?.toUpperCase();
-
-    if (ampm === "PM" && hours < 12) hours += 12;
-    if (ampm === "AM" && hours === 12) hours = 0;
-
-    let month = now.getMonth();
-    let day = now.getDate();
-
-    if (monthPart in months) {
-      month = months[monthPart];
-      if (dayPart) day = parseInt(dayPart, 10);
-    } else if (monthPart.includes("/") || monthPart.includes("-")) {
-      const [m, d] = monthPart.split(/[\/-]/).map(n => parseInt(n, 10));
-      if (m > 0 && m <= 12) month = m - 1;
-      if (d > 0 && d <= 31) day = d;
-    }
-
-    const year = now.getFullYear();
-    const start = new Date(Date.UTC(year, month, day, hours - etOffset, minutes));
-    const end = new Date(start.getTime() + 3.25 * 3600_000);
-    return { startTime: start, endTime: end };
-  }
-
-  // 2. Matches `7:10 PM ET`, `(7:10 PM)`, `@ 7:10 PM`, `7:10PM`
-  const matchTimeOnly = title.match(/(?:@|\(|\b)\s*(\d{1,2}):(\d{2})\s*(AM|PM)?\s*(?:ET|EDT|EST)?(?:\)|\b)/i);
-  if (matchTimeOnly) {
-    let hours = parseInt(matchTimeOnly[1], 10);
-    const minutes = parseInt(matchTimeOnly[2], 10);
-    const ampm = matchTimeOnly[3]?.toUpperCase();
-
-    if (ampm === "PM" && hours < 12) hours += 12;
-    if (ampm === "AM" && hours === 12) hours = 0;
-
-    const etNowParts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      year: 'numeric', month: 'numeric', day: 'numeric'
-    }).formatToParts(now);
-    const year = parseInt(etNowParts.find(p => p.type === 'year')?.value || String(now.getFullYear()), 10);
-    const month = parseInt(etNowParts.find(p => p.type === 'month')?.value || String(now.getMonth() + 1), 10) - 1;
-    const day = parseInt(etNowParts.find(p => p.type === 'day')?.value || String(now.getDate()), 10);
-
-    const start = new Date(Date.UTC(year, month, day, hours - etOffset, minutes));
-    const end = new Date(start.getTime() + 3.25 * 3600_000);
-    return { startTime: start, endTime: end };
-  }
-
-  // 3. Fallback when title does not state an explicit time: align start to Eastern Time for today
   const etNowParts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
     year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', hour12: false
   }).formatToParts(now);
-  const year = parseInt(etNowParts.find(p => p.type === 'year')?.value || String(now.getFullYear()), 10);
-  const month = parseInt(etNowParts.find(p => p.type === 'month')?.value || String(now.getMonth() + 1), 10) - 1;
-  const day = parseInt(etNowParts.find(p => p.type === 'day')?.value || String(now.getDate()), 10);
+  const curYear = parseInt(etNowParts.find(p => p.type === 'year')?.value || String(now.getFullYear()), 10);
+  const curMonth = parseInt(etNowParts.find(p => p.type === 'month')?.value || String(now.getMonth() + 1), 10) - 1;
+  const curDay = parseInt(etNowParts.find(p => p.type === 'day')?.value || String(now.getDate()), 10);
   const curHour = parseInt(etNowParts.find(p => p.type === 'hour')?.value || String(now.getHours()), 10);
 
-  const start = new Date(Date.UTC(year, month, day, curHour - etOffset, 0));
+  let year = curYear;
+  let month = curMonth;
+  let day = curDay;
+  let hours: number | null = null;
+  let minutes = 0;
+
+  // 1. Extract explicit Month + Day if present: e.g. "Oct 3", "Oct 03", "October 3", "10/03", "10-03"
+  const dateMonthNamedMatch = title.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
+  if (dateMonthNamedMatch) {
+    const mName = dateMonthNamedMatch[1].toLowerCase();
+    if (mName in months) {
+      month = months[mName];
+      day = parseInt(dateMonthNamedMatch[2], 10);
+    }
+  } else {
+    const numericDateMatch = title.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/);
+    if (numericDateMatch) {
+      const m = parseInt(numericDateMatch[1], 10);
+      const d = parseInt(numericDateMatch[2], 10);
+      if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+        month = m - 1;
+        day = d;
+        if (numericDateMatch[3]) {
+          const y = parseInt(numericDateMatch[3], 10);
+          year = y < 100 ? 2000 + y : y;
+        }
+      }
+    }
+  }
+
+  // 2. Extract 12-hour Time with AM/PM (e.g. "8:30 PM", "8:30PM", "08:30 PM ET", "8 PM", "8PM")
+  const time12Match = title.match(/\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b/i);
+  if (time12Match) {
+    let h = parseInt(time12Match[1], 10);
+    const m = time12Match[2] ? parseInt(time12Match[2], 10) : 0;
+    const ampm = time12Match[3].toUpperCase();
+    if (ampm === "PM" && h < 12) h += 12;
+    if (ampm === "AM" && h === 12) h = 0;
+    if (h >= 0 && h < 24 && m >= 0 && m < 60) {
+      hours = h;
+      minutes = m;
+    }
+  }
+
+  // 3. Extract 24-hour Time (e.g. "20:30 ET", "(20:30)", "@ 20:30")
+  if (hours === null) {
+    const time24Match = title.match(/(?:@|\(|\b)\s*([01]?\d|2[0-3]):([0-5]\d)\s*(?:ET|EDT|EST)?(?:\)|\b)/i);
+    if (time24Match) {
+      hours = parseInt(time24Match[1], 10);
+      minutes = parseInt(time24Match[2], 10);
+    }
+  }
+
+  // Fallback if no time stated in title: default to current hour in Eastern Time
+  if (hours === null) {
+    hours = curHour;
+    minutes = 0;
+  }
+
+  const start = new Date(Date.UTC(year, month, day, hours - etOffset, minutes));
   const end = new Date(start.getTime() + 3.25 * 3600_000);
   return { startTime: start, endTime: end };
 }
