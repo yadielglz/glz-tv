@@ -2195,9 +2195,8 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
         uniqueMap.set(item.tvgId, item);
       }
     }
-    const existing = await supabaseJson(env, "/rest/v1/event_channels?select=tvg_id") as Record<string, unknown>[];
-    const managedIds = new Set(existing.map((row) => String(row.tvg_id)));
-    const deduplicated = sortEventChannels(Array.from(uniqueMap.values()).filter((item) => managedIds.has(item.tvgId)));
+    // Refresh against the complete provider feed so newly published events are discovered.
+    const deduplicated = sortEventChannels(Array.from(uniqueMap.values()));
     if (!deduplicated.length) return json({ ok: true, ingestedCount: 0, events: [] });
     const result = await saveIngestedEventChannels(env, deduplicated);
     await pushConfigUpdateToAllDevices(env);
