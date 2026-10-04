@@ -1598,10 +1598,9 @@ function formatSportEventName(sportLeague: unknown): string {
   return sp;
 }
 
-function getEventChannelDisplayName(channelNumber: string, sportLeague: unknown): string {
+function getEventChannelDisplayName(sportLeague: unknown): string {
   const sport = formatSportEventName(sportLeague);
-  const chno = channelNumber ? `${channelNumber} ` : "";
-  return `${chno}${sport} Event`;
+  return `${sport} Event`;
 }
 
 function formatEpgEventTitle(sportLeague: unknown, title: string): string {
@@ -1635,7 +1634,7 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
     const rawEventTitle = cleanText(String(event.title || "Live Sports Event"));
     const sportLeague = cleanText(String(event.sport_league || "SPORTS"));
     const epgEventTitle = escapeXml(formatEpgEventTitle(sportLeague, rawEventTitle));
-    const channelDisplayName = escapeXml(getEventChannelDisplayName(channelNumber, event.sport_league));
+    const channelDisplayName = escapeXml(getEventChannelDisplayName(event.sport_league));
     const logoUrl = event.logo_url ? escapeXml(String(event.logo_url)) : "";
 
     const startTime = new Date(String(event.start_time));
@@ -2561,7 +2560,7 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
     let activeIndex = 1;
     for (const event of sortedEvents) {
       const chnoValue = String(event.channel_number || `30-${String(activeIndex).padStart(2, '0')}`);
-      const channelDisplayName = cleanText(getEventChannelDisplayName(chnoValue, event.sport_league));
+      const channelDisplayName = cleanText(getEventChannelDisplayName(event.sport_league));
       const mediaUrl = String(event.stream_url || "");
       const tvgId = event.tvg_id ? ` tvg-id="${cleanAttribute(event.tvg_id)}"` : "";
       const tvgName = ` tvg-name="${cleanAttribute(channelDisplayName)}"`;
