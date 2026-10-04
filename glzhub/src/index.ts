@@ -1604,6 +1604,15 @@ function getEventChannelDisplayName(channelNumber: string, sportLeague: unknown)
   return `${chno}${sport} Event`;
 }
 
+function formatEpgEventTitle(sportLeague: unknown, title: string): string {
+  const sport = formatSportEventName(sportLeague);
+  let clean = cleanText(title);
+  // Strip duplicate leading prefix like "MLB:", "[MLB]", "MLB -", "MLB |"
+  clean = clean.replace(new RegExp(`^(?:\\[?${sport}\\]?|${sport})\\s*[:\\-|•]?\\s*`, 'i'), '').trim();
+  if (!clean) clean = cleanText(title);
+  return `[${sport}] ${clean}`;
+}
+
 async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<string> {
   if (!xmlText || !xmlText.includes("</tv>")) return xmlText;
 
@@ -1623,8 +1632,9 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
   for (const event of sortedEvents) {
     const channelNumber = String(event.channel_number || `30-${String(index).padStart(2, "0")}`);
     const tvgId = escapeXml(String(event.tvg_id || `event.channel.${index}`));
-    const eventTitle = escapeXml(cleanText(String(event.title || "Live Sports Event")));
-    const sportLeague = escapeXml(cleanText(String(event.sport_league || "SPORTS")));
+    const rawEventTitle = cleanText(String(event.title || "Live Sports Event"));
+    const sportLeague = cleanText(String(event.sport_league || "SPORTS"));
+    const epgEventTitle = escapeXml(formatEpgEventTitle(sportLeague, rawEventTitle));
     const channelDisplayName = escapeXml(getEventChannelDisplayName(channelNumber, event.sport_league));
     const logoUrl = event.logo_url ? escapeXml(String(event.logo_url)) : "";
 
@@ -1645,8 +1655,8 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
     channelNodes += `  </channel>\n`;
 
     programmeNodes += `  <programme start="${formatXmlTvDate(startTime)}" stop="${formatXmlTvDate(endTime)}" channel="${tvgId}">\n`;
-    programmeNodes += `    <title lang="en">${eventTitle}</title>\n`;
-    programmeNodes += `    <desc lang="en">${eventTitle}</desc>\n`;
+    programmeNodes += `    <title lang="en">${epgEventTitle}</title>\n`;
+    programmeNodes += `    <desc lang="en">${epgEventTitle}</desc>\n`;
     programmeNodes += `    <category lang="en">Sports</category>\n`;
     programmeNodes += `    <category lang="en">Pay Per View</category>\n`;
     programmeNodes += `  </programme>\n`;
