@@ -180,6 +180,7 @@ import com.glztv.app.ui.components.GlzFocusCard
 import com.glztv.app.ui.components.GlzPanel
 import com.glztv.app.ui.components.GlzCardDefaults
 import com.glztv.app.ui.screens.GoogleTvGuideScreen
+import com.glztv.app.ui.screens.GoogleTvHomeScreen
 import com.glztv.app.ui.screens.GoogleTvPlayerOsd
 import com.glztv.app.ui.components.GoogleTvMiniGuide
 import com.glztv.app.ui.components.GoogleTvChannelLogo
@@ -197,6 +198,7 @@ import com.glztv.app.ui.navigation.ExpressiveNavigationRail
 import com.glztv.app.ui.components.SlimHeader
 import com.glztv.app.model.NetworkInfo
 import com.glztv.app.model.WeatherInfo
+import com.glztv.app.model.EntertainmentApp
 import com.glztv.app.ui.GlzTvApp
 import com.glztv.app.ui.i18n.GlzStrings
 import com.glztv.app.ui.i18n.LocalGlzStrings
@@ -263,12 +265,6 @@ private fun panelExit(fromLeft: Boolean) =
         slideOutHorizontally(tween(PANEL_ANIM_OUT)) { width -> if (fromLeft) -width else width }
 
 private enum class PlayerDrawer { None, Channels, Services, Recent, MiniGuide }
-
-private data class EntertainmentApp(
-    val name: String,
-    val packageName: String,
-    val accent: Color
-)
 
 private val EntertainmentApps = listOf(
     EntertainmentApp("YouTube", "com.google.android.youtube.tv", Color(0xFFFF2020)),
@@ -979,23 +975,55 @@ internal fun TvScreen(
                             label = "section"
                         ) { visibleSection ->
                         when (visibleSection) {
-                            AppSection.Home -> GuestHubHome(
-                                guestName = guestName,
-                                experience = guestExperience,
-                                entertainmentApps = managedEntertainmentApps,
-                                previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
-                                resumeChannel = resumeChannel,
-                                weather = weather,
-                                networkInfo = networkInfo,
-                                captionLanguage = captionLanguage,
+                            AppSection.Home -> GoogleTvHomeScreen(
                                 channels = ordered,
                                 guide = guide,
+                                resumeChannel = resumeChannel,
+                                previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
+                                favorites = favorites,
+                                recentChannels = remember(recentRevision, channels.toList()) {
+                                    recentChannelManager.recentIds().mapNotNull { id ->
+                                        channels.firstOrNull { it.id == id }
+                                    }
+                                },
+                                entertainmentApps = managedEntertainmentApps,
+                                guestName = guestName,
+                                experience = guestExperience,
+                                weather = weather,
+                                networkInfo = networkInfo,
                                 onWatchChannel = { channel ->
                                     section = AppSection.Live
                                     tuneChannel(channel)
+                                    playerActive = true
+                                },
+                                onToggleFavorite = { favId ->
+                                    favorites = if (favId in favorites) favorites - favId else favorites + favId
+                                    prefs.edit().putStringSet(FAVORITES, favorites).apply()
+                                },
+                                onOpenGuide = { section = AppSection.Live },
+                                onOpenRadio = { section = AppSection.Radio },
+                                onOpenWeather = { section = AppSection.Weather },
+                                onOpenSettings = { section = AppSection.You },
+                                onLaunchApp = { app ->
+                                    launchEntertainmentApp(context, app.packageName, null)
                                 },
                                 sportsBarKioskEnabled = sportsBarKioskEnabled,
                                 onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
+                                previewContent = {
+                                    val previewCh = ordered.firstOrNull { it.id == homePreviewChannelId } ?: resumeChannel ?: ordered.firstOrNull()
+                                    if (previewCh != null) {
+                                        VideoPlayer(
+                                            channel = previewCh,
+                                            captionsEnabled = false,
+                                            captionLanguage = captionLanguage,
+                                            modifier = Modifier.fillMaxSize(),
+                                            muted = true,
+                                            createMediaSession = false,
+                                            keepScreenOn = false,
+                                            cropVideo = true
+                                        )
+                                    }
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                             AppSection.Live -> GuideSection(

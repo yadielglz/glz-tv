@@ -1,5 +1,7 @@
 package com.glztv.app.model
 
+import androidx.compose.ui.graphics.Color
+
 data class WeatherInfo(
     val temperature: Int,
     val weatherCode: Int,
@@ -30,4 +32,10 @@ data class HourlyForecast(
 )
 
 data class NetworkInfo(val connection: String, val isp: String)
+
+data class EntertainmentApp(
+    val name: String,
+    val packageName: String,
+    val accent: Color
+)
 
