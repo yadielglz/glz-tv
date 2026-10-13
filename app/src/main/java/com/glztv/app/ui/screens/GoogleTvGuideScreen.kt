@@ -123,6 +123,13 @@ fun GoogleTvGuideScreen(
         }
     }
 
+    LaunchedEffect(filteredChannels) {
+        if (focusedChannel != null && focusedChannel !in filteredChannels) {
+            focusedChannel = filteredChannels.firstOrNull()
+            focusedProgramme = null
+        }
+    }
+
     val displayChannel = focusedChannel ?: activeTunedChannel ?: filteredChannels.firstOrNull()
 
     // 30 minute timeline calculation
@@ -455,6 +462,8 @@ private fun GoogleTvHeroSynopsisPanel(
                         color = GoogleTvTokens.BlueAccent,
                         trackColor = Color.White.copy(alpha = 0.12f)
                     )
+                } else {
+                    Spacer(Modifier.height(2.5.dp))
                 }
 
                 // Description
@@ -633,20 +642,28 @@ private fun GoogleTvGridRow(
                     .fillMaxHeight()
             ) {
                 if (visible.isEmpty()) {
+                    var emptyFocused by remember(channel.id) { mutableStateOf(false) }
                     Surface(
                         onClick = onWatch,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 2.dp)
-                            .googleTvFocusable(shape = RoundedCornerShape(8.dp), focusedScale = 1.01f),
+                            .googleTvFocusable(
+                                shape = RoundedCornerShape(8.dp),
+                                focusedScale = 1.01f,
+                                onFocusChange = {
+                                    emptyFocused = it
+                                    if (it) onFocusChannel()
+                                }
+                            ),
                         shape = RoundedCornerShape(8.dp),
-                        color = GoogleTvTokens.SurfaceTimelineSlot
+                        color = if (emptyFocused) Color.White.copy(alpha = 0.25f) else GoogleTvTokens.SurfaceTimelineSlot
                     ) {
                         Box(Modifier.fillMaxSize().padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
                             Text(
-                                "Live Broadcast",
+                                "Live Broadcast · Click to watch",
                                 fontSize = 11.sp,
-                                color = GoogleTvTokens.TextSecondary,
+                                color = if (emptyFocused) Color.White else GoogleTvTokens.TextSecondary,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -655,11 +672,16 @@ private fun GoogleTvGridRow(
                     visible.forEach { programme ->
                         val clippedStart = maxOf(programme.startMillis, windowStart)
                         val clippedEnd = minOf(programme.endMillis, windowEnd)
-                        val durationHalfHours = ((clippedEnd - clippedStart).toFloat() / halfHour.toFloat()).coerceAtLeast(0.3f)
-                        val startOffset = (((clippedStart - windowStart).toFloat() / halfHour.toFloat()) * slotWidth.value).dp
-                        val blockWidth = (slotWidth * durationHalfHours).coerceAtLeast(40.dp)
+                        if (clippedEnd <= clippedStart) return@forEach
+                        val durationRatio = (clippedEnd - clippedStart).toFloat() / halfHour.toFloat()
+                        val startOffsetRatio = (clippedStart - windowStart).toFloat() / halfHour.toFloat()
+                        val startOffset = slotWidth * startOffsetRatio
+                        val rawWidth = slotWidth * durationRatio
+                        val availableWidth = (totalTimelineWidth - startOffset).coerceAtLeast(0.dp)
+                        val blockWidth = rawWidth.coerceAtMost(availableWidth)
+                        if (blockWidth <= 2.dp) return@forEach
                         val isCurrent = programme.startMillis <= now && programme.endMillis > now
-                        var progFocused by remember { mutableStateOf(false) }
+                        var progFocused by remember(channel.id, programme.startMillis) { mutableStateOf(false) }
 
                         Surface(
                             onClick = onWatch,
