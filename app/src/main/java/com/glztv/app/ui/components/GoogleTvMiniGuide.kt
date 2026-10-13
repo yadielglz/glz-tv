@@ -161,7 +161,7 @@ private fun MiniGuideChannelCard(
             isPlaying -> GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
             else -> GoogleTvTokens.SurfaceCardTranslucent
         },
-        shadowElevation = 6.dp
+        shadowElevation = 0.dp
     ) {
         Column(
             Modifier

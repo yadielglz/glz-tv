@@ -4039,15 +4039,17 @@ private fun ImmersivePlayerScreen(
         initialFirstVisibleItemIndex = (selectedIndex - 2).coerceAtLeast(0)
     )
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    val channelProgrammes = guide.forChannel(channel)
-    val currentProgramme = channelProgrammes
-        .firstOrNull { it.startMillis <= now && it.endMillis > now }
-    val nextProgramme = channelProgrammes
-        .firstOrNull { it.startMillis >= (currentProgramme?.endMillis ?: now) }
+    val currentProgramme = remember(channel.id, guide, now) {
+        guide.forChannel(channel).firstOrNull { it.startMillis <= now && it.endMillis > now }
+    }
+    val nextProgramme = remember(channel.id, guide, currentProgramme) {
+        guide.forChannel(channel).firstOrNull { it.startMillis >= (currentProgramme?.endMillis ?: now) }
+    }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(showOsd, drawer) {
+        if (!showOsd && drawer == PlayerDrawer.None) return@LaunchedEffect
         while (true) {
-            delay(1_000)
+            delay(15_000L)
             now = System.currentTimeMillis()
         }
     }
@@ -4061,11 +4063,9 @@ private fun ImmersivePlayerScreen(
     LaunchedEffect(showOsd) {
         if (showOsd) {
             delay(80)
-            val req = runCatching { osdActionFocus.requestFocus() }
-            android.util.Log.d("GlzNav", "osdActionFocus.requestFocus success=${req.isSuccess} exc=${req.exceptionOrNull()}")
+            runCatching { osdActionFocus.requestFocus() }
         } else {
-            val req = runCatching { playerFocus.requestFocus() }
-            android.util.Log.d("GlzNav", "playerFocus.requestFocus success=${req.isSuccess}")
+            runCatching { playerFocus.requestFocus() }
         }
     }
     LaunchedEffect(channel.id) {
@@ -4308,7 +4308,7 @@ private fun ImmersivePlayerScreen(
                 contentColor = Color.White,
                 shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
                 border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
-                shadowElevation = 24.dp
+                shadowElevation = 0.dp
             ) {
                 Column(Modifier.fillMaxSize().padding(top = 22.dp)) {
                     // Header Channel Identity
@@ -4558,7 +4558,7 @@ private fun ImmersivePlayerScreen(
                 contentColor = Color.White,
                 shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
                 border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
-                shadowElevation = 24.dp
+                shadowElevation = 0.dp
             ) {
                 LazyColumn(
                     Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 22.dp),
@@ -4770,7 +4770,7 @@ private fun ImmersivePlayerScreen(
                 contentColor = Color.White,
                 shape = RoundedCornerShape(24.dp),
                 border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
-                shadowElevation = 24.dp
+                shadowElevation = 0.dp
             ) {
                 Column(Modifier.padding(22.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -4971,7 +4971,7 @@ private fun PlayerOsd(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
         color = Color(0xF5080C10),
-        shadowElevation = 24.dp
+        shadowElevation = 0.dp
     ) {
         Column(
             Modifier

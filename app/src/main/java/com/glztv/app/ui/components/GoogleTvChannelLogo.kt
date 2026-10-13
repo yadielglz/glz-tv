@@ -66,7 +66,7 @@ fun GoogleTvChannelLogo(
         modifier = modifier.size(size),
         shape = shape,
         color = Color(0xFF1E2129),
-        shadowElevation = 2.dp
+        shadowElevation = 0.dp
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (!logoLoaded) {

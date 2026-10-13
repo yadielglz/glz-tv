@@ -28,7 +28,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -416,14 +419,26 @@ private fun OsdActionButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    var isFocused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = if (active) GoogleTvTokens.BlueAccent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f),
-        contentColor = if (active) GoogleTvTokens.BlueAccent else Color.White,
+        color = when {
+            isFocused -> Color.White
+            active -> GoogleTvTokens.BlueAccent.copy(alpha = 0.22f)
+            else -> Color.White.copy(alpha = 0.10f)
+        },
+        contentColor = when {
+            isFocused -> Color.Black
+            active -> GoogleTvTokens.BlueAccent
+            else -> Color.White
+        },
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
         modifier = modifier.googleTvFocusable(
             shape = CircleShape,
-            focusedScale = 1.05f
+            focusedScale = 1.04f,
+            onFocusChange = { isFocused = it }
         )
     ) {
         Row(
@@ -435,7 +450,11 @@ private fun OsdActionButton(
                 icon,
                 contentDescription = label,
                 modifier = Modifier.size(16.dp),
-                tint = if (active) GoogleTvTokens.BlueAccent else Color.White
+                tint = when {
+                    isFocused -> Color.Black
+                    active -> GoogleTvTokens.BlueAccent
+                    else -> Color.White
+                }
             )
             Text(
                 label,

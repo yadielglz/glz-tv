@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 import com.glztv.app.Programme
@@ -63,8 +64,17 @@ import com.glztv.app.ui.components.GoogleTvChannelLogo
 import com.glztv.app.ui.theme.GoogleTvTokens
 import com.glztv.app.ui.theme.googleTvFocusable
 import kotlinx.coroutines.delay
-import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
+
+private val sharedTimeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+
+private fun formatGuideTime(millis: Long): String {
+    return synchronized(sharedTimeFormat) {
+        sharedTimeFormat.format(Date(millis))
+    }
+}
 
 /**
  * Authentic Google TV 1:1 Live Guide Experience.
@@ -210,7 +220,7 @@ fun GoogleTvGuideScreen(
                                 contentAlignment = Alignment.CenterStart
                             ) {
                                 Text(
-                                    DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(slotTime)),
+                                    formatGuideTime(slotTime),
                                     Modifier.padding(start = 10.dp),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
@@ -260,31 +270,18 @@ fun GoogleTvGuideScreen(
                 }
             }
 
-            // Real-time "NOW" Glowing Needle Cursor
+            // Real-time "NOW" Needle Cursor (uses layout offset so scrolling doesn't trigger recomposition)
             if (now in timelineStart..timelineEnd) {
-                val elapsedRatio = (now - timelineStart).toFloat() / (slots * halfHour).toFloat()
-                val needleTimelineX = totalTimelineWidth * elapsedRatio
-                val density = LocalDensity.current
-                val scrollOffsetDp = with(density) { timelineScrollState.value.toDp() }
-                val needleScreenX = channelColumnWidth + needleTimelineX - scrollOffsetDp
-
-                if (needleScreenX >= channelColumnWidth && needleScreenX <= maxWidth) {
-                    Box(
-                        Modifier
-                            .offset(x = needleScreenX - 1.dp)
-                            .width(2.dp)
-                            .fillMaxHeight()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(
-                                        GoogleTvTokens.BlueAccent,
-                                        GoogleTvTokens.BlueAccent.copy(alpha = 0.5f),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                    )
-                }
+                TimelineNeedle(
+                    now = now,
+                    timelineStart = timelineStart,
+                    slots = slots,
+                    halfHour = halfHour,
+                    channelColumnWidth = channelColumnWidth,
+                    totalTimelineWidth = totalTimelineWidth,
+                    timelineScrollState = timelineScrollState,
+                    maxWidth = maxWidth
+                )
             }
         }
     }
@@ -419,8 +416,8 @@ private fun GoogleTvHeroSynopsisPanel(
                         }
                     }
                     activeProg?.let { prog ->
-                        val startStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))
-                        val endStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))
+                        val startStr = formatGuideTime(prog.startMillis)
+                        val endStr = formatGuideTime(prog.endMillis)
                         Spacer(Modifier.width(8.dp))
                         Text(
                             "$startStr – $endStr",
@@ -675,7 +672,7 @@ private fun GoogleTvGridRow(
                                 .padding(horizontal = 1.dp)
                                 .googleTvFocusable(
                                     shape = RoundedCornerShape(8.dp),
-                                    focusedScale = 1.02f,
+                                    focusedScale = 1.0f,
                                     onFocusChange = {
                                         progFocused = it
                                         if (it) onFocusProgramme(programme)
@@ -702,7 +699,7 @@ private fun GoogleTvGridRow(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                val startFormatted = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(programme.startMillis))
+                                val startFormatted = formatGuideTime(programme.startMillis)
                                 Text(
                                     startFormatted,
                                     fontSize = 9.sp,
@@ -716,3 +713,48 @@ private fun GoogleTvGridRow(
         }
     }
 }
+
+@Composable
+private fun TimelineNeedle(
+    now: Long,
+    timelineStart: Long,
+    slots: Int,
+    halfHour: Long,
+    channelColumnWidth: Dp,
+    totalTimelineWidth: Dp,
+    timelineScrollState: androidx.compose.foundation.ScrollState,
+    maxWidth: Dp
+) {
+    val density = LocalDensity.current
+    val channelColPx = with(density) { channelColumnWidth.toPx() }
+    val totalTimelinePx = with(density) { totalTimelineWidth.toPx() }
+    val maxScreenPx = with(density) { maxWidth.toPx() }
+
+    Box(
+        Modifier
+            .width(2.dp)
+            .fillMaxHeight()
+            .offset {
+                val elapsedRatio = (now - timelineStart).toFloat() / (slots * halfHour).toFloat()
+                val needleTimelineX = totalTimelinePx * elapsedRatio
+                val scrollOffsetPx = timelineScrollState.value
+                val screenXPx = channelColPx + needleTimelineX - scrollOffsetPx
+
+                if (screenXPx in channelColPx..maxScreenPx) {
+                    IntOffset(screenXPx.toInt() - 1, 0)
+                } else {
+                    IntOffset(-10000, 0)
+                }
+            }
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        GoogleTvTokens.BlueAccent,
+                        GoogleTvTokens.BlueAccent.copy(alpha = 0.5f),
+                        Color.Transparent
+                    )
+                )
+            )
+    )
+}
+

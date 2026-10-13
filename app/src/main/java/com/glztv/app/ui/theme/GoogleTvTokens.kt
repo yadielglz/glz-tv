@@ -83,60 +83,34 @@ object GoogleTvTokens {
 }
 
 /**
- * Google TV 1:1 focus behavior:
- * - Subtle spring scale (1.04x - 1.06x)
- * - Solid crisp focus border outline (white or blue)
- * - Soft diffuse back-glow
+ * Authentic Google TV / Material 3 focus behavior:
+ * - Clean solid fill inversion (handled by container)
+ * - Subtle scale (1.02x - 1.05x)
+ * - No border outlines, no shadows, no glow — exactly like official Google TV software
  */
 fun Modifier.googleTvFocusable(
     shape: Shape = GoogleTvTokens.ShapeCard,
-    focusedScale: Float = 1.05f,
-    focusBorderColor: Color = Color.White,
-    glowColor: Color = Color(0x558AB4F8),
+    focusedScale: Float = 1.04f,
+    focusBorderColor: Color = Color.Transparent,
     onFocusChange: ((Boolean) -> Unit)? = null
 ): Modifier = composed {
     var isFocused by remember { mutableStateOf(false) }
 
-    val scale by animateFloatAsState(
-        targetValue = if (isFocused) focusedScale else 1.0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "GtvFocusScale"
-    )
-
-    val glowAlpha by animateFloatAsState(
-        targetValue = if (isFocused) 1f else 0f,
-        animationSpec = tween(durationMillis = 150),
-        label = "GtvFocusGlow"
-    )
-
     this
         .onFocusChanged { state ->
-            isFocused = state.isFocused
-            onFocusChange?.invoke(state.isFocused)
-        }
-        .drawBehind {
-            if (glowAlpha > 0.01f) {
-                val spread = 10.dp.toPx() * glowAlpha
-                drawRoundRect(
-                    color = glowColor.copy(alpha = glowColor.alpha * glowAlpha),
-                    topLeft = Offset(-spread, -spread),
-                    size = Size(size.width + spread * 2f, size.height + spread * 2f),
-                    cornerRadius = CornerRadius(16.dp.toPx(), 16.dp.toPx())
-                )
+            if (isFocused != state.isFocused) {
+                isFocused = state.isFocused
+                onFocusChange?.invoke(state.isFocused)
             }
         }
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-            this.shape = shape
-            this.clip = true
-        }
         .then(
-            if (isFocused) {
-                Modifier.border(2.dp, focusBorderColor, shape)
+            if (isFocused && focusedScale > 1.001f) {
+                Modifier.graphicsLayer {
+                    scaleX = focusedScale
+                    scaleY = focusedScale
+                    this.shape = shape
+                    this.clip = true
+                }
             } else {
                 Modifier
             }
