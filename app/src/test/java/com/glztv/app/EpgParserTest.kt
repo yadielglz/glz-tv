@@ -165,4 +165,21 @@ class EpgParserTest {
         assertEquals(1, progs.size)
         assertEquals("Telenoticias", progs.single().title)
     }
+
+    @Test
+    fun testNowAndNextProgrammeBinarySearchAndPrewarm() {
+        val now = 1753812300000L // 2026-07-29 18:05:00 UTC
+        val prog1 = Programme("ch1", now - 600000L, now + 600000L, "Show 1", "Desc 1")
+        val prog2 = Programme("ch1", now + 600000L, now + 1800000L, "Show 2", "Desc 2")
+        val guide = EpgGuide(
+            programmes = mapOf("ch1" to listOf(prog1, prog2)),
+            channelNames = mapOf("ch1" to "Channel 1")
+        )
+        val channel = Channel("ch1", "Channel 1", "Group", "1", "", "", emptyMap())
+
+        guide.prewarm(listOf(channel))
+        assertEquals("Show 1", guide.nowProgrammeForChannel(channel, now)?.title)
+        assertEquals("Show 2", guide.nextProgrammeForChannel(channel, now + 600000L)?.title)
+    }
 }
+

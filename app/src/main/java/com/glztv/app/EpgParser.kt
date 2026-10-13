@@ -1,5 +1,6 @@
 package com.glztv.app
 
+import androidx.compose.runtime.Immutable
 import org.xml.sax.Attributes
 import org.xml.sax.helpers.DefaultHandler
 import java.io.StringReader
@@ -8,6 +9,7 @@ import java.util.Locale
 import javax.xml.parsers.SAXParserFactory
 import org.xml.sax.InputSource
 
+@Immutable
 data class Programme(
     val channelId: String,
     val startMillis: Long,
@@ -16,6 +18,7 @@ data class Programme(
     val description: String
 )
 
+@Immutable
 data class EpgGuide(
     val programmes: Map<String, List<Programme>>,
     val channelNames: Map<String, String>,
@@ -90,6 +93,51 @@ data class EpgGuide(
         }
     }
 
+    fun nowProgrammeForChannel(channel: Channel, nowMillis: Long): Programme? {
+        val list = forChannel(channel)
+        if (list.isEmpty()) return null
+        var low = 0
+        var high = list.size - 1
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            val p = list[mid]
+            if (nowMillis < p.startMillis) {
+                high = mid - 1
+            } else if (nowMillis >= p.endMillis) {
+                low = mid + 1
+            } else {
+                return p
+            }
+        }
+        return null
+    }
+
+    fun nextProgrammeForChannel(channel: Channel, afterMillis: Long): Programme? {
+        val list = forChannel(channel)
+        if (list.isEmpty()) return null
+        var low = 0
+        var high = list.size - 1
+        var candidate: Programme? = null
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            val p = list[mid]
+            if (p.startMillis >= afterMillis) {
+                candidate = p
+                high = mid - 1
+            } else {
+                low = mid + 1
+            }
+        }
+        return candidate
+    }
+
+    fun prewarm(channels: Collection<Channel>) {
+        for (ch in channels) {
+            forChannel(ch)
+            logoForChannel(ch)
+        }
+    }
+
     fun logoForChannel(channel: Channel): String? {
         val cacheKey = "${channel.id}\u0000${channel.name}"
         return synchronized(logoMatchCache) {
@@ -101,6 +149,7 @@ data class EpgGuide(
         }
     }
 }
+
 
 object EpgParser {
     private val dateFormatTL = ThreadLocal.withInitial {

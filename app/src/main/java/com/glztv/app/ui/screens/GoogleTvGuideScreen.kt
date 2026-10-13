@@ -257,8 +257,7 @@ fun GoogleTvGuideScreen(
                             onToggleFavorite = { onToggleFavorite(channel.id) },
                             onFocusChannel = {
                                 focusedChannel = channel
-                                val progs = guide.forChannel(channel)
-                                focusedProgramme = progs.firstOrNull { it.startMillis <= now && it.endMillis > now }
+                                focusedProgramme = guide.nowProgrammeForChannel(channel, now)
                             },
                             onFocusProgramme = { prog ->
                                 focusedChannel = channel
@@ -355,9 +354,8 @@ private fun GoogleTvHeroSynopsisPanel(
     previewContent: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val programmes = remember(channel, guide) { guide.forChannel(channel) }
-    val current = remember(programmes, now) {
-        programmes.firstOrNull { it.startMillis <= now && it.endMillis > now }
+    val current = remember(channel, guide, now) {
+        guide.nowProgrammeForChannel(channel, now)
     }
     val activeProg = focusedProgramme ?: current
     val isLive = activeProg != null && activeProg.startMillis <= now && activeProg.endMillis > now

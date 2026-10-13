@@ -111,8 +111,7 @@ fun GoogleTvMiniGuide(
                 itemsIndexed(channels, key = { _, ch -> "mini-${ch.id}" }) { index, channel ->
                     val isPlaying = channel.id == currentChannel.id
                     val isFav = channel.id in favorites
-                    val progs = guide.forChannel(channel)
-                    val activeProg = progs.firstOrNull { it.startMillis <= now && it.endMillis > now }
+                    val activeProg = guide.nowProgrammeForChannel(channel, now)
                     val progress = activeProg?.let {
                         ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L)).coerceIn(0f, 1f)
                     } ?: 0f
@@ -152,7 +151,6 @@ private fun MiniGuideChannelCard(
             .googleTvFocusable(
                 shape = RoundedCornerShape(14.dp),
                 focusedScale = 1.05f,
-                focusBorderColor = Color.White,
                 onFocusChange = { isFocused = it }
             ),
         shape = RoundedCornerShape(14.dp),

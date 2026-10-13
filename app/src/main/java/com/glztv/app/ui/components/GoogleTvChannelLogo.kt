@@ -53,14 +53,7 @@ fun GoogleTvChannelLogo(
         }
     }
     var logoLoaded by remember(model) { mutableStateOf(false) }
-    val initials = remember(channel.name) {
-        channel.name.split(Regex("\\s+"))
-            .mapNotNull { word -> word.firstOrNull(Char::isLetterOrDigit) }
-            .take(2)
-            .joinToString("")
-            .uppercase()
-            .ifBlank { "TV" }
-    }
+    val initials = channel.monogram.ifBlank { "TV" }
 
     Surface(
         modifier = modifier.size(size),

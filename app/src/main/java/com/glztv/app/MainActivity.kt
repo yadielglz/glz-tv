@@ -483,7 +483,10 @@ internal fun TvScreen(
         cached.first?.let { cachedChannels ->
             channels.clear()
             channels.addAll(cachedChannels)
-            cached.second?.let { guide = it }
+            cached.second?.let {
+                it.prewarm(cachedChannels)
+                guide = it
+            }
             status = if (BuildConfig.DEBUG) {
                 "${cachedChannels.size} channels · restored instantly" +
                     cached.second?.let { " · ${it.programmeCount} guide entries" }.orEmpty()
@@ -509,6 +512,9 @@ internal fun TvScreen(
         }
         refreshResult.onSuccess { (parsed, parsedGuide, refreshInfo) ->
             val (fromCache, matchedChannels) = refreshInfo
+            withContext(Dispatchers.Default) {
+                parsedGuide.prewarm(parsed)
+            }
             channels.clear()
             channels.addAll(parsed)
             guide = parsedGuide
@@ -4040,10 +4046,10 @@ private fun ImmersivePlayerScreen(
     )
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     val currentProgramme = remember(channel.id, guide, now) {
-        guide.forChannel(channel).firstOrNull { it.startMillis <= now && it.endMillis > now }
+        guide.nowProgrammeForChannel(channel, now)
     }
     val nextProgramme = remember(channel.id, guide, currentProgramme) {
-        guide.forChannel(channel).firstOrNull { it.startMillis >= (currentProgramme?.endMillis ?: now) }
+        guide.nextProgrammeForChannel(channel, currentProgramme?.endMillis ?: now)
     }
 
     LaunchedEffect(showOsd, drawer) {
@@ -4438,8 +4444,9 @@ private fun ImmersivePlayerScreen(
                         itemsIndexed(channels, key = { index, ch -> "ch-drawer-$index-${ch.id}" }) { _, item ->
                             val isTuned = item.id == channel.id
                             var isFocused by remember(item.id) { mutableStateOf(false) }
-                            val itemProgramme = guide.forChannel(item)
-                                .firstOrNull { it.startMillis <= now && it.endMillis > now }
+                            val itemProgramme = remember(item.id, guide, now) {
+                                guide.nowProgrammeForChannel(item, now)
+                            }
 
                             Surface(
                                 onClick = {
