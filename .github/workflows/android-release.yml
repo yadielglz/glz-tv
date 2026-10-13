@@ -46,20 +46,29 @@ jobs:
           MANUAL_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          version="${MANUAL_VERSION:-${GITHUB_REF_NAME#v}}"
-          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+          ref_version="${GITHUB_REF_NAME##*/}"
+          version="${MANUAL_VERSION:-${ref_version#v}}"
+          if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            p1="${BASH_REMATCH[1]}"
+            p2="${BASH_REMATCH[2]}"
+            p3="${BASH_REMATCH[3]}"
+            p4="${BASH_REMATCH[4]}"
+            suffix="${BASH_REMATCH[5]:-}"
+            version_code=$((10#$p1 * 10000000 + 10#$p2 * 1000000 + 10#$p3 * 1000 + 10#$p4))
+          elif [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+            suffix="${BASH_REMATCH[4]:-}"
+            subpatch=0
+            if [[ "$suffix" =~ ^-([0-9]+)$ ]]; then
+              subpatch="${BASH_REMATCH[1]}"
+            fi
+            version_code=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch + 10#$subpatch))
+          else
             echo "Version must use major.minor.patch[-suffix] format." >&2
             exit 1
           fi
-          major="${BASH_REMATCH[1]}"
-          minor="${BASH_REMATCH[2]}"
-          patch="${BASH_REMATCH[3]}"
-          suffix="${BASH_REMATCH[4]:-}"
-          subpatch=0
-          if [[ "$suffix" =~ ^-([0-9]+)$ ]]; then
-            subpatch="${BASH_REMATCH[1]}"
-          fi
-          version_code=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch + 10#$subpatch))
           echo "name=$version" >> "$GITHUB_OUTPUT"
           echo "code=$version_code" >> "$GITHUB_OUTPUT"
 
