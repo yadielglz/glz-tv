@@ -338,26 +338,29 @@ internal fun TvScreen(
             }
         }
         val refreshResult = runCatching {
-            onProgress(50, "Updating TV lineup…")
-            val parsed = withContext(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
+            onProgress(50, "Updating TV lineup & guide…")
+            val (parsed, parsedGuide) = coroutineScope {
+                val playlistDeferred = async(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
+                val epgDeferred = async(Dispatchers.IO) {
+                    runCatching { epgRepository.load(forceRefresh) }.getOrNull()
+                }
+                val p = playlistDeferred.await()
+                val g = epgDeferred.await() ?: cached.second ?: EpgGuide.Empty
+                p to g
+            }
             channels.clear()
             channels.addAll(parsed)
             if (selected == null && prefs.getBoolean(RESUME_LAST_CHANNEL, true)) {
                 val lastId = prefs.getString(LAST_CHANNEL_ID, null)
                 selected = parsed.firstOrNull { it.id == lastId }
             }
-            onProgress(70, "Updating programme guide…")
-            val parsedGuide = runCatching {
-                withContext(Dispatchers.IO) { epgRepository.load(forceRefresh) }
-            }.getOrElse {
-                cached.second ?: EpgGuide.Empty
-            }
+            onProgress(75, "Matching guide data…")
             val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
             val effectiveGuide = if (parsedGuide.programmeCount > 0 && matchedChannels == 0 && cached.second != null) {
                 cached.second ?: parsedGuide
             } else parsedGuide
             guide = effectiveGuide
-            val finalMatches = parsed.count { effectiveGuide.forChannel(it).isNotEmpty() }
+            val finalMatches = if (effectiveGuide === parsedGuide) matchedChannels else parsed.count { effectiveGuide.forChannel(it).isNotEmpty() }
 
             status = if (BuildConfig.DEBUG) {
                 "${parsed.size} channels · ${effectiveGuide.programmeCount} guide entries · $finalMatches EPG matches"
@@ -465,6 +468,22 @@ internal fun TvScreen(
     }
 
     LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val cachedChannels = playlistRepository.cached()
+            val cachedGuide = epgRepository.cached()
+            if (cachedChannels != null) {
+                withContext(Dispatchers.Main) {
+                    if (channels.isEmpty()) {
+                        channels.addAll(cachedChannels)
+                        if (cachedGuide != null) guide = cachedGuide
+                        if (selected == null && prefs.getBoolean(RESUME_LAST_CHANNEL, true)) {
+                            val lastId = prefs.getString(LAST_CHANNEL_ID, null)
+                            selected = cachedChannels.firstOrNull { it.id == lastId }
+                        }
+                    }
+                }
+            }
+        }
         val initialSync = runCatching {
             withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
         }.getOrNull()

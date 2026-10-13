@@ -76,7 +76,9 @@ fun ChannelLogo(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val logoUrl = channel.logoUrl.takeIf { it.isNotBlank() } ?: guide?.logoForChannel(channel)
+    val logoUrl = remember(channel, guide) {
+        channel.logoUrl.takeIf { it.isNotBlank() } ?: guide?.logoForChannel(channel)
+    }
     val model = remember(logoUrl, channel.headers, channel.logoStyle, channel.name) {
         if (logoUrl.isNullOrBlank()) null
         else {

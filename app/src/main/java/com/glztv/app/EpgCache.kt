@@ -11,7 +11,7 @@ object EpgCache {
     fun read(context: Context, sourceUrl: String): EpgGuide? = runCatching {
         val file = context.cacheDir.resolve(EPG_CACHE_FILE)
         if (!file.isFile) return null
-        DataInputStream(BufferedInputStream(file.inputStream())).use { input ->
+        DataInputStream(BufferedInputStream(file.inputStream(), 65536)).use { input ->
             val version = input.readInt()
             if (version !in 1..3 || input.readString() != sourceUrl) return null
             input.readLong() // Saved timestamp is informational; retain last-known-good data.
@@ -65,7 +65,7 @@ object EpgCache {
 
             val target = context.cacheDir.resolve(EPG_CACHE_FILE)
             val temporary = context.cacheDir.resolve("$EPG_CACHE_FILE.tmp")
-            DataOutputStream(BufferedOutputStream(temporary.outputStream())).use { output ->
+            DataOutputStream(BufferedOutputStream(temporary.outputStream(), 65536)).use { output ->
                 output.writeInt(3)
                 output.writeString(sourceUrl)
                 output.writeLong(System.currentTimeMillis())

@@ -22,6 +22,7 @@ data class EpgGuide(
     val channelLogos: Map<String, String> = emptyMap(),
     val allChannelNames: Map<String, Set<String>> = emptyMap()
 ) {
+    private val channelIdMatchCache = mutableMapOf<String, String?>()
     private val programmeMatchCache = mutableMapOf<String, List<Programme>>()
     private val logoMatchCache = mutableMapOf<String, String?>()
     private val exactNormalizedNameMap: Map<String, String> by lazy {
@@ -49,6 +50,19 @@ data class EpgGuide(
 
     val programmeCount: Int get() = programmes.values.sumOf(List<Programme>::size)
 
+    private fun getMatchedChannelId(channel: Channel): String? {
+        val cacheKey = "${channel.id}\u0000${channel.name}"
+        return synchronized(channelIdMatchCache) {
+            if (channelIdMatchCache.containsKey(cacheKey)) {
+                channelIdMatchCache[cacheKey]
+            } else {
+                val matched = findMatchedChannelId(channel)
+                channelIdMatchCache[cacheKey] = matched
+                matched
+            }
+        }
+    }
+
     private fun findMatchedChannelId(channel: Channel): String? {
         if (channel.id.isNotBlank() && (programmes.containsKey(channel.id) || channelLogos.containsKey(channel.id) || channelNames.containsKey(channel.id))) {
             return channel.id
@@ -67,7 +81,7 @@ data class EpgGuide(
 
         if (normClean.length >= 3) {
             exactNormalizedNameMap.entries.firstOrNull { (normKey, _) ->
-                normKey.length >= 3 && (normClean.startsWith(normKey) || normKey.startsWith(normClean) || normClean.contains(normKey) || normKey.contains(normClean))
+                normKey.length >= 3 && (normClean.startsWith(normKey) || normKey.startsWith(normClean) || normClean.contains(normKey) || normKey.contains(cleanName))
             }?.value?.let { return it }
         }
 
@@ -85,7 +99,7 @@ data class EpgGuide(
         return synchronized(programmeMatchCache) {
             programmeMatchCache.getOrPut(cacheKey) {
                 programmes[channel.id]?.takeIf(List<Programme>::isNotEmpty)
-                    ?: findMatchedChannelId(channel)?.let(programmes::get).orEmpty()
+                    ?: getMatchedChannelId(channel)?.let(programmes::get).orEmpty()
             }
         }
     }
@@ -95,7 +109,7 @@ data class EpgGuide(
         return synchronized(logoMatchCache) {
             if (logoMatchCache.containsKey(cacheKey)) return@synchronized logoMatchCache[cacheKey]
             val logo = channelLogos[channel.id]?.takeIf(String::isNotBlank)
-                ?: findMatchedChannelId(channel)?.let { channelLogos[it] }?.takeIf(String::isNotBlank)
+                ?: getMatchedChannelId(channel)?.let { channelLogos[it] }?.takeIf(String::isNotBlank)
             logoMatchCache[cacheKey] = logo
             logo
         }
@@ -133,27 +147,30 @@ object EpgParser {
     }
 
     fun parse(stream: java.io.InputStream, cutoffMillis: Long = 0L): EpgGuide {
-        val rawReader = java.io.InputStreamReader(stream, Charsets.UTF_8)
+        val rawReader = java.io.BufferedReader(java.io.InputStreamReader(stream, Charsets.UTF_8), 32768)
         val sanitizingReader = XmlSanitizingReader(rawReader)
         return parse(InputSource(sanitizingReader), cutoffMillis)
     }
 
     private class XmlSanitizingReader(private val delegate: java.io.Reader) : java.io.Reader() {
         private val buffer = StringBuilder()
+        private var readPos = 0
         private var isFirstChar = true
+        private val chunkBuf = CharArray(16384)
 
         private fun fillBufferIfNeeded(minChars: Int) {
-            while (buffer.length < minChars) {
-                val c = delegate.read()
-                if (c == -1) break
-                val ch = c.toChar()
-                if (isFirstChar && ch == '\uFEFF') {
-                    isFirstChar = false
-                    continue
+            while ((buffer.length - readPos) < minChars) {
+                val n = delegate.read(chunkBuf, 0, chunkBuf.size)
+                if (n == -1) break
+                for (i in 0 until n) {
+                    val ch = chunkBuf[i]
+                    if (isFirstChar) {
+                        isFirstChar = false
+                        if (ch == '\uFEFF') continue
+                    }
+                    if (isInvalidXmlChar(ch.code)) continue
+                    buffer.append(ch)
                 }
-                isFirstChar = false
-                if (isInvalidXmlChar(c)) continue
-                buffer.append(ch)
             }
         }
 
@@ -163,38 +180,44 @@ object EpgParser {
 
             while (written < len) {
                 fillBufferIfNeeded(64)
-                if (buffer.isEmpty()) break
+                if (readPos >= buffer.length) break
 
-                val c = buffer[0]
+                val c = buffer[readPos]
                 if (c == '&') {
                     sanitizeAmpersand()
                 } else if (c == '<') {
                     sanitizeLessThan()
                 }
 
-                cbuf[off + written] = buffer[0]
-                buffer.deleteCharAt(0)
+                cbuf[off + written] = buffer[readPos]
+                readPos++
                 written++
+            }
+
+            if (readPos >= 16384) {
+                buffer.delete(0, readPos)
+                readPos = 0
             }
 
             return if (written > 0) written else -1
         }
 
         private fun sanitizeAmpersand() {
-            val entityEnd = buffer.indexOf(';', 1)
-            val isValid = entityEnd in 1..32 && isValidEntityStr(buffer.substring(1, entityEnd))
+            val entityEnd = buffer.indexOf(';', readPos + 1)
+            val isValid = entityEnd in (readPos + 1)..(readPos + 32) &&
+                    isValidEntityStr(buffer.substring(readPos + 1, entityEnd))
             if (!isValid) {
-                buffer.replace(0, 1, "&amp;")
+                buffer.replace(readPos, readPos + 1, "&amp;")
             }
         }
 
         private fun sanitizeLessThan() {
-            if (buffer.length < 2) return
-            val next = buffer[1]
+            if (readPos + 1 >= buffer.length) return
+            val next = buffer[readPos + 1]
             val isValidStart = next == '/' || next == '!' || next == '?' ||
                     next in 'a'..'z' || next in 'A'..'Z' || next == '_' || next == ':'
             if (!isValidStart) {
-                buffer.replace(0, 1, "&lt;")
+                buffer.replace(readPos, readPos + 1, "&lt;")
             }
         }
 
@@ -299,8 +322,12 @@ object EpgParser {
 
     private fun parseXmlTvTime(value: String?): Long? {
         if (value.isNullOrBlank()) return null
+        val trimmed = value.trim()
+        val fastResult = fastParseXmlTvTime(trimmed)
+        if (fastResult != null) return fastResult
+
         return runCatching {
-            val match = xmlTvTimeRegex.find(value.trim()) ?: return null
+            val match = xmlTvTimeRegex.find(trimmed) ?: return null
             val rawDigits = match.groupValues[1].padEnd(14, '0')
             val rawOffset = match.groupValues.getOrNull(2)
             val offset = when {
@@ -315,6 +342,67 @@ object EpgParser {
             }
             dateFormatTL.get()!!.parse("$rawDigits $offset")?.time
         }.getOrNull()
+    }
+
+    private fun fastParseXmlTvTime(s: String): Long? {
+        if (s.length < 8) return null
+        var digitEnd = 0
+        while (digitEnd < s.length && s[digitEnd] in '0'..'9') {
+            digitEnd++
+        }
+        if (digitEnd < 8 || digitEnd > 14) return null
+
+        val year = s.substring(0, 4).toIntOrNull() ?: return null
+        val month = s.substring(4, 6).toIntOrNull() ?: return null
+        val day = s.substring(6, 8).toIntOrNull() ?: return null
+        if (month !in 1..12 || day !in 1..31) return null
+
+        val hour = if (digitEnd >= 10) s.substring(8, 10).toIntOrNull() ?: return null else 0
+        val min = if (digitEnd >= 12) s.substring(10, 12).toIntOrNull() ?: return null else 0
+        val sec = if (digitEnd >= 14) s.substring(12, 14).toIntOrNull() ?: return null else 0
+        if (hour !in 0..23 || min !in 0..59 || sec !in 0..59) return null
+
+        var pos = digitEnd
+        while (pos < s.length && s[pos].isWhitespace()) pos++
+
+        val offsetMillis: Long
+        if (pos >= s.length) {
+            offsetMillis = 0L
+        } else {
+            val remainder = s.substring(pos)
+            if (remainder.equals("Z", ignoreCase = true) ||
+                remainder.equals("UTC", ignoreCase = true) ||
+                remainder.equals("GMT", ignoreCase = true)) {
+                offsetMillis = 0L
+            } else if (remainder.startsWith("+") || remainder.startsWith("-")) {
+                val sign = if (remainder.startsWith("+")) 1 else -1
+                val offsetDigits = remainder.substring(1).replace(":", "").trim()
+                if (offsetDigits.length < 2) return null
+                val offHours = offsetDigits.substring(0, 2).toIntOrNull() ?: return null
+                val offMins = if (offsetDigits.length >= 4) offsetDigits.substring(2, 4).toIntOrNull() ?: return null else 0
+                offsetMillis = sign * (offHours * 3600L + offMins * 60L) * 1000L
+            } else {
+                return null
+            }
+        }
+
+        val utcEpochMillis = epochMillisFromUtc(year, month, day, hour, min, sec)
+        return utcEpochMillis - offsetMillis
+    }
+
+    private fun epochMillisFromUtc(year: Int, month: Int, day: Int, hour: Int, min: Int, sec: Int): Long {
+        var y = year.toLong()
+        var m = month.toLong()
+        if (m <= 2) {
+            y -= 1
+            m += 12
+        }
+        val era = (if (y >= 0) y else y - 399) / 400
+        val yoe = y - era * 400
+        val doy = (153 * (m - 3) + 2) / 5 + day - 1
+        val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        val days = era * 146097 + doe - 719468
+        return (days * 86400L + hour * 3600L + min * 60L + sec) * 1000L
     }
 }
 

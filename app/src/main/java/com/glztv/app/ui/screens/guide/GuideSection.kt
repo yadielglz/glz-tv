@@ -109,6 +109,13 @@ fun GuideSection(
         }
     }
 
+    LaunchedEffect(filteredChannels) {
+        if (focusedChannel != null && focusedChannel !in filteredChannels) {
+            focusedChannel = filteredChannels.firstOrNull()
+            focusedProgramme = null
+        }
+    }
+
     val activeChannel = focusedChannel ?: previewChannel ?: filteredChannels.firstOrNull()
 
     GlzPanel(
@@ -116,7 +123,7 @@ fun GuideSection(
         shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
         fill = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
     ) {
-        BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp)) {
+        Box(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp)) {
             if (guide.programmeCount == 0 && channels.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -293,7 +300,7 @@ fun EpgPreviewHeader(
         } else 0f
     } ?: 0f
 
-    val isLive = activeProg != null && activeProg.startMillis <= now && activeProg.endMillis > now
+    val isLive = activeProg == null || (activeProg.startMillis <= now && activeProg.endMillis > now)
 
     Surface(
         modifier,
@@ -303,23 +310,40 @@ fun EpgPreviewHeader(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            ChannelLogo(focusedChannel, 34.dp, guide)
+            ChannelLogo(focusedChannel, 38.dp, guide)
 
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
                         "${focusedChannel.number.ifBlank { "TV" }} · ${focusedChannel.name}",
+                        modifier = Modifier.weight(1f, fill = false),
                         fontWeight = FontWeight.Black,
                         fontSize = 13.sp,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.width(8.dp))
+                    if (focusedChannel.group.isNotBlank() && !focusedChannel.group.equals("TV", ignoreCase = true)) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color.White.copy(alpha = 0.08f)
+                        ) {
+                            Text(
+                                focusedChannel.group.uppercase(),
+                                Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = if (isLive) Color(0xFF00E5FF).copy(alpha = 0.20f) else Color.White.copy(alpha = 0.10f),
@@ -335,9 +359,16 @@ fun EpgPreviewHeader(
                     activeProg?.let { prog ->
                         val startStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))
                         val endStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))
-                        Spacer(Modifier.width(8.dp))
+                        val durationMinutes = ((prog.endMillis - prog.startMillis) / 60_000L).coerceAtLeast(1L)
+                        val durationStr = if (durationMinutes >= 60) {
+                            val hours = durationMinutes / 60
+                            val mins = durationMinutes % 60
+                            if (mins > 0) "${hours}h ${mins}m" else "${hours}h"
+                        } else {
+                            "${durationMinutes}m"
+                        }
                         Text(
-                            "$startStr – $endStr",
+                            "$startStr – $endStr ($durationStr)",
                             color = MaterialTheme.colorScheme.secondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -345,30 +376,25 @@ fun EpgPreviewHeader(
                     }
                 }
 
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        activeProg?.title ?: "Live Broadcast",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 14.sp,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    next?.let { n ->
-                        Text(
-                            "Next: ${n.title}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.80f),
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = 10.dp)
-                        )
-                    }
-                }
+                Text(
+                    activeProg?.title ?: "Live Broadcast",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 14.sp,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                val subtitleText = activeProg?.description?.takeIf(String::isNotBlank)
+                    ?: next?.let { "Next: ${it.title}" }
+                    ?: "Live programming on ${focusedChannel.name}"
+                Text(
+                    subtitleText,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
                 if (isLive) {
                     LinearProgressIndicator(
@@ -377,6 +403,8 @@ fun EpgPreviewHeader(
                         color = Color(0xFF00E5FF),
                         trackColor = Color.White.copy(alpha = 0.12f)
                     )
+                } else {
+                    Spacer(Modifier.height(2.5.dp))
                 }
             }
 
@@ -431,7 +459,8 @@ fun EpgGrid(
                 Row(
                     Modifier
                         .height(28.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f), RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f))
                 ) {
                     Box(
                         Modifier
@@ -469,24 +498,40 @@ fun EpgGrid(
 
                 Spacer(Modifier.height(4.dp))
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().focusGroup(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    itemsIndexed(channels, key = { index, ch -> "grid-$index-${ch.streamUrl}" }) { _, channel ->
-                        EpgGridRow(
-                            channel = channel,
-                            programmes = guide.forChannel(channel),
-                            guide = guide,
-                            windowStart = start,
-                            windowEnd = start + slots * halfHour,
-                            channelWidth = channelWidth,
-                            timelineWidth = timelineWidth,
-                            slotWidth = slotWidth,
-                            onFocusChannel = { onFocusChannel(channel) },
-                            onFocusProgramme = { prog -> onFocusProgramme(channel, prog) },
-                            onWatch = { onWatch(channel) }
+                if (channels.isEmpty()) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "No channels found in this category",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f)
                         )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxWidth().focusGroup(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemsIndexed(channels, key = { index, ch -> "grid-$index-${ch.streamUrl}" }) { _, channel ->
+                            EpgGridRow(
+                                channel = channel,
+                                programmes = guide.forChannel(channel),
+                                guide = guide,
+                                windowStart = start,
+                                windowEnd = start + slots * halfHour,
+                                channelWidth = channelWidth,
+                                timelineWidth = timelineWidth,
+                                slotWidth = slotWidth,
+                                onFocusChannel = { onFocusChannel(channel) },
+                                onFocusProgramme = { prog -> onFocusProgramme(channel, prog) },
+                                onWatch = { onWatch(channel) }
+                            )
+                        }
                     }
                 }
             }
@@ -509,8 +554,9 @@ fun EpgGrid(
                             )
                         )
                 )
+                val badgeX = (clockX - 16.dp).coerceIn(channelWidth + 4.dp, totalWidth - 40.dp)
                 Surface(
-                    modifier = Modifier.offset(x = clockX - 16.dp, y = 4.dp),
+                    modifier = Modifier.offset(x = badgeX, y = 4.dp),
                     shape = RoundedCornerShape(4.dp),
                     color = Color(0xFF00E5FF),
                     contentColor = Color.Black
@@ -543,14 +589,16 @@ fun EpgGridRow(
     onFocusProgramme: (Programme) -> Unit,
     onWatch: () -> Unit
 ) {
-    val halfHour = 30 * 60 * 1000f
-    val visible = programmes.filter { it.endMillis > windowStart && it.startMillis < windowEnd }
+    val halfHour = 30 * 60 * 1000L
+    val visible = remember(programmes, windowStart, windowEnd) {
+        programmes.filter { it.endMillis > windowStart && it.startMillis < windowEnd }
+    }
     val now = remember { System.currentTimeMillis() }
     var channelFocused by remember { mutableStateOf(false) }
 
     Row(
         Modifier
-            .height(46.dp)
+            .height(48.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
     ) {
         Surface(
@@ -575,7 +623,7 @@ fun EpgGridRow(
                 Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ChannelLogo(channel, 28.dp, guide)
+                ChannelLogo(channel, 30.dp, guide)
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                     Text(
@@ -589,6 +637,7 @@ fun EpgGridRow(
                         channel.name,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        color = if (channelFocused) Color.Black else Color.White,
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -614,35 +663,58 @@ fun EpgGridRow(
                 )
             }
             if (visible.isEmpty()) {
-                Box(
-                    Modifier
+                var emptyFocused by remember(channel.id) { mutableStateOf(false) }
+                Surface(
+                    onClick = onWatch,
+                    modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.CenterStart
+                        .padding(horizontal = 1.5.dp, vertical = 2.dp)
+                        .tvFocusableWithPhysics(
+                            shape = RoundedCornerShape(8.dp),
+                            focusedScale = 1.01f,
+                            glowColor = Color(0xFF00E5FF),
+                            onFocusChange = {
+                                emptyFocused = it
+                                if (it) onFocusChannel()
+                            }
+                        ),
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (emptyFocused) Color(0xFF00E5FF).copy(alpha = 0.25f) else Color.Transparent,
+                    contentColor = if (emptyFocused) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 ) {
-                    Text(
-                        "No program information",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        fontWeight = FontWeight.Medium
-                    )
+                    Box(
+                        Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            "Live programming · Click to watch",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             } else {
                 visible.forEach { programme ->
                     val clippedStart = maxOf(programme.startMillis, windowStart)
                     val clippedEnd = minOf(programme.endMillis, windowEnd)
-                    val x = slotWidth * ((clippedStart - windowStart) / halfHour)
-                    val width = slotWidth * ((clippedEnd - clippedStart) / halfHour)
+                    if (clippedEnd <= clippedStart) return@forEach
+                    val startOffsetRatio = (clippedStart - windowStart).toFloat() / halfHour.toFloat()
+                    val durationRatio = (clippedEnd - clippedStart).toFloat() / halfHour.toFloat()
+                    val x = slotWidth * startOffsetRatio
+                    val rawWidth = slotWidth * durationRatio
+                    val availableWidth = (timelineWidth - x).coerceAtLeast(0.dp)
+                    val cardWidth = rawWidth.coerceAtMost(availableWidth)
+                    if (cardWidth <= 2.dp) return@forEach
                     val isCurrent = programme.startMillis <= now && programme.endMillis > now
-                    var progFocused by remember { mutableStateOf(false) }
+                    var progFocused by remember(channel.id, programme.startMillis) { mutableStateOf(false) }
 
                     Surface(
                         onClick = onWatch,
                         modifier = Modifier
                             .offset(x = x)
-                            .width(maxOf(width, 48.dp))
+                            .width(cardWidth)
                             .fillMaxHeight()
-                            .padding(2.dp)
+                            .padding(horizontal = 1.5.dp, vertical = 2.dp)
                             .tvFocusableWithPhysics(
                                 shape = RoundedCornerShape(8.dp),
                                 focusedScale = 1.03f,
