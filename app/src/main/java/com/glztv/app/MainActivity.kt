@@ -178,6 +178,9 @@ import com.glztv.app.ui.components.tvFocusableWithPhysics
 import com.glztv.app.ui.components.GlzFocusCard
 import com.glztv.app.ui.components.GlzPanel
 import com.glztv.app.ui.components.GlzCardDefaults
+import com.glztv.app.ui.screens.GoogleTvGuideScreen
+import com.glztv.app.ui.screens.GoogleTvPlayerOsd
+import com.glztv.app.ui.components.GoogleTvMiniGuide
 import com.glztv.app.ui.navigation.AppSection
 import com.glztv.app.ui.navigation.ExpressiveNavigationRail
 import com.glztv.app.ui.components.SlimHeader
@@ -248,7 +251,7 @@ private fun panelExit(fromLeft: Boolean) =
     fadeOut(tween(PANEL_ANIM_OUT)) +
         slideOutHorizontally(tween(PANEL_ANIM_OUT)) { width -> if (fromLeft) -width else width }
 
-private enum class PlayerDrawer { None, Channels, Services, Recent }
+private enum class PlayerDrawer { None, Channels, Services, Recent, MiniGuide }
 
 private data class EntertainmentApp(
     val name: String,
@@ -818,7 +821,7 @@ internal fun TvScreen(
         Scaffold(
             containerColor = Color.Transparent,
         topBar = {
-            if (!immersive) {
+            if (!immersive && section != AppSection.Live) {
             SlimHeader(
                 loading = loading,
                     contentLoaded = channels.isNotEmpty(),
@@ -833,7 +836,7 @@ internal fun TvScreen(
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(if (immersive) PaddingValues(0.dp) else padding)) {
+        Box(Modifier.fillMaxSize().padding(if (immersive || section == AppSection.Live) PaddingValues(0.dp) else padding)) {
             if (immersive) {
                 if (section == AppSection.SportsBarKiosk) {
                     SportsBarKioskScreen(
@@ -880,6 +883,11 @@ internal fun TvScreen(
                             channels.firstOrNull { it.id == id }
                         }
                     },
+                    favorites = favorites,
+                    onToggleFavorite = { favId ->
+                        favorites = if (favId in favorites) favorites - favId else favorites + favId
+                        prefs.edit().putStringSet(FAVORITES, favorites).apply()
+                    },
                     onPreviousChannel = {
                         recentChannelManager.previousId(selected!!.id)
                             ?.let { id -> channels.firstOrNull { it.id == id } }
@@ -890,8 +898,38 @@ internal fun TvScreen(
                     onExit = {
                         playerActive = false
                         GlzHubManager.reportActivity(prefs, "idle")
-                        section = AppSection.Home
+                        section = AppSection.Live
                     }
+                )
+            } else if (section == AppSection.Live) {
+                GoogleTvGuideScreen(
+                    channels = ordered,
+                    guide = guide,
+                    activeTunedChannel = selected ?: ordered.firstOrNull(),
+                    favorites = favorites,
+                    onToggleFavorite = { favId ->
+                        favorites = if (favId in favorites) favorites - favId else favorites + favId
+                        prefs.edit().putStringSet(FAVORITES, favorites).apply()
+                    },
+                    onWatchChannel = { ch ->
+                        tuneChannel(ch)
+                        playerActive = true
+                    },
+                    previewContent = {
+                        val previewCh = selected ?: ordered.firstOrNull()
+                        if (previewCh != null) {
+                            VideoPlayer(
+                                channel = previewCh,
+                                captionsEnabled = false,
+                                captionLanguage = captionLanguage,
+                                modifier = Modifier.fillMaxSize(),
+                                muted = false,
+                                keepScreenOn = false,
+                                cropVideo = true
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
                 )
             } else {
                 Row(
@@ -3892,6 +3930,8 @@ private fun ImmersivePlayerScreen(
     osdTimeoutSeconds: Int = 8,
     entertainmentApps: List<EntertainmentApp>,
     recentChannels: List<Channel>,
+    favorites: Set<String> = emptySet(),
+    onToggleFavorite: ((String) -> Unit)? = null,
     speedTestResult: SpeedTestResult? = null,
     onRunSpeedTest: ((String) -> Unit)? = null,
     onPreviousChannel: () -> Unit,
@@ -3965,6 +4005,7 @@ private fun ImmersivePlayerScreen(
                 runCatching { firstServiceFocus.requestFocus() }
             }
             PlayerDrawer.Recent -> Unit
+            PlayerDrawer.MiniGuide -> Unit
         }
     }
 
@@ -3997,18 +4038,26 @@ private fun ImmersivePlayerScreen(
                             true
                         } else false
                     }
-                    // Up = next channel in list order, Down = previous. CHANNEL_UP/DOWN match.
-                    KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_DPAD_UP -> {
+                    // Channel keys step channels directly
+                    KeyEvent.KEYCODE_CHANNEL_UP -> {
                         if (drawer == PlayerDrawer.None) {
                             stepChannel(1)
                             showOsd = true
                             true
                         } else false
                     }
-                    KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                         if (drawer == PlayerDrawer.None) {
                             stepChannel(-1)
                             showOsd = true
+                            true
+                        } else false
+                    }
+                    // DPAD Up & Down toggle Google TV Mini Guide overlay
+                    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (drawer == PlayerDrawer.None) {
+                            showOsd = false
+                            drawer = PlayerDrawer.MiniGuide
                             true
                         } else false
                     }
@@ -4052,36 +4101,50 @@ private fun ImmersivePlayerScreen(
 
         AnimatedVisibility(
             visible = drawer == PlayerDrawer.None && showOsd,
-            modifier = Modifier.align(Alignment.TopCenter),
-            enter = fadeIn(animationSpec = tween(180)),
-            exit = fadeOut(animationSpec = tween(650))
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(animationSpec = tween(180)) + slideInVertically(animationSpec = tween(180)) { it / 4 },
+            exit = fadeOut(animationSpec = tween(650)) + slideOutVertically(animationSpec = tween(650)) { it / 4 }
         ) {
-            PlayerOsd(
+            GoogleTvPlayerOsd(
                 channel = channel,
                 currentProgramme = currentProgramme,
                 nextProgramme = nextProgramme,
                 guide = guide,
-                now = now
+                now = now,
+                isFavorite = channel.id in favorites,
+                captionsEnabled = captionsEnabled,
+                captionLanguage = captionLanguage,
+                onToggleFavorite = { onToggleFavorite?.invoke(channel.id) },
+                onToggleCaptions = {
+                    val newEnabled = !captionsEnabled
+                    onCaptionsChanged(newEnabled, captionLanguage)
+                },
+                onOpenAudioSelector = {
+                    showOsd = false
+                    drawer = PlayerDrawer.Services
+                },
+                onOpenGuide = onExit
             )
         }
 
         AnimatedVisibility(
-            visible = drawer == PlayerDrawer.None && showOsd,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp),
-            enter = fadeIn(animationSpec = tween(180)),
-            exit = fadeOut(animationSpec = tween(650))
+            visible = drawer == PlayerDrawer.MiniGuide,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(animationSpec = tween(180)) + slideInVertically(animationSpec = tween(180)) { it },
+            exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(animationSpec = tween(200)) { it }
         ) {
-            Surface(
-                color = Color.Black.copy(alpha = .58f),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text(
-                    "▲ Next   ▼ Previous      ◀ Guide      ▶ Apps · Audio · CC      OK Info",
-                    Modifier.padding(horizontal = 22.dp, vertical = 11.dp),
-                    color = Color.White.copy(alpha = .86f),
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
+            GoogleTvMiniGuide(
+                currentChannel = channel,
+                channels = channels,
+                guide = guide,
+                now = now,
+                favorites = favorites,
+                onTune = { newCh ->
+                    drawer = PlayerDrawer.None
+                    onTune(newCh)
+                },
+                onDismiss = { drawer = PlayerDrawer.None }
+            )
         }
 
         AnimatedVisibility(
