@@ -108,7 +108,7 @@ fun GoogleTvMiniGuide(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
             ) {
-                itemsIndexed(channels, key = { _, ch -> "mini-${ch.id}" }) { index, channel ->
+                itemsIndexed(channels, key = { index, ch -> "mini-${ch.id.ifBlank { "c" }}-$index" }) { index, channel ->
                     val isPlaying = channel.id == currentChannel.id
                     val isFav = channel.id in favorites
                     val activeProg = guide.nowProgrammeForChannel(channel, now)

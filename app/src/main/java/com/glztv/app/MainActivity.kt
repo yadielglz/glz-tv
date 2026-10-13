@@ -416,6 +416,16 @@ internal fun TvScreen(
     }
     var radioPlaying by remember { mutableStateOf(false) }
     var currentRadioStation by remember { mutableStateOf<RadioStation?>(null) }
+    var radioStations by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
+    var showWeatherModal by remember { mutableStateOf(false) }
+    var showYouModal by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val list = runCatching { RadioCatalogManager.load(prefs, client).stations }.getOrElse { emptyList() }
+            radioStations = list
+        }
+    }
     var osdTimeoutSeconds by remember {
         mutableStateOf(prefs.getInt(OSD_TIMEOUT_SECONDS, 8))
     }
@@ -813,7 +823,7 @@ internal fun TvScreen(
         else EntertainmentApps.filter { it.packageName in visibleAppPackages }
     }
 
-    BackHandler(enabled = !showSettings && !immersive) {
+    BackHandler(enabled = !showSettings && !showWeatherModal && !showYouModal && !immersive) {
         if (section != AppSection.Home) {
             section = AppSection.Home
         } else {
@@ -834,9 +844,9 @@ internal fun TvScreen(
         Scaffold(
             containerColor = Color.Transparent,
         topBar = {
-            if (!immersive && section != AppSection.Live) {
-            SlimHeader(
-                loading = loading,
+            if (!immersive && section != AppSection.Live && section != AppSection.Home) {
+                SlimHeader(
+                    loading = loading,
                     contentLoaded = channels.isNotEmpty(),
                     weather = weather,
                     networkInfo = networkInfo,
@@ -844,12 +854,12 @@ internal fun TvScreen(
                     onRefresh = { scope.launch { loadSources(forceRefresh = true) } },
                     onSettings = { showSettings = true },
                     onScreensaver = { showScreensaver = true },
-                    minimal = section == AppSection.Home
+                    minimal = false
                 )
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(if (immersive || section == AppSection.Live) PaddingValues(0.dp) else padding)) {
+        Box(Modifier.fillMaxSize().padding(if (immersive || section == AppSection.Live || section == AppSection.Home) PaddingValues(0.dp) else padding)) {
             if (immersive) {
                 if (section == AppSection.SportsBarKiosk) {
                     SportsBarKioskScreen(
@@ -945,6 +955,67 @@ internal fun TvScreen(
                     },
                     modifier = Modifier.fillMaxSize()
                 )
+            } else if (section == AppSection.Home) {
+                GoogleTvHomeScreen(
+                    channels = ordered,
+                    guide = guide,
+                    resumeChannel = resumeChannel,
+                    previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
+                    favorites = favorites,
+                    recentChannels = remember(recentRevision, channels.toList()) {
+                        recentChannelManager.recentIds().mapNotNull { id ->
+                            channels.firstOrNull { it.id == id }
+                        }
+                    },
+                    radioStations = radioStations,
+                    currentRadioStation = currentRadioStation,
+                    onPlayRadioStation = { station ->
+                        currentRadioStation = station
+                        section = AppSection.Radio
+                    },
+                    entertainmentApps = managedEntertainmentApps,
+                    guestName = guestName,
+                    experience = guestExperience,
+                    weather = weather,
+                    networkInfo = networkInfo,
+                    onWatchChannel = { channel ->
+                        section = AppSection.Live
+                        tuneChannel(channel)
+                        playerActive = true
+                    },
+                    onToggleFavorite = { favId ->
+                        favorites = if (favId in favorites) favorites - favId else favorites + favId
+                        prefs.edit().putStringSet(FAVORITES, favorites).apply()
+                    },
+                    onOpenGuide = { section = AppSection.Live },
+                    onOpenRadio = { section = AppSection.Radio },
+                    onOpenWeather = { showWeatherModal = true },
+                    onOpenSettings = { showSettings = true },
+                    onOpenWelcome = { showYouModal = true },
+                    onLaunchApp = { app ->
+                        launchEntertainmentApp(context, app.packageName, null)
+                    },
+                    sportsBarKioskEnabled = sportsBarKioskEnabled,
+                    onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
+                    previewContent = {
+                        val hubPreviewChannel = ordered.firstOrNull { it.id == homePreviewChannelId }
+                            ?: resumeChannel
+                            ?: ordered.firstOrNull()
+                        if (hubPreviewChannel != null) {
+                            VideoPlayer(
+                                channel = hubPreviewChannel,
+                                captionsEnabled = false,
+                                captionLanguage = captionLanguage,
+                                modifier = Modifier.fillMaxSize(),
+                                muted = true,
+                                createMediaSession = false,
+                                keepScreenOn = false,
+                                cropVideo = true
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             } else {
                 Row(
                     Modifier.fillMaxSize()
@@ -975,57 +1046,7 @@ internal fun TvScreen(
                             label = "section"
                         ) { visibleSection ->
                         when (visibleSection) {
-                            AppSection.Home -> GoogleTvHomeScreen(
-                                channels = ordered,
-                                guide = guide,
-                                resumeChannel = resumeChannel,
-                                previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
-                                favorites = favorites,
-                                recentChannels = remember(recentRevision, channels.toList()) {
-                                    recentChannelManager.recentIds().mapNotNull { id ->
-                                        channels.firstOrNull { it.id == id }
-                                    }
-                                },
-                                entertainmentApps = managedEntertainmentApps,
-                                guestName = guestName,
-                                experience = guestExperience,
-                                weather = weather,
-                                networkInfo = networkInfo,
-                                onWatchChannel = { channel ->
-                                    section = AppSection.Live
-                                    tuneChannel(channel)
-                                    playerActive = true
-                                },
-                                onToggleFavorite = { favId ->
-                                    favorites = if (favId in favorites) favorites - favId else favorites + favId
-                                    prefs.edit().putStringSet(FAVORITES, favorites).apply()
-                                },
-                                onOpenGuide = { section = AppSection.Live },
-                                onOpenRadio = { section = AppSection.Radio },
-                                onOpenWeather = { section = AppSection.Weather },
-                                onOpenSettings = { section = AppSection.You },
-                                onLaunchApp = { app ->
-                                    launchEntertainmentApp(context, app.packageName, null)
-                                },
-                                sportsBarKioskEnabled = sportsBarKioskEnabled,
-                                onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
-                                previewContent = {
-                                    val previewCh = ordered.firstOrNull { it.id == homePreviewChannelId } ?: resumeChannel ?: ordered.firstOrNull()
-                                    if (previewCh != null) {
-                                        VideoPlayer(
-                                            channel = previewCh,
-                                            captionsEnabled = false,
-                                            captionLanguage = captionLanguage,
-                                            modifier = Modifier.fillMaxSize(),
-                                            muted = true,
-                                            createMediaSession = false,
-                                            keepScreenOn = false,
-                                            cropVideo = true
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            AppSection.Home -> Unit
                             AppSection.Live -> GuideSection(
                                 channels = ordered,
                                 guide = guide,
@@ -1081,6 +1102,54 @@ internal fun TvScreen(
                     }
                 }
             }
+        }
+    }
+
+    if (showWeatherModal) {
+        BackHandler(onBack = { showWeatherModal = false })
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xFF070B14))
+        ) {
+            WeatherScreen(
+                weather = weather,
+                location = weatherLocation,
+                loading = weatherLoading,
+                error = weatherError,
+                onRefresh = {
+                    scope.launch {
+                        weatherLoading = true
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                weatherRepository.load(weatherLocation)
+                            }
+                        }.onSuccess {
+                            weather = it
+                            weatherError = null
+                        }.onFailure {
+                            weatherError = it.message ?: "Weather service unavailable"
+                        }
+                        weatherLoading = false
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+
+    if (showYouModal) {
+        BackHandler(onBack = { showYouModal = false })
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xFF070B14))
+        ) {
+            GuestYouSection(
+                guestName = guestName,
+                experience = guestExperience,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 
@@ -4832,7 +4901,7 @@ private fun ImmersivePlayerScreen(
                     }
                     Spacer(Modifier.height(14.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(recentChannels, key = { "recent-${it.id}" }) { recent ->
+                        itemsIndexed(recentChannels, key = { index, recent -> "recent-${recent.id}-$index" }) { _, recent ->
                             val programme = guide.forChannel(recent)
                                 .firstOrNull { it.startMillis <= now && it.endMillis > now }
                             var isFocused by remember(recent.id) { mutableStateOf(false) }
