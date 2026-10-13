@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
 import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 import com.glztv.app.Programme
@@ -229,7 +230,7 @@ fun GoogleTvGuideScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(bottom = 20.dp)
                 ) {
-                    itemsIndexed(filteredChannels, key = { _, ch -> "gtv-${ch.id}" }) { _, channel ->
+                    itemsIndexed(filteredChannels, key = { index, ch -> "gtv-${ch.id}-$index" }) { _, channel ->
                         GoogleTvGridRow(
                             channel = channel,
                             guide = guide,
@@ -240,6 +241,7 @@ fun GoogleTvGuideScreen(
                             slots = slots,
                             halfHour = halfHour,
                             channelColumnWidth = channelColumnWidth,
+                            totalTimelineWidth = totalTimelineWidth,
                             timelineScrollState = timelineScrollState,
                             isFavorite = channel.id in favorites,
                             onToggleFavorite = { onToggleFavorite(channel.id) },
@@ -261,8 +263,10 @@ fun GoogleTvGuideScreen(
             // Real-time "NOW" Glowing Needle Cursor
             if (now in timelineStart..timelineEnd) {
                 val elapsedRatio = (now - timelineStart).toFloat() / (slots * halfHour).toFloat()
-                val needleTimelineX = (totalTimelineWidth.value * elapsedRatio).dp
-                val needleScreenX = channelColumnWidth + needleTimelineX - timelineScrollState.value.dp
+                val needleTimelineX = totalTimelineWidth * elapsedRatio
+                val density = LocalDensity.current
+                val scrollOffsetDp = with(density) { timelineScrollState.value.toDp() }
+                val needleScreenX = channelColumnWidth + needleTimelineX - scrollOffsetDp
 
                 if (needleScreenX >= channelColumnWidth && needleScreenX <= maxWidth) {
                     Box(
@@ -549,6 +553,7 @@ private fun GoogleTvGridRow(
     slots: Int,
     halfHour: Long,
     channelColumnWidth: Dp,
+    totalTimelineWidth: Dp,
     timelineScrollState: androidx.compose.foundation.ScrollState,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
@@ -621,82 +626,89 @@ private fun GoogleTvGridRow(
         }
 
         // 2. SYNCHRONIZED TIMELINE PROGRAMME BLOCKS
-        Row(
+        Box(
             Modifier
                 .weight(1f)
                 .fillMaxHeight()
                 .horizontalScroll(timelineScrollState)
         ) {
-            if (visible.isEmpty()) {
-                Surface(
-                    onClick = onWatch,
-                    modifier = Modifier
-                        .width(slotWidth * slots)
-                        .fillMaxHeight()
-                        .padding(horizontal = 2.dp)
-                        .googleTvFocusable(shape = RoundedCornerShape(8.dp), focusedScale = 1.01f),
-                    shape = RoundedCornerShape(8.dp),
-                    color = GoogleTvTokens.SurfaceTimelineSlot
-                ) {
-                    Box(Modifier.fillMaxSize().padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
-                        Text(
-                            "Live Broadcast",
-                            fontSize = 11.sp,
-                            color = GoogleTvTokens.TextSecondary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            } else {
-                visible.forEach { programme ->
-                    val clippedStart = maxOf(programme.startMillis, windowStart)
-                    val clippedEnd = minOf(programme.endMillis, windowEnd)
-                    val durationHalfHours = ((clippedEnd - clippedStart).toFloat() / halfHour.toFloat()).coerceAtLeast(0.5f)
-                    val blockWidth = slotWidth * durationHalfHours
-                    val isCurrent = programme.startMillis <= now && programme.endMillis > now
-                    var progFocused by remember { mutableStateOf(false) }
-
+            Box(
+                Modifier
+                    .width(totalTimelineWidth)
+                    .fillMaxHeight()
+            ) {
+                if (visible.isEmpty()) {
                     Surface(
                         onClick = onWatch,
                         modifier = Modifier
-                            .width(blockWidth)
-                            .fillMaxHeight()
-                            .padding(horizontal = 1.dp)
-                            .googleTvFocusable(
-                                shape = RoundedCornerShape(8.dp),
-                                focusedScale = 1.02f,
-                                onFocusChange = {
-                                    progFocused = it
-                                    if (it) onFocusProgramme(programme)
-                                }
-                            ),
+                            .fillMaxSize()
+                            .padding(horizontal = 2.dp)
+                            .googleTvFocusable(shape = RoundedCornerShape(8.dp), focusedScale = 1.01f),
                         shape = RoundedCornerShape(8.dp),
-                        color = when {
-                            progFocused -> Color.White
-                            isCurrent -> GoogleTvTokens.SurfaceTimelineSlotActive
-                            else -> GoogleTvTokens.SurfaceTimelineSlot
-                        },
-                        contentColor = if (progFocused) Color.Black else Color.White
+                        color = GoogleTvTokens.SurfaceTimelineSlot
                     ) {
-                        Column(
-                            Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalArrangement = Arrangement.Center
-                        ) {
+                        Box(Modifier.fillMaxSize().padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
                             Text(
-                                programme.title,
+                                "Live Broadcast",
                                 fontSize = 11.sp,
-                                fontWeight = if (isCurrent || progFocused) FontWeight.Bold else FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                color = GoogleTvTokens.TextSecondary,
+                                fontWeight = FontWeight.Medium
                             )
-                            val startFormatted = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(programme.startMillis))
-                            Text(
-                                startFormatted,
-                                fontSize = 9.sp,
-                                color = if (progFocused) Color.Black.copy(alpha = 0.7f) else GoogleTvTokens.TextSecondary
-                            )
+                        }
+                    }
+                } else {
+                    visible.forEach { programme ->
+                        val clippedStart = maxOf(programme.startMillis, windowStart)
+                        val clippedEnd = minOf(programme.endMillis, windowEnd)
+                        val durationHalfHours = ((clippedEnd - clippedStart).toFloat() / halfHour.toFloat()).coerceAtLeast(0.3f)
+                        val startOffset = (((clippedStart - windowStart).toFloat() / halfHour.toFloat()) * slotWidth.value).dp
+                        val blockWidth = (slotWidth * durationHalfHours).coerceAtLeast(40.dp)
+                        val isCurrent = programme.startMillis <= now && programme.endMillis > now
+                        var progFocused by remember { mutableStateOf(false) }
+
+                        Surface(
+                            onClick = onWatch,
+                            modifier = Modifier
+                                .offset(x = startOffset)
+                                .width(blockWidth)
+                                .fillMaxHeight()
+                                .padding(horizontal = 1.dp)
+                                .googleTvFocusable(
+                                    shape = RoundedCornerShape(8.dp),
+                                    focusedScale = 1.02f,
+                                    onFocusChange = {
+                                        progFocused = it
+                                        if (it) onFocusProgramme(programme)
+                                    }
+                                ),
+                            shape = RoundedCornerShape(8.dp),
+                            color = when {
+                                progFocused -> Color.White
+                                isCurrent -> GoogleTvTokens.SurfaceTimelineSlotActive
+                                else -> GoogleTvTokens.SurfaceTimelineSlot
+                            },
+                            contentColor = if (progFocused) Color.Black else Color.White
+                        ) {
+                            Column(
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    programme.title,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isCurrent || progFocused) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                val startFormatted = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(programme.startMillis))
+                                Text(
+                                    startFormatted,
+                                    fontSize = 9.sp,
+                                    color = if (progFocused) Color.Black.copy(alpha = 0.7f) else GoogleTvTokens.TextSecondary
+                                )
+                            }
                         }
                     }
                 }

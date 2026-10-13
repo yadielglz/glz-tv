@@ -32,6 +32,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +66,7 @@ fun GoogleTvPlayerOsd(
     isFavorite: Boolean = false,
     captionsEnabled: Boolean = false,
     captionLanguage: String = "en",
+    firstButtonFocusRequester: FocusRequester? = null,
     onToggleFavorite: () -> Unit = {},
     onToggleCaptions: () -> Unit = {},
     onOpenAudioSelector: () -> Unit = {},
@@ -278,6 +283,11 @@ fun GoogleTvPlayerOsd(
             }
 
             // Quick Actions Bar (D-Pad Action Buttons)
+            val favFocus = firstButtonFocusRequester ?: remember { FocusRequester() }
+            val ccFocus = remember { FocusRequester() }
+            val audioFocus = remember { FocusRequester() }
+            val guideFocus = remember { FocusRequester() }
+
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -287,24 +297,94 @@ fun GoogleTvPlayerOsd(
                     label = if (isFavorite) "Favorited" else "Favorite",
                     icon = if (isFavorite) Icons.Default.Star else Icons.Outlined.StarOutline,
                     active = isFavorite,
+                    modifier = Modifier
+                        .focusRequester(favFocus)
+                        .focusProperties {
+                            right = ccFocus
+                        }
+                        .onKeyEvent { keyEvent ->
+                            if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                                if (keyEvent.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+                                    ccFocus.requestFocus()
+                                    return@onKeyEvent true
+                                }
+                            }
+                            false
+                        },
                     onClick = onToggleFavorite
                 )
                 OsdActionButton(
                     label = if (captionsEnabled) "CC: ${captionLanguage.uppercase()}" else "CC: Off",
                     icon = Icons.Default.ClosedCaption,
                     active = captionsEnabled,
+                    modifier = Modifier
+                        .focusRequester(ccFocus)
+                        .focusProperties {
+                            left = favFocus
+                            right = audioFocus
+                        }
+                        .onKeyEvent { keyEvent ->
+                            if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                                when (keyEvent.nativeKeyEvent.keyCode) {
+                                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                        favFocus.requestFocus()
+                                        return@onKeyEvent true
+                                    }
+                                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                        audioFocus.requestFocus()
+                                        return@onKeyEvent true
+                                    }
+                                }
+                            }
+                            false
+                        },
                     onClick = onToggleCaptions
                 )
                 OsdActionButton(
                     label = "Audio",
                     icon = Icons.AutoMirrored.Filled.VolumeUp,
                     active = false,
+                    modifier = Modifier
+                        .focusRequester(audioFocus)
+                        .focusProperties {
+                            left = ccFocus
+                            right = guideFocus
+                        }
+                        .onKeyEvent { keyEvent ->
+                            if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                                when (keyEvent.nativeKeyEvent.keyCode) {
+                                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                        ccFocus.requestFocus()
+                                        return@onKeyEvent true
+                                    }
+                                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                        guideFocus.requestFocus()
+                                        return@onKeyEvent true
+                                    }
+                                }
+                            }
+                            false
+                        },
                     onClick = onOpenAudioSelector
                 )
                 OsdActionButton(
                     label = "Full Guide",
                     icon = Icons.AutoMirrored.Filled.List,
                     active = false,
+                    modifier = Modifier
+                        .focusRequester(guideFocus)
+                        .focusProperties {
+                            left = audioFocus
+                        }
+                        .onKeyEvent { keyEvent ->
+                            if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                                if (keyEvent.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) {
+                                    audioFocus.requestFocus()
+                                    return@onKeyEvent true
+                                }
+                            }
+                            false
+                        },
                     onClick = onOpenGuide
                 )
             }
@@ -333,6 +413,7 @@ private fun OsdActionButton(
     label: String,
     icon: ImageVector,
     active: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Surface(
@@ -340,7 +421,7 @@ private fun OsdActionButton(
         shape = CircleShape,
         color = if (active) GoogleTvTokens.BlueAccent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f),
         contentColor = if (active) GoogleTvTokens.BlueAccent else Color.White,
-        modifier = Modifier.googleTvFocusable(
+        modifier = modifier.googleTvFocusable(
             shape = CircleShape,
             focusedScale = 1.05f
         )

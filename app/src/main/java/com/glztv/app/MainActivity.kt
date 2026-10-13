@@ -85,6 +85,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
@@ -181,6 +182,16 @@ import com.glztv.app.ui.components.GlzCardDefaults
 import com.glztv.app.ui.screens.GoogleTvGuideScreen
 import com.glztv.app.ui.screens.GoogleTvPlayerOsd
 import com.glztv.app.ui.components.GoogleTvMiniGuide
+import com.glztv.app.ui.components.GoogleTvChannelLogo
+import com.glztv.app.ui.theme.GoogleTvTokens
+import com.glztv.app.ui.theme.googleTvFocusable
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.ClosedCaption
 import com.glztv.app.ui.navigation.AppSection
 import com.glztv.app.ui.navigation.ExpressiveNavigationRail
 import com.glztv.app.ui.components.SlimHeader
@@ -486,13 +497,13 @@ internal fun TvScreen(
             onProgress(55, "Downloading TV lineup & programme guide")
             coroutineScope {
                 val parsedDeferred = async(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
-                val guideDeferred = async(Dispatchers.IO) { epgRepository.load(forceRefresh) }
+                val guideDeferred = async(Dispatchers.IO) {
+                    runCatching { epgRepository.load(forceRefresh) }
+                        .getOrElse { cached.second ?: EpgGuide.Empty }
+                }
                 val parsed = parsedDeferred.await()
                 val parsedGuide = guideDeferred.await()
                 val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
-                check(parsedGuide.programmeCount == 0 || matchedChannels > 0) {
-                    "EPG downloaded ${parsedGuide.programmeCount} programmes but matched 0 of ${parsed.size} channels"
-                }
                 Triple(parsed, parsedGuide, Pair(cached.first != null && cached.second != null, matchedChannels))
             }
         }
@@ -924,6 +935,7 @@ internal fun TvScreen(
                                 captionLanguage = captionLanguage,
                                 modifier = Modifier.fillMaxSize(),
                                 muted = false,
+                                createMediaSession = false,
                                 keepScreenOn = false,
                                 cropVideo = true
                             )
@@ -3876,12 +3888,79 @@ private fun ChannelCard(
 private fun DrawerSectionLabel(text: String) {
     Text(
         text,
-        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
-        color = Color.White.copy(alpha = .55f),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+        color = GoogleTvTokens.TextSecondary,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Black,
         letterSpacing = 0.5.sp
     )
+}
+
+@Composable
+private fun GoogleTvDrawerActionRow(
+    title: String,
+    subtitle: String? = null,
+    icon: ImageVector,
+    active: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .googleTvFocusable(
+                shape = RoundedCornerShape(14.dp),
+                focusedScale = 1.02f,
+                onFocusChange = { isFocused = it }
+            ),
+        shape = RoundedCornerShape(14.dp),
+        color = when {
+            isFocused -> Color.White
+            active -> GoogleTvTokens.BlueAccent.copy(alpha = 0.22f)
+            else -> Color.White.copy(alpha = 0.06f)
+        },
+        contentColor = when {
+            isFocused -> Color.Black
+            active -> GoogleTvTokens.BlueAccent
+            else -> Color.White
+        }
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = title,
+                modifier = Modifier.size(20.dp),
+                tint = if (isFocused) Color.Black else if (active) GoogleTvTokens.BlueAccent else Color.White
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        fontSize = 11.sp,
+                        color = if (isFocused) Color.Black.copy(alpha = 0.70f) else GoogleTvTokens.TextSecondary
+                    )
+                }
+            }
+            if (active) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = if (isFocused) Color.Black else GoogleTvTokens.BlueAccent
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -3954,6 +4033,7 @@ private fun ImmersivePlayerScreen(
     val playerFocus = remember { FocusRequester() }
     val selectedChannelFocus = remember { FocusRequester() }
     val firstServiceFocus = remember { FocusRequester() }
+    val osdActionFocus = remember { FocusRequester() }
     val selectedIndex = channels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
     val channelListState = rememberLazyListState(
         initialFirstVisibleItemIndex = (selectedIndex - 2).coerceAtLeast(0)
@@ -3971,10 +4051,21 @@ private fun ImmersivePlayerScreen(
             now = System.currentTimeMillis()
         }
     }
-    LaunchedEffect(showOsd, channel.id, osdTimeoutSeconds) {
+    var osdRevision by remember { mutableStateOf(0) }
+    LaunchedEffect(showOsd, osdRevision, channel.id, osdTimeoutSeconds) {
         if (showOsd) {
             delay(osdTimeoutSeconds * 1_000L)
             showOsd = false
+        }
+    }
+    LaunchedEffect(showOsd) {
+        if (showOsd) {
+            delay(80)
+            val req = runCatching { osdActionFocus.requestFocus() }
+            android.util.Log.d("GlzNav", "osdActionFocus.requestFocus success=${req.isSuccess} exc=${req.exceptionOrNull()}")
+        } else {
+            val req = runCatching { playerFocus.requestFocus() }
+            android.util.Log.d("GlzNav", "playerFocus.requestFocus success=${req.isSuccess}")
         }
     }
     LaunchedEffect(channel.id) {
@@ -3990,7 +4081,14 @@ private fun ImmersivePlayerScreen(
     }
 
     BackHandler {
-        if (drawer != PlayerDrawer.None) drawer = PlayerDrawer.None else onExit()
+        if (drawer != PlayerDrawer.None) {
+            drawer = PlayerDrawer.None
+        } else if (showOsd) {
+            showOsd = false
+            playerFocus.requestFocus()
+        } else {
+            onExit()
+        }
     }
     LaunchedEffect(channel.id, drawer) {
         when (drawer) {
@@ -4017,15 +4115,55 @@ private fun ImmersivePlayerScreen(
             .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+
+                if (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK) {
+                    if (drawer != PlayerDrawer.None) {
+                        drawer = PlayerDrawer.None
+                        playerFocus.requestFocus()
+                        return@onPreviewKeyEvent true
+                    } else if (showOsd) {
+                        showOsd = false
+                        playerFocus.requestFocus()
+                        return@onPreviewKeyEvent true
+                    }
+                }
+
+                // When OSD is shown and no drawer is active, allow D-pad to navigate OSD buttons!
+                if (showOsd && drawer == PlayerDrawer.None) {
+                    osdRevision++
+                    when (event.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_BACK,
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            showOsd = false
+                            playerFocus.requestFocus()
+                            return@onPreviewKeyEvent true
+                        }
+                        // Allow D-Pad navigation and click into OSD action buttons:
+                        KeyEvent.KEYCODE_DPAD_LEFT,
+                        KeyEvent.KEYCODE_DPAD_RIGHT,
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER,
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            return@onPreviewKeyEvent false
+                        }
+                        else -> {
+                            return@onPreviewKeyEvent false
+                        }
+                    }
+                }
+
                 when (event.nativeKeyEvent.keyCode) {
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
                         if (drawer == PlayerDrawer.None) {
+                            showOsd = false
                             drawer = PlayerDrawer.Channels
                             true
                         } else false
                     }
                     KeyEvent.KEYCODE_DPAD_RIGHT -> {
                         if (drawer == PlayerDrawer.None) {
+                            showOsd = false
                             drawer = PlayerDrawer.Services
                             true
                         } else false
@@ -4034,7 +4172,20 @@ private fun ImmersivePlayerScreen(
                     KeyEvent.KEYCODE_ENTER,
                     KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                         if (drawer == PlayerDrawer.None) {
-                            showOsd = !showOsd
+                            showOsd = true
+                            true
+                        } else false
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (drawer == PlayerDrawer.None) {
+                            showOsd = true
+                            true
+                        } else false
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        if (drawer == PlayerDrawer.None) {
+                            showOsd = false
+                            drawer = PlayerDrawer.MiniGuide
                             true
                         } else false
                     }
@@ -4050,14 +4201,6 @@ private fun ImmersivePlayerScreen(
                         if (drawer == PlayerDrawer.None) {
                             stepChannel(-1)
                             showOsd = true
-                            true
-                        } else false
-                    }
-                    // DPAD Up & Down toggle Google TV Mini Guide overlay
-                    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (drawer == PlayerDrawer.None) {
-                            showOsd = false
-                            drawer = PlayerDrawer.MiniGuide
                             true
                         } else false
                     }
@@ -4114,6 +4257,7 @@ private fun ImmersivePlayerScreen(
                 isFavorite = channel.id in favorites,
                 captionsEnabled = captionsEnabled,
                 captionLanguage = captionLanguage,
+                firstButtonFocusRequester = osdActionFocus,
                 onToggleFavorite = { onToggleFavorite?.invoke(channel.id) },
                 onToggleCaptions = {
                     val newEnabled = !captionsEnabled
@@ -4123,7 +4267,10 @@ private fun ImmersivePlayerScreen(
                     showOsd = false
                     drawer = PlayerDrawer.Services
                 },
-                onOpenGuide = onExit
+                onOpenGuide = {
+                    showOsd = false
+                    onExit()
+                }
             )
         }
 
@@ -4153,108 +4300,241 @@ private fun ImmersivePlayerScreen(
             exit = panelExit(fromLeft = true),
             modifier = Modifier.align(Alignment.TopStart)
         ) {
-            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .88f else 420.dp
+            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .88f else 430.dp
             // Flush to the left screen edge; only the inner (right) corners are rounded.
             Surface(
                 Modifier.width(drawerWidth).fillMaxHeight(),
-                color = Color(0xF20B1114),
+                color = GoogleTvTokens.SurfaceCardTranslucent,
                 contentColor = Color.White,
                 shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
-                tonalElevation = 18.dp,
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
                 shadowElevation = 24.dp
             ) {
                 Column(Modifier.fillMaxSize().padding(top = 22.dp)) {
+                    // Header Channel Identity
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        ChannelLogo(channel, 66.dp, guide)
-                        Spacer(Modifier.width(16.dp))
+                        GoogleTvChannelLogo(
+                            channel = channel,
+                            size = 52.dp,
+                            guide = guide,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(channel.number.ifBlank { "LIVE" },
-                                color = Color(0xFFC4FF4D),
-                                fontWeight = FontWeight.Black)
-                            Text(channel.name, color = Color.White, fontSize = 24.sp,
-                                fontWeight = FontWeight.Black, maxLines = 1,
-                                overflow = TextOverflow.Ellipsis)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
+                                ) {
+                                    Text(
+                                        channel.number.ifBlank { "LIVE" },
+                                        Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                        color = GoogleTvTokens.BlueAccent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                                if (channel.id in favorites) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Icon(
+                                        Icons.Default.Star,
+                                        contentDescription = "Favorite",
+                                        tint = GoogleTvTokens.StarGold,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                channel.name,
+                                color = Color.White,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
+
+                    // ON NOW Live Synopsis Card
                     Surface(
-                        Modifier.fillMaxWidth().padding(22.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = .18f),
-                        shape = RoundedCornerShape(20.dp)
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        color = Color.White.copy(alpha = 0.06f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.06f))
                     ) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("ON NOW", color = MaterialTheme.colorScheme.secondary,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Black)
-                            Text(currentProgramme?.title ?: "Live programming",
-                                color = Color.White, fontSize = 19.sp,
-                                fontWeight = FontWeight.Bold, maxLines = 2,
-                                overflow = TextOverflow.Ellipsis)
-                            currentProgramme?.let {
+                        Column(Modifier.padding(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier
+                                        .size(6.dp)
+                                        .background(GoogleTvTokens.LiveRed, CircleShape)
+                                )
+                                Spacer(Modifier.width(6.dp))
                                 Text(
-                                    "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.startMillis))} – " +
-                                        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.endMillis)),
-                                    color = Color.White.copy(alpha = .68f)
+                                    "NOW PLAYING",
+                                    color = GoogleTvTokens.LiveRed,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                currentProgramme?.title ?: "Live Broadcast",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            currentProgramme?.let { prog ->
+                                val start = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))
+                                val end = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))
+                                val progProgress = ((now - prog.startMillis).toFloat() / (prog.endMillis - prog.startMillis).coerceAtLeast(1L)).coerceIn(0f, 1f)
+                                Spacer(Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { progProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = GoogleTvTokens.BlueAccent,
+                                    trackColor = Color.White.copy(alpha = 0.12f)
+                                )
+                                Spacer(Modifier.height(5.dp))
+                                Text(
+                                    "$start – $end",
+                                    color = GoogleTvTokens.TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
                     }
-                    Text(if (selectingMultiViewChannel) "SELECT SECOND CHANNEL" else "CHANNELS",
+
+                    // Section Title
+                    Text(
+                        if (selectingMultiViewChannel) "SELECT SECOND CHANNEL FOR MULTIVIEW" else "ALL CHANNELS (${channels.size})",
                         Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
-                        color = Color.White.copy(alpha = .56f),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Black)
+                        color = GoogleTvTokens.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
+                    )
+
+                    // Channels List
                     LazyColumn(
                         Modifier.fillMaxSize(),
                         state = channelListState,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        itemsIndexed(channels, key = { index, ch -> "drawer-$index-${ch.streamUrl}" }) { _, item ->
-                            val isSelected = item.id == channel.id
+                        itemsIndexed(channels, key = { index, ch -> "ch-drawer-$index-${ch.id}" }) { _, item ->
+                            val isTuned = item.id == channel.id
                             var isFocused by remember(item.id) { mutableStateOf(false) }
                             val itemProgramme = guide.forChannel(item)
                                 .firstOrNull { it.startMillis <= now && it.endMillis > now }
+
                             Surface(
-                                Modifier.fillMaxWidth()
-                                    .then(if (isSelected) Modifier.focusRequester(selectedChannelFocus)
-                                    else Modifier)
-                                    .onFocusChanged { isFocused = it.isFocused }
-                                    .clickable {
-                                        if (selectingMultiViewChannel) {
-                                            onAddToMultiView(item)
-                                            selectingMultiViewChannel = false
-                                        } else {
-                                            onTune(item)
-                                        }
-                                        drawer = PlayerDrawer.None
+                                onClick = {
+                                    if (selectingMultiViewChannel) {
+                                        onAddToMultiView(item)
+                                        selectingMultiViewChannel = false
+                                    } else {
+                                        onTune(item)
                                     }
-                                    .focusable(),
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isFocused)
-                                    Color(0xFF23405F)
-                                else if (isSelected)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = .35f)
-                                else Color.Transparent
+                                    drawer = PlayerDrawer.None
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(if (isTuned) Modifier.focusRequester(selectedChannelFocus) else Modifier)
+                                    .googleTvFocusable(
+                                        shape = RoundedCornerShape(12.dp),
+                                        focusedScale = 1.02f,
+                                        onFocusChange = { isFocused = it }
+                                    ),
+                                shape = RoundedCornerShape(12.dp),
+                                color = when {
+                                    isFocused -> Color.White
+                                    isTuned -> GoogleTvTokens.BlueAccent.copy(alpha = 0.22f)
+                                    else -> Color.White.copy(alpha = 0.04f)
+                                },
+                                contentColor = if (isFocused) Color.Black else Color.White
                             ) {
-                                Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    ChannelLogo(item, 42.dp, guide)
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(item.number.ifBlank { "—" }, Modifier.width(45.dp),
-                                        color = if (isSelected) Color(0xFFC4FF4D)
-                                        else Color.White.copy(alpha = .62f),
-                                        fontWeight = FontWeight.Black)
+                                Row(
+                                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    GoogleTvChannelLogo(
+                                        channel = item,
+                                        size = 36.dp,
+                                        guide = guide,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = if (isFocused) Color.Black.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.10f)
+                                    ) {
+                                        Text(
+                                            item.number.ifBlank { "—" },
+                                            Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = if (isFocused) Color.Black else if (isTuned) GoogleTvTokens.BlueAccent else GoogleTvTokens.TextSecondary
+                                        )
+                                    }
+                                    Spacer(Modifier.width(10.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text(item.name, color = Color.White,
-                                            fontWeight = FontWeight.Bold, maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis)
-                                        Text(itemProgramme?.title ?: "Guide unavailable",
-                                            color = Color.White.copy(alpha = .58f),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(
+                                            item.name,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            itemProgramme?.title ?: "Live Programming",
+                                            fontSize = 11.sp,
+                                            color = if (isFocused) Color.Black.copy(alpha = 0.70f) else GoogleTvTokens.TextSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (isTuned) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = GoogleTvTokens.LiveRed.copy(alpha = if (isFocused) 0.25f else 0.20f)
+                                        ) {
+                                            Row(
+                                                Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                            ) {
+                                                Box(Modifier.size(4.dp).background(GoogleTvTokens.LiveRed, CircleShape))
+                                                Text(
+                                                    "LIVE",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Black,
+                                                    color = GoogleTvTokens.LiveRed
+                                                )
+                                            }
+                                        }
+                                    } else if (item.id in favorites) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Icon(
+                                            Icons.Default.Star,
+                                            contentDescription = null,
+                                            tint = if (isFocused) Color(0xFFE6A700) else GoogleTvTokens.StarGold,
+                                            modifier = Modifier.size(13.dp)
+                                        )
                                     }
                                 }
                             }
@@ -4263,6 +4543,7 @@ private fun ImmersivePlayerScreen(
                 }
             }
         }
+
         AnimatedVisibility(
             visible = drawer == PlayerDrawer.Services,
             enter = panelEnter(fromLeft = false),
@@ -4273,10 +4554,10 @@ private fun ImmersivePlayerScreen(
             // Flush to the right screen edge; only the inner (left) corners are rounded.
             Surface(
                 Modifier.width(drawerWidth).fillMaxHeight(),
-                color = Color(0xF20B1114),
+                color = GoogleTvTokens.SurfaceCardTranslucent,
                 contentColor = Color.White,
                 shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
-                tonalElevation = 18.dp,
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
                 shadowElevation = 24.dp
             ) {
                 LazyColumn(
@@ -4285,36 +4566,67 @@ private fun ImmersivePlayerScreen(
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
                     item {
-                        Column(Modifier.padding(bottom = 6.dp)) {
-                            Text("ENTERTAINMENT", color = Color.White, fontSize = 24.sp,
-                                fontWeight = FontWeight.Black)
-                            Text("Playback options and other apps",
-                                color = Color.White.copy(alpha = .6f))
+                        Column(Modifier.padding(bottom = 8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
+                                ) {
+                                    Text(
+                                        "CONTROLS & SETTINGS",
+                                        Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = GoogleTvTokens.BlueAccent,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Stream Options",
+                                color = Color.White,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                "${channel.name} · Live Stream",
+                                color = GoogleTvTokens.TextSecondary,
+                                fontSize = 12.sp
+                            )
                         }
                     }
 
-                    // --- PLAYBACK CONTROLS (folded in from the old MENU drawer) ---
-                    item { DrawerSectionLabel("PLAYBACK") }
+                    // --- PLAYBACK CONTROLS ---
+                    item { DrawerSectionLabel("PLAYBACK CONTROLS") }
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TvOptionButton(
-                                text = "Previous channel",
+                            GoogleTvDrawerActionRow(
+                                title = "Previous Channel",
+                                subtitle = "Return to last watched channel",
+                                icon = Icons.AutoMirrored.Filled.ArrowBack,
                                 onClick = { onPreviousChannel(); drawer = PlayerDrawer.None },
                                 modifier = Modifier.fillMaxWidth().focusRequester(firstServiceFocus)
                             )
-                            TvOptionButton(
-                                text = "Recent channels",
+                            GoogleTvDrawerActionRow(
+                                title = "Recent Channels",
+                                subtitle = "Browse channel history",
+                                icon = Icons.Default.History,
                                 onClick = { drawer = PlayerDrawer.Recent },
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            TvOptionButton(
-                                text = "Add to MultiView",
+                            GoogleTvDrawerActionRow(
+                                title = "Add to MultiView",
+                                subtitle = "Split-screen dual playback",
+                                icon = Icons.Default.Dashboard,
                                 onClick = { selectingMultiViewChannel = true; drawer = PlayerDrawer.Channels },
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            TvOptionButton(
-                                text = if (showDiagnostics) "Hide stream info" else "Stream info",
-                                selected = showDiagnostics,
+                            GoogleTvDrawerActionRow(
+                                title = if (showDiagnostics) "Hide Stream Diagnostics" else "Stream Diagnostics",
+                                subtitle = if (showDiagnostics) "Diagnostics overlay visible" else "View live bitrate, codecs & dropped frames",
+                                icon = Icons.Default.Info,
+                                active = showDiagnostics,
                                 onClick = { showDiagnostics = !showDiagnostics },
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -4322,13 +4634,15 @@ private fun ImmersivePlayerScreen(
                     }
 
                     if (playbackControls.audioTracks.isNotEmpty()) {
-                        item { DrawerSectionLabel("AUDIO") }
+                        item { DrawerSectionLabel("AUDIO TRACKS") }
                         item {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 playbackControls.audioTracks.forEach { track ->
-                                    TvOptionButton(
-                                        text = if (track.selected) "✓ ${track.label}" else track.label,
-                                        selected = track.selected,
+                                    GoogleTvDrawerActionRow(
+                                        title = track.label,
+                                        subtitle = if (track.selected) "Currently selected" else "Select audio feed",
+                                        icon = Icons.AutoMirrored.Filled.VolumeUp,
+                                        active = track.selected,
                                         onClick = { playbackControls.chooseAudio(track.id) },
                                         modifier = Modifier.fillMaxWidth()
                                     )
@@ -4340,17 +4654,21 @@ private fun ImmersivePlayerScreen(
                     item { DrawerSectionLabel("SUBTITLES / CC") }
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TvOptionButton(
-                                text = if (!captionsEnabled) "✓ Off" else "Off",
-                                selected = !captionsEnabled,
+                            GoogleTvDrawerActionRow(
+                                title = "Off",
+                                subtitle = if (!captionsEnabled) "Captions disabled" else "Turn off captions",
+                                icon = Icons.Default.ClosedCaption,
+                                active = !captionsEnabled,
                                 onClick = { playbackControls.chooseSubtitle(null) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             playbackControls.subtitleTracks.forEach { track ->
                                 val isSelected = track.selected && captionsEnabled
-                                TvOptionButton(
-                                    text = if (isSelected) "✓ ${track.label}" else track.label,
-                                    selected = isSelected,
+                                GoogleTvDrawerActionRow(
+                                    title = track.label,
+                                    subtitle = if (isSelected) "Active captions" else "Select subtitle language",
+                                    icon = Icons.Default.ClosedCaption,
+                                    active = isSelected,
                                     onClick = { playbackControls.chooseSubtitle(track.id) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -4359,7 +4677,7 @@ private fun ImmersivePlayerScreen(
                     }
 
                     // --- OTHER APPS ---
-                    item { DrawerSectionLabel("APPS") }
+                    item { DrawerSectionLabel("ENTERTAINMENT APPS") }
                     items(entertainmentApps, key = { "service-${it.packageName}" }) { app ->
                         val launchIntent = remember(app.packageName) {
                             findAppLaunchIntent(context, app.packageName)
@@ -4371,37 +4689,62 @@ private fun ImmersivePlayerScreen(
                         }
                         var isFocused by remember(app.packageName) { mutableStateOf(false) }
                         Surface(
-                            Modifier.fillMaxWidth()
-                                .onFocusChanged { isFocused = it.isFocused }
-                                .clickable {
-                                    GlzHubManager.reportLaunchedApp(
-                                        prefs, app.name, app.packageName
-                                    )
-                                    scope.launch(Dispatchers.IO) {
-                                        GlzHubManager.heartbeat(prefs, client)
-                                    }
-                                    launchEntertainmentApp(context, app.packageName, launchIntent)
+                            onClick = {
+                                GlzHubManager.reportLaunchedApp(prefs, app.name, app.packageName)
+                                scope.launch(Dispatchers.IO) {
+                                    GlzHubManager.heartbeat(prefs, client)
                                 }
-                                .focusable(),
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isFocused) app.accent
-                            else Color.White.copy(alpha = .08f),
-                            shadowElevation = 0.dp
+                                launchEntertainmentApp(context, app.packageName, launchIntent)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .googleTvFocusable(
+                                    shape = RoundedCornerShape(16.dp),
+                                    focusedScale = 1.02f,
+                                    onFocusChange = { isFocused = it }
+                                ),
+                            shape = RoundedCornerShape(16.dp),
+                            color = when {
+                                isFocused -> Color.White
+                                else -> Color.White.copy(alpha = 0.06f)
+                            },
+                            contentColor = if (isFocused) Color.Black else Color.White
                         ) {
-                            Row(Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 AdaptiveAppIcon(
                                     icon = icon,
                                     appName = app.name,
                                     accent = app.accent,
-                                    size = 54.dp
+                                    size = 46.dp
                                 )
                                 Spacer(Modifier.width(14.dp))
-                                Column {
-                                    Text(app.name, color = Color.White, fontSize = 18.sp,
-                                        fontWeight = FontWeight.Black)
-                                    Text(if (launchIntent == null) "Install" else "Open",
-                                        color = Color.White.copy(alpha = .7f))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        app.name,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                    Text(
+                                        if (launchIntent == null) "Install from store" else "Launch app",
+                                        color = if (isFocused) Color.Black.copy(alpha = 0.70f) else GoogleTvTokens.TextSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (isFocused) Color.Black else GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
+                                ) {
+                                    Text(
+                                        if (launchIntent == null) "INSTALL" else "OPEN",
+                                        Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (isFocused) Color.White else GoogleTvTokens.BlueAccent,
+                                        letterSpacing = 0.5.sp
+                                    )
                                 }
                             }
                         }
@@ -4423,14 +4766,36 @@ private fun ImmersivePlayerScreen(
             Surface(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                     .padding(horizontal = 48.dp, vertical = 30.dp),
-                color = Color(0xF20B1114), contentColor = Color.White,
+                color = GoogleTvTokens.SurfaceCardTranslucent,
+                contentColor = Color.White,
                 shape = RoundedCornerShape(24.dp),
-                tonalElevation = 18.dp
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
+                shadowElevation = 24.dp
             ) {
                 Column(Modifier.padding(22.dp)) {
-                    Text("RECENT CHANNELS", color = Color(0xFFC4FF4D),
-                        fontWeight = FontWeight.Black)
-                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
+                        ) {
+                            Text(
+                                "HISTORY",
+                                Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                color = GoogleTvTokens.BlueAccent
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "RECENT CHANNELS",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(recentChannels, key = { "recent-${it.id}" }) { recent ->
                             val programme = guide.forChannel(recent)
@@ -4442,22 +4807,37 @@ private fun ImmersivePlayerScreen(
                                     drawer = PlayerDrawer.None
                                 },
                                 modifier = Modifier
-                                    .onFocusChanged { isFocused = it.isFocused }
-                                    .padding(vertical = 2.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isFocused) Color(0xFFC4FF4D) else Color.White.copy(alpha = 0.12f),
-                                contentColor = if (isFocused) Color.Black else Color.White,
-                                shadowElevation = if (isFocused) 8.dp else 0.dp
+                                    .googleTvFocusable(
+                                        shape = RoundedCornerShape(14.dp),
+                                        focusedScale = 1.04f,
+                                        onFocusChange = { isFocused = it }
+                                    ),
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isFocused) Color.White else Color.White.copy(alpha = 0.08f),
+                                contentColor = if (isFocused) Color.Black else Color.White
                             ) {
-                                Column(Modifier.width(180.dp).padding(14.dp)) {
-                                    Text(recent.name, maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isFocused) Color.Black else Color.White)
-                                    Text(programme?.title ?: "Live programming", maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isFocused) Color.Black.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.6f))
+                                Row(
+                                    Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    GoogleTvChannelLogo(recent, 32.dp, guide, shape = RoundedCornerShape(6.dp))
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.width(150.dp)) {
+                                        Text(
+                                            recent.name,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                        Text(
+                                            programme?.title ?: "Live Broadcast",
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            fontSize = 11.sp,
+                                            color = if (isFocused) Color.Black.copy(alpha = 0.70f) else GoogleTvTokens.TextSecondary
+                                        )
+                                    }
                                 }
                             }
                         }

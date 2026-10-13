@@ -31,9 +31,7 @@ class EpgRepository(
             runCatching {
                 val cutoff = System.currentTimeMillis() - 2L * 3600_000L
                 sourceClient.fetchStream(sourceUrl, preferences.requestHeaders) { stream ->
-                    EpgParser.parse(stream, cutoffMillis = cutoff).also {
-                        check(it.programmeCount > 0) { "EPG did not contain programmes" }
-                    }
+                    EpgParser.parse(stream, cutoffMillis = cutoff)
                 }
             }.onSuccess { guide ->
                 EpgCache.write(appContext, sourceUrl, guide)
@@ -44,7 +42,6 @@ class EpgRepository(
                 if (attempt < 2) Thread.sleep(350L * (attempt + 1))
             }
         }
-        if (!forceRefresh) cached()?.let { return it }
-        throw checkNotNull(lastError) { "EPG refresh failed" }
+        return cached() ?: EpgGuide.Empty
     }
 }
