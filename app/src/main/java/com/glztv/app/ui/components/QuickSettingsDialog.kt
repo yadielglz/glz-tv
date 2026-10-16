@@ -59,6 +59,9 @@ import com.glztv.app.model.NetworkInfo
 import com.glztv.app.ui.theme.GoogleTvTokens
 import com.glztv.app.ui.theme.googleTvFocusable
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.filled.Close
+
 @Composable
 fun QuickSettingsDialog(
     networkInfo: NetworkInfo?,
@@ -84,24 +87,24 @@ fun QuickSettingsDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.78f))
+            .background(Color.Black.copy(alpha = 0.65f))
             .clickable(onClick = onDismiss),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.CenterEnd
     ) {
         Surface(
             modifier = Modifier
-                .width(580.dp)
+                .fillMaxHeight()
+                .width(430.dp)
                 .clickable(enabled = false) {},
-            shape = RoundedCornerShape(22.dp),
-            color = Color(0xFF111722),
-            tonalElevation = 14.dp,
+            shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp),
+            color = Color(0xFF101520),
+            tonalElevation = 16.dp,
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp)
-                    .verticalScroll(scrollState)
+                    .fillMaxSize()
+                    .padding(horizontal = 22.dp, vertical = 20.dp)
             ) {
                 // Header
                 Row(
@@ -111,38 +114,68 @@ fun QuickSettingsDialog(
                     Surface(
                         shape = CircleShape,
                         color = GoogleTvTokens.BlueAccent.copy(alpha = 0.18f),
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(42.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = null,
                                 tint = GoogleTvTokens.BlueAccent,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
 
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.width(12.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Quick Settings",
                             color = Color.White,
-                            fontSize = 19.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = "System shortcuts & diagnostics",
                             color = GoogleTvTokens.TextSecondary,
-                            fontSize = 12.sp
+                            fontSize = 11.sp
                         )
+                    }
+
+                    var isCloseHeaderFocused by remember { mutableStateOf(false) }
+                    Surface(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .googleTvFocusable(
+                                shape = CircleShape,
+                                focusedScale = 1.1f,
+                                onFocusChange = { isCloseHeaderFocused = it }
+                            ),
+                        shape = CircleShape,
+                        color = if (isCloseHeaderFocused) Color.White else Color.White.copy(alpha = 0.08f),
+                        contentColor = if (isCloseHeaderFocused) Color.Black else Color.White
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(14.dp))
 
-                // SECTION 1: NETWORK & DIAGNOSTICS
+                // Scrollable settings body
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(scrollState)
+                ) {
+                    // SECTION 1: NETWORK & DIAGNOSTICS
                 QuickSettingsHeader(title = "NETWORK & CONNECTIVITY")
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     QuickSettingsActionCard(
@@ -288,8 +321,9 @@ fun QuickSettingsDialog(
                         }
                     }
                 }
+            }
 
-                Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(14.dp))
 
                 // Bottom Buttons
                 Row(
@@ -303,7 +337,7 @@ fun QuickSettingsDialog(
                             onOpenFullSettings()
                         },
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(1.15f)
                             .height(44.dp)
                             .googleTvFocusable(
                                 shape = RoundedCornerShape(10.dp),
@@ -323,7 +357,7 @@ fun QuickSettingsDialog(
                     Surface(
                         onClick = onDismiss,
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(0.85f)
                             .height(44.dp)
                             .googleTvFocusable(
                                 shape = RoundedCornerShape(10.dp),

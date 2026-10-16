@@ -264,7 +264,6 @@ fun GoogleTvHomeScreen(
     val liveGuideFocusRequester = remember { FocusRequester() }
     val quickTuneFocusRequester = remember { FocusRequester() }
     val radioPlayerFocusRequester = remember { FocusRequester() }
-    val firstRailFocusRequester = remember { FocusRequester() }
 
     val isRadioPlaying = radioPlaying && currentRadioStation != null
 
@@ -316,7 +315,6 @@ fun GoogleTvHomeScreen(
                 liveGuideFocusRequester = liveGuideFocusRequester,
                 quickTuneFocusRequester = quickTuneFocusRequester,
                 radioPlayerFocusRequester = radioPlayerFocusRequester,
-                firstRailFocusRequester = firstRailFocusRequester,
                 onWatch = { heroChannel?.let(onWatchChannel) ?: onOpenGuide() },
                 onToggleFavorite = { heroChannel?.let { onToggleFavorite(it.id) } },
                 onOpenGuide = onOpenGuide,
@@ -348,11 +346,7 @@ fun GoogleTvHomeScreen(
                         else watchLiveFocusRequester.requestFocus()
                     } catch (_: Exception) {}
                 },
-                onFocusDown = {
-                    try {
-                        firstRailFocusRequester.requestFocus()
-                    } catch (_: Exception) {}
-                },
+                onFocusDown = null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
@@ -394,7 +388,6 @@ fun GoogleTvHomeScreen(
                                 now = now,
                                 modifier = if (index == 0) {
                                     Modifier
-                                        .focusRequester(firstRailFocusRequester)
                                         .focusProperties {
                                             if (currentRadioStation != null) {
                                                 up = radioPlayerFocusRequester
@@ -567,7 +560,9 @@ fun GoogleTvHomeScreen(
                             InstalledAppCard(
                                 app = app,
                                 onClick = {
-                                    LauncherAppsManager.launchApp(context, app.packageName)
+                                    if (contextMenuApp == null) {
+                                        LauncherAppsManager.launchApp(context, app.packageName)
+                                    }
                                 },
                                 onLongClick = {
                                     contextMenuApp = app
@@ -728,6 +723,7 @@ private fun InstalledAppCard(
     var isFocused by remember { mutableStateOf(false) }
     var longPressJob by remember { mutableStateOf<Job?>(null) }
     var isLongPressTriggered by remember { mutableStateOf(false) }
+    var lastLongClickTimestamp by remember { mutableStateOf(0L) }
 
     val hasBanner = app.banner != null
     val appImage = remember(app.packageName) {
@@ -749,15 +745,25 @@ private fun InstalledAppCard(
                     isFocused = focused
                     if (!focused) {
                         longPressJob?.cancel()
-                        isLongPressTriggered = false
+                        // Note: Do NOT clear isLongPressTriggered here!
+                        // When long-press opens AppContextMenuDialog, InstalledAppCard loses focus.
+                        // Clearing isLongPressTriggered here causes the trailing ACTION_UP from the user releasing
+                        // the button to be treated as a normal click, accidentally opening the app!
                     }
                 }
             )
             .focusable()
             .pointerInput(app.packageName) {
                 detectTapGestures(
-                    onTap = { onClick() },
-                    onLongPress = { onLongClick() }
+                    onTap = {
+                        if (System.currentTimeMillis() - lastLongClickTimestamp > 1000L) {
+                            onClick()
+                        }
+                    },
+                    onLongPress = {
+                        lastLongClickTimestamp = System.currentTimeMillis()
+                        onLongClick()
+                    }
                 )
             }
             .onKeyEvent { event ->
@@ -773,12 +779,14 @@ private fun InstalledAppCard(
                                     longPressJob = scope.launch {
                                         delay(450L) // Standard long-press duration
                                         isLongPressTriggered = true
+                                        lastLongClickTimestamp = System.currentTimeMillis()
                                         onLongClick()
                                     }
                                     true
                                 } else {
-                                    if (!isLongPressTriggered) {
+                                    if (!isLongPressTriggered && (System.currentTimeMillis() - lastLongClickTimestamp > 1200L)) {
                                         isLongPressTriggered = true
+                                        lastLongClickTimestamp = System.currentTimeMillis()
                                         longPressJob?.cancel()
                                         onLongClick()
                                     }
@@ -786,7 +794,7 @@ private fun InstalledAppCard(
                                 }
                             }
                             KeyEvent.ACTION_UP -> {
-                                val wasLongPress = isLongPressTriggered
+                                val wasLongPress = isLongPressTriggered || (System.currentTimeMillis() - lastLongClickTimestamp < 1000L)
                                 longPressJob?.cancel()
                                 isLongPressTriggered = false
                                 if (!wasLongPress) {
@@ -801,6 +809,7 @@ private fun InstalledAppCard(
                     KeyEvent.KEYCODE_INFO,
                     KeyEvent.KEYCODE_BOOKMARK -> {
                         if (native.action == KeyEvent.ACTION_UP) {
+                            lastLongClickTimestamp = System.currentTimeMillis()
                             onLongClick()
                             true
                         } else false
@@ -1176,7 +1185,6 @@ private fun GoogleTvSpotlightBillboard(
     liveGuideFocusRequester: FocusRequester? = null,
     quickTuneFocusRequester: FocusRequester? = null,
     radioPlayerFocusRequester: FocusRequester? = null,
-    firstRailFocusRequester: FocusRequester? = null,
     onWatch: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenGuide: () -> Unit,
@@ -1191,7 +1199,7 @@ private fun GoogleTvSpotlightBillboard(
     val downFocusTarget = if (currentRadioStation != null && radioPlayerFocusRequester != null) {
         radioPlayerFocusRequester
     } else {
-        firstRailFocusRequester
+        null
     }
     val activeProg = remember(channel?.id, guide, now) {
         channel?.let { guide.nowProgrammeForChannel(it, now) }

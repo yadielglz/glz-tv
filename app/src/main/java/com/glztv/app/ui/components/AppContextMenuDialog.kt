@@ -72,12 +72,14 @@ fun AppContextMenuDialog(
 ) {
     val initialFocus = remember { FocusRequester() }
     val openTime = remember { System.currentTimeMillis() }
+    var allowActionExecution by remember { mutableStateOf(false) }
     var receivedKeyDownInDialog by remember { mutableStateOf(false) }
 
-    fun isSafeClick(): Boolean = (System.currentTimeMillis() - openTime) > 300L
+    fun isSafeClick(): Boolean = allowActionExecution && (System.currentTimeMillis() - openTime) > 400L
 
     LaunchedEffect(Unit) {
-        delay(150L)
+        delay(350L)
+        allowActionExecution = true
         try {
             initialFocus.requestFocus()
         } catch (_: Exception) {}
@@ -96,10 +98,13 @@ fun AppContextMenuDialog(
             modifier = Modifier
                 .width(460.dp)
                 .onKeyEvent { event ->
-                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                        receivedKeyDownInDialog = true
+                    val native = event.nativeKeyEvent
+                    if (native.action == KeyEvent.ACTION_DOWN) {
+                        if (allowActionExecution && native.repeatCount == 0) {
+                            receivedKeyDownInDialog = true
+                        }
                         false
-                    } else if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
+                    } else if (native.action == KeyEvent.ACTION_UP) {
                         if (!receivedKeyDownInDialog) {
                             // Consume trailing ACTION_UP from the long-press that opened this dialog
                             true
@@ -212,6 +217,7 @@ fun AppContextMenuDialog(
                         iconTint = if (app.isFavorite) GoogleTvTokens.StarGold else Color.White,
                         title = if (app.isFavorite) "Remove from Favorites" else "Pin to Favorites",
                         subtitle = if (app.isFavorite) "Unpin from home favorite apps" else "Keep at the front of home screen",
+                        isSafeClick = { isSafeClick() },
                         onClick = {
                             onToggleFavorite()
                             onDismiss()
@@ -222,6 +228,7 @@ fun AppContextMenuDialog(
                         icon = Icons.Default.Info,
                         title = "App Info & Permissions",
                         subtitle = "Storage, permissions, notifications & cache",
+                        isSafeClick = { isSafeClick() },
                         onClick = {
                             onDismiss()
                             onOpenDetails()
@@ -232,6 +239,7 @@ fun AppContextMenuDialog(
                         icon = if (app.isHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                         title = if (app.isHidden) "Show on Home" else "Hide from Home",
                         subtitle = if (app.isHidden) "Unhide this app on the home screen" else "Hide this app from the launcher view",
+                        isSafeClick = { isSafeClick() },
                         onClick = {
                             onToggleHide()
                             onDismiss()
@@ -244,6 +252,7 @@ fun AppContextMenuDialog(
                             iconTint = Color(0xFFFF5252),
                             title = "Uninstall App",
                             subtitle = "Remove this application from the device",
+                            isSafeClick = { isSafeClick() },
                             onClick = {
                                 onDismiss()
                                 onUninstall()
