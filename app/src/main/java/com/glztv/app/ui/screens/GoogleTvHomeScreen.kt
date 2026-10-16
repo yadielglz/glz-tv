@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sports
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.Wifi
@@ -168,6 +169,8 @@ fun GoogleTvHomeScreen(
     onStartSportsBarKiosk: () -> Unit = {},
     previewContent: (@Composable () -> Unit)? = null,
     isFamilyChannel: Boolean = false,
+    hasUpdate: Boolean = false,
+    onOpenUpdate: () -> Unit = {},
     radioPlaying: Boolean = false,
     onToggleRadioPlayPause: () -> Unit = {},
     onStopRadio: () -> Unit = {},
@@ -296,6 +299,8 @@ fun GoogleTvHomeScreen(
                 onOpenWelcome = onOpenWelcome,
                 onOpenWeather = onOpenWeather,
                 onOpenSettings = { showQuickSettings = true },
+                hasUpdate = hasUpdate,
+                onOpenUpdate = onOpenUpdate,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 4.dp)
@@ -1007,6 +1012,8 @@ private fun GoogleTvHomeTopBar(
     onOpenWelcome: () -> Unit,
     onOpenWeather: () -> Unit,
     onOpenSettings: () -> Unit,
+    hasUpdate: Boolean = false,
+    onOpenUpdate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
@@ -1120,6 +1127,50 @@ private fun GoogleTvHomeTopBar(
                 letterSpacing = 0.5.sp,
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
+
+            // Update Pill Button (shown whenever an update is available)
+            if (hasUpdate) {
+                var updateFocused by remember { mutableStateOf(false) }
+                Surface(
+                    onClick = onOpenUpdate,
+                    shape = CircleShape,
+                    color = if (updateFocused) Color(0xFF60A5FA) else Color(0xFF2563EB),
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .onKeyEvent { event ->
+                            if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP &&
+                                (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                                 event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ENTER)) {
+                                onOpenUpdate()
+                                true
+                            } else false
+                        }
+                        .googleTvFocusable(
+                            shape = CircleShape,
+                            focusedScale = 1.06f,
+                            onFocusChange = { updateFocused = it }
+                        )
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.SystemUpdate,
+                            contentDescription = "Update Available",
+                            Modifier.size(13.dp),
+                            tint = Color.White
+                        )
+                        Text(
+                            "Update",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
 
             // Settings Pill Button (Matching Google TV Top Right Header)
             var settingsFocused by remember { mutableStateOf(false) }

@@ -122,7 +122,7 @@ jobs:
           tag="v${{ steps.version.outputs.name }}"
           args=("$tag" "GLZ-TV-${{ steps.version.outputs.name }}.apk" "GLZ-TV-${{ steps.version.outputs.name }}.apk.sha256"
             --generate-notes --title "GLZ TV ${{ steps.version.outputs.name }}")
-          if [[ "${{ steps.version.outputs.name }}" == *-beta* || "${{ steps.version.outputs.name }}" == *-family* || "${{ steps.version.outputs.name }}" == *-rc* ]]; then
+          if [[ "${{ steps.version.outputs.name }}" == *-testing* || "${{ steps.version.outputs.name }}" == *-weekly* || "${{ steps.version.outputs.name }}" == *-biweekly* || "${{ steps.version.outputs.name }}" == *-monthly* || "${{ steps.version.outputs.name }}" == *-beta* || "${{ steps.version.outputs.name }}" == *-family* || "${{ steps.version.outputs.name }}" == *-rc* ]]; then
             args+=(--prerelease --latest=false)
           fi
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then

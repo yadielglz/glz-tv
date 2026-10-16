@@ -12,6 +12,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.URLDecoder
+import java.util.Calendar
+import java.util.TimeZone
 
 object GithubUpdateManager {
     private const val RELEASES =
@@ -19,34 +21,184 @@ object GithubUpdateManager {
     private const val APK_MIME = "application/vnd.android.package-archive"
 
     /**
-     * Which GitHub release ring this install follows. The [marker] is matched against the
+     * Which GitHub release ring this install follows. The [markers] are matched against the
      * lowercased tag suffix (the part after the first `-`). Stable releases (no suffix) are
      * offered on every channel; a channel additionally accepts its own pre-release tags.
      */
-    enum class UpdateChannel(val id: String, val label: String, val marker: String?) {
-        PRODUCTION("production", "Production", null),
-        FAMILY("family", "Family", "family"),
-        BETA("beta", "Beta", "beta"),
-        RELEASE_CANDIDATE("rc", "Release Candidate", "rc");
+    enum class UpdateChannel(
+        val id: String,
+        val label: String,
+        val markers: List<String>,
+        val legacyIds: List<String> = emptyList()
+    ) {
+        PRODUCTION(
+            id = "production",
+            label = "Production Stable",
+            markers = emptyList(),
+            legacyIds = listOf("prod")
+        ),
+        WEEKLY(
+            id = "weekly",
+            label = "Weekly",
+            markers = listOf("weekly", "family"),
+            legacyIds = listOf("family")
+        ),
+        BIWEEKLY(
+            id = "biweekly",
+            label = "Bi-Weekly",
+            markers = listOf("biweekly", "rc"),
+            legacyIds = listOf("rc")
+        ),
+        MONTHLY(
+            id = "monthly",
+            label = "Stable (Monthly)",
+            markers = listOf("monthly")
+        ),
+        TESTING(
+            id = "testing",
+            label = "Testing",
+            markers = listOf("testing", "beta"),
+            legacyIds = listOf("beta")
+        );
+
+        val marker: String? get() = markers.firstOrNull()
 
         companion object {
+            // Legacy enum aliases to preserve compatibility with existing code and tests
+            val FAMILY get() = WEEKLY
+            val BETA get() = TESTING
+            val RELEASE_CANDIDATE get() = BIWEEKLY
+
             fun from(id: String?): UpdateChannel =
-                values().firstOrNull { it.id.equals(id, ignoreCase = true) } ?: PRODUCTION
+                values().firstOrNull { channel ->
+                    channel.id.equals(id, ignoreCase = true) ||
+                    channel.legacyIds.any { it.equals(id, ignoreCase = true) }
+                } ?: PRODUCTION
         }
     }
 
     /**
      * The first release on the Production ring. Every stable release tagged before this one
-     * belongs to the Family ring, so Production installs are never offered an older build.
+     * belongs to the legacy Family ring, so Production installs are never offered an older build.
      */
     internal const val PRODUCTION_FLOOR = "26.902.05"
+
+    data class MilestoneStatus(
+        val milestoneDeadlineMillis: Long,
+        val forceDeadlineMillis: Long,
+        val isPastMilestone: Boolean,
+        val isForceRequired: Boolean
+    )
 
     data class UpdateInfo(
         val version: String,
         val downloadUrl: String,
         val releaseUrl: String,
-        val notes: String
+        val notes: String,
+        val publishedAt: String? = null
     )
+
+    /**
+     * Parse release date from a version name such as "2026.1016.15" or "2026.1016.05-family".
+     * Returns timestamp in millis at start of day in GMT-5, or null if unparseable.
+     */
+    fun parseReleaseDate(versionName: String): Long? {
+        val match = Regex("""^(?:v)?(\d{4})\.(\d{2})(\d{2})""").find(versionName) ?: return null
+        val (yStr, mStr, dStr) = match.destructured
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("GMT-5")).apply {
+            set(Calendar.YEAR, yStr.toInt())
+            set(Calendar.MONTH, mStr.toInt() - 1)
+            set(Calendar.DAY_OF_MONTH, dStr.toInt())
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return cal.timeInMillis
+    }
+
+    /**
+     * Calculates the monthly milestone deadline for a release on the Monthly channel.
+     * The milestone deadline is the 9th of the month or the 2nd Friday of the month
+     * at 23:59:00 GMT-5, whichever comes first in the cycle, ensuring a ~30-day
+     * rolling period (e.g. 2026.1016.15 released 10/16 is valid to 11/13 23:59:00 GMT-5).
+     */
+    fun getMonthlyMilestoneDeadline(releaseDateMillis: Long): Long {
+        val tz = TimeZone.getTimeZone("GMT-5")
+        val cal = Calendar.getInstance(tz).apply { timeInMillis = releaseDateMillis }
+        val releaseYear = cal.get(Calendar.YEAR)
+        val releaseMonth = cal.get(Calendar.MONTH)
+
+        // Check subsequent month
+        var targetYear = releaseYear
+        var targetMonth = releaseMonth + 1
+        if (targetMonth > 11) {
+            targetMonth = 0
+            targetYear += 1
+        }
+
+        val d9 = Calendar.getInstance(tz).apply {
+            set(Calendar.YEAR, targetYear)
+            set(Calendar.MONTH, targetMonth)
+            set(Calendar.DAY_OF_MONTH, 9)
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        val f2 = Calendar.getInstance(tz).apply {
+            set(Calendar.YEAR, targetYear)
+            set(Calendar.MONTH, targetMonth)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            val firstDow = get(Calendar.DAY_OF_WEEK)
+            val daysToFriday = (Calendar.FRIDAY - firstDow + 7) % 7
+            val firstFriday = 1 + daysToFriday
+            val secondFriday = firstFriday + 7
+            set(Calendar.DAY_OF_MONTH, secondFriday)
+        }.timeInMillis
+
+        val earlier = minOf(d9, f2)
+        val later = maxOf(d9, f2)
+
+        // If the earlier date provides at least 25 days of life, use it.
+        // If not (e.g. released 10/16 where Nov 9 is only 24 days away), use the 2nd Friday (11/13)
+        // so it stays within the 30 rolling days milestone period.
+        val twentyFiveDays = 25L * 24 * 60 * 60 * 1000L
+        return if ((earlier - releaseDateMillis) >= twentyFiveDays) {
+            earlier
+        } else {
+            later
+        }
+    }
+
+    /**
+     * Checks whether the current build on the Monthly channel is past its milestone deadline,
+     * and if it is 7+ days overdue (triggering a mandatory force update).
+     */
+    fun checkMilestoneStatus(
+        versionName: String = BuildConfig.VERSION_NAME,
+        currentTimeMillis: Long = System.currentTimeMillis()
+    ): MilestoneStatus {
+        val releaseDate = parseReleaseDate(versionName) ?: currentTimeMillis
+        val milestoneDeadline = getMonthlyMilestoneDeadline(releaseDate)
+        val sevenDays = 7L * 24 * 60 * 60 * 1000L
+        val forceDeadline = milestoneDeadline + sevenDays
+
+        val isPastMilestone = currentTimeMillis >= milestoneDeadline
+        val isForceRequired = currentTimeMillis >= forceDeadline
+
+        return MilestoneStatus(
+            milestoneDeadlineMillis = milestoneDeadline,
+            forceDeadlineMillis = forceDeadline,
+            isPastMilestone = isPastMilestone,
+            isForceRequired = isForceRequired
+        )
+    }
 
     fun check(client: OkHttpClient, channel: UpdateChannel = UpdateChannel.PRODUCTION): UpdateInfo? {
         val response = client.newCall(
@@ -86,7 +238,8 @@ object GithubUpdateManager {
             version = version,
             downloadUrl = asset.getString("browser_download_url"),
             releaseUrl = newest.optString("html_url"),
-            notes = newest.optString("body").take(1_200)
+            notes = newest.optString("body").take(1_200),
+            publishedAt = newest.optString("published_at").ifBlank { null }
         )
     }
 
@@ -98,10 +251,12 @@ object GithubUpdateManager {
         return when (channel) {
             // Production: stable tags from the floor release onward only.
             UpdateChannel.PRODUCTION -> stable && compareVersions(base, PRODUCTION_FLOOR) >= 0
-            // Family: every stable tag (including the pre-floor history) plus -family builds.
-            UpdateChannel.FAMILY -> stable || suffix.startsWith("family")
-            UpdateChannel.BETA -> stable || suffix.startsWith("beta")
-            UpdateChannel.RELEASE_CANDIDATE -> stable || suffix.startsWith("rc")
+            // Monthly: tags with -monthly, or stable tags from the floor onward
+            UpdateChannel.MONTHLY -> suffix.startsWith("monthly") || (stable && compareVersions(base, PRODUCTION_FLOOR) >= 0)
+            // Pre-release and cadence rings: accept their own markers (and legacy markers) OR any newer stable release
+            UpdateChannel.WEEKLY,
+            UpdateChannel.BIWEEKLY,
+            UpdateChannel.TESTING -> stable || channel.markers.any { suffix.startsWith(it) }
         }
     }
 

@@ -73,8 +73,11 @@ class LauncherAppsManagerTest {
     @Test
     fun familyChannelValidation() {
         val family = GithubUpdateManager.UpdateChannel.from("family")
-        assertEquals(GithubUpdateManager.UpdateChannel.FAMILY, family)
+        assertEquals(GithubUpdateManager.UpdateChannel.WEEKLY, family)
         assertTrue(family == GithubUpdateManager.UpdateChannel.FAMILY)
+
+        val weekly = GithubUpdateManager.UpdateChannel.from("weekly")
+        assertEquals(GithubUpdateManager.UpdateChannel.WEEKLY, weekly)
 
         val prod = GithubUpdateManager.UpdateChannel.from("production")
         assertFalse(prod == GithubUpdateManager.UpdateChannel.FAMILY)

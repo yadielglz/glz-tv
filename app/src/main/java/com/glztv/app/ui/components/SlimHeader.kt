@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +53,8 @@ fun SlimHeader(
     onRefresh: () -> Unit,
     onSettings: () -> Unit,
     onScreensaver: (() -> Unit)? = null,
+    hasUpdate: Boolean = false,
+    onOpenUpdate: (() -> Unit)? = null,
     /** When true, hide the network / weather / clock cluster (Home shows its own). */
     minimal: Boolean = false
 ) {
@@ -196,6 +199,42 @@ fun SlimHeader(
                 )
             ) {
                 Icon(Icons.Default.Refresh, strings.refresh, tint = MaterialTheme.colorScheme.onSurface)
+            }
+            Spacer(Modifier.width(6.dp))
+            if (hasUpdate && onOpenUpdate != null) {
+                var updateFocused by remember { mutableStateOf(false) }
+                Surface(
+                    onClick = onOpenUpdate,
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = if (updateFocused) Color(0xFF60A5FA) else Color(0xFF2563EB),
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .tvFocusableWithPhysics(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            focusedScale = 1.06f,
+                            onFocusChange = { updateFocused = it }
+                        )
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.SystemUpdate,
+                            contentDescription = "Update Available",
+                            Modifier.size(14.dp),
+                            tint = Color.White
+                        )
+                        Text(
+                            "Update",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
             }
             Spacer(Modifier.width(6.dp))
             FilledIconButton(

@@ -197,6 +197,7 @@ import androidx.compose.material.icons.filled.ClosedCaption
 import com.glztv.app.ui.navigation.AppSection
 import com.glztv.app.ui.navigation.ExpressiveNavigationRail
 import com.glztv.app.ui.components.SlimHeader
+import com.glztv.app.ui.components.UpdateModalDialog
 import com.glztv.app.model.NetworkInfo
 import com.glztv.app.model.WeatherInfo
 import com.glztv.app.model.EntertainmentApp
@@ -431,11 +432,28 @@ internal fun TvScreen(
     var currentUpdateChannel by remember {
         mutableStateOf(
             prefs.getString(UPDATE_CHANNEL, null)
-                ?: if (BuildConfig.DEBUG) GithubUpdateManager.UpdateChannel.FAMILY.id else GithubUpdateManager.UpdateChannel.PRODUCTION.id
+                ?: if (BuildConfig.DEBUG) GithubUpdateManager.UpdateChannel.TESTING.id else GithubUpdateManager.UpdateChannel.PRODUCTION.id
         )
     }
     val isFamilyChannel = remember(currentUpdateChannel) {
-        BuildConfig.DEBUG || GithubUpdateManager.UpdateChannel.from(currentUpdateChannel) == GithubUpdateManager.UpdateChannel.FAMILY
+        BuildConfig.DEBUG || GithubUpdateManager.UpdateChannel.from(currentUpdateChannel) in setOf(
+            GithubUpdateManager.UpdateChannel.WEEKLY,
+            GithubUpdateManager.UpdateChannel.TESTING
+        )
+    }
+    var showUpdateModal by remember { mutableStateOf(false) }
+
+    val milestoneStatus = remember(currentUpdateChannel) {
+        if (GithubUpdateManager.UpdateChannel.from(currentUpdateChannel) == GithubUpdateManager.UpdateChannel.MONTHLY) {
+            GithubUpdateManager.checkMilestoneStatus()
+        } else null
+    }
+    val isForceUpdate = (milestoneStatus?.isForceRequired == true) && (availableUpdate != null)
+
+    LaunchedEffect(isForceUpdate) {
+        if (isForceUpdate) {
+            showUpdateModal = true
+        }
     }
 
     val radioDataSourceFactory = remember {
@@ -956,6 +974,8 @@ internal fun TvScreen(
                     onRefresh = { scope.launch { loadSources(forceRefresh = true) } },
                     onSettings = { showSettings = true },
                     onScreensaver = { showScreensaver = true },
+                    hasUpdate = availableUpdate != null,
+                    onOpenUpdate = { showUpdateModal = true },
                     minimal = false
                 )
             }
@@ -1126,6 +1146,8 @@ internal fun TvScreen(
                         }
                     },
                     isFamilyChannel = isFamilyChannel,
+                    hasUpdate = availableUpdate != null,
+                    onOpenUpdate = { showUpdateModal = true },
                     radioPlaying = radioPlaying,
                     onToggleRadioPlayPause = { toggleRadioPlayPause() },
                     onStopRadio = { stopRadio() },
@@ -1386,243 +1408,48 @@ internal fun TvScreen(
         )
     }
 
-    BackHandler(enabled = availableUpdate != null && !updateDownloading) {
-        availableUpdate = null
-        updateDownloadStatus = null
-    }
-
-    AnimatedVisibility(
-        visible = availableUpdate != null,
-        enter = slideInVertically(initialOffsetY = { it * 2 }, animationSpec = tween(350)) + fadeIn(animationSpec = tween(300)),
-        exit = slideOutVertically(targetOffsetY = { it * 2 }, animationSpec = tween(300)) + fadeOut(animationSpec = tween(250)),
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(horizontal = safeHorizontalPadding, vertical = 24.dp)
-    ) {
-        availableUpdate?.let { update ->
-            UpdateNotificationBanner(
-                update = update,
-                downloading = updateDownloading,
-                downloadStatus = updateDownloadStatus,
-                onUpdateNow = {
-                    if (!GithubUpdateManager.canInstall(context)) {
-                        updateDownloadStatus =
-                            "Allow GLZ TV to install unknown apps, then choose Update Now again."
-                        GithubUpdateManager.requestInstallPermission(context)
-                    } else {
-                        updateDownloading = true
-                        updateDownloadStatus = "Downloading update…"
-                        scope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    GithubUpdateManager.download(context, client, update)
-                                }
-                            }.onSuccess { apk ->
-                                updateDownloadStatus = "Opening system installer…"
-                                GithubUpdateManager.launchInstaller(context, apk)
-                            }.onFailure {
-                                updateDownloadStatus = "Download failed: ${it.message}"
+    if ((showUpdateModal || isForceUpdate) && availableUpdate != null) {
+        val update = availableUpdate!!
+        val channel = GithubUpdateManager.UpdateChannel.from(currentUpdateChannel)
+        UpdateModalDialog(
+            update = update,
+            channel = channel,
+            isForceUpdate = isForceUpdate,
+            downloading = updateDownloading,
+            downloadStatus = updateDownloadStatus,
+            onUpdateNow = {
+                if (!GithubUpdateManager.canInstall(context)) {
+                    updateDownloadStatus =
+                        "Allow GLZ TV to install unknown apps, then choose Update Now again."
+                    GithubUpdateManager.requestInstallPermission(context)
+                } else {
+                    updateDownloading = true
+                    updateDownloadStatus = "Downloading update…"
+                    scope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                GithubUpdateManager.download(context, client, update)
                             }
-                            updateDownloading = false
+                        }.onSuccess { apk ->
+                            updateDownloadStatus = "Opening system installer…"
+                            GithubUpdateManager.launchInstaller(context, apk)
+                        }.onFailure {
+                            updateDownloadStatus = "Download failed: ${it.message}"
                         }
-                    }
-                },
-                onNotNow = {
-                    availableUpdate = null
-                    updateDownloadStatus = null
-                }
-            )
-        }
-    }
-    }
-}
-
-@Composable
-private fun UpdateNotificationBanner(
-    update: GithubUpdateManager.UpdateInfo,
-    downloading: Boolean,
-    downloadStatus: String?,
-    onUpdateNow: () -> Unit,
-    onNotNow: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val initialFocus = remember { FocusRequester() }
-    LaunchedEffect(update) {
-        delay(150L)
-        runCatching { initialFocus.requestFocus() }
-    }
-
-    val accent = MaterialTheme.colorScheme.primary
-    val strings = LocalGlzStrings.current
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = Color(0xF20F1626),
-        border = BorderStroke(1.5.dp, accent.copy(alpha = 0.60f)),
-        tonalElevation = 16.dp,
-        shadowElevation = 24.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Left: Icon + Release details
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 24.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "GLZ TV v${update.version}",
-                        color = Color.White,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 17.sp,
-                        letterSpacing = 0.3.sp
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = accent.copy(alpha = 0.20f)
-                    ) {
-                        Text(
-                            strings.updateAvailableTitle.uppercase(),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 0.8.sp,
-                            color = accent
-                        )
+                        updateDownloading = false
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = downloadStatus ?: update.notes.ifBlank {
-                        "A new version is ready from the official GLZ TV GitHub release."
-                    },
-                    color = if (downloadStatus != null) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = if (downloadStatus != null) FontWeight.Bold else FontWeight.Normal,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            },
+            onDismiss = {
+                if (!isForceUpdate) {
+                    showUpdateModal = false
+                }
             }
-
-            // Action Buttons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Update Now (Primary)
-                UpdateActionButton(
-                    label = if (downloading) strings.buffering else strings.updateNow,
-                    isPrimary = true,
-                    enabled = !downloading,
-                    loading = downloading,
-                    focusRequester = initialFocus,
-                    onClick = onUpdateNow
-                )
-
-                // Not Now (Secondary)
-                UpdateActionButton(
-                    label = strings.notNow,
-                    isPrimary = false,
-                    enabled = !downloading,
-                    loading = false,
-                    onClick = onNotNow
-                )
-            }
-        }
+        )
+    }
     }
 }
 
-@Composable
-private fun UpdateActionButton(
-    label: String,
-    isPrimary: Boolean,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    loading: Boolean = false,
-    focusRequester: FocusRequester? = null,
-    modifier: Modifier = Modifier
-) {
-    var focused by remember { mutableStateOf(false) }
-    val accent = MaterialTheme.colorScheme.primary
-    val shape = RoundedCornerShape(14.dp)
-
-    // Contrast calculations:
-    // When focused: solid bright white with pure black bold text and luminous glow (maximum contrast)
-    // When unfocused & primary: solid accent fill with onAccent high-contrast dark text
-    // When unfocused & secondary: dark slate background with crisp white border and white text
-    val backgroundColor = when {
-        focused -> Color.White
-        !enabled -> if (isPrimary) accent.copy(alpha = 0.40f) else Color.White.copy(alpha = 0.05f)
-        isPrimary -> accent
-        else -> Color(0xFF1E283C)
-    }
-
-    val contentColor = when {
-        focused -> Color.Black
-        !enabled -> if (isPrimary) GlzCardDefaults.onAccent(accent).copy(alpha = 0.60f) else Color.White.copy(alpha = 0.35f)
-        isPrimary -> GlzCardDefaults.onAccent(accent)
-        else -> Color.White
-    }
-
-    val borderStroke = when {
-        focused -> BorderStroke(2.dp, Color.White)
-        !enabled -> BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-        isPrimary -> BorderStroke(1.5.dp, Color.White.copy(alpha = 0.50f))
-        else -> BorderStroke(1.5.dp, Color.White.copy(alpha = 0.50f))
-    }
-
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .tvFocusableWithPhysics(
-                shape = shape,
-                focusedScale = 1.08f,
-                glowColor = if (isPrimary) accent else Color.White,
-                onFocusChange = { focused = it }
-            ),
-        shape = shape,
-        color = backgroundColor,
-        contentColor = contentColor,
-        border = borderStroke
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
-                    color = contentColor
-                )
-            }
-            Text(
-                label,
-                fontWeight = FontWeight.Black,
-                fontSize = 14.sp
-            )
-        }
-    }
-}
 
 @Composable
 private fun GuestHubHome(
@@ -6489,7 +6316,10 @@ private fun SettingsDialog(
                             onClick = { LauncherAppsManager.openDeveloperSettings(context) }
                         )
 
-                        if (updateChannelValue == GithubUpdateManager.UpdateChannel.FAMILY.id) {
+                        if (GithubUpdateManager.UpdateChannel.from(updateChannelValue) in setOf(
+                            GithubUpdateManager.UpdateChannel.WEEKLY,
+                            GithubUpdateManager.UpdateChannel.TESTING
+                        )) {
                             SettingsLabel("HOME LAUNCHER (FAMILY LABS)")
                             var launcherEnabled by remember {
                                 mutableStateOf(LauncherAppsManager.isHomeLauncherAliasEnabled(context))
