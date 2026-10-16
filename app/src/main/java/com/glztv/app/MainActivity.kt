@@ -796,10 +796,32 @@ internal fun TvScreen(
         var nextConfigSyncAt = System.currentTimeMillis() + 5 * 60_000L
         var nextHeartbeatAt = System.currentTimeMillis() + 90_000L
         var nextCommandCheckAt = System.currentTimeMillis() + 30_000L
+        var nextEpgRefreshAt = System.currentTimeMillis() + 2 * 3600_000L
         while (true) {
             delay(15_000L)
             val pendingEnrollment = GlzHubManager.pairingCode(prefs) != null
             val now = System.currentTimeMillis()
+            val cachedGuide = withContext(Dispatchers.IO) { epgRepository.cached() }
+            if (cachedGuide != null && cachedGuide !== guide && cachedGuide.programmeCount > 0) {
+                withContext(Dispatchers.Default) {
+                    cachedGuide.prewarm(channels)
+                }
+                guide = cachedGuide
+            }
+            if (!pendingEnrollment && now >= nextEpgRefreshAt) {
+                nextEpgRefreshAt = now + 2 * 3600_000L
+                runCatching {
+                    val refreshedGuide = withContext(Dispatchers.IO) {
+                        epgRepository.load(forceRefresh = true)
+                    }
+                    if (refreshedGuide.programmeCount > 0) {
+                        withContext(Dispatchers.Default) {
+                            refreshedGuide.prewarm(channels)
+                        }
+                        guide = refreshedGuide
+                    }
+                }
+            }
             if (!pendingEnrollment && now >= nextHeartbeatAt) {
                 runCatching { withContext(Dispatchers.IO) { GlzHubManager.heartbeat(prefs, client) } }
                 nextHeartbeatAt = now + 90_000L
@@ -4111,15 +4133,22 @@ private fun ImmersivePlayerScreen(
     val currentProgramme = remember(channel.id, guide, now) {
         guide.nowProgrammeForChannel(channel, now)
     }
-    val nextProgramme = remember(channel.id, guide, currentProgramme) {
+    val nextProgramme = remember(channel.id, guide, currentProgramme, now) {
         guide.nextProgrammeForChannel(channel, currentProgramme?.endMillis ?: now)
     }
 
     LaunchedEffect(showOsd, drawer) {
-        if (!showOsd && drawer == PlayerDrawer.None) return@LaunchedEffect
-        while (true) {
-            delay(15_000L)
+        if (showOsd || drawer != PlayerDrawer.None) {
             now = System.currentTimeMillis()
+            while (true) {
+                delay(1_000L)
+                now = System.currentTimeMillis()
+            }
+        } else {
+            while (true) {
+                delay(10_000L)
+                now = System.currentTimeMillis()
+            }
         }
     }
     var osdRevision by remember { mutableStateOf(0) }
@@ -4225,6 +4254,7 @@ private fun ImmersivePlayerScreen(
                 when (event.nativeKeyEvent.keyCode) {
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
                         if (drawer == PlayerDrawer.None) {
+                            now = System.currentTimeMillis()
                             showOsd = false
                             drawer = PlayerDrawer.Channels
                             true
@@ -4232,6 +4262,7 @@ private fun ImmersivePlayerScreen(
                     }
                     KeyEvent.KEYCODE_DPAD_RIGHT -> {
                         if (drawer == PlayerDrawer.None) {
+                            now = System.currentTimeMillis()
                             showOsd = false
                             drawer = PlayerDrawer.Services
                             true
@@ -4241,18 +4272,21 @@ private fun ImmersivePlayerScreen(
                     KeyEvent.KEYCODE_ENTER,
                     KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                         if (drawer == PlayerDrawer.None) {
+                            now = System.currentTimeMillis()
                             showOsd = true
                             true
                         } else false
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (drawer == PlayerDrawer.None) {
+                            now = System.currentTimeMillis()
                             showOsd = true
                             true
                         } else false
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
                         if (drawer == PlayerDrawer.None) {
+                            now = System.currentTimeMillis()
                             showOsd = false
                             drawer = PlayerDrawer.MiniGuide
                             true
@@ -4261,6 +4295,7 @@ private fun ImmersivePlayerScreen(
                     // Channel keys step channels directly
                     KeyEvent.KEYCODE_CHANNEL_UP -> {
                         if (drawer == PlayerDrawer.None) {
+                            now = System.currentTimeMillis()
                             stepChannel(1)
                             showOsd = true
                             true
@@ -4268,6 +4303,7 @@ private fun ImmersivePlayerScreen(
                     }
                     KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                         if (drawer == PlayerDrawer.None) {
+                            now = System.currentTimeMillis()
                             stepChannel(-1)
                             showOsd = true
                             true
@@ -4276,6 +4312,7 @@ private fun ImmersivePlayerScreen(
                     // Some full remotes still have MENU — send it to the same panel as ▶.
                     KeyEvent.KEYCODE_MENU -> {
                         if (drawer == PlayerDrawer.None) {
+                            now = System.currentTimeMillis()
                             showOsd = false
                             drawer = PlayerDrawer.Services
                             true
@@ -4307,7 +4344,10 @@ private fun ImmersivePlayerScreen(
                 }
             },
             onPlaybackReady = { readyChannelId ->
-                if (readyChannelId == channel.id) showOsd = true
+                if (readyChannelId == channel.id) {
+                    now = System.currentTimeMillis()
+                    showOsd = true
+                }
             }
         )
 
@@ -4682,14 +4722,14 @@ private fun ImmersivePlayerScreen(
                                 title = "Recent Channels",
                                 subtitle = "Browse channel history",
                                 icon = Icons.Default.History,
-                                onClick = { drawer = PlayerDrawer.Recent },
+                                onClick = { now = System.currentTimeMillis(); drawer = PlayerDrawer.Recent },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             GoogleTvDrawerActionRow(
                                 title = "Add to MultiView",
                                 subtitle = "Split-screen dual playback",
                                 icon = Icons.Default.Dashboard,
-                                onClick = { selectingMultiViewChannel = true; drawer = PlayerDrawer.Channels },
+                                onClick = { now = System.currentTimeMillis(); selectingMultiViewChannel = true; drawer = PlayerDrawer.Channels },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             GoogleTvDrawerActionRow(
@@ -4930,6 +4970,13 @@ private fun MultiViewScreen(
 ) {
     var activePane by remember { mutableStateOf(0) }
     val focusRequester = remember { FocusRequester() }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000L)
+            now = System.currentTimeMillis()
+        }
+    }
     BackHandler(onBack = onExit)
     LaunchedEffect(Unit) {
         delay(60)
@@ -4958,8 +5005,8 @@ private fun MultiViewScreen(
     ) {
         listOf(primary, secondary).forEachIndexed { index, paneChannel ->
             val isFocused = activePane == index
-            val programme = guide.forChannel(paneChannel).firstOrNull {
-                it.startMillis <= System.currentTimeMillis() && it.endMillis > System.currentTimeMillis()
+            val programme = remember(paneChannel.id, guide, now) {
+                guide.nowProgrammeForChannel(paneChannel, now)
             }
             Box(
                 Modifier.weight(1f).fillMaxHeight().padding(6.dp)

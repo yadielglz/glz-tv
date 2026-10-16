@@ -181,5 +181,32 @@ class EpgParserTest {
         assertEquals("Show 1", guide.nowProgrammeForChannel(channel, now)?.title)
         assertEquals("Show 2", guide.nextProgrammeForChannel(channel, now + 600000L)?.title)
     }
+
+    @Test
+    fun testProgrammeTransitionsWhenNowAdvances() {
+        val t0 = 1753812000000L
+        val prog1 = Programme("ch1", t0, t0 + 1800000L, "Show 1", "Desc 1") // 0 to 30 min
+        val prog2 = Programme("ch1", t0 + 1800000L, t0 + 3600000L, "Show 2", "Desc 2") // 30 to 60 min
+        val prog3 = Programme("ch1", t0 + 3600000L, t0 + 5400000L, "Show 3", "Desc 3") // 60 to 90 min
+        val guide = EpgGuide(
+            programmes = mapOf("ch1" to listOf(prog1, prog2, prog3)),
+            channelNames = mapOf("ch1" to "Channel 1")
+        )
+        val channel = Channel("ch1", "Channel 1", "Group", "1", "", "", emptyMap())
+
+        // While watching Show 1 (at minute 15)
+        val now1 = t0 + 900000L
+        val current1 = guide.nowProgrammeForChannel(channel, now1)
+        val next1 = guide.nextProgrammeForChannel(channel, current1?.endMillis ?: now1)
+        assertEquals("Show 1", current1?.title)
+        assertEquals("Show 2", next1?.title)
+
+        // Show 1 ends and Show 2 starts (at minute 31)
+        val now2 = t0 + 1860000L
+        val current2 = guide.nowProgrammeForChannel(channel, now2)
+        val next2 = guide.nextProgrammeForChannel(channel, current2?.endMillis ?: now2)
+        assertEquals("Show 2", current2?.title)
+        assertEquals("Show 3", next2?.title)
+    }
 }
 
