@@ -1,12 +1,6 @@
 package com.glztv.app.ui.components
 
-import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.input.key.nativeKeyEvent
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -278,14 +272,6 @@ fun UpdateModalDialog(
                                     focusedScale = 1.05f,
                                     onFocusChange = { notNowFocused = it }
                                 )
-                                .onKeyEvent { event ->
-                                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP &&
-                                        (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                                         event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ENTER)) {
-                                        onDismiss()
-                                        true
-                                    } else false
-                                }
                         ) {
                             Text(strings.notNow, fontWeight = FontWeight.SemiBold)
                         }
@@ -309,14 +295,6 @@ fun UpdateModalDialog(
                                 focusedScale = 1.05f,
                                 onFocusChange = { updateFocused = it }
                             )
-                            .onKeyEvent { event ->
-                                if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP &&
-                                    (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                                     event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ENTER)) {
-                                    onUpdateNow()
-                                    true
-                                } else false
-                            }
                     ) {
                         Text(
                             text = if (downloading) strings.buffering else strings.updateNow,
