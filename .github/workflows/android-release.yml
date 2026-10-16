@@ -54,7 +54,7 @@ jobs:
             p3="${BASH_REMATCH[3]}"
             p4="${BASH_REMATCH[4]}"
             suffix="${BASH_REMATCH[5]:-}"
-            version_code=$((10#$p1 * 10000000 + 10#$p2 * 1000000 + 10#$p3 * 1000 + 10#$p4))
+            version_code=$((10#$p1 * 100000 + 10#$p2 * 1000 + 10#$p3 * 100 + 10#$p4))
           elif [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
             major="${BASH_REMATCH[1]}"
             minor="${BASH_REMATCH[2]}"

@@ -12,7 +12,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-private const val PACKAGE_NAME = "com.glztv.app"
+private const val PACKAGE_NAME = "glz.tv.app"
 
 @RunWith(AndroidJUnit4::class)
 class StartupBenchmark {

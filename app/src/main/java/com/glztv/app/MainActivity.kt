@@ -743,6 +743,16 @@ internal fun TvScreen(
     }
 
     LaunchedEffect(Unit) {
+        if (com.glztv.app.data.DataMigrationManager.isMigrationNeeded(prefs, context)) {
+            val result = withContext(Dispatchers.IO) {
+                com.glztv.app.data.DataMigrationManager.performMigration(context, prefs)
+            }
+            if (result.migrated) {
+                hubStatus = "Migrated from previous installation"
+                currentUpdateChannel = prefs.getString(UPDATE_CHANNEL, null)
+                    ?: if (BuildConfig.DEBUG) GithubUpdateManager.UpdateChannel.TESTING.id else GithubUpdateManager.UpdateChannel.PRODUCTION.id
+            }
+        }
         val initialSync = runCatching {
             withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
         }.getOrNull()

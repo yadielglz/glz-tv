@@ -99,10 +99,28 @@ object GithubUpdateManager {
     )
 
     /**
-     * Parse release date from a version name such as "2026.1016.15" or "2026.1016.05-family".
+     * Parse release date from a version name such as "1.42.6.02" (major.week.day.patch)
+     * or legacy "2026.1016.15".
      * Returns timestamp in millis at start of day in GMT-5, or null if unparseable.
      */
     fun parseReleaseDate(versionName: String): Long? {
+        val weekMatch = Regex("""^(?:v)?(\d+)\.(\d{1,2})\.(\d)\.(\d{1,2})""").find(versionName)
+        if (weekMatch != null) {
+            val (_, weekStr, dayStr, _) = weekMatch.destructured
+            val week = weekStr.toIntOrNull() ?: return null
+            val day = dayStr.toIntOrNull() ?: return null
+            val tz = TimeZone.getTimeZone("GMT-5")
+            val cal = Calendar.getInstance(tz).apply {
+                set(Calendar.YEAR, 2026)
+                set(Calendar.WEEK_OF_YEAR, week)
+                set(Calendar.DAY_OF_WEEK, day)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            return cal.timeInMillis
+        }
         val match = Regex("""^(?:v)?(\d{4})\.(\d{2})(\d{2})""").find(versionName) ?: return null
         val (yStr, mStr, dStr) = match.destructured
         val cal = Calendar.getInstance(TimeZone.getTimeZone("GMT-5")).apply {
@@ -243,16 +261,20 @@ object GithubUpdateManager {
         )
     }
 
+    internal fun isNewEra(version: String): Boolean {
+        return Regex("""^(?:v)?\d{1,2}\.\d{1,2}\.\d\.\d{1,2}""").containsMatchIn(version)
+    }
+
     internal fun matchesChannel(tag: String, channel: UpdateChannel): Boolean {
         val version = tag.removePrefix("v")
         val base = version.substringBefore("-")
         val suffix = version.substringAfter("-", "").lowercase()
         val stable = suffix.isEmpty()
         return when (channel) {
-            // Production: stable tags from the floor release onward only.
-            UpdateChannel.PRODUCTION -> stable && compareVersions(base, PRODUCTION_FLOOR) >= 0
-            // Monthly: tags with -monthly, or stable tags from the floor onward
-            UpdateChannel.MONTHLY -> suffix.startsWith("monthly") || (stable && compareVersions(base, PRODUCTION_FLOOR) >= 0)
+            // Production: stable tags from new era or floor onward
+            UpdateChannel.PRODUCTION -> stable && (isNewEra(base) || compareVersions(base, PRODUCTION_FLOOR) >= 0)
+            // Monthly: tags with -monthly, or stable tags from new era or floor onward
+            UpdateChannel.MONTHLY -> suffix.startsWith("monthly") || (stable && (isNewEra(base) || compareVersions(base, PRODUCTION_FLOOR) >= 0))
             // Pre-release and cadence rings: accept their own markers (and legacy markers) OR any newer stable release
             UpdateChannel.WEEKLY,
             UpdateChannel.BIWEEKLY,
@@ -277,7 +299,7 @@ object GithubUpdateManager {
 
     fun download(context: Context, client: OkHttpClient, update: UpdateInfo): File {
         return downloadApk(context, client, update.downloadUrl, context.packageName,
-            "Glz-TV-${update.version}.apk")
+            "GLZ-TV-${update.version}.apk")
     }
 
     fun downloadApk(
@@ -331,7 +353,9 @@ object GithubUpdateManager {
         check(apk.length() > 0) { "Downloaded APK is empty" }
         val packageInfo = context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
             ?: error("Downloaded file is not a valid APK")
-        check(packageInfo.packageName == expectedPackageName) {
+        check(packageInfo.packageName == expectedPackageName ||
+              (expectedPackageName == "com.glztv.app" && packageInfo.packageName == "glz.tv.app") ||
+              (expectedPackageName == "glz.tv.app" && packageInfo.packageName == "com.glztv.app")) {
             "Downloaded APK is ${packageInfo.packageName}, expected $expectedPackageName"
         }
         return apk
@@ -352,6 +376,11 @@ object GithubUpdateManager {
     }
 
     internal fun compareVersions(left: String, right: String): Int {
+        val leftNewEra = isNewEra(left)
+        val rightNewEra = isNewEra(right)
+        if (leftNewEra && !rightNewEra) return 1
+        if (!leftNewEra && rightNewEra) return -1
+
         val leftParts = left.split('.').map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
         val rightParts = right.split('.').map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
         return (0 until maxOf(leftParts.size, rightParts.size))

@@ -15,6 +15,42 @@ class GithubUpdateManagerTest {
         assertTrue(GithubUpdateManager.compareVersions("2.0", "1.99.9") > 0)
         assertTrue(GithubUpdateManager.compareVersions("1.6.2", "1.6.1-firetv") > 0)
         assertEquals(0, GithubUpdateManager.compareVersions("1.6.1", "1.6.1-firetv"))
+
+        // New era (1.WW.D.PP) vs legacy comparison
+        assertTrue(GithubUpdateManager.compareVersions("1.42.6.02", "2026.1016.12") > 0)
+        assertTrue(GithubUpdateManager.compareVersions("1.42.6.02", "26.902.05") > 0)
+        assertTrue(GithubUpdateManager.compareVersions("2026.1016.12", "1.42.6.02") < 0)
+
+        // New era internal comparison
+        assertTrue(GithubUpdateManager.compareVersions("1.42.6.02", "1.42.6.01") > 0)
+        assertTrue(GithubUpdateManager.compareVersions("1.43.1.01", "1.42.6.02") > 0)
+        assertEquals(0, GithubUpdateManager.compareVersions("1.42.6.02", "1.42.6.02"))
+    }
+
+    @Test
+    fun newEraTagsMatchRespectiveChannels() {
+        assertTrue(GithubUpdateManager.matchesChannel("v1.42.6.02", UpdateChannel.PRODUCTION))
+        assertTrue(GithubUpdateManager.matchesChannel("v1.42.6.02", UpdateChannel.WEEKLY))
+        assertTrue(GithubUpdateManager.matchesChannel("v1.42.6.02", UpdateChannel.MONTHLY))
+
+        assertTrue(GithubUpdateManager.matchesChannel("v1.42.6.02-weekly", UpdateChannel.WEEKLY))
+        assertFalse(GithubUpdateManager.matchesChannel("v1.42.6.02-weekly", UpdateChannel.PRODUCTION))
+        assertFalse(GithubUpdateManager.matchesChannel("v1.42.6.02-weekly", UpdateChannel.MONTHLY))
+
+        assertTrue(GithubUpdateManager.matchesChannel("v1.42.6.02-biweekly", UpdateChannel.BIWEEKLY))
+        assertTrue(GithubUpdateManager.matchesChannel("v1.42.6.02-monthly", UpdateChannel.MONTHLY))
+        assertTrue(GithubUpdateManager.matchesChannel("v1.42.6.02-testing", UpdateChannel.TESTING))
+    }
+
+    @Test
+    fun parsesWeekDayReleaseDateCorrectly() {
+        val millis = GithubUpdateManager.parseReleaseDate("1.42.6.02")
+        org.junit.Assert.assertNotNull(millis)
+        val tz = TimeZone.getTimeZone("GMT-5")
+        val cal = Calendar.getInstance(tz).apply { timeInMillis = millis!! }
+        assertEquals(2026, cal.get(Calendar.YEAR))
+        assertEquals(42, cal.get(Calendar.WEEK_OF_YEAR))
+        assertEquals(Calendar.FRIDAY, cal.get(Calendar.DAY_OF_WEEK))
     }
 
     @Test
