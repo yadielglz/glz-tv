@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -259,6 +260,7 @@ fun GoogleTvHomeScreen(
 
     var showQuickTune by remember { mutableStateOf(false) }
     val watchLiveFocusRequester = remember { FocusRequester() }
+    val favFocusRequester = remember { FocusRequester() }
     val liveGuideFocusRequester = remember { FocusRequester() }
     val quickTuneFocusRequester = remember { FocusRequester() }
     val radioPlayerFocusRequester = remember { FocusRequester() }
@@ -310,9 +312,11 @@ fun GoogleTvHomeScreen(
                 isRadioPlaying = isRadioPlaying,
                 currentRadioStation = currentRadioStation,
                 watchLiveFocusRequester = watchLiveFocusRequester,
+                favFocusRequester = favFocusRequester,
                 liveGuideFocusRequester = liveGuideFocusRequester,
                 quickTuneFocusRequester = quickTuneFocusRequester,
                 radioPlayerFocusRequester = radioPlayerFocusRequester,
+                firstRailFocusRequester = firstRailFocusRequester,
                 onWatch = { heroChannel?.let(onWatchChannel) ?: onOpenGuide() },
                 onToggleFavorite = { heroChannel?.let { onToggleFavorite(it.id) } },
                 onOpenGuide = onOpenGuide,
@@ -394,7 +398,23 @@ fun GoogleTvHomeScreen(
                                         .focusProperties {
                                             if (currentRadioStation != null) {
                                                 up = radioPlayerFocusRequester
+                                            } else {
+                                                up = if (isRadioPlaying) liveGuideFocusRequester else watchLiveFocusRequester
                                             }
+                                        }
+                                        .onKeyEvent { event ->
+                                            val native = event.nativeKeyEvent
+                                            if (native.action == KeyEvent.ACTION_DOWN && native.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                                                try {
+                                                    if (currentRadioStation != null) {
+                                                        radioPlayerFocusRequester.requestFocus()
+                                                    } else {
+                                                        if (isRadioPlaying) liveGuideFocusRequester.requestFocus()
+                                                        else watchLiveFocusRequester.requestFocus()
+                                                    }
+                                                    true
+                                                } catch (_: Exception) { false }
+                                            } else false
                                         }
                                 } else Modifier,
                                 onClick = { onWatchChannel(ch) }
@@ -722,6 +742,17 @@ private fun InstalledAppCard(
         modifier = Modifier
             .width(cardWidth)
             .height(cardHeight)
+            .googleTvFocusable(
+                shape = RoundedCornerShape(12.dp),
+                focusedScale = 1.08f,
+                onFocusChange = { focused ->
+                    isFocused = focused
+                    if (!focused) {
+                        longPressJob?.cancel()
+                        isLongPressTriggered = false
+                    }
+                }
+            )
             .focusable()
             .pointerInput(app.packageName) {
                 detectTapGestures(
@@ -776,22 +807,11 @@ private fun InstalledAppCard(
                     }
                     else -> false
                 }
-            }
-            .googleTvFocusable(
-                shape = RoundedCornerShape(12.dp),
-                focusedScale = 1.08f,
-                onFocusChange = { focused ->
-                    isFocused = focused
-                    if (!focused) {
-                        longPressJob?.cancel()
-                        isLongPressTriggered = false
-                    }
-                }
-            ),
+            },
         shape = RoundedCornerShape(12.dp),
         color = Color(0xFF141923),
         border = when {
-            isFocused -> androidx.compose.foundation.BorderStroke(2.5.dp, Color.White)
+            isFocused -> androidx.compose.foundation.BorderStroke(3.dp, Color.White)
             app.isFavorite -> androidx.compose.foundation.BorderStroke(1.5.dp, GoogleTvTokens.StarGold.copy(alpha = 0.75f))
             else -> null
         }
@@ -831,6 +851,15 @@ private fun InstalledAppCard(
                         letterSpacing = 1.sp
                     )
                 }
+            }
+
+            // High-visibility focus ring overlay directly on top of app card
+            if (isFocused) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(3.dp, Color.White, RoundedCornerShape(12.dp))
+                )
             }
 
             if (app.isFavorite) {
@@ -942,6 +971,15 @@ private fun EntertainmentAppCard(
                         letterSpacing = 1.sp
                     )
                 }
+            }
+
+            // High-visibility focus ring overlay
+            if (isFocused) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(3.dp, Color.White, RoundedCornerShape(12.dp))
+                )
             }
         }
     }
@@ -1134,9 +1172,11 @@ private fun GoogleTvSpotlightBillboard(
     isRadioPlaying: Boolean = false,
     currentRadioStation: RadioStation? = null,
     watchLiveFocusRequester: FocusRequester? = null,
+    favFocusRequester: FocusRequester? = null,
     liveGuideFocusRequester: FocusRequester? = null,
     quickTuneFocusRequester: FocusRequester? = null,
     radioPlayerFocusRequester: FocusRequester? = null,
+    firstRailFocusRequester: FocusRequester? = null,
     onWatch: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenGuide: () -> Unit,
@@ -1147,6 +1187,12 @@ private fun GoogleTvSpotlightBillboard(
     previewContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val favRequester = favFocusRequester ?: remember { FocusRequester() }
+    val downFocusTarget = if (currentRadioStation != null && radioPlayerFocusRequester != null) {
+        radioPlayerFocusRequester
+    } else {
+        firstRailFocusRequester
+    }
     val activeProg = remember(channel?.id, guide, now) {
         channel?.let { guide.nowProgrammeForChannel(it, now) }
     }
@@ -1446,9 +1492,28 @@ private fun GoogleTvSpotlightBillboard(
                                     contentColor = if (watchFocused) Color.Black else Color(0xFF001F2A),
                                     modifier = Modifier
                                         .then(if (watchLiveFocusRequester != null) Modifier.focusRequester(watchLiveFocusRequester) else Modifier)
-                                        .then(if (radioPlayerFocusRequester != null) {
-                                            Modifier.focusProperties { down = radioPlayerFocusRequester }
-                                        } else Modifier)
+                                        .focusProperties {
+                                            right = favRequester
+                                            if (downFocusTarget != null) {
+                                                down = downFocusTarget
+                                            }
+                                        }
+                                        .onKeyEvent { event ->
+                                            val native = event.nativeKeyEvent
+                                            if (native.action == KeyEvent.ACTION_DOWN) {
+                                                when (native.keyCode) {
+                                                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                                        try { favRequester.requestFocus(); true } catch (_: Exception) { false }
+                                                    }
+                                                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                                        if (downFocusTarget != null) {
+                                                            try { downFocusTarget.requestFocus(); true } catch (_: Exception) { false }
+                                                        } else false
+                                                    }
+                                                    else -> false
+                                                }
+                                            } else false
+                                        }
                                         .googleTvFocusable(
                                             shape = CircleShape,
                                             focusedScale = 1.05f,
@@ -1473,9 +1538,41 @@ private fun GoogleTvSpotlightBillboard(
                                     color = if (favFocused) Color.White else Color.White.copy(alpha = 0.10f),
                                     contentColor = if (favFocused) Color.Black else if (isFavorite) GoogleTvTokens.StarGold else Color.White,
                                     modifier = Modifier
-                                        .then(if (radioPlayerFocusRequester != null) {
-                                            Modifier.focusProperties { down = radioPlayerFocusRequester }
-                                        } else Modifier)
+                                        .focusRequester(favRequester)
+                                        .focusProperties {
+                                            if (watchLiveFocusRequester != null) {
+                                                left = watchLiveFocusRequester
+                                            }
+                                            if (liveGuideFocusRequester != null) {
+                                                right = liveGuideFocusRequester
+                                            }
+                                            if (downFocusTarget != null) {
+                                                down = downFocusTarget
+                                            }
+                                        }
+                                        .onKeyEvent { event ->
+                                            val native = event.nativeKeyEvent
+                                            if (native.action == KeyEvent.ACTION_DOWN) {
+                                                when (native.keyCode) {
+                                                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                                        watchLiveFocusRequester?.let {
+                                                            try { it.requestFocus(); true } catch (_: Exception) { false }
+                                                        } ?: false
+                                                    }
+                                                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                                        liveGuideFocusRequester?.let {
+                                                            try { it.requestFocus(); true } catch (_: Exception) { false }
+                                                        } ?: false
+                                                    }
+                                                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                                        if (downFocusTarget != null) {
+                                                            try { downFocusTarget.requestFocus(); true } catch (_: Exception) { false }
+                                                        } else false
+                                                    }
+                                                    else -> false
+                                                }
+                                            } else false
+                                        }
                                         .googleTvFocusable(
                                             shape = CircleShape,
                                             focusedScale = 1.05f,
@@ -1507,9 +1604,40 @@ private fun GoogleTvSpotlightBillboard(
                                 contentColor = if (guideFocused) Color.Black else if (isRadioPlaying) Color(0xFF001F2A) else Color.White,
                                 modifier = Modifier
                                     .then(if (liveGuideFocusRequester != null) Modifier.focusRequester(liveGuideFocusRequester) else Modifier)
-                                    .then(if (radioPlayerFocusRequester != null) {
-                                        Modifier.focusProperties { down = radioPlayerFocusRequester }
-                                    } else Modifier)
+                                    .focusProperties {
+                                        if (!isRadioPlaying) {
+                                            left = favRequester
+                                        }
+                                        if (quickTuneFocusRequester != null) {
+                                            right = quickTuneFocusRequester
+                                        }
+                                        if (downFocusTarget != null) {
+                                            down = downFocusTarget
+                                        }
+                                    }
+                                    .onKeyEvent { event ->
+                                        val native = event.nativeKeyEvent
+                                        if (native.action == KeyEvent.ACTION_DOWN) {
+                                            when (native.keyCode) {
+                                                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                                    if (!isRadioPlaying) {
+                                                        try { favRequester.requestFocus(); true } catch (_: Exception) { false }
+                                                    } else false
+                                                }
+                                                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                                    quickTuneFocusRequester?.let {
+                                                        try { it.requestFocus(); true } catch (_: Exception) { false }
+                                                    } ?: false
+                                                }
+                                                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                                    if (downFocusTarget != null) {
+                                                        try { downFocusTarget.requestFocus(); true } catch (_: Exception) { false }
+                                                    } else false
+                                                }
+                                                else -> false
+                                            }
+                                        } else false
+                                    }
                                     .googleTvFocusable(
                                         shape = CircleShape,
                                         focusedScale = 1.05f,
@@ -1535,9 +1663,32 @@ private fun GoogleTvSpotlightBillboard(
                                 contentColor = if (quickTuneFocused) Color.Black else Color.White,
                                 modifier = Modifier
                                     .then(if (quickTuneFocusRequester != null) Modifier.focusRequester(quickTuneFocusRequester) else Modifier)
-                                    .then(if (radioPlayerFocusRequester != null) {
-                                        Modifier.focusProperties { down = radioPlayerFocusRequester }
-                                    } else Modifier)
+                                    .focusProperties {
+                                        if (liveGuideFocusRequester != null) {
+                                            left = liveGuideFocusRequester
+                                        }
+                                        if (downFocusTarget != null) {
+                                            down = downFocusTarget
+                                        }
+                                    }
+                                    .onKeyEvent { event ->
+                                        val native = event.nativeKeyEvent
+                                        if (native.action == KeyEvent.ACTION_DOWN) {
+                                            when (native.keyCode) {
+                                                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                                    liveGuideFocusRequester?.let {
+                                                        try { it.requestFocus(); true } catch (_: Exception) { false }
+                                                    } ?: false
+                                                }
+                                                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                                    if (downFocusTarget != null) {
+                                                        try { downFocusTarget.requestFocus(); true } catch (_: Exception) { false }
+                                                    } else false
+                                                }
+                                                else -> false
+                                            }
+                                        } else false
+                                    }
                                     .googleTvFocusable(
                                         shape = CircleShape,
                                         focusedScale = 1.05f,
@@ -2160,6 +2311,21 @@ private fun RadioStationCard(
                         )
                     }
                 }
+            }
+
+            // High-visibility focus ring overlay directly on top of radio card
+            if (isFocused) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(3.dp, Color.White, RoundedCornerShape(12.dp))
+                )
+            } else if (isCurrent) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(2.dp, Color(0xFFFF6B2C), RoundedCornerShape(12.dp))
+                )
             }
 
             // On-Air / Tuned Badge
