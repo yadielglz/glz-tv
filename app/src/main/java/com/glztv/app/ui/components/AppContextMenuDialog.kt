@@ -1,6 +1,9 @@
 package com.glztv.app.ui.components
 
 import androidx.activity.compose.BackHandler
+import android.view.KeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,9 +71,16 @@ fun AppContextMenuDialog(
     onDismiss: () -> Unit
 ) {
     val initialFocus = remember { FocusRequester() }
+    val openTime = remember { System.currentTimeMillis() }
+    var receivedKeyDownInDialog by remember { mutableStateOf(false) }
+
+    fun isSafeClick(): Boolean = (System.currentTimeMillis() - openTime) > 300L
 
     LaunchedEffect(Unit) {
-        initialFocus.requestFocus()
+        delay(150L)
+        try {
+            initialFocus.requestFocus()
+        } catch (_: Exception) {}
     }
 
     BackHandler(onBack = onDismiss)
@@ -85,6 +95,17 @@ fun AppContextMenuDialog(
         Surface(
             modifier = Modifier
                 .width(460.dp)
+                .onKeyEvent { event ->
+                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                        receivedKeyDownInDialog = true
+                        false
+                    } else if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
+                        if (!receivedKeyDownInDialog) {
+                            // Consume trailing ACTION_UP from the long-press that opened this dialog
+                            true
+                        } else false
+                    } else false
+                }
                 .clickable(enabled = false) {}, // prevent click-through
             shape = RoundedCornerShape(20.dp),
             color = Color(0xFF141923),
@@ -179,6 +200,7 @@ fun AppContextMenuDialog(
                         title = "Open App",
                         subtitle = "Launch application",
                         focusRequester = initialFocus,
+                        isSafeClick = { isSafeClick() && receivedKeyDownInDialog },
                         onClick = {
                             onDismiss()
                             onOpenApp()
@@ -271,12 +293,17 @@ private fun ContextMenuActionItem(
     title: String,
     subtitle: String,
     focusRequester: FocusRequester? = null,
+    isSafeClick: () -> Boolean = { true },
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
     Surface(
-        onClick = onClick,
+        onClick = {
+            if (isSafeClick()) {
+                onClick()
+            }
+        },
         modifier = Modifier
             .fillMaxWidth()
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)

@@ -81,6 +81,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.Job
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.filled.Bolt
@@ -668,7 +672,10 @@ private fun InstalledAppCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     var isFocused by remember { mutableStateOf(false) }
+    var longPressJob by remember { mutableStateOf<Job?>(null) }
+    var isLongPressTriggered by remember { mutableStateOf(false) }
 
     val hasBanner = app.banner != null
     val appImage = remember(app.packageName) {
@@ -680,28 +687,74 @@ private fun InstalledAppCard(
     val cardHeight = 84.dp
 
     Surface(
-        onClick = onClick,
         modifier = Modifier
             .width(cardWidth)
             .height(cardHeight)
+            .focusable()
+            .pointerInput(app.packageName) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = { onLongClick() }
+                )
+            }
             .onKeyEvent { event ->
                 val native = event.nativeKeyEvent
-                if (native.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || native.keyCode == KeyEvent.KEYCODE_ENTER) {
-                    if (native.action == KeyEvent.ACTION_DOWN && native.repeatCount > 0) {
-                        onLongClick()
-                        true
-                    } else false
-                } else if (native.keyCode == KeyEvent.KEYCODE_MENU || native.keyCode == KeyEvent.KEYCODE_INFO) {
-                    if (native.action == KeyEvent.ACTION_UP) {
-                        onLongClick()
-                        true
-                    } else false
-                } else false
+                when (native.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_CENTER,
+                    KeyEvent.KEYCODE_ENTER -> {
+                        when (native.action) {
+                            KeyEvent.ACTION_DOWN -> {
+                                if (native.repeatCount == 0) {
+                                    isLongPressTriggered = false
+                                    longPressJob?.cancel()
+                                    longPressJob = scope.launch {
+                                        delay(450L) // Standard long-press duration
+                                        isLongPressTriggered = true
+                                        onLongClick()
+                                    }
+                                    true
+                                } else {
+                                    if (!isLongPressTriggered) {
+                                        isLongPressTriggered = true
+                                        longPressJob?.cancel()
+                                        onLongClick()
+                                    }
+                                    true
+                                }
+                            }
+                            KeyEvent.ACTION_UP -> {
+                                val wasLongPress = isLongPressTriggered
+                                longPressJob?.cancel()
+                                isLongPressTriggered = false
+                                if (!wasLongPress) {
+                                    onClick()
+                                }
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                    KeyEvent.KEYCODE_MENU,
+                    KeyEvent.KEYCODE_INFO,
+                    KeyEvent.KEYCODE_BOOKMARK -> {
+                        if (native.action == KeyEvent.ACTION_UP) {
+                            onLongClick()
+                            true
+                        } else false
+                    }
+                    else -> false
+                }
             }
             .googleTvFocusable(
                 shape = RoundedCornerShape(12.dp),
                 focusedScale = 1.08f,
-                onFocusChange = { isFocused = it }
+                onFocusChange = { focused ->
+                    isFocused = focused
+                    if (!focused) {
+                        longPressJob?.cancel()
+                        isLongPressTriggered = false
+                    }
+                }
             ),
         shape = RoundedCornerShape(12.dp),
         color = Color(0xFF141923),
