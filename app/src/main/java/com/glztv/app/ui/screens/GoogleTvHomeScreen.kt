@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sports
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.StarOutline
@@ -75,6 +76,33 @@ import com.glztv.app.ui.components.GoogleTvChannelLogo
 import com.glztv.app.ui.theme.GoogleTvTokens
 import com.glztv.app.ui.theme.googleTvFocusable
 import kotlinx.coroutines.delay
+import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.Image
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import com.glztv.app.BuildConfig
+import com.glztv.app.launcher.LauncherAppsManager
+import com.glztv.app.launcher.LauncherAppItem
+import com.glztv.app.launcher.toSafeImageBitmap
+import com.glztv.app.ui.components.AppContextMenuDialog
+import com.glztv.app.ui.components.QuickSettingsDialog
+import com.glztv.app.ui.components.HomeRadioPlayerBar
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -133,8 +161,49 @@ fun GoogleTvHomeScreen(
     sportsBarKioskEnabled: Boolean = false,
     onStartSportsBarKiosk: () -> Unit = {},
     previewContent: (@Composable () -> Unit)? = null,
+    isFamilyChannel: Boolean = false,
+    radioPlaying: Boolean = false,
+    onToggleRadioPlayPause: () -> Unit = {},
+    onStopRadio: () -> Unit = {},
+    onOpenSpeedTest: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val prefs = remember { context.getSharedPreferences("glz_tv", Context.MODE_PRIVATE) }
+
+    var installedApps by remember { mutableStateOf<List<LauncherAppItem>>(emptyList()) }
+    var contextMenuApp by remember { mutableStateOf<LauncherAppItem?>(null) }
+    var showQuickSettings by remember { mutableStateOf(false) }
+
+    val isFamilyMode = isFamilyChannel || BuildConfig.DEBUG
+
+    fun refreshInstalledApps() {
+        if (isFamilyMode) {
+            scope.launch {
+                installedApps = LauncherAppsManager.loadInstalledApps(context, prefs)
+            }
+        }
+    }
+
+    LaunchedEffect(isFamilyMode) {
+        if (isFamilyMode) {
+            refreshInstalledApps()
+        }
+    }
+
+    if (isFamilyMode) {
+        DisposableEffect(isFamilyMode) {
+            refreshInstalledApps()
+            val receiver = LauncherAppsManager.registerAppListener(context) {
+                refreshInstalledApps()
+            }
+            onDispose {
+                runCatching { context.unregisterReceiver(receiver) }
+            }
+        }
+    }
+
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -184,46 +253,78 @@ fun GoogleTvHomeScreen(
         else channels.filter { it.group.equals(selectedGenre, ignoreCase = true) }.take(10)
     }
 
-    Column(
+    var showQuickTune by remember { mutableStateOf(false) }
+    val watchLiveFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        delay(120L)
+        try {
+            watchLiveFocusRequester.requestFocus()
+        } catch (_: Exception) {}
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(GoogleTvTokens.BackgroundDark)
     ) {
-        // 1. PINNED / STATIC TOP AMBIENT STATUS ROW (Always visible while on Home)
-        GoogleTvHomeTopBar(
-            guestName = guestName,
-            experience = experience,
-            now = now,
-            weather = weather,
-            networkInfo = networkInfo,
-            onOpenWelcome = onOpenWelcome,
-            onOpenWeather = onOpenWeather,
-            onOpenSettings = onOpenSettings,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 4.dp)
-        )
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // 1. PINNED / STATIC TOP AMBIENT STATUS ROW (Always visible while on Home)
+            GoogleTvHomeTopBar(
+                guestName = guestName,
+                experience = experience,
+                now = now,
+                weather = weather,
+                networkInfo = networkInfo,
+                onOpenWelcome = onOpenWelcome,
+                onOpenWeather = onOpenWeather,
+                onOpenSettings = { showQuickSettings = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 4.dp)
+            )
 
-        // 2. PINNED / STATIC HERO SPOTLIGHT BILLBOARD (FULL WIDTH edge-to-edge as requested)
-        GoogleTvSpotlightBillboard(
-            channel = activeChannel,
-            guide = guide,
-            now = now,
-            experience = experience,
-            isFavorite = activeChannel != null && activeChannel.id in favorites,
-            onWatch = { activeChannel?.let(onWatchChannel) ?: onOpenGuide() },
-            onToggleFavorite = { activeChannel?.let { onToggleFavorite(it.id) } },
-            onOpenGuide = onOpenGuide,
-            onOpenRadio = onOpenRadio,
-            onOpenWeather = onOpenWeather,
-            onOpenSettings = onOpenSettings,
-            previewContent = previewContent,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp)
-        )
+            // 2. PINNED / STATIC HERO SPOTLIGHT BILLBOARD (FULL WIDTH edge-to-edge as requested)
+            GoogleTvSpotlightBillboard(
+                channel = activeChannel,
+                guide = guide,
+                now = now,
+                experience = experience,
+                isFavorite = activeChannel != null && activeChannel.id in favorites,
+                watchLiveFocusRequester = watchLiveFocusRequester,
+                onWatch = { activeChannel?.let(onWatchChannel) ?: onOpenGuide() },
+                onToggleFavorite = { activeChannel?.let { onToggleFavorite(it.id) } },
+                onOpenGuide = onOpenGuide,
+                onOpenQuickTune = { showQuickTune = true },
+                onOpenRadio = onOpenRadio,
+                onOpenWeather = onOpenWeather,
+                onOpenSettings = onOpenSettings,
+                previewContent = previewContent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+            )
 
-        // 3. SCROLLABLE SWIMLANES (All horizontal rails scroll beneath the static hero card)
+        // 3. PERSISTENT MINI RADIO PLAYER (ALWAYS VISIBLE & PINNED WHEN RADIO IS ACTIVE)
+        AnimatedVisibility(
+            visible = currentRadioStation != null,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            HomeRadioPlayerBar(
+                station = currentRadioStation,
+                isPlaying = radioPlaying,
+                onTogglePlayPause = onToggleRadioPlayPause,
+                onStop = onStopRadio,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
+            )
+        }
+
+        // 4. SCROLLABLE SWIMLANES (All horizontal rails scroll beneath the static hero card & mini player)
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -296,7 +397,8 @@ fun GoogleTvHomeScreen(
                         itemsIndexed(radioStations, key = { index, st -> "radio-${st.code}-$index" }) { _, st ->
                             RadioStationCard(
                                 station = st,
-                                nowPlaying = currentRadioStation?.code == st.code,
+                                isCurrent = currentRadioStation?.code == st.code,
+                                isPlaying = currentRadioStation?.code == st.code && radioPlaying,
                                 onClick = { onPlayRadioStation(st) }
                             )
                         }
@@ -389,53 +491,51 @@ fun GoogleTvHomeScreen(
                 }
             }
 
-            // RAIL 6: APPS & SERVICES
+            // RAIL 6: APPS & SERVICES (DYNAMIC APP LISTENER ON FAMILY CHANNEL / DEBUG)
             item(key = "rail-apps") {
-                RailHeader(title = "APPS & SERVICES", icon = Icons.Default.Apps)
+                val visibleInstalled = remember(installedApps) { installedApps.filter { !it.isHidden } }
+                val headerTitle = if (isFamilyMode && visibleInstalled.isNotEmpty()) {
+                    "INSTALLED APPS (${visibleInstalled.size})"
+                } else if (isFamilyMode) {
+                    "INSTALLED APPS"
+                } else {
+                    "APPS & SERVICES"
+                }
+                RailHeader(title = headerTitle, icon = Icons.Default.Apps)
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
-                    // Streaming & Entertainment Apps
-                    itemsIndexed(entertainmentApps, key = { index, app -> "app-${app.packageName}-$index" }) { _, app ->
-                        var isFocused by remember { mutableStateOf(false) }
-                        Surface(
-                            onClick = { onLaunchApp(app) },
-                            modifier = Modifier
-                                .width(110.dp)
-                                .height(72.dp)
-                                .googleTvFocusable(
-                                    shape = RoundedCornerShape(12.dp),
-                                    focusedScale = 1.05f,
-                                    onFocusChange = { isFocused = it }
-                                ),
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isFocused) Color.White else GoogleTvTokens.SurfaceCard,
-                            contentColor = if (isFocused) Color.Black else Color.White
-                        ) {
-                            Column(
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(8.dp),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Box(
-                                    Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(app.accent)
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    app.name,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                    if (isFamilyMode && visibleInstalled.isNotEmpty()) {
+                        itemsIndexed(visibleInstalled, key = { index, app -> "installed-${app.packageName}-$index" }) { _, app ->
+                            InstalledAppCard(
+                                app = app,
+                                onClick = {
+                                    LauncherAppsManager.launchApp(context, app.packageName)
+                                },
+                                onLongClick = {
+                                    contextMenuApp = app
+                                }
+                            )
                         }
+                    } else {
+                        // Streaming & Entertainment Apps (Android TV styled cards)
+                        itemsIndexed(entertainmentApps, key = { index, app -> "app-${app.packageName}-$index" }) { _, app ->
+                            EntertainmentAppCard(
+                                app = app,
+                                onClick = { onLaunchApp(app) }
+                            )
+                        }
+                    }
+
+                    // Quick Settings Shortcut
+                    item(key = "srv-quick-settings") {
+                        ServiceShortcutCard(
+                            label = "Quick Settings",
+                            icon = Icons.Default.Tune,
+                            color = GoogleTvTokens.BlueAccent,
+                            onClick = { showQuickSettings = true }
+                        )
                     }
 
                     // Radio Service Shortcut
@@ -484,6 +584,279 @@ fun GoogleTvHomeScreen(
 
             item(key = "bottom-spacer") {
                 Spacer(Modifier.height(20.dp))
+            }
+        }
+
+        // App Context Menu Dialog
+        if (contextMenuApp != null) {
+            val app = contextMenuApp!!
+            AppContextMenuDialog(
+                app = app,
+                onOpenApp = {
+                    LauncherAppsManager.launchApp(context, app.packageName)
+                },
+                onToggleFavorite = {
+                    LauncherAppsManager.setFavorite(prefs, app.packageName, !app.isFavorite)
+                    refreshInstalledApps()
+                },
+                onToggleHide = {
+                    LauncherAppsManager.setHidden(prefs, app.packageName, !app.isHidden)
+                    refreshInstalledApps()
+                },
+                onOpenDetails = {
+                    LauncherAppsManager.openAppDetails(context, app.packageName)
+                },
+                onUninstall = {
+                    LauncherAppsManager.uninstallApp(context, app.packageName)
+                },
+                onDismiss = {
+                    contextMenuApp = null
+                }
+            )
+        }
+
+        // Quick Settings Dialog
+        if (showQuickSettings) {
+            QuickSettingsDialog(
+                networkInfo = networkInfo,
+                isFamilyChannel = isFamilyChannel,
+                onOpenSpeedTest = onOpenSpeedTest,
+                onOpenFullSettings = onOpenSettings,
+                onDismiss = { showQuickSettings = false }
+            )
+        }
+        }
+
+        // Quick Tune Right Drawer Scrim & Sliding Drawer (matches player channel pane on the right)
+        if (showQuickTune) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { showQuickTune = false }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = showQuickTune,
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            QuickTuneDrawer(
+                channels = channels,
+                guide = guide,
+                activeChannel = activeChannel,
+                favorites = favorites,
+                now = now,
+                onWatchChannel = { ch ->
+                    showQuickTune = false
+                    onWatchChannel(ch)
+                },
+                onDismiss = { showQuickTune = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun InstalledAppCard(
+    app: LauncherAppItem,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    val hasBanner = app.banner != null
+    val appImage = remember(app.packageName) {
+        val drawable = app.banner ?: app.icon
+        drawable?.toSafeImageBitmap(320, 180)
+    }
+
+    val cardWidth = 148.dp
+    val cardHeight = 84.dp
+
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .width(cardWidth)
+            .height(cardHeight)
+            .onKeyEvent { event ->
+                val native = event.nativeKeyEvent
+                if (native.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || native.keyCode == KeyEvent.KEYCODE_ENTER) {
+                    if (native.action == KeyEvent.ACTION_DOWN && native.repeatCount > 0) {
+                        onLongClick()
+                        true
+                    } else false
+                } else if (native.keyCode == KeyEvent.KEYCODE_MENU || native.keyCode == KeyEvent.KEYCODE_INFO) {
+                    if (native.action == KeyEvent.ACTION_UP) {
+                        onLongClick()
+                        true
+                    } else false
+                } else false
+            }
+            .googleTvFocusable(
+                shape = RoundedCornerShape(12.dp),
+                focusedScale = 1.08f,
+                onFocusChange = { isFocused = it }
+            ),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF141923),
+        border = when {
+            isFocused -> androidx.compose.foundation.BorderStroke(2.5.dp, Color.White)
+            app.isFavorite -> androidx.compose.foundation.BorderStroke(1.5.dp, GoogleTvTokens.StarGold.copy(alpha = 0.75f))
+            else -> null
+        }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF141923)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (appImage != null) {
+                Image(
+                    bitmap = appImage,
+                    contentDescription = app.label,
+                    contentScale = if (hasBanner) ContentScale.Crop else ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (hasBanner) Modifier else Modifier.padding(12.dp))
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(app.accent, app.accent.copy(alpha = 0.55f))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = app.label.take(2).uppercase(),
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+
+            if (app.isFavorite) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.65f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = "Favorite",
+                        tint = GoogleTvTokens.StarGold,
+                        modifier = Modifier
+                            .padding(3.dp)
+                            .size(12.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Android TV styled Entertainment App Card for Curated Apps Row.
+ * Dynamically retrieves genuine Leanback banners or app icons from PackageManager if installed,
+ * filling the entire card with no text below.
+ */
+@Composable
+private fun EntertainmentAppCard(
+    app: EntertainmentApp,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val pm = context.packageManager
+    var isFocused by remember { mutableStateOf(false) }
+
+    val appInfo = remember(app.packageName) {
+        runCatching { pm.getApplicationInfo(app.packageName, 0) }.getOrNull()
+    }
+
+    val banner = remember(app.packageName, appInfo) {
+        appInfo?.let { runCatching { pm.getApplicationBanner(it) }.getOrNull() }
+            ?: runCatching { pm.getApplicationBanner(app.packageName) }.getOrNull()
+    }
+
+    val icon = remember(app.packageName, appInfo, banner) {
+        if (banner != null) null
+        else appInfo?.let { runCatching { pm.getApplicationIcon(it) }.getOrNull() }
+            ?: runCatching { pm.getApplicationIcon(app.packageName) }.getOrNull()
+    }
+
+    val hasBanner = banner != null
+    val appImage = remember(app.packageName, banner, icon) {
+        val drawable = banner ?: icon
+        drawable?.toSafeImageBitmap(320, 180)
+    }
+
+    val cardWidth = 148.dp
+    val cardHeight = 84.dp
+
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .width(cardWidth)
+            .height(cardHeight)
+            .googleTvFocusable(
+                shape = RoundedCornerShape(12.dp),
+                focusedScale = 1.08f,
+                onFocusChange = { isFocused = it }
+            ),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF141923),
+        border = if (isFocused) androidx.compose.foundation.BorderStroke(2.5.dp, Color.White) else null
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF141923)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (appImage != null) {
+                Image(
+                    bitmap = appImage,
+                    contentDescription = app.name,
+                    contentScale = if (hasBanner) ContentScale.Crop else ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (hasBanner) Modifier else Modifier.padding(12.dp))
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(app.accent, app.accent.copy(alpha = 0.55f))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = app.name.take(2).uppercase(),
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
+                    )
+                }
             }
         }
     }
@@ -550,115 +923,60 @@ private fun GoogleTvHomeTopBar(
                     tint = if (welcomeFocused) Color.Black else GoogleTvTokens.BlueAccent
                 )
                 Text(
-                    text = buildString {
-                        append(timeGreeting)
-                        append(", ")
-                        append(guestName.ifBlank { "Guest" })
-                        if (!experience.roomNumber.isNullOrBlank()) {
-                            append(" · Room ")
-                            append(experience.roomNumber)
-                        }
-                        if (experience.propertyName.isNotBlank()) {
-                            append(" · ")
-                            append(experience.propertyName)
-                        }
-                    },
+                    text = "$timeGreeting, ${guestName.ifBlank { "Guest" }}",
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (welcomeFocused) Color.Black else Color.White
                 )
-
-                experience.checkoutTime?.takeIf(String::isNotBlank)?.let { checkout ->
-                    Box(
-                        Modifier
-                            .padding(start = 4.dp)
-                            .clip(CircleShape)
-                            .background(if (welcomeFocused) Color.Black.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.12f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            "Checkout $checkout",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black,
-                            color = if (welcomeFocused) Color.Black else GoogleTvTokens.BlueAccent
-                        )
-                    }
-                }
             }
         }
 
-        // Right: Ambient Glance Status (Clickable Weather, Network, Clock, Settings)
+        // Right: Ambient Glance Status (Ambient Weather, Network, Clock, Settings)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Clickable Weather Pill (brings up Weather Modal)
+            // Ambient Weather (clean icon + text, identical ambient style as Time)
             weather?.let { w ->
-                var weatherFocused by remember { mutableStateOf(false) }
-                Surface(
-                    onClick = onOpenWeather,
-                    shape = CircleShape,
-                    color = if (weatherFocused) Color.White else Color.White.copy(alpha = 0.07f),
-                    contentColor = if (weatherFocused) Color.Black else Color.White,
-                    modifier = Modifier
-                        .onKeyEvent { event ->
-                            if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP &&
-                                (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                                 event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ENTER)) {
-                                onOpenWeather()
-                                true
-                            } else false
-                        }
-                        .googleTvFocusable(
-                            shape = CircleShape,
-                            focusedScale = 1.05f,
-                            onFocusChange = { weatherFocused = it }
-                        )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 ) {
-                    Row(
-                        Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.WbSunny,
-                            contentDescription = null,
-                            Modifier.size(13.dp),
-                            tint = if (weatherFocused) Color.Black else Color(0xFFFFB300)
-                        )
-                        Text(
-                            "${w.temperature}°F · ${w.location}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (weatherFocused) Color.Black else Color.White
-                        )
-                    }
+                    Icon(
+                        Icons.Default.WbSunny,
+                        contentDescription = null,
+                        Modifier.size(13.dp),
+                        tint = Color(0xFFFFB300)
+                    )
+                    Text(
+                        "${w.temperature}°F · ${w.location}",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = GoogleTvTokens.TextSecondary
+                    )
                 }
             }
 
+            // Ambient Connection (clean icon + text, identical ambient style as Time)
             networkInfo?.let { net ->
-                Surface(
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.06f)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 ) {
-                    Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Wifi,
-                            contentDescription = null,
-                            Modifier.size(12.dp),
-                            tint = GoogleTvTokens.TextSecondary
-                        )
-                        Text(
-                            net.connection,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = GoogleTvTokens.TextSecondary
-                        )
-                    }
+                    Icon(
+                        Icons.Default.Wifi,
+                        contentDescription = null,
+                        Modifier.size(12.dp),
+                        tint = GoogleTvTokens.TextSecondary
+                    )
+                    Text(
+                        net.connection,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = GoogleTvTokens.TextSecondary
+                    )
                 }
             }
 
@@ -728,9 +1046,11 @@ private fun GoogleTvSpotlightBillboard(
     now: Long,
     experience: GuestExperience,
     isFavorite: Boolean,
+    watchLiveFocusRequester: FocusRequester? = null,
     onWatch: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenGuide: () -> Unit,
+    onOpenQuickTune: () -> Unit,
     onOpenRadio: () -> Unit,
     onOpenWeather: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -917,18 +1237,20 @@ private fun GoogleTvSpotlightBillboard(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Primary: Watch Live
+                            // Primary: Watch Live (Initial focus target)
                             var watchFocused by remember { mutableStateOf(false) }
                             Surface(
                                 onClick = onWatch,
                                 shape = CircleShape,
                                 color = if (watchFocused) Color.White else GoogleTvTokens.BlueAccent,
                                 contentColor = if (watchFocused) Color.Black else Color(0xFF001F2A),
-                                modifier = Modifier.googleTvFocusable(
-                                    shape = CircleShape,
-                                    focusedScale = 1.05f,
-                                    onFocusChange = { watchFocused = it }
-                                )
+                                modifier = Modifier
+                                    .then(if (watchLiveFocusRequester != null) Modifier.focusRequester(watchLiveFocusRequester) else Modifier)
+                                    .googleTvFocusable(
+                                        shape = CircleShape,
+                                        focusedScale = 1.05f,
+                                        onFocusChange = { watchFocused = it }
+                                    )
                             ) {
                                 Row(
                                     Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
@@ -988,6 +1310,34 @@ private fun GoogleTvSpotlightBillboard(
                                 ) {
                                     Icon(Icons.Default.CalendarMonth, contentDescription = null, Modifier.size(14.dp))
                                     Text("LIVE GUIDE", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            // Quaternary: Quick Tune (Same left pane channel from player but on the right)
+                            var quickTuneFocused by remember { mutableStateOf(false) }
+                            Surface(
+                                onClick = onOpenQuickTune,
+                                shape = CircleShape,
+                                color = if (quickTuneFocused) Color.White else Color.White.copy(alpha = 0.10f),
+                                contentColor = if (quickTuneFocused) Color.Black else Color.White,
+                                modifier = Modifier.googleTvFocusable(
+                                    shape = CircleShape,
+                                    focusedScale = 1.05f,
+                                    onFocusChange = { quickTuneFocused = it }
+                                )
+                            ) {
+                                Row(
+                                    Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Bolt,
+                                        contentDescription = null,
+                                        Modifier.size(14.dp),
+                                        tint = if (quickTuneFocused) Color.Black else GoogleTvTokens.BlueAccent
+                                    )
+                                    Text("QUICK TUNE", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -1492,7 +1842,8 @@ private fun LiveShowCard(
 @Composable
 private fun RadioStationCard(
     station: RadioStation,
-    nowPlaying: Boolean,
+    isCurrent: Boolean,
+    isPlaying: Boolean,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -1509,7 +1860,8 @@ private fun RadioStationCard(
             ),
         shape = RoundedCornerShape(12.dp),
         color = if (isFocused) Color.White else GoogleTvTokens.SurfaceCard,
-        contentColor = if (isFocused) Color.Black else Color.White
+        contentColor = if (isFocused) Color.Black else Color.White,
+        border = if (isCurrent) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFFF6B2C)) else null
     ) {
         Row(
             Modifier
@@ -1561,12 +1913,18 @@ private fun RadioStationCard(
                 )
             }
 
-            if (nowPlaying) {
+            if (isCurrent) {
                 Surface(
-                    shape = CircleShape,
-                    color = if (isFocused) Color.Black else GoogleTvTokens.BlueAccent
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (isFocused) Color.Black else Color(0xFFFF6B2C).copy(alpha = 0.22f)
                 ) {
-                    Box(Modifier.size(6.dp))
+                    Text(
+                        text = if (isPlaying) "ON AIR" else "TUNING…",
+                        color = if (isFocused) Color.Black else Color(0xFFFF6B2C),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
                 }
             }
         }
@@ -1661,34 +2019,35 @@ private fun ServiceShortcutCard(
     Surface(
         onClick = onClick,
         modifier = Modifier
-            .width(105.dp)
-            .height(72.dp)
+            .width(148.dp)
+            .height(84.dp)
             .googleTvFocusable(
                 shape = RoundedCornerShape(12.dp),
-                focusedScale = 1.05f,
+                focusedScale = 1.08f,
                 onFocusChange = { isFocused = it }
             ),
         shape = RoundedCornerShape(12.dp),
         color = if (isFocused) Color.White else GoogleTvTokens.SurfaceCard,
-        contentColor = if (isFocused) Color.Black else Color.White
+        contentColor = if (isFocused) Color.Black else Color.White,
+        border = if (isFocused) androidx.compose.foundation.BorderStroke(2.5.dp, Color.White) else null
     ) {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(8.dp),
+                .padding(10.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 icon,
                 contentDescription = null,
-                Modifier.size(18.dp),
+                Modifier.size(24.dp),
                 tint = if (isFocused) Color.Black else color
             )
-            Spacer(Modifier.height(5.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 label,
-                fontSize = 10.5.sp,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1724,5 +2083,335 @@ private fun SkeletonCard(
         color = Color.White.copy(alpha = alpha)
     ) {
         Box(Modifier.fillMaxSize())
+    }
+}
+
+/**
+ * Quick Tune Side Drawer.
+ * Replicates the player's left-hand channel drawer, sliding in from the right edge on the Home Screen.
+ */
+@Composable
+private fun QuickTuneDrawer(
+    channels: List<Channel>,
+    guide: EpgGuide,
+    activeChannel: Channel?,
+    favorites: Set<String>,
+    now: Long,
+    onWatchChannel: (Channel) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BackHandler(onBack = onDismiss)
+
+    val listState = rememberLazyListState()
+    val initialFocusRequester = remember { FocusRequester() }
+
+    val targetFocusIndex = remember(channels, activeChannel) {
+        val idx = channels.indexOfFirst { it.id == activeChannel?.id }
+        if (idx >= 0) idx else 0
+    }
+
+    LaunchedEffect(Unit) {
+        if (targetFocusIndex > 0) {
+            runCatching { listState.scrollToItem(targetFocusIndex) }
+        }
+        delay(120L)
+        try {
+            initialFocusRequester.requestFocus()
+        } catch (_: Exception) {}
+    }
+
+    Surface(
+        modifier = modifier
+            .width(420.dp)
+            .fillMaxHeight()
+            .onKeyEvent { event ->
+                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (event.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_BACK,
+                        KeyEvent.KEYCODE_ESCAPE -> {
+                            onDismiss()
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            },
+        color = Color(0xF511151C),
+        contentColor = Color.White,
+        shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.12f)),
+        shadowElevation = 16.dp
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(top = 18.dp)
+        ) {
+            // Header Bar
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .background(GoogleTvTokens.BlueAccent.copy(alpha = 0.20f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Bolt,
+                            contentDescription = null,
+                            tint = GoogleTvTokens.BlueAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            "QUICK TUNE",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            "Instant Channel Tuning",
+                            color = GoogleTvTokens.TextSecondary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+                }
+
+                Surface(
+                    onClick = onDismiss,
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.08f)
+                ) {
+                    Text(
+                        "CLOSE",
+                        Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        color = GoogleTvTokens.TextSecondary
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            // Active Channel Showcase Card (Matches player left pane)
+            activeChannel?.let { ch ->
+                val currentProg = remember(ch.id, guide, now) { guide.nowProgrammeForChannel(ch, now) }
+                Surface(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    color = Color.White.copy(alpha = 0.05f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.06f))
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            GoogleTvChannelLogo(
+                                channel = ch,
+                                size = 40.dp,
+                                guide = guide,
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = GoogleTvTokens.BlueAccent.copy(alpha = 0.22f)
+                                    ) {
+                                        Text(
+                                            ch.number.ifBlank { "LIVE" },
+                                            Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                            color = GoogleTvTokens.BlueAccent,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                    }
+                                    if (ch.id in favorites) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Icon(
+                                            Icons.Default.Star,
+                                            contentDescription = null,
+                                            tint = GoogleTvTokens.StarGold,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    ch.name,
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        currentProg?.let { prog ->
+                            Spacer(Modifier.height(10.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier
+                                        .size(6.dp)
+                                        .background(GoogleTvTokens.LiveRed, CircleShape)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "NOW PLAYING",
+                                    color = GoogleTvTokens.LiveRed,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                prog.title,
+                                color = Color.White,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            val progProgress = if (prog.startMillis <= now && prog.endMillis > now) {
+                                ((now - prog.startMillis).toFloat() / (prog.endMillis - prog.startMillis).coerceAtLeast(1L)).coerceIn(0f, 1f)
+                            } else 0f
+                            Spacer(Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = { progProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.5.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = GoogleTvTokens.BlueAccent,
+                                trackColor = Color.White.copy(alpha = 0.12f)
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+
+            // Section Title
+            Text(
+                "ALL CHANNELS (${channels.size})",
+                Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
+                color = GoogleTvTokens.TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.5.sp
+            )
+
+            // Channels List
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                state = listState,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                itemsIndexed(channels, key = { index, ch -> "qt-$index-${ch.id}" }) { index, item ->
+                    val isTuned = item.id == activeChannel?.id
+                    var isFocused by remember(item.id) { mutableStateOf(false) }
+                    val itemProgramme = remember(item.id, guide, now) {
+                        guide.nowProgrammeForChannel(item, now)
+                    }
+
+                    Surface(
+                        onClick = {
+                            onWatchChannel(item)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (index == targetFocusIndex) Modifier.focusRequester(initialFocusRequester) else Modifier)
+                            .googleTvFocusable(
+                                shape = RoundedCornerShape(12.dp),
+                                focusedScale = 1.02f,
+                                onFocusChange = { isFocused = it }
+                            ),
+                        shape = RoundedCornerShape(12.dp),
+                        color = when {
+                            isFocused -> Color.White
+                            isTuned -> GoogleTvTokens.BlueAccent.copy(alpha = 0.22f)
+                            else -> Color.White.copy(alpha = 0.04f)
+                        },
+                        contentColor = if (isFocused) Color.Black else Color.White,
+                        border = androidx.compose.foundation.BorderStroke(
+                            0.5.dp,
+                            if (isFocused) Color.White else if (isTuned) GoogleTvTokens.BlueAccent.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.05f)
+                        )
+                    ) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            GoogleTvChannelLogo(
+                                channel = item,
+                                size = 38.dp,
+                                guide = guide,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        item.number.ifBlank { "LIVE" },
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (isFocused) Color(0xFF00363A) else GoogleTvTokens.BlueAccent
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        item.name,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isFocused) Color.Black else Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (item.id in favorites) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(
+                                            Icons.Default.Star,
+                                            contentDescription = null,
+                                            tint = GoogleTvTokens.StarGold,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                }
+                                itemProgramme?.let { prog ->
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        prog.title,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = if (isFocused) Color(0xFF37474F) else GoogleTvTokens.TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

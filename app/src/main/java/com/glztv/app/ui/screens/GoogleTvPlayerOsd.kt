@@ -100,192 +100,9 @@ fun GoogleTvPlayerOsd(
     ) {
         Column(
             Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Main Top Row: Channel Identity + Program Details + Up Next Card
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 1. Channel Badge & Logo
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(0.32f)
-                ) {
-                    GoogleTvChannelLogo(
-                        channel = channel,
-                        size = 56.dp,
-                        guide = guide,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color.White.copy(alpha = 0.14f)
-                            ) {
-                                Text(
-                                    channel.number.ifBlank { "LIVE" },
-                                    Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White
-                                )
-                            }
-                            if (isFavorite) {
-                                Spacer(Modifier.width(6.dp))
-                                Icon(
-                                    Icons.Default.Star,
-                                    contentDescription = "Favorite",
-                                    tint = GoogleTvTokens.StarGold,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            channel.name,
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Spacer(Modifier.width(20.dp))
-
-                // 2. Program Details & Elapsed Progress
-                Column(Modifier.weight(0.48f)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // LIVE Badge with red pulsing bullet
-                        Surface(
-                            shape = CircleShape,
-                            color = GoogleTvTokens.LiveRed.copy(alpha = 0.20f)
-                        ) {
-                            Row(
-                                Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Box(
-                                    Modifier
-                                        .size(5.dp)
-                                        .background(GoogleTvTokens.LiveRed, CircleShape)
-                                )
-                                Text(
-                                    "LIVE",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = GoogleTvTokens.LiveRed
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.width(8.dp))
-
-                        Text(
-                            startEndFormatted,
-                            color = GoogleTvTokens.TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        remainingMinutes?.let {
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "· $it min left",
-                                color = GoogleTvTokens.BlueAccent,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    Text(
-                        currentProgramme?.title ?: "Live Programming",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    // Progress Bar
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.5.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = GoogleTvTokens.BlueAccent,
-                        trackColor = Color.White.copy(alpha = 0.15f)
-                    )
-
-                    Spacer(Modifier.height(6.dp))
-
-                    // Media Badges (HD, CC, Stereo)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OsdSpecBadge("HD")
-                        if (captionsEnabled) {
-                            OsdSpecBadge("CC ${captionLanguage.uppercase()}", active = true)
-                        } else {
-                            OsdSpecBadge("CC")
-                        }
-                        OsdSpecBadge("STEREO")
-                    }
-                }
-
-                Spacer(Modifier.width(20.dp))
-
-                // 3. "UP NEXT" Card
-                nextProgramme?.let { next ->
-                    Surface(
-                        modifier = Modifier.weight(0.20f),
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.White.copy(alpha = 0.07f)
-                    ) {
-                        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                            Text(
-                                "UP NEXT",
-                                color = GoogleTvTokens.TextSecondary,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.5.sp
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                next.title,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            val nextTime = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(next.startMillis))
-                            Text(
-                                nextTime,
-                                color = GoogleTvTokens.TextSecondary,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Quick Actions Bar (D-Pad Action Buttons)
+            // 1. Quick Actions Bar (D-Pad Action Buttons placed on top for clean organization)
             val favFocus = firstButtonFocusRequester ?: remember { FocusRequester() }
             val ccFocus = remember { FocusRequester() }
             val audioFocus = remember { FocusRequester() }
@@ -390,6 +207,189 @@ fun GoogleTvPlayerOsd(
                         },
                     onClick = onOpenGuide
                 )
+            }
+
+            // 2. Channel Identity + Program Details + Up Next Card (at bottom where gradient is darkest & most legible)
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Channel Badge & Logo
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(0.32f)
+                ) {
+                    GoogleTvChannelLogo(
+                        channel = channel,
+                        size = 56.dp,
+                        guide = guide,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color.White.copy(alpha = 0.14f)
+                            ) {
+                                Text(
+                                    channel.number.ifBlank { "LIVE" },
+                                    Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
+                            if (isFavorite) {
+                                Spacer(Modifier.width(6.dp))
+                                Icon(
+                                    Icons.Default.Star,
+                                    contentDescription = "Favorite",
+                                    tint = GoogleTvTokens.StarGold,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            channel.name,
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(20.dp))
+
+                // Program Details & Elapsed Progress
+                Column(Modifier.weight(0.48f)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // LIVE Badge with red pulsing bullet
+                        Surface(
+                            shape = CircleShape,
+                            color = GoogleTvTokens.LiveRed.copy(alpha = 0.20f)
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(5.dp)
+                                        .background(GoogleTvTokens.LiveRed, CircleShape)
+                                )
+                                Text(
+                                    "LIVE",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = GoogleTvTokens.LiveRed
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        Text(
+                            startEndFormatted,
+                            color = GoogleTvTokens.TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        remainingMinutes?.let {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "· $it min left",
+                                color = GoogleTvTokens.BlueAccent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                        currentProgramme?.title ?: "Live Programming",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Progress Bar
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.5.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = GoogleTvTokens.BlueAccent,
+                        trackColor = Color.White.copy(alpha = 0.15f)
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    // Media Badges (HD, CC, Stereo)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OsdSpecBadge("HD")
+                        if (captionsEnabled) {
+                            OsdSpecBadge("CC ${captionLanguage.uppercase()}", active = true)
+                        } else {
+                            OsdSpecBadge("CC")
+                        }
+                        OsdSpecBadge("STEREO")
+                    }
+                }
+
+                Spacer(Modifier.width(20.dp))
+
+                // "UP NEXT" Card
+                nextProgramme?.let { next ->
+                    Surface(
+                        modifier = Modifier.weight(0.20f),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White.copy(alpha = 0.07f)
+                    ) {
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            Text(
+                                "UP NEXT",
+                                color = GoogleTvTokens.TextSecondary,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 0.5.sp
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                next.title,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            val nextTime = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(next.startMillis))
+                            Text(
+                                nextTime,
+                                color = GoogleTvTokens.TextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
             }
         }
     }

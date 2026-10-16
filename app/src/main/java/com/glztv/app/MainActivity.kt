@@ -186,6 +186,7 @@ import com.glztv.app.ui.components.GoogleTvMiniGuide
 import com.glztv.app.ui.components.GoogleTvChannelLogo
 import com.glztv.app.ui.theme.GoogleTvTokens
 import com.glztv.app.ui.theme.googleTvFocusable
+import com.glztv.app.launcher.LauncherAppsManager
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.History
@@ -425,6 +426,105 @@ internal fun TvScreen(
             val list = runCatching { RadioCatalogManager.load(prefs, client).stations }.getOrElse { emptyList() }
             radioStations = list
         }
+    }
+
+    var currentUpdateChannel by remember {
+        mutableStateOf(
+            prefs.getString(UPDATE_CHANNEL, null)
+                ?: if (BuildConfig.DEBUG) GithubUpdateManager.UpdateChannel.FAMILY.id else GithubUpdateManager.UpdateChannel.PRODUCTION.id
+        )
+    }
+    val isFamilyChannel = remember(currentUpdateChannel) {
+        BuildConfig.DEBUG || GithubUpdateManager.UpdateChannel.from(currentUpdateChannel) == GithubUpdateManager.UpdateChannel.FAMILY
+    }
+
+    val radioDataSourceFactory = remember {
+        DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}")
+    }
+    val radioPlayer = remember {
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(radioDataSourceFactory))
+            .build().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .setUsage(C.USAGE_MEDIA)
+                        .build(),
+                    true
+                )
+                setHandleAudioBecomingNoisy(true)
+                setWakeMode(C.WAKE_MODE_LOCAL)
+            }
+    }
+
+    DisposableEffect(radioPlayer) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                radioPlaying = isPlaying
+            }
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) {
+                    radioPlaying = false
+                }
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                radioPlaying = false
+            }
+        }
+        radioPlayer.addListener(listener)
+        onDispose {
+            radioPlayer.removeListener(listener)
+            radioPlayer.stop()
+            radioPlayer.release()
+        }
+    }
+
+    fun playRadioStation(station: RadioStation) {
+        if (currentRadioStation?.code == station.code) {
+            if (radioPlaying) {
+                radioPlayer.pause()
+                radioPlaying = false
+            } else {
+                radioPlayer.play()
+                radioPlaying = true
+            }
+            return
+        }
+        currentRadioStation = station
+        radioDataSourceFactory.setDefaultRequestProperties(station.requestHeaders)
+        val metadata = MediaMetadata.Builder()
+            .setTitle(station.name)
+            .setArtist(station.genre)
+            .apply { station.logoUrl?.let { setArtworkUri(Uri.parse(it)) } }
+            .build()
+        radioPlayer.setMediaItem(
+            MediaItem.Builder().setUri(station.streamUrl).setMediaMetadata(metadata).build()
+        )
+        radioPlayer.prepare()
+        radioPlayer.play()
+        radioPlaying = true
+        GlzHubManager.reportActivity(prefs, "radio", station.name)
+    }
+
+    fun toggleRadioPlayPause() {
+        if (radioPlaying) {
+            radioPlayer.pause()
+            radioPlaying = false
+        } else if (currentRadioStation != null) {
+            if (radioPlayer.playbackState == Player.STATE_IDLE) {
+                radioPlayer.prepare()
+            }
+            radioPlayer.play()
+            radioPlaying = true
+        }
+    }
+
+    fun stopRadio() {
+        radioPlayer.stop()
+        radioPlayer.clearMediaItems()
+        radioPlaying = false
+        currentRadioStation = null
+        GlzHubManager.reportActivity(prefs, "idle")
     }
     var osdTimeoutSeconds by remember {
         mutableStateOf(prefs.getInt(OSD_TIMEOUT_SECONDS, 8))
@@ -783,6 +883,7 @@ internal fun TvScreen(
         )
     }
     val tuneChannel: (Channel) -> Unit = {
+        stopRadio()
         if (selected?.id != it.id) {
             PlaybackPerformance.channelSelected(it.id)
             recentChannelManager.record(it.id)
@@ -823,10 +924,11 @@ internal fun TvScreen(
         else EntertainmentApps.filter { it.packageName in visibleAppPackages }
     }
 
+    val isHomeLauncherActive = isFamilyChannel && LauncherAppsManager.isHomeLauncherAliasEnabled(context)
     BackHandler(enabled = !showSettings && !showWeatherModal && !showYouModal && !immersive) {
         if (section != AppSection.Home) {
             section = AppSection.Home
-        } else {
+        } else if (!isHomeLauncherActive) {
             (context as? Activity)?.finishAndRemoveTask()
         }
     }
@@ -970,8 +1072,7 @@ internal fun TvScreen(
                     radioStations = radioStations,
                     currentRadioStation = currentRadioStation,
                     onPlayRadioStation = { station ->
-                        currentRadioStation = station
-                        section = AppSection.Radio
+                        playRadioStation(station)
                     },
                     entertainmentApps = managedEntertainmentApps,
                     guestName = guestName,
@@ -979,6 +1080,7 @@ internal fun TvScreen(
                     weather = weather,
                     networkInfo = networkInfo,
                     onWatchChannel = { channel ->
+                        stopRadio()
                         section = AppSection.Live
                         tuneChannel(channel)
                         playerActive = true
@@ -993,7 +1095,11 @@ internal fun TvScreen(
                     onOpenSettings = { showSettings = true },
                     onOpenWelcome = { showYouModal = true },
                     onLaunchApp = { app ->
-                        launchEntertainmentApp(context, app.packageName, null)
+                        if (radioPlaying) radioPlayer.pause()
+                        val launched = LauncherAppsManager.launchApp(context, app.packageName)
+                        if (!launched) {
+                            launchEntertainmentApp(context, app.packageName, null)
+                        }
                     },
                     sportsBarKioskEnabled = sportsBarKioskEnabled,
                     onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
@@ -1013,6 +1119,14 @@ internal fun TvScreen(
                                 cropVideo = true
                             )
                         }
+                    },
+                    isFamilyChannel = isFamilyChannel,
+                    radioPlaying = radioPlaying,
+                    onToggleRadioPlayPause = { toggleRadioPlayPause() },
+                    onStopRadio = { stopRadio() },
+                    onOpenSpeedTest = {
+                        speedTestTargetUrl = null
+                        showSpeedTestDialog = true
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -1215,6 +1329,7 @@ internal fun TvScreen(
                     .putString(UPDATE_CHANNEL, updateChannel)
                     .putString(GlzHubManager.APP_LANGUAGE, chosenLang)
                     .apply()
+                currentUpdateChannel = updateChannel
                 onThemeMode(theme)
                 if (chosenLang != appLanguage) {
                     appLanguage = chosenLang
@@ -3178,8 +3293,9 @@ private fun PremiumFocusCard(
 
 private fun launchEntertainmentApp(context: Context, packageName: String, launchIntent: Intent?) {
     try {
-        if (launchIntent != null) {
-            context.startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val resolvedIntent = launchIntent ?: LauncherAppsManager.findAppLaunchIntent(context, packageName)
+        if (resolvedIntent != null) {
+            context.startActivity(resolvedIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } else {
             context.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
@@ -3187,12 +3303,14 @@ private fun launchEntertainmentApp(context: Context, packageName: String, launch
             )
         }
     } catch (_: ActivityNotFoundException) {
-        context.startActivity(
-            Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
-            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
+        runCatching {
+            context.startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
     }
 }
 
@@ -6050,6 +6168,7 @@ private fun SettingsDialog(
         Boolean, Boolean, Boolean, Boolean, String, String, String
     ) -> Unit
 ) {
+    val context = LocalContext.current
     var showAdvanced by remember { mutableStateOf(false) }
     var playlistValue by remember { mutableStateOf(playlist) }
     var epgValue by remember { mutableStateOf(epg) }
@@ -6336,6 +6455,54 @@ private fun SettingsDialog(
                             valueText = "Benchmark latency, jitter & download throughput",
                             onClick = onOpenSpeedTest
                         )
+
+                        SettingsLabel("ANDROID TV SETTINGS")
+                        SettingsActionRow(
+                            name = "Android TV Settings",
+                            valueText = "Device preferences, apps, storage & accounts",
+                            onClick = { LauncherAppsManager.openAndroidSettings(context) }
+                        )
+                        SettingsActionRow(
+                            name = "Wi-Fi & Network Settings",
+                            valueText = "Configure Android network connections",
+                            onClick = { LauncherAppsManager.openWifiSettings(context) }
+                        )
+                        SettingsActionRow(
+                            name = "Remotes & Accessories",
+                            valueText = "Bluetooth TV accessories, remotes & audio",
+                            onClick = { LauncherAppsManager.openBluetoothSettings(context) }
+                        )
+                        SettingsActionRow(
+                            name = "Developer & Debug Options",
+                            valueText = "Android developer options & debugging",
+                            onClick = { LauncherAppsManager.openDeveloperSettings(context) }
+                        )
+
+                        if (updateChannelValue == GithubUpdateManager.UpdateChannel.FAMILY.id) {
+                            SettingsLabel("HOME LAUNCHER (FAMILY LABS)")
+                            var launcherEnabled by remember {
+                                mutableStateOf(LauncherAppsManager.isHomeLauncherAliasEnabled(context))
+                            }
+                            SettingsChoiceRow(
+                                name = "Home Launcher Role",
+                                valueText = if (launcherEnabled) "Active (Enabled)" else "Inactive (Disabled)",
+                                onPrev = {
+                                    val next = !launcherEnabled
+                                    LauncherAppsManager.setHomeLauncherAliasEnabled(context, next)
+                                    launcherEnabled = next
+                                },
+                                onNext = {
+                                    val next = !launcherEnabled
+                                    LauncherAppsManager.setHomeLauncherAliasEnabled(context, next)
+                                    launcherEnabled = next
+                                }
+                            )
+                            SettingsActionRow(
+                                name = "Default Home App Settings",
+                                valueText = "Open Android default home application picker",
+                                onClick = { LauncherAppsManager.openHomeSettings(context) }
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(24.dp))

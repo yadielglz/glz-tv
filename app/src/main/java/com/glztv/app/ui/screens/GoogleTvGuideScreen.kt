@@ -47,6 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -100,6 +102,15 @@ fun GoogleTvGuideScreen(
     var selectedCategory by remember { mutableStateOf("ALL") }
     var focusedChannel by remember { mutableStateOf(activeTunedChannel ?: channels.firstOrNull()) }
     var focusedProgramme by remember { mutableStateOf<Programme?>(null) }
+
+    val topChannelFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        delay(150L)
+        try {
+            topChannelFocusRequester.requestFocus()
+        } catch (_: Exception) {}
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -238,6 +249,16 @@ fun GoogleTvGuideScreen(
                     }
                 }
 
+                // Visual separation between table header and channel grid
+                Spacer(Modifier.height(5.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.18f))
+                )
+                Spacer(Modifier.height(5.dp))
+
                 // Channel Rows
                 LazyColumn(
                     state = listState,
@@ -247,7 +268,7 @@ fun GoogleTvGuideScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(bottom = 20.dp)
                 ) {
-                    itemsIndexed(filteredChannels, key = { index, ch -> "gtv-${ch.id}-$index" }) { _, channel ->
+                    itemsIndexed(filteredChannels, key = { index, ch -> "gtv-${ch.id}-$index" }) { index, channel ->
                         GoogleTvGridRow(
                             channel = channel,
                             guide = guide,
@@ -261,6 +282,7 @@ fun GoogleTvGuideScreen(
                             totalTimelineWidth = totalTimelineWidth,
                             timelineScrollState = timelineScrollState,
                             isFavorite = channel.id in favorites,
+                            channelBadgeModifier = if (index == 0) Modifier.focusRequester(topChannelFocusRequester) else Modifier,
                             onToggleFavorite = { onToggleFavorite(channel.id) },
                             onFocusChannel = {
                                 focusedChannel = channel
@@ -560,6 +582,7 @@ private fun GoogleTvGridRow(
     totalTimelineWidth: Dp,
     timelineScrollState: androidx.compose.foundation.ScrollState,
     isFavorite: Boolean,
+    channelBadgeModifier: Modifier = Modifier,
     onToggleFavorite: () -> Unit,
     onFocusChannel: () -> Unit,
     onFocusProgramme: (Programme) -> Unit,
@@ -582,6 +605,7 @@ private fun GoogleTvGridRow(
             modifier = Modifier
                 .width(channelColumnWidth)
                 .fillMaxHeight()
+                .then(channelBadgeModifier)
                 .googleTvFocusable(
                     shape = RoundedCornerShape(8.dp),
                     focusedScale = 1.02f,
