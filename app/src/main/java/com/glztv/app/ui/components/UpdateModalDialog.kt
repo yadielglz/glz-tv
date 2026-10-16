@@ -18,18 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,22 +34,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.glztv.app.BuildConfig
 import com.glztv.app.GithubUpdateManager
-import com.glztv.app.ui.i18n.LocalGlzStrings
+import com.glztv.app.ui.theme.GoogleTvTokens
+import com.glztv.app.ui.theme.googleTvFocusable
 import kotlinx.coroutines.delay
 
 /**
- * Centered TV Modal Dialog triggered when an update is available or required.
- * When isForceUpdate is true (e.g. 7+ days past monthly milestone mark), dismissing
- * is disabled to ensure the device stays compliant within the rolling window.
+ * Authentic Google TV style System Update prompt.
+ * Features clean elevated dark surface, prominent version badging,
+ * and standard Google TV [Cancel] / [Install] focus action pills.
  */
 @Composable
 fun UpdateModalDialog(
@@ -68,13 +64,12 @@ fun UpdateModalDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val initialFocus = remember { FocusRequester() }
-    val strings = LocalGlzStrings.current
-    val accent = if (isForceUpdate) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary
+    val cancelFocus = remember { FocusRequester() }
+    val installFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        delay(150L)
-        runCatching { initialFocus.requestFocus() }
+        delay(120L)
+        runCatching { installFocus.requestFocus() }
     }
 
     BackHandler(enabled = !downloading) {
@@ -86,78 +81,77 @@ fun UpdateModalDialog(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.82f))
+            .background(Color.Black.copy(alpha = 0.75f))
             .clickable(enabled = !isForceUpdate && !downloading, onClick = onDismiss),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(max = 640.dp)
+                .widthIn(max = 500.dp)
                 .fillMaxWidth()
-                .padding(24.dp)
+                .padding(horizontal = 24.dp)
                 .clickable(enabled = false) {},
             shape = RoundedCornerShape(24.dp),
-            color = Color(0xF20F1626),
-            border = BorderStroke(1.5.dp, accent.copy(alpha = 0.50f)),
-            shadowElevation = 24.dp
+            color = Color(0xFF16181D),
+            border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.12f)),
+            shadowElevation = 0.dp
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(horizontal = 28.dp, vertical = 26.dp)
             ) {
-                // Header Row
+                // Header: Icon + Title + Version Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = accent.copy(alpha = 0.18f),
-                        modifier = Modifier.size(46.dp)
+                        color = Color.White.copy(alpha = 0.08f),
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
-                                if (isForceUpdate) Icons.Default.ErrorOutline else Icons.Default.SystemUpdate,
+                                Icons.Default.SystemUpdate,
                                 contentDescription = null,
-                                tint = accent,
+                                tint = GoogleTvTokens.BlueAccent,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
                     }
 
+                    Spacer(Modifier.width(16.dp))
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (isForceUpdate) "Milestone Update Required" else "Update Available",
-                            color = if (isForceUpdate) Color(0xFFFCA5A5) else Color.White,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 19.sp,
-                            letterSpacing = 0.3.sp
+                            text = if (isForceUpdate) "Update Required" else "System Update",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
                         )
-                        Spacer(Modifier.height(2.dp))
+                        Spacer(Modifier.height(3.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "v${BuildConfig.VERSION_NAME} → v${update.version}",
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontSize = 13.sp,
+                                text = "v${update.version.removePrefix("v")}",
+                                color = GoogleTvTokens.TextPrimary,
+                                fontSize = 13.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = accent.copy(alpha = 0.22f)
+                                color = GoogleTvTokens.BlueAccent.copy(alpha = 0.18f)
                             ) {
                                 Text(
                                     text = channel.label.uppercase(),
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.6.sp,
-                                    color = accent
+                                    letterSpacing = 0.5.sp,
+                                    color = GoogleTvTokens.BlueAccent
                                 )
                             }
                         }
@@ -166,141 +160,153 @@ fun UpdateModalDialog(
 
                 Spacer(Modifier.height(18.dp))
 
-                // Force Update Warning Banner
-                if (isForceUpdate) {
+                // Explanatory prompt
+                Text(
+                    text = "A new version of GLZ TV is ready to install with stability and performance improvements.",
+                    color = GoogleTvTokens.TextSecondary,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+
+                // Release Notes Card (if present)
+                if (update.notes.isNotBlank()) {
+                    Spacer(Modifier.height(14.dp))
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF7F1D1D).copy(alpha = 0.35f),
-                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.50f)),
+                        color = Color.White.copy(alpha = 0.04f),
+                        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 14.dp)
+                            .heightIn(max = 130.dp)
+                    ) {
+                        val scroll = rememberScrollState()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(scroll)
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = update.notes.trim(),
+                                fontSize = 12.5.sp,
+                                color = Color.White.copy(alpha = 0.85f),
+                                lineHeight = 17.sp
+                            )
+                        }
+                    }
+                }
+
+                // Milestone / Required update warning banner
+                if (isForceUpdate) {
+                    Spacer(Modifier.height(14.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF2B1616),
+                        border = BorderStroke(0.5.dp, Color(0xFFEF4444).copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "This device is past the monthly milestone window (7+ days overdue). A rolling milestone update is required to continue.",
-                            color = Color(0xFFFEE2E2),
-                            fontSize = 12.5.sp,
+                            text = "A milestone update is required to keep this device compliant with service requirements.",
+                            color = Color(0xFFFCA5A5),
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(12.dp)
                         )
                     }
                 }
 
-                // Release Notes Box
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color.White.copy(alpha = 0.04f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 180.dp)
-                ) {
-                    val scroll = rememberScrollState()
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(scroll)
-                            .padding(14.dp)
-                    ) {
-                        Text(
-                            text = "Release Notes:",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White.copy(alpha = 0.6f)
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = update.notes.ifBlank {
-                                "A new update is ready from the official GLZ TV GitHub release."
-                            },
-                            fontSize = 13.sp,
-                            color = Color.White.copy(alpha = 0.9f),
-                            lineHeight = 18.sp
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(18.dp))
-
                 // Download Progress / Status
-                if (downloadStatus != null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        if (downloading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = accent,
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(Modifier.width(10.dp))
-                        }
+                if (downloading || downloadStatus != null) {
+                    Spacer(Modifier.height(16.dp))
+                    if (downloading) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = GoogleTvTokens.BlueAccent,
+                            trackColor = Color.White.copy(alpha = 0.12f)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (downloadStatus != null) {
                         Text(
                             text = downloadStatus,
-                            color = accent,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center
+                            color = if (downloadStatus.contains("failed", ignoreCase = true)) {
+                                Color(0xFFF87171)
+                            } else {
+                                GoogleTvTokens.BlueAccent
+                            },
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.5.sp
                         )
                     }
                 }
 
-                // Action Buttons
+                Spacer(Modifier.height(24.dp))
+
+                // Actions: [Cancel] [Install]
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (!isForceUpdate) {
-                        var notNowFocused by remember { mutableStateOf(false) }
-                        OutlinedButton(
+                        var cancelFocused by remember { mutableStateOf(false) }
+                        Surface(
                             onClick = onDismiss,
                             enabled = !downloading,
-                            shape = CircleShape,
-                            border = BorderStroke(
-                                1.dp,
-                                if (notNowFocused) Color.White else Color.White.copy(alpha = 0.25f)
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (notNowFocused) Color.White.copy(alpha = 0.12f) else Color.Transparent,
-                                contentColor = Color.White
-                            ),
+                            shape = GoogleTvTokens.ShapePill,
+                            color = if (cancelFocused) Color.White else Color.White.copy(alpha = 0.08f),
+                            contentColor = if (cancelFocused) Color.Black else Color.White,
                             modifier = Modifier
-                                .tvFocusableWithPhysics(
-                                    shape = CircleShape,
-                                    focusedScale = 1.05f,
-                                    onFocusChange = { notNowFocused = it }
+                                .focusRequester(cancelFocus)
+                                .focusProperties { right = installFocus }
+                                .googleTvFocusable(
+                                    shape = GoogleTvTokens.ShapePill,
+                                    focusedScale = 1.04f,
+                                    onFocusChange = { cancelFocused = it }
                                 )
                         ) {
-                            Text(strings.notNow, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "Cancel",
+                                modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
 
                         Spacer(Modifier.width(12.dp))
                     }
 
-                    var updateFocused by remember { mutableStateOf(false) }
-                    Button(
+                    var installFocused by remember { mutableStateOf(false) }
+                    Surface(
                         onClick = onUpdateNow,
                         enabled = !downloading,
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isForceUpdate) Color(0xFFDC2626) else MaterialTheme.colorScheme.primary,
-                            contentColor = Color.White
-                        ),
+                        shape = GoogleTvTokens.ShapePill,
+                        color = when {
+                            installFocused -> Color.White
+                            isForceUpdate -> Color(0xFFDC2626)
+                            else -> GoogleTvTokens.BlueAccent.copy(alpha = 0.22f)
+                        },
+                        contentColor = when {
+                            installFocused -> Color.Black
+                            isForceUpdate -> Color.White
+                            else -> GoogleTvTokens.BlueAccent
+                        },
                         modifier = Modifier
-                            .focusRequester(initialFocus)
-                            .tvFocusableWithPhysics(
-                                shape = CircleShape,
-                                focusedScale = 1.05f,
-                                onFocusChange = { updateFocused = it }
+                            .focusRequester(installFocus)
+                            .focusProperties { left = cancelFocus }
+                            .googleTvFocusable(
+                                shape = GoogleTvTokens.ShapePill,
+                                focusedScale = 1.04f,
+                                onFocusChange = { installFocused = it }
                             )
                     ) {
                         Text(
-                            text = if (downloading) strings.buffering else strings.updateNow,
+                            text = if (downloading) "Downloading…" else "Install",
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
