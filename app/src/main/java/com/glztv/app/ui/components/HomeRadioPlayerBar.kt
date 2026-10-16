@@ -52,6 +52,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.view.KeyEvent
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.glztv.app.RadioStation
@@ -66,9 +71,17 @@ fun HomeRadioPlayerBar(
     isPlaying: Boolean,
     onTogglePlayPause: () -> Unit,
     onStop: () -> Unit,
+    focusRequester: FocusRequester? = null,
+    onFocusUp: (() -> Unit)? = null,
+    onFocusDown: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (station == null) return
+
+    var isBarFocused by remember { mutableStateOf(false) }
+    var isStopFocused by remember { mutableStateOf(false) }
+    val stopRequester = remember { FocusRequester() }
+    val barRequester = focusRequester ?: remember { FocusRequester() }
 
     val infiniteTransition = rememberInfiniteTransition(label = "radio-pulse")
     val dotAlpha by infiniteTransition.animateFloat(
@@ -82,12 +95,58 @@ fun HomeRadioPlayerBar(
     )
 
     Surface(
+        onClick = onTogglePlayPause,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)),
+            .then(if (focusRequester != null) Modifier.focusRequester(barRequester) else Modifier)
+            .googleTvFocusable(
+                shape = RoundedCornerShape(16.dp),
+                focusedScale = 1.02f,
+                onFocusChange = { isBarFocused = it }
+            )
+            .onKeyEvent { event ->
+                val native = event.nativeKeyEvent
+                if (native.action == KeyEvent.ACTION_DOWN) {
+                    when (native.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                            onTogglePlayPause()
+                            true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_STOP -> {
+                            onStop()
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            try {
+                                stopRequester.requestFocus()
+                            } catch (_: Exception) {}
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            if (onFocusUp != null) {
+                                onFocusUp()
+                                true
+                            } else false
+                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (onFocusDown != null) {
+                                onFocusDown()
+                                true
+                            } else false
+                        }
+                        else -> false
+                    }
+                } else false
+            },
         shape = RoundedCornerShape(16.dp),
         color = Color(0xFF111722),
-        border = androidx.compose.foundation.BorderStroke(1.dp, RadioOrange.copy(alpha = 0.35f)),
+        border = when {
+            isBarFocused -> BorderStroke(2.dp, Color.White)
+            isPlaying -> BorderStroke(1.dp, RadioOrange.copy(alpha = 0.5f))
+            else -> BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+        },
         tonalElevation = 8.dp
     ) {
         Box(
@@ -200,20 +259,13 @@ fun HomeRadioPlayerBar(
                     modifier = Modifier.padding(end = 16.dp)
                 )
 
-                // Play / Pause Button
-                var isPlayFocused by remember { mutableStateOf(false) }
+                // Play / Pause Button Indicator
                 Surface(
                     onClick = onTogglePlayPause,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .googleTvFocusable(
-                            shape = CircleShape,
-                            focusedScale = 1.15f,
-                            onFocusChange = { isPlayFocused = it }
-                        ),
+                    modifier = Modifier.size(38.dp),
                     shape = CircleShape,
-                    color = if (isPlayFocused) Color.White else RadioOrange,
-                    contentColor = if (isPlayFocused) Color.Black else Color.White
+                    color = if (isBarFocused) Color.White else RadioOrange,
+                    contentColor = if (isBarFocused) Color.Black else Color.White
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
@@ -227,19 +279,52 @@ fun HomeRadioPlayerBar(
                 Spacer(Modifier.width(10.dp))
 
                 // Stop / Close Button
-                var isStopFocused by remember { mutableStateOf(false) }
                 Surface(
                     onClick = onStop,
                     modifier = Modifier
                         .size(38.dp)
+                        .focusRequester(stopRequester)
                         .googleTvFocusable(
                             shape = CircleShape,
                             focusedScale = 1.15f,
                             onFocusChange = { isStopFocused = it }
-                        ),
+                        )
+                        .onKeyEvent { event ->
+                            val native = event.nativeKeyEvent
+                            if (native.action == KeyEvent.ACTION_DOWN) {
+                                when (native.keyCode) {
+                                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                        try {
+                                            barRequester.requestFocus()
+                                        } catch (_: Exception) {}
+                                        true
+                                    }
+                                    KeyEvent.KEYCODE_DPAD_UP -> {
+                                        if (onFocusUp != null) {
+                                            onFocusUp()
+                                            true
+                                        } else false
+                                    }
+                                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                        if (onFocusDown != null) {
+                                            onFocusDown()
+                                            true
+                                        } else false
+                                    }
+                                    KeyEvent.KEYCODE_DPAD_CENTER,
+                                    KeyEvent.KEYCODE_ENTER,
+                                    KeyEvent.KEYCODE_MEDIA_STOP -> {
+                                        onStop()
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else false
+                        },
                     shape = CircleShape,
                     color = if (isStopFocused) Color.White else Color.White.copy(alpha = 0.12f),
-                    contentColor = if (isStopFocused) Color.Black else Color.White
+                    contentColor = if (isStopFocused) Color.Black else Color.White,
+                    border = if (isStopFocused) BorderStroke(2.dp, Color.White) else null
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(

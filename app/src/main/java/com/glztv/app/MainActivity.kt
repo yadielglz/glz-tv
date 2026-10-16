@@ -1058,11 +1058,19 @@ internal fun TvScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else if (section == AppSection.Home) {
+                val glzHubPreviewChannel = ordered.firstOrNull {
+                    !homePreviewChannelId.isNullOrBlank() && (
+                        it.id == homePreviewChannelId ||
+                        it.number == homePreviewChannelId ||
+                        it.name.equals(homePreviewChannelId, ignoreCase = true)
+                    )
+                } ?: ordered.firstOrNull()
+
                 GoogleTvHomeScreen(
                     channels = ordered,
                     guide = guide,
                     resumeChannel = resumeChannel,
-                    previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
+                    previewChannel = glzHubPreviewChannel,
                     favorites = favorites,
                     recentChannels = remember(recentRevision, channels.toList()) {
                         recentChannelManager.recentIds().mapNotNull { id ->
@@ -1104,12 +1112,9 @@ internal fun TvScreen(
                     sportsBarKioskEnabled = sportsBarKioskEnabled,
                     onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
                     previewContent = {
-                        val hubPreviewChannel = ordered.firstOrNull { it.id == homePreviewChannelId }
-                            ?: resumeChannel
-                            ?: ordered.firstOrNull()
-                        if (hubPreviewChannel != null) {
+                        if (!radioPlaying && glzHubPreviewChannel != null) {
                             VideoPlayer(
-                                channel = hubPreviewChannel,
+                                channel = glzHubPreviewChannel,
                                 captionsEnabled = false,
                                 captionLanguage = captionLanguage,
                                 modifier = Modifier.fillMaxSize(),
@@ -1164,7 +1169,13 @@ internal fun TvScreen(
                             AppSection.Live -> GuideSection(
                                 channels = ordered,
                                 guide = guide,
-                                previewChannel = ordered.firstOrNull { it.id == homePreviewChannelId },
+                                previewChannel = ordered.firstOrNull {
+                                    !homePreviewChannelId.isNullOrBlank() && (
+                                        it.id == homePreviewChannelId ||
+                                        it.number == homePreviewChannelId ||
+                                        it.name.equals(homePreviewChannelId, ignoreCase = true)
+                                    )
+                                },
                                 captionLanguage = captionLanguage,
                                 favorites = favorites,
                                 onWatch = tuneChannel,
