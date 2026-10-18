@@ -668,6 +668,20 @@ internal fun TvScreen(
         if (forceRefresh) refreshResult.exceptionOrNull()?.let { throw it }
     }
 
+    suspend fun checkForAppUpdate(): String {
+        val channel = GithubUpdateManager.UpdateChannel.from(prefs.getString(UPDATE_CHANNEL, null))
+        return runCatching {
+            withContext(Dispatchers.IO) { GithubUpdateManager.check(client, channel) }
+        }.fold(
+            onSuccess = { update ->
+                availableUpdate = update
+                if (update == null) "Version ${BuildConfig.VERSION_NAME} is current"
+                else "Version ${update.version} is ready to install"
+            },
+            onFailure = { "Update check failed: ${it.message}" }
+        )
+    }
+
     suspend fun syncEverythingNow(onProgress: (Int, String) -> Unit): String {
         suspend fun report(percent: Int, message: String, syncStatus: String = "syncing") {
             status = message
@@ -740,20 +754,6 @@ internal fun TvScreen(
             }
             throw error
         }
-    }
-
-    suspend fun checkForAppUpdate(): String {
-        val channel = GithubUpdateManager.UpdateChannel.from(prefs.getString(UPDATE_CHANNEL, null))
-        return runCatching {
-            withContext(Dispatchers.IO) { GithubUpdateManager.check(client, channel) }
-        }.fold(
-            onSuccess = { update ->
-                availableUpdate = update
-                if (update == null) "Version ${BuildConfig.VERSION_NAME} is current"
-                else "Version ${update.version} is ready to install"
-            },
-            onFailure = { "Update check failed: ${it.message}" }
-        )
     }
 
     LaunchedEffect(Unit) {
