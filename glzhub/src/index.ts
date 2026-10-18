@@ -1621,10 +1621,14 @@ function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now())
   if (status === "disabled" || status === "expired") return false;
 
   const startTime = new Date(String(event.start_time)).getTime();
-  const endTime = new Date(String(event.end_time)).getTime();
-  if (!isNaN(startTime) && !isNaN(endTime)) {
-    const preBuffer = (Number(event.pre_buffer_hours) || 1) * 3600_000;
-    const postBuffer = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
+  const rawEndTime = new Date(String(event.end_time)).getTime();
+  if (!isNaN(startTime) && !isNaN(rawEndTime)) {
+    const rawDuration = rawEndTime - startTime;
+    const endTime = (rawDuration > 0 && rawDuration <= 3.5 * 3600_000)
+      ? rawEndTime
+      : startTime + 3 * 3600_000;
+    const preBuffer = Math.min(Number(event.pre_buffer_hours ?? 0.5) || 0.5, 1) * 3600_000;
+    const postBuffer = Math.min(Number(event.post_buffer_hours ?? 0.5) || 0.5, 1) * 3600_000;
     const winStart = startTime - preBuffer;
     const winEnd = endTime + postBuffer;
     if (now < winStart || now > winEnd) {
@@ -1685,9 +1689,13 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
     const logoUrl = event.logo_url ? escapeXml(String(event.logo_url)) : "";
 
     const startTime = new Date(String(event.start_time));
-    const endTime = new Date(String(event.end_time));
-    const preBuffer = (Number(event.pre_buffer_hours) || 1) * 3600_000;
-    const postBuffer = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
+    const rawEndTime = new Date(String(event.end_time));
+    const rawDuration = rawEndTime.getTime() - startTime.getTime();
+    const endTime = (rawDuration > 0 && rawDuration <= 3.5 * 3600_000)
+      ? rawEndTime
+      : new Date(startTime.getTime() + 3 * 3600_000);
+    const preBuffer = Math.min(Number(event.pre_buffer_hours ?? 0.5) || 0.5, 1) * 3600_000;
+    const postBuffer = Math.min(Number(event.post_buffer_hours ?? 0.5) || 0.5, 1) * 3600_000;
 
     const winStart = new Date(startTime.getTime() - preBuffer);
     const winEnd = new Date(endTime.getTime() + postBuffer);
@@ -1700,12 +1708,28 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
     }
     channelNodes += `  </channel>\n`;
 
-    programmeNodes += `  <programme start="${formatXmlTvDate(winStart)}" stop="${formatXmlTvDate(winEnd)}" channel="${tvgId}">\n`;
+    if (winStart.getTime() < startTime.getTime()) {
+      programmeNodes += `  <programme start="${formatXmlTvDate(winStart)}" stop="${formatXmlTvDate(startTime)}" channel="${tvgId}">\n`;
+      programmeNodes += `    <title lang="en">Pre-Game · ${eventTitle}</title>\n`;
+      programmeNodes += `    <desc lang="en">Pre-game coverage for ${sportLeague} - ${eventTitle}</desc>\n`;
+      programmeNodes += `    <category lang="en">Sports</category>\n`;
+      programmeNodes += `  </programme>\n`;
+    }
+
+    programmeNodes += `  <programme start="${formatXmlTvDate(startTime)}" stop="${formatXmlTvDate(endTime)}" channel="${tvgId}">\n`;
     programmeNodes += `    <title lang="en">${eventTitle}</title>\n`;
     programmeNodes += `    <desc lang="en">Live ${sportLeague} Event - ${eventTitle}</desc>\n`;
     programmeNodes += `    <category lang="en">Sports</category>\n`;
     programmeNodes += `    <category lang="en">Pay Per View</category>\n`;
     programmeNodes += `  </programme>\n`;
+
+    if (winEnd.getTime() > endTime.getTime()) {
+      programmeNodes += `  <programme start="${formatXmlTvDate(endTime)}" stop="${formatXmlTvDate(winEnd)}" channel="${tvgId}">\n`;
+      programmeNodes += `    <title lang="en">Post-Game · ${eventTitle}</title>\n`;
+      programmeNodes += `    <desc lang="en">Post-game wrap-up for ${sportLeague} - ${eventTitle}</desc>\n`;
+      programmeNodes += `    <category lang="en">Sports</category>\n`;
+      programmeNodes += `  </programme>\n`;
+    }
 
     index++;
   }
@@ -1843,9 +1867,10 @@ function parseInlineEventTime(title: string): { startTime: Date; endTime: Date }
   };
   const now = new Date();
   const etOffset = getEasternOffsetHours(now);
+  const DEFAULT_GAME_DURATION_MS = 3 * 3600_000; // 3 hours
 
-  // 1. Matches `@ Sep 16 7:10 PM` or `@ Sep 16 7:10PM` or `@ 09/16 7:10 PM`
-  const matchWithMonth = title.match(/@\s*([A-Za-z]{3}|\d{1,2}[\/-]\d{1,2})\s+(\d{1,2})?\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  // 1. Matches `@ Sep 16 7:10 PM`, `Oct 18 7:10PM`, `10/18 7:10 PM`
+  const matchWithMonth = title.match(/(?:@|\||-|\(|\[|\b)\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}[\/-]\d{1,2})(?:\s+(\d{1,2}))?\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   if (matchWithMonth) {
     const monthPart = matchWithMonth[1].toLowerCase();
     const dayPart = matchWithMonth[2];
@@ -1854,7 +1879,8 @@ function parseInlineEventTime(title: string): { startTime: Date; endTime: Date }
     const ampm = matchWithMonth[5]?.toUpperCase();
 
     if (ampm === "PM" && hours < 12) hours += 12;
-    if (ampm === "AM" && hours === 12) hours = 0;
+    else if (ampm === "AM" && hours === 12) hours = 0;
+    else if (!ampm && hours >= 1 && hours <= 11) hours += 12;
 
     let month = now.getMonth();
     let day = now.getDate();
@@ -1870,7 +1896,7 @@ function parseInlineEventTime(title: string): { startTime: Date; endTime: Date }
 
     const year = now.getFullYear();
     const start = new Date(Date.UTC(year, month, day, hours - etOffset, minutes));
-    const end = new Date(start.getTime() + 3.25 * 3600_000);
+    const end = new Date(start.getTime() + DEFAULT_GAME_DURATION_MS);
     return { startTime: start, endTime: end };
   }
 
@@ -1882,7 +1908,8 @@ function parseInlineEventTime(title: string): { startTime: Date; endTime: Date }
     const ampm = matchTimeOnly[3]?.toUpperCase();
 
     if (ampm === "PM" && hours < 12) hours += 12;
-    if (ampm === "AM" && hours === 12) hours = 0;
+    else if (ampm === "AM" && hours === 12) hours = 0;
+    else if (!ampm && hours >= 1 && hours <= 11) hours += 12;
 
     const etNowParts = new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/New_York',
@@ -1893,7 +1920,7 @@ function parseInlineEventTime(title: string): { startTime: Date; endTime: Date }
     const day = parseInt(etNowParts.find(p => p.type === 'day')?.value || String(now.getDate()), 10);
 
     const start = new Date(Date.UTC(year, month, day, hours - etOffset, minutes));
-    const end = new Date(start.getTime() + 3.25 * 3600_000);
+    const end = new Date(start.getTime() + DEFAULT_GAME_DURATION_MS);
     return { startTime: start, endTime: end };
   }
 
@@ -1908,7 +1935,7 @@ function parseInlineEventTime(title: string): { startTime: Date; endTime: Date }
   const curHour = parseInt(etNowParts.find(p => p.type === 'hour')?.value || String(now.getHours()), 10);
 
   const start = new Date(Date.UTC(year, month, day, curHour - etOffset, 0));
-  const end = new Date(start.getTime() + 3.25 * 3600_000);
+  const end = new Date(start.getTime() + DEFAULT_GAME_DURATION_MS);
   return { startTime: start, endTime: end };
 }
 
@@ -2119,8 +2146,8 @@ async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChanne
       channel_number: item.channelNumber,
       start_time: item.startTime,
       end_time: item.endTime,
-      pre_buffer_hours: 1,
-      post_buffer_hours: 2,
+      pre_buffer_hours: 0.5,
+      post_buffer_hours: 0.5,
       status: "active",
       auto_ingested: true,
       updated_at: nowIso
@@ -2304,9 +2331,9 @@ async function injectSingleStream(request: Request, env: Env): Promise<Response>
     stream_url: stream.streamUrl,
     channel_number: stream.channelNumber,
     start_time: stream.startTime || new Date().toISOString(),
-    end_time: stream.endTime || new Date(Date.now() + 4 * 3600_000).toISOString(),
-    pre_buffer_hours: 1,
-    post_buffer_hours: 2,
+    end_time: stream.endTime || new Date(Date.now() + 3 * 3600_000).toISOString(),
+    pre_buffer_hours: 0.5,
+    post_buffer_hours: 0.5,
     status: "active",
     auto_ingested: false,
     is_online: true,
@@ -2341,9 +2368,9 @@ async function createEventChannel(request: Request, env: Env): Promise<Response>
   const defaultPrefix = getChannelPrefix(sportLeague, title, groupTitle, tvgId);
   const channelNumber = optionalString(input.channelNumber, "channelNumber", 20) || `${defaultPrefix}-01`;
   const startTime = optionalString(input.startTime, "startTime", 60) || new Date().toISOString();
-  const endTime = optionalString(input.endTime, "endTime", 60) || new Date(Date.now() + 4 * 3600_000).toISOString();
-  const preBufferHours = Number(input.preBufferHours || 1);
-  const postBufferHours = Number(input.postBufferHours || 1.5);
+  const endTime = optionalString(input.endTime, "endTime", 60) || new Date(Date.now() + 3 * 3600_000).toISOString();
+  const preBufferHours = Number(input.preBufferHours ?? 0.5);
+  const postBufferHours = Number(input.postBufferHours ?? 0.5);
 
   const rows = await supabaseJson(env, "/rest/v1/event_channels?select=*", {
     method: "POST",
@@ -2486,13 +2513,13 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
       const eventTitleAttr = ` x-event-title="${cleanAttribute(event.title || "Live Sports Event")}"`;
       const eventLeagueAttr = ` x-event-league="${cleanAttribute(event.sport_league || "SPORTS")}"`;
       const startMs = new Date(String(event.start_time || "")).getTime();
-      const endMs = new Date(String(event.end_time || "")).getTime();
-      const preBufferMs = (Number(event.pre_buffer_hours) || 1) * 3600_000;
-      const postBufferMs = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
-      const winStartMs = Number.isFinite(startMs) ? startMs - preBufferMs : now - 3600_000;
-      const winEndMs = Number.isFinite(endMs) ? endMs + postBufferMs : now + 3 * 3600_000;
-      const eventStartAttr = ` x-event-start="${Math.round(winStartMs)}"`;
-      const eventEndAttr = ` x-event-end="${Math.round(winEndMs)}"`;
+      const rawEndMs = new Date(String(event.end_time || "")).getTime();
+      const gameStartMs = Number.isFinite(startMs) ? startMs : now;
+      const gameEndMs = (!Number.isFinite(rawEndMs) || rawEndMs <= gameStartMs || (rawEndMs - gameStartMs) > 3.5 * 3600_000)
+        ? gameStartMs + 3 * 3600_000
+        : rawEndMs;
+      const eventStartAttr = ` x-event-start="${Math.round(gameStartMs)}"`;
+      const eventEndAttr = ` x-event-end="${Math.round(gameEndMs)}"`;
       m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo}${eventTitleAttr}${eventLeagueAttr}${eventStartAttr}${eventEndAttr} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
       activeIndex++;
     }

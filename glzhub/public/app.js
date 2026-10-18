@@ -2605,9 +2605,12 @@ async function loadEventChannels() {
 function isEventActive(event) {
   if (event.status === "disabled" || event.status === "expired") return false;
   const start = new Date(event.start_time).getTime();
-  const end = new Date(event.end_time).getTime();
-  const preBuffer = (Number(event.pre_buffer_hours) || 1) * 3600_000;
-  const postBuffer = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
+  const rawEnd = new Date(event.end_time).getTime();
+  const end = (!Number.isFinite(rawEnd) || rawEnd <= start || (rawEnd - start) > 3.5 * 3600_000)
+    ? start + 3 * 3600_000
+    : rawEnd;
+  const preBuffer = Math.min(Math.max(Number(event.pre_buffer_hours ?? 0.5) || 0.5, 0), 1) * 3600_000;
+  const postBuffer = Math.min(Math.max(Number(event.post_buffer_hours ?? 0.5) || 0.5, 0), 1.5) * 3600_000;
   const now = Date.now();
   return now >= (start - preBuffer) && now <= (end + postBuffer);
 }
@@ -2901,12 +2904,12 @@ function openEventDialog(id = "") {
 
   const now = new Date();
   const defaultStart = event?.start_time ? new Date(event.start_time) : now;
-  const defaultEnd = event?.end_time ? new Date(event.end_time) : new Date(now.getTime() + 4 * 3600_000);
+  const defaultEnd = event?.end_time ? new Date(event.end_time) : new Date(now.getTime() + 3 * 3600_000);
 
   $("#eventStartTime").value = localInputValue(defaultStart);
   $("#eventEndTime").value = localInputValue(defaultEnd);
-  $("#eventPreBuffer").value = event?.pre_buffer_hours ?? 1;
-  $("#eventPostBuffer").value = event?.post_buffer_hours ?? 1.5;
+  $("#eventPreBuffer").value = event?.pre_buffer_hours ?? 0.5;
+  $("#eventPostBuffer").value = event?.post_buffer_hours ?? 0.5;
   $("#eventStatus").value = event?.status || "active";
 
   $("#eventDialogTitle").textContent = event ? "Edit Event Channel" : "Add Custom Event Channel";

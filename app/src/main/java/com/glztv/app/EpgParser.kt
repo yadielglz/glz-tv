@@ -103,16 +103,33 @@ data class EpgGuide(
         val title = channel.eventTitle.trim()
         if (title.isEmpty()) return emptyList()
         val now = System.currentTimeMillis()
+        val threeHoursMs = 3 * 3600_000L
         val start = if (channel.eventStartMillis > 0L) channel.eventStartMillis else now - 30 * 60_000L
-        val end = if (channel.eventEndMillis > start) channel.eventEndMillis else start + 4 * 3600_000L
+        val rawEnd = if (channel.eventEndMillis > start) channel.eventEndMillis else start + threeHoursMs
+        val end = if (rawEnd - start > 4 * 3600_000L) start + threeHoursMs else rawEnd
         val league = channel.eventLeague.ifBlank { "SPORTS" }
         val desc = "Live $league Event · $title"
+        val cid = channel.id.ifBlank { channel.name }
         return listOf(
             Programme(
-                channelId = channel.id.ifBlank { channel.name },
+                channelId = cid,
+                startMillis = start - 60 * 60_000L,
+                endMillis = start,
+                title = "Pre-Game · $title",
+                description = desc
+            ),
+            Programme(
+                channelId = cid,
                 startMillis = start,
                 endMillis = end,
                 title = title,
+                description = desc
+            ),
+            Programme(
+                channelId = cid,
+                startMillis = end,
+                endMillis = end + 90 * 60_000L,
+                title = "Post-Game · $title",
                 description = desc
             )
         )

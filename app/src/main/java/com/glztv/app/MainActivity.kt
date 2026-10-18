@@ -3508,100 +3508,21 @@ private fun EpgPreviewHeader(
     } ?: 0f
 
     val isLive = activeProg != null && activeProg.startMillis <= now && activeProg.endMillis > now
+    val heroBaseColor = Color(0xFF0B0D0F)
 
     Surface(
-        modifier,
+        modifier = modifier.height(84.dp),
         shape = RoundedCornerShape(16.dp),
-        color = Color.White.copy(alpha = 0.05f),
+        color = heroBaseColor,
     ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            ChannelLogo(focusedChannel, 34.dp, guide)
-
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "${focusedChannel.number.ifBlank { "TV" }} · ${focusedChannel.name}",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 13.sp,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = if (isLive) Color(0xFF00E5FF).copy(alpha = 0.20f) else Color.White.copy(alpha = 0.10f),
-                    ) {
-                        Text(
-                            if (isLive) "LIVE" else "UPCOMING",
-                            Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black,
-                            color = if (isLive) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.80f)
-                        )
-                    }
-                    activeProg?.let { prog ->
-                        val startStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))
-                        val endStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "$startStr – $endStr",
-                            color = MaterialTheme.colorScheme.secondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        activeProg?.title ?: "Live Broadcast",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 14.sp,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    next?.let { n ->
-                        Text(
-                            "Next: ${n.title}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.80f),
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = 10.dp)
-                        )
-                    }
-                }
-
-                if (isLive) {
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier.fillMaxWidth().height(2.5.dp).clip(RoundedCornerShape(1.dp)),
-                        color = Color(0xFF00E5FF),
-                        trackColor = Color.White.copy(alpha = 0.12f)
-                    )
-                }
-            }
-
-            // Fixed preview PIP video (stays on tuned channel without changing on focus)
+        Box(Modifier.fillMaxSize()) {
             previewChannel?.let { channel ->
-                Surface(
-                    Modifier
-                        .width(110.dp)
-                        .height(62.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color.Black,
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.42f)
+                        .align(Alignment.CenterEnd)
+                        .background(heroBaseColor)
                 ) {
                     VideoPlayer(
                         channel = channel,
@@ -3612,6 +3533,113 @@ private fun EpgPreviewHeader(
                         keepScreenOn = false,
                         cropVideo = true
                     )
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.horizontalGradient(
+                                    0.00f to heroBaseColor,
+                                    0.18f to heroBaseColor.copy(alpha = 0.85f),
+                                    0.36f to heroBaseColor.copy(alpha = 0.35f),
+                                    0.50f to Color.Transparent,
+                                    1.00f to Color.Transparent
+                                )
+                            )
+                    )
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0.00f to heroBaseColor.copy(alpha = 0.35f),
+                                    0.15f to Color.Transparent,
+                                    0.85f to Color.Transparent,
+                                    1.00f to heroBaseColor.copy(alpha = 0.35f)
+                                )
+                            )
+                    )
+                }
+            }
+
+            Row(
+                Modifier
+                    .fillMaxWidth(if (previewChannel != null) 0.66f else 1f)
+                    .fillMaxHeight()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ChannelLogo(focusedChannel, 34.dp, guide)
+
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${focusedChannel.number.ifBlank { "TV" }} · ${focusedChannel.name}",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 13.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = if (isLive) Color(0xFF00E5FF).copy(alpha = 0.20f) else Color.White.copy(alpha = 0.10f),
+                        ) {
+                            Text(
+                                if (isLive) "LIVE" else "UPCOMING",
+                                Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                color = if (isLive) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.80f)
+                            )
+                        }
+                        activeProg?.let { prog ->
+                            val startStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))
+                            val endStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "$startStr – $endStr",
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            activeProg?.title ?: "Live Broadcast",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        next?.let { n ->
+                            Text(
+                                "Next: ${n.title}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.80f),
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = 10.dp)
+                            )
+                        }
+                    }
+
+                    if (isLive) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth().height(2.5.dp).clip(RoundedCornerShape(1.dp)),
+                            color = Color(0xFF00E5FF),
+                            trackColor = Color.White.copy(alpha = 0.12f)
+                        )
+                    }
                 }
             }
         }

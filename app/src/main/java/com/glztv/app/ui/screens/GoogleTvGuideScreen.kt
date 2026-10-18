@@ -409,104 +409,149 @@ private fun GoogleTvHeroSynopsisPanel(
         } else null
     }
 
+    val heroBaseColor = Color(0xFF0B0D0F)
+
     Surface(
-        modifier = modifier,
+        modifier = modifier.height(148.dp),
         shape = RoundedCornerShape(16.dp),
-        color = GoogleTvTokens.SurfaceCardTranslucent
+        color = heroBaseColor
     ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left Metadata Column
-            Column(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+        Box(Modifier.fillMaxSize()) {
+            // 1. Right-side live stream preview with gradient blend across the right 1/3 of the hero card
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.42f)
+                    .align(Alignment.CenterEnd)
+                    .background(heroBaseColor)
             ) {
-                // Channel Identity Line
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    GoogleTvChannelLogo(channel, 26.dp, guide, shape = RoundedCornerShape(6.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "${channel.number.ifBlank { "CH" }} · ${channel.name}",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    if (isLive) {
-                        Surface(
-                            shape = CircleShape,
-                            color = GoogleTvTokens.LiveRed.copy(alpha = 0.20f)
-                        ) {
-                            Text(
-                                "LIVE",
-                                Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Black,
-                                color = GoogleTvTokens.LiveRed
+                Box(Modifier.fillMaxSize()) {
+                    previewContent()
+                }
+
+                // Continuous horizontal dissolve gradient matching Home screen hero card:
+                // Left edge (0.00f) is 100% solid heroBaseColor, easing out so the right 1/3 is clear & vibrant.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                0.00f to heroBaseColor,
+                                0.18f to heroBaseColor.copy(alpha = 0.85f),
+                                0.36f to heroBaseColor.copy(alpha = 0.35f),
+                                0.50f to Color.Transparent,
+                                1.00f to Color.Transparent
                             )
-                        }
-                    }
-                    activeProg?.let { prog ->
-                        val startStr = formatGuideTime(prog.startMillis)
-                        val endStr = formatGuideTime(prog.endMillis)
+                        )
+                )
+
+                // Subtle vertical edge vignettes for top and bottom framing
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.00f to heroBaseColor.copy(alpha = 0.35f),
+                                0.15f to Color.Transparent,
+                                0.85f to Color.Transparent,
+                                1.00f to heroBaseColor.copy(alpha = 0.35f)
+                            )
+                        )
+                )
+            }
+
+            // 2. Foreground Left Metadata Column
+            Column(
+                Modifier
+                    .fillMaxWidth(0.66f)
+                    .fillMaxHeight()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Channel Identity Line
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        GoogleTvChannelLogo(channel, 26.dp, guide, shape = RoundedCornerShape(6.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "$startStr – $endStr",
-                            color = GoogleTvTokens.TextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
+                            "${channel.number.ifBlank { "CH" }} · ${channel.name}",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                        remainingMinutes?.let {
+                        Spacer(Modifier.width(8.dp))
+                        if (isLive) {
+                            Surface(
+                                shape = CircleShape,
+                                color = GoogleTvTokens.LiveRed.copy(alpha = 0.20f)
+                            ) {
+                                Text(
+                                    "LIVE",
+                                    Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = GoogleTvTokens.LiveRed
+                                )
+                            }
+                        }
+                        activeProg?.let { prog ->
+                            val startStr = formatGuideTime(prog.startMillis)
+                            val endStr = formatGuideTime(prog.endMillis)
+                            Spacer(Modifier.width(8.dp))
                             Text(
-                                " · $it min left",
-                                color = GoogleTvTokens.BlueAccent,
+                                "$startStr – $endStr",
+                                color = GoogleTvTokens.TextSecondary,
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Medium
                             )
+                            remainingMinutes?.let {
+                                Text(
+                                    " · $it min left",
+                                    color = GoogleTvTokens.BlueAccent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
-                }
 
-                // Show Title
-                Text(
-                    activeProg?.title ?: "Live Programming",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                // Progress Bar
-                if (isLive) {
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .height(2.5.dp)
-                            .clip(RoundedCornerShape(1.dp)),
-                        color = GoogleTvTokens.BlueAccent,
-                        trackColor = Color.White.copy(alpha = 0.12f)
+                    // Show Title
+                    Text(
+                        activeProg?.title ?: "Live Programming",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                } else {
-                    Spacer(Modifier.height(2.5.dp))
-                }
 
-                // Description
-                Text(
-                    activeProg?.description?.takeIf(String::isNotBlank)
-                        ?: "Watch live broadcast from ${channel.name}.",
-                    color = GoogleTvTokens.TextSecondary,
-                    fontSize = 11.sp,
-                    lineHeight = 15.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
+                    // Progress Bar
+                    if (isLive) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth(0.6f)
+                                .height(2.5.dp)
+                                .clip(RoundedCornerShape(1.dp)),
+                            color = GoogleTvTokens.BlueAccent,
+                            trackColor = Color.White.copy(alpha = 0.12f)
+                        )
+                    } else {
+                        Spacer(Modifier.height(2.5.dp))
+                    }
+
+                    // Description
+                    Text(
+                        activeProg?.description?.takeIf(String::isNotBlank)
+                            ?: "Watch live broadcast from ${channel.name}.",
+                        color = GoogleTvTokens.TextSecondary,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
 
                 // Quick Action Buttons
                 Row(
@@ -553,19 +598,6 @@ private fun GoogleTvHeroSynopsisPanel(
                         }
                     }
                 }
-            }
-
-            Spacer(Modifier.width(16.dp))
-
-            // Right PiP Video Preview
-            Surface(
-                modifier = Modifier
-                    .width(180.dp)
-                    .height(101.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = Color.Black
-            ) {
-                previewContent()
             }
         }
     }

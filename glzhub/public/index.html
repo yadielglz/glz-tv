@@ -744,7 +744,7 @@
             <div>
               <div class="eyebrow">LIVE EVENT CHANNELS &amp; TEMPORARY SCHEDULE</div>
               <h2>Temporary Live Event Channels</h2>
-              <p class="field-help">Auto-syncs live event streams from your provider (<code>starlite.best</code>). Schedules game active windows (game start ± 3h buffer) and injects XMLTV EPG data.</p>
+              <p class="field-help">Auto-syncs live event streams from your provider (<code>starlite.best</code>). Schedules 3-hour game windows and injects XMLTV EPG data.</p>
             </div>
             <div class="header-actions">
               <button id="browseProviderStreamsBtn" type="button" class="primary" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🔍 <span>Browse &amp; Inject Streams</span></button>
@@ -837,8 +837,8 @@
         <label class="wide">Logo URL (optional)<input id="eventLogoUrl" type="url" placeholder="https://media.starlite.best/...png"></label>
         <label>Game Start Time (UTC / Local)<input id="eventStartTime" type="datetime-local" required></label>
         <label>Game End Time (UTC / Local)<input id="eventEndTime" type="datetime-local" required></label>
-        <label>Pre-Game Buffer (Hours)<input id="eventPreBuffer" type="number" value="3" min="0" max="24"></label>
-        <label>Post-Game Buffer (Hours)<input id="eventPostBuffer" type="number" value="3" min="0" max="24"></label>
+        <label>Pre-Game Buffer (Hours)<input id="eventPreBuffer" type="number" value="0.5" step="0.5" min="0" max="24"></label>
+        <label>Post-Game Buffer (Hours)<input id="eventPostBuffer" type="number" value="0.5" step="0.5" min="0" max="24"></label>
         <label class="wide">Status
           <select id="eventStatus">
             <option value="active">Active (Shows on TVs during window)</option>
