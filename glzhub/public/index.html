@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff" id="themeColorMeta">
-  <title>GLZ Hub | Device Management & TV Studio Control Center</title>
+  <title>GLZ Hub | Fleet Management & TV Studio Control Center</title>
   <meta name="description" content="Centralized device management, box groups, playlist studio, guest experiences, and XMLTV EPG schedule editor for GLZ TV displays.">
   <link rel="manifest" href="/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -26,82 +26,357 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=2.3.1">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=3.0.1">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 </head>
 
 <body>
+  <!-- SVG Symbol Sprite Library for Clean Flat Micro-Icons -->
+  <svg style="display:none;" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="icon-screens" viewBox="0 0 24 24">
+      <rect x="2" y="3" width="20" height="14" rx="2"/>
+      <line x1="8" y1="21" x2="16" y2="21"/>
+      <line x1="12" y1="17" x2="12" y2="21"/>
+    </symbol>
+    <symbol id="icon-groups" viewBox="0 0 24 24">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+      <polyline points="2 17 12 22 22 17"/>
+      <polyline points="2 12 12 17 22 12"/>
+    </symbol>
+    <symbol id="icon-property" viewBox="0 0 24 24">
+      <path d="M3 21h18"/>
+      <path d="M5 21V7l8-4v18"/>
+      <path d="M19 21V11l-6-4"/>
+      <line x1="9" y1="9" x2="9" y2="9.01"/>
+      <line x1="9" y1="13" x2="9" y2="13.01"/>
+      <line x1="9" y1="17" x2="9" y2="17.01"/>
+    </symbol>
+    <symbol id="icon-experience" viewBox="0 0 24 24">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    </symbol>
+    <symbol id="icon-radio" viewBox="0 0 24 24">
+      <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/>
+      <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/>
+      <circle cx="12" cy="12" r="2"/>
+      <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/>
+      <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>
+    </symbol>
+    <symbol id="icon-events" viewBox="0 0 24 24">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </symbol>
+    <symbol id="icon-studio" viewBox="0 0 24 24">
+      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+      <line x1="7" y1="2" x2="7" y2="22"/>
+      <line x1="17" y1="2" x2="17" y2="22"/>
+      <line x1="2" y1="12" x2="22" y2="12"/>
+      <line x1="2" y1="7" x2="7" y2="7"/>
+      <line x1="2" y1="17" x2="7" y2="17"/>
+      <line x1="17" y1="17" x2="22" y2="17"/>
+      <line x1="17" y1="7" x2="22" y2="7"/>
+    </symbol>
+    <symbol id="icon-epg" viewBox="0 0 24 24">
+      <rect x="3" y="4" width="18" height="16" rx="2"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+      <line x1="8" y1="10" x2="8" y2="20"/>
+      <line x1="14" y1="10" x2="14" y2="20"/>
+    </symbol>
+    <symbol id="icon-apps" viewBox="0 0 24 24">
+      <rect x="3" y="3" width="7" height="7"/>
+      <rect x="14" y="3" width="7" height="7"/>
+      <rect x="14" y="14" width="7" height="7"/>
+      <rect x="3" y="14" width="7" height="7"/>
+    </symbol>
+    <symbol id="icon-pair" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="16"/>
+      <line x1="8" y1="12" x2="16" y2="12"/>
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24">
+      <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+    </symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/>
+      <line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </symbol>
+    <symbol id="icon-logout" viewBox="0 0 24 24">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </symbol>
+    <symbol id="icon-menu" viewBox="0 0 24 24">
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </symbol>
+    <symbol id="icon-arrow-left" viewBox="0 0 24 24">
+      <line x1="19" y1="12" x2="5" y2="12"/>
+      <polyline points="12 19 5 12 12 5"/>
+    </symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    </symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </symbol>
+    <symbol id="icon-wifi" viewBox="0 0 24 24">
+      <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+      <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+      <line x1="12" y1="20" x2="12.01" y2="20"/>
+    </symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </symbol>
+    <symbol id="icon-sliders" viewBox="0 0 24 24">
+      <line x1="4" y1="21" x2="4" y2="14"/>
+      <line x1="4" y1="10" x2="4" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="12"/>
+      <line x1="12" y1="8" x2="12" y2="3"/>
+      <line x1="20" y1="21" x2="20" y2="16"/>
+      <line x1="20" y1="12" x2="20" y2="3"/>
+      <line x1="1" y1="14" x2="7" y2="14"/>
+      <line x1="9" y1="8" x2="15" y2="8"/>
+      <line x1="17" y1="16" x2="23" y2="16"/>
+    </symbol>
+    <symbol id="icon-palette" viewBox="0 0 24 24">
+      <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
+      <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
+      <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
+      <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
+      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C22 6.5 17.5 2 12 2z"/>
+    </symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <polyline points="9 12 11 14 15 10"/>
+    </symbol>
+    <symbol id="icon-server" viewBox="0 0 24 24">
+      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+      <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+      <line x1="6" y1="6" x2="6.01" y2="6"/>
+      <line x1="6" y1="18" x2="6.01" y2="18"/>
+    </symbol>
+    <symbol id="icon-chevron-right" viewBox="0 0 24 24">
+      <polyline points="9 18 15 12 9 6"/>
+    </symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24">
+      <polyline points="20 6 9 17 4 12"/>
+    </symbol>
+    <symbol id="icon-command" viewBox="0 0 24 24">
+      <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+    </symbol>
+    <symbol id="icon-bell" viewBox="0 0 24 24">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    </symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+    </symbol>
+  </svg>
+
   <div class="shell">
     <div id="railBackdrop" class="rail-backdrop hidden"></div>
     <aside class="rail" id="mainRail">
       <div class="rail-header">
-        <a class="brand" href="/">
+        <a class="brand" href="/" title="GLZ Hub Control Center">
           <span class="brand-mark">G</span>
-          <span><strong>GLZ Hub</strong><small>Control Center</small></span>
+          <div class="brand-text">
+            <div class="brand-title-wrap">
+              <strong>GLZ Hub</strong>
+              <span class="brand-badge">CONTROL</span>
+            </div>
+            <small class="brand-sub">Fleet &amp; TV Studio</small>
+          </div>
         </a>
-        <button id="closeRailButton" class="icon-button mobile-only" aria-label="Close Menu">✕</button>
+        <button id="closeRailButton" class="icon-button mobile-only" aria-label="Close Menu">
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <nav>
-        <button class="nav active" data-view="devices">▣ <span>Devices</span></button>
-        <button class="nav" data-view="groups">▦ <span>Box groups</span></button>
-        <button class="nav" data-view="sites">⌂ <span>Properties</span></button>
-        <button class="nav" data-view="experience">✦ <span>Guest experience</span></button>
-        <button class="nav" data-view="radio">🎙️ <span>Radio streams</span></button>
-        <button class="nav" data-view="events">⚡ <span>Live events</span></button>
-        <button class="nav" data-view="studio">🎬 <span>TV playlists</span></button>
-        <button class="nav" data-view="epg">▤ <span>EPG Studio</span></button>
-        <button class="nav" data-view="apps">⬡ <span>App library</span></button>
-        <button class="nav" data-view="pair">＋ <span>Pair a TV</span></button>
+        <div class="nav-group">
+          <div class="nav-group-title">
+            <span>Fleet Management</span>
+          </div>
+          <button class="nav active" data-view="devices">
+            <svg class="icon"><use href="#icon-screens"/></svg>
+            <span>Devices</span>
+            <span class="nav-badge" id="navCountDevices">0</span>
+          </button>
+          <button class="nav" data-view="groups">
+            <svg class="icon"><use href="#icon-groups"/></svg>
+            <span>Box groups</span>
+            <span class="nav-badge" id="navCountGroups">0</span>
+          </button>
+          <button class="nav" data-view="sites">
+            <svg class="icon"><use href="#icon-property"/></svg>
+            <span>Properties</span>
+            <span class="nav-badge" id="navCountSites">0</span>
+          </button>
+          <button class="nav" data-view="pair">
+            <svg class="icon"><use href="#icon-pair"/></svg>
+            <span>Pair a TV</span>
+            <span class="nav-badge-accent">+ Pair</span>
+          </button>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-title">
+            <span>Broadcast &amp; Channels</span>
+          </div>
+          <button class="nav" data-view="studio">
+            <svg class="icon"><use href="#icon-studio"/></svg>
+            <span>TV playlists</span>
+            <span class="nav-badge" id="navCountPlaylists">0</span>
+          </button>
+          <button class="nav" data-view="events">
+            <svg class="icon"><use href="#icon-events"/></svg>
+            <span>Live events</span>
+            <span class="nav-badge-live hidden" id="navLiveBadge">● LIVE</span>
+          </button>
+          <button class="nav" data-view="epg">
+            <svg class="icon"><use href="#icon-epg"/></svg>
+            <span>EPG Studio</span>
+          </button>
+          <button class="nav" data-view="radio">
+            <svg class="icon"><use href="#icon-radio"/></svg>
+            <span>Radio streams</span>
+            <span class="nav-badge" id="navCountRadio">0</span>
+          </button>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-title">
+            <span>Hospitality &amp; Apps</span>
+          </div>
+          <button class="nav" data-view="experience">
+            <svg class="icon"><use href="#icon-experience"/></svg>
+            <span>Guest experience</span>
+          </button>
+          <button class="nav" data-view="apps">
+            <svg class="icon"><use href="#icon-apps"/></svg>
+            <span>App library</span>
+            <span class="nav-badge" id="navCountApps">0</span>
+          </button>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-title">
+            <span>System</span>
+          </div>
+          <button class="nav" data-view="settings">
+            <svg class="icon"><use href="#icon-settings"/></svg>
+            <span>Settings</span>
+            <span class="nav-badge">v3.0</span>
+          </button>
+        </div>
       </nav>
       <div class="rail-foot">
-        <div class="user-chip">
+        <div class="user-chip" id="userChipBtn" role="button" tabindex="0" title="Open Settings &amp; Profile">
           <div class="user-avatar" id="userAvatar">A</div>
           <div class="user-info">
             <span id="accountEmail">Not signed in</span>
             <small id="connectionStatus" class="connection-status">Online</small>
           </div>
-          <button id="themeToggle" class="icon-button" type="button" title="Switch light / dark theme" aria-label="Switch light / dark theme">◐</button>
+          <button id="themeToggle" class="icon-button" type="button" title="Switch theme" aria-label="Switch theme">
+            <svg class="icon"><use href="#icon-sun"/></svg>
+          </button>
         </div>
-        <button id="signOut" class="text-button hidden">Sign out</button>
+        <div class="rail-foot-actions">
+          <button id="railSettingsBtn" class="text-button" type="button" data-view-button="settings">
+            <svg class="icon-sm"><use href="#icon-settings"/></svg>
+            <span>Settings</span>
+          </button>
+          <button id="signOut" class="text-button hidden">
+            <svg class="icon-sm"><use href="#icon-logout"/></svg>
+            <span>Sign out</span>
+          </button>
+        </div>
       </div>
     </aside>
 
     <main>
       <div class="mobile-top-bar mobile-only">
-        <button id="mobileNavToggle" class="mobile-menu-btn" aria-label="Open Navigation">☰</button>
+        <button id="mobileNavToggle" class="mobile-menu-btn" aria-label="Open Navigation">
+          <svg class="icon"><use href="#icon-menu"/></svg>
+        </button>
         <div class="mobile-brand">
           <span class="brand-mark-sm">G</span>
           <strong>GLZ Hub</strong>
         </div>
         <div style="display:flex;gap:8px;">
-          <button id="themeToggleMobile" class="icon-button" type="button" title="Switch light / dark theme" aria-label="Switch light / dark theme">◐</button>
-          <button id="mobileRefreshBtn" class="icon-button" title="Refresh">🔄</button>
+          <button id="themeToggleMobile" class="icon-button" type="button" title="Switch light / dark theme" aria-label="Switch light / dark theme">
+            <svg class="icon"><use href="#icon-sun"/></svg>
+          </button>
+          <button id="mobileSearchBtn" class="icon-button" title="Quick Search">
+            <svg class="icon"><use href="#icon-search"/></svg>
+          </button>
+          <button id="mobileRefreshBtn" class="icon-button" title="Refresh">
+            <svg class="icon"><use href="#icon-refresh"/></svg>
+          </button>
         </div>
       </div>
 
       <section id="authView" class="auth-wrap">
-        <div class="auth-card">
-          <div class="eyebrow">FAMILY ENTERTAINMENT & CONTROL</div>
+        <div class="auth-card" style="max-width: 420px; margin: 40px auto; padding: 32px; background: var(--panel-card); border: 1px solid var(--line); border-radius: var(--radius-lg);">
+          <div class="eyebrow">ENTERPRISE TELEMETRY &amp; CONTROL</div>
           <h1>Every screen.<br><em>One calm place.</em></h1>
           <p>Manage guest names, channels, guides, and entertainment apps across every GLZ TV display.</p>
-          <form id="authForm">
-            <label>Email<input id="email" type="email" autocomplete="email" required placeholder="admin@example.com"></label>
-            <label>Password<input id="password" type="password" autocomplete="current-password" required placeholder="••••••••••••"></label>
-            <button class="primary" type="submit">Sign in to GLZ Hub</button>
+          <form id="authForm" style="display:flex; flex-direction:column; gap:16px; margin-top:20px;">
+            <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">Email
+              <input id="email" type="email" autocomplete="email" required placeholder="admin@example.com">
+            </label>
+            <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">Password
+              <input id="password" type="password" autocomplete="current-password" required placeholder="••••••••••••">
+            </label>
+            <button class="primary" type="submit" style="margin-top:4px;">Sign in to GLZ Hub</button>
             <p id="authError" class="error"></p>
           </form>
         </div>
       </section>
 
       <section id="inviteView" class="auth-wrap hidden">
-        <div class="auth-card">
+        <div class="auth-card" style="max-width: 420px; margin: 40px auto; padding: 32px; background: var(--panel-card); border: 1px solid var(--line); border-radius: var(--radius-lg);">
           <div class="eyebrow">WELCOME TO GLZ HUB</div>
           <h1>Choose your<br><em>admin password.</em></h1>
           <p>Your email has been verified. Create the password you’ll use to manage your televisions.</p>
-          <form id="inviteForm">
-            <label>New password<input id="invitePassword" type="password" autocomplete="new-password" minlength="10" required placeholder="At least 10 characters"></label>
-            <label>Confirm password<input id="invitePasswordConfirm" type="password" autocomplete="new-password" minlength="10" required placeholder="Repeat new password"></label>
+          <form id="inviteForm" style="display:flex; flex-direction:column; gap:16px; margin-top:20px;">
+            <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">New password
+              <input id="invitePassword" type="password" autocomplete="new-password" minlength="10" required placeholder="At least 10 characters">
+            </label>
+            <label style="display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:600; color:var(--text-secondary);">Confirm password
+              <input id="invitePasswordConfirm" type="password" autocomplete="new-password" minlength="10" required placeholder="Repeat new password">
+            </label>
             <button class="primary" type="submit">Activate administrator account</button>
             <p id="inviteError" class="error"></p>
           </form>
@@ -110,13 +385,45 @@
 
       <section id="appView" class="hidden">
         <header id="mainAppHeader">
-          <div>
-            <div class="eyebrow">GLZTECH CONTROL CENTER</div>
-            <h2 id="pageTitle">Your TVs</h2>
+          <div class="header-main-group">
+            <div class="header-breadcrumbs" id="headerBreadcrumbs">
+              <span class="bc-root" data-view-jump="devices">GLZ Hub</span>
+              <svg class="icon-sm bc-sep"><use href="#icon-chevron-right"/></svg>
+              <span class="bc-section" id="bcSection">Fleet Management</span>
+              <svg class="icon-sm bc-sep"><use href="#icon-chevron-right"/></svg>
+              <span class="bc-current" id="bcCurrent">Your TVs</span>
+            </div>
+            <div class="header-title-row">
+              <h2 id="pageTitle">Your TVs</h2>
+              <span id="fleetHealthIndicator" class="fleet-health-indicator">
+                <span class="status-dot"></span>
+                <span id="fleetHealthText">Fleet Ready · Edge v3.0</span>
+              </span>
+            </div>
           </div>
-          <div class="header-actions">
-            <button id="refreshDashboardButton" type="button" class="secondary" title="Refresh all device status">🔄 <span>Refresh</span></button>
-            <button id="pairButton" class="primary">＋ <span>Pair a TV</span></button>
+          <div class="header-search-and-actions">
+            <button id="globalSearchTriggerBtn" class="global-search-btn" type="button" title="Quick navigator &amp; command palette (Cmd+K)">
+              <svg class="icon"><use href="#icon-search"/></svg>
+              <span class="search-placeholder">Quick search screens, channels, settings…</span>
+              <kbd class="search-kbd">⌘K</kbd>
+            </button>
+            <div class="header-actions">
+              <button id="refreshDashboardButton" type="button" class="secondary" title="Refresh device status">
+                <svg class="icon"><use href="#icon-refresh"/></svg>
+                <span>Refresh</span>
+              </button>
+              <button id="syncAllScreensButton" type="button" class="secondary" title="Broadcast configuration sync to all devices">
+                <svg class="icon"><use href="#icon-upload"/></svg>
+                <span>Sync Fleet</span>
+              </button>
+              <button id="headerSettingsBtn" type="button" class="secondary icon-btn-only" title="Hub Settings &amp; Preferences" data-view-button="settings">
+                <svg class="icon"><use href="#icon-settings"/></svg>
+              </button>
+              <button id="pairButton" class="primary">
+                <svg class="icon"><use href="#icon-pair"/></svg>
+                <span>Pair a TV</span>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -128,39 +435,50 @@
                 <span>Managed screens</span>
                 <strong id="deviceCount">0</strong>
               </div>
-              <div class="stat-badge" id="fleetScoreBadge">100% HEALTH</div>
+              <div class="stat-badge" id="fleetScoreBadge">FLEET READY</div>
             </article>
             <article class="stat-card">
               <div class="stat-meta">
                 <span>Online now</span>
                 <strong id="onlineCount" class="text-emerald">0</strong>
               </div>
-              <div class="stat-indicator online-pulse"></div>
+              <div class="stat-badge text-emerald">CONNECTED</div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-meta">
+                <span>Sync pending</span>
+                <strong id="syncingCount" style="color:var(--accent);">0</strong>
+              </div>
+              <div class="stat-badge" id="syncingBadge">IN SYNC</div>
             </article>
             <article class="stat-card">
               <div class="stat-meta">
                 <span>Needs attention</span>
                 <strong id="attentionCount" class="text-amber">0</strong>
               </div>
-              <div class="stat-indicator" id="attentionIndicator"></div>
+              <div class="stat-badge text-amber" id="attentionIndicator">ALL CLEAR</div>
             </article>
           </div>
 
           <div class="device-toolbar">
             <div class="search-wrap">
-              <input id="deviceSearchInput" type="search" placeholder="⌕ Filter screens by name, room, guest, model, or status…" autocomplete="off">
+              <svg class="icon search-icon"><use href="#icon-search"/></svg>
+              <input id="deviceSearchInput" type="search" placeholder="Search screens by name, room, guest, model, or status…" autocomplete="off">
             </div>
             <div class="filter-pills" id="deviceFilterPills">
               <button class="filter-pill active" data-filter="all">All</button>
               <button class="filter-pill" data-filter="online">Online</button>
               <button class="filter-pill" data-filter="syncing">Syncing</button>
               <button class="filter-pill" data-filter="offline">Offline</button>
+              <button class="filter-pill" data-filter="attention">Attention</button>
             </div>
           </div>
 
           <div id="deviceGrid" class="device-list"></div>
           <div id="emptyState" class="empty hidden">
-            <div class="empty-icon">＋</div>
+            <div class="empty-icon">
+              <svg class="icon-lg"><use href="#icon-screens"/></svg>
+            </div>
             <h3>Pair your first TV</h3>
             <p>Open GLZ TV settings on the television and enter its pairing code here.</p>
             <button class="primary" data-open-pair>Pair a TV</button>
@@ -171,38 +489,54 @@
         <section id="deviceEditorView" class="hidden">
           <div class="editor-header">
             <div class="editor-breadcrumb">
-              <button type="button" class="back-link" id="backToDevicesBtn">← Back to TV Fleet</button>
+              <button type="button" class="back-link" id="backToDevicesBtn">
+                <svg class="icon"><use href="#icon-arrow-left"/></svg>
+                <span>Back to TV Fleet</span>
+              </button>
               <div class="device-hero">
-                <div class="screen-icon-lg"></div>
                 <div>
                   <div class="eyebrow" id="editorDeviceEyebrow">DEVICE CONTROL STUDIO</div>
                   <h2 id="editorDeviceTitle">Living Room</h2>
                   <div class="device-quick-meta">
-                    <span id="editorDeviceStatus" class="status">ONLINE</span>
+                    <span id="editorDeviceStatus" class="status-pill online"><span class="status-dot"></span>ONLINE</span>
                     <span id="editorDeviceModel" class="meta-pill">Android TV</span>
                     <span id="editorDeviceSite" class="meta-pill">Hotel Resort</span>
                     <span id="editorDeviceVersion" class="meta-pill">App v2.2.0</span>
+                    <span id="editorDeviceUpdateRing" class="meta-pill">PRODUCTION RING</span>
                   </div>
                 </div>
               </div>
             </div>
             <div class="header-actions">
-              <button id="forceRefreshDevice" type="button" class="secondary">⚡ Force Refresh</button>
-              <button id="unpairDevice" type="button" class="danger-button">Remove Pairing</button>
-              <button id="saveDeviceNoSyncTopBtn" type="button" class="secondary">💾 Save (No Sync)</button>
-              <button id="saveDeviceTopBtn" type="button" class="primary">Save &amp; Sync to TV</button>
+              <button id="checkUpdateDevice" type="button" class="secondary" title="Trigger an immediate remote APK update check on this TV">
+                <svg class="icon"><use href="#icon-download"/></svg>
+                <span>Check Update</span>
+              </button>
+              <button id="forceRefreshDevice" type="button" class="secondary">
+                <svg class="icon"><use href="#icon-refresh"/></svg>
+                <span>Force Refresh</span>
+              </button>
+              <button id="unpairDevice" type="button" class="danger-button">
+                <svg class="icon"><use href="#icon-trash"/></svg>
+                <span>Remove Pairing</span>
+              </button>
+              <button id="saveDeviceNoSyncTopBtn" type="button" class="secondary">Save Draft</button>
+              <button id="saveDeviceTopBtn" type="button" class="primary">
+                <svg class="icon"><use href="#icon-upload"/></svg>
+                <span>Save &amp; Sync to TV</span>
+              </button>
             </div>
           </div>
 
           <div class="editor-nav-tabs">
-            <button type="button" class="editor-tab active" data-tab="tab-general">🏷️ General &amp; Stay</button>
-            <button type="button" class="editor-tab" data-tab="tab-lineup">📺 TV Channels &amp; Guide</button>
-            <button type="button" class="editor-tab" data-tab="tab-playback">🎨 Playback &amp; Display</button>
-            <button type="button" class="editor-tab" data-tab="tab-apps">📱 Managed Apps</button>
-            <button type="button" class="editor-tab" data-tab="tab-network">🌐 Network &amp; System</button>
+            <button type="button" class="editor-tab active" data-tab="tab-general">General &amp; Location</button>
+            <button type="button" class="editor-tab" data-tab="tab-lineup">Channels &amp; Guide</button>
+            <button type="button" class="editor-tab" data-tab="tab-playback">Playback &amp; Display</button>
+            <button type="button" class="editor-tab" data-tab="tab-apps">Managed Apps</button>
+            <button type="button" class="editor-tab" data-tab="tab-network">Network &amp; Diagnostics</button>
           </div>
 
-          <form id="deviceForm" class="editor-form">
+          <form id="deviceForm" class="editor-form" style="display:flex; flex-direction:column; gap:16px; margin-top:4px;">
             <input id="deviceId" type="hidden">
             <input id="configVersion" type="hidden">
 
@@ -240,16 +574,16 @@
                   <label class="wide">Box Group (Shared Lineup &amp; Policy)
                     <select id="deviceBoxGroup"><option value="">No box group</option></select>
                   </label>
-                  <div class="wide channel-policy-launch-card">
+                  <div class="wide" style="display:flex; justify-content:space-between; align-items:center; padding:14px; background:var(--panel-card-hover); border:1px solid var(--line); border-radius:var(--radius-sm); margin-top:4px;">
                     <div>
-                      <strong>Granular Channel Access Rules</strong>
-                      <p>Override group policy to allow or block specific channels on this box.</p>
+                      <strong style="display:block; font-size:13px;">Granular Channel Access Rules</strong>
+                      <p style="font-size:12px; margin:0; color:var(--text-muted);">Override group policy to allow or block specific channels on this box.</p>
                     </div>
-                    <button id="editDeviceChannelPolicy" type="button" class="secondary">Configure Channel Policy</button>
+                    <button id="editDeviceChannelPolicy" type="button" class="secondary">Configure Policy</button>
                   </div>
                   <label class="wide">Home Screen Hero Preview Channel
                     <select id="homePreviewChannel"><option value="">No live preview</option></select>
-                    <small>Muted live TV channel played inside the GLZ TV Home hero banner.</small>
+                    <small class="field-help">Muted live TV channel played inside the GLZ TV Home hero banner.</small>
                   </label>
                 </div>
               </div>
@@ -294,13 +628,13 @@
                       <option value="10">10 seconds</option>
                     </select>
                   </label>
-                  <label>Closed Captions Language<input id="captionsLanguage" maxlength="12" placeholder="en"></label>
                   <label>App Interface Language
                     <select id="appLanguage">
-                      <option value="en">English (Default)</option>
-                      <option value="es">Español (Spanish)</option>
+                      <option value="en">English (en)</option>
+                      <option value="es">Español (es)</option>
                     </select>
                   </label>
+                  <label>Closed Captions Language<input id="captionsLanguage" maxlength="12" placeholder="en"></label>
                 </div>
               </div>
               <div class="editor-card">
@@ -310,7 +644,7 @@
                   <label class="check-card"><input id="autoStart" type="checkbox"> <div><strong>Auto-Start on Boot</strong><small>Launch GLZ TV when television turns on</small></div></label>
                   <label class="check-card"><input id="resumeLastChannel" type="checkbox"> <div><strong>Resume Last Channel</strong><small>Automatically start the last watched stream</small></div></label>
                   <label class="check-card"><input id="keepAwakeHome" type="checkbox"> <div><strong>Keep Screen Awake on Home</strong><small>Prevent TV screensaver while on guest home</small></div></label>
-                  <label class="check-card"><input id="sportsBarKioskEnabled" type="checkbox"> <div><strong>Enable Sports Bar Kiosk</strong><small>Allow muted TV with GLZ Radio audio. Staff choose the channel and station on the TV.</small></div></label>
+                  <label class="check-card"><input id="sportsBarKioskEnabled" type="checkbox"> <div><strong>Enable Sports Bar Kiosk</strong><small>Allow muted TV with GLZ Radio audio background</small></div></label>
                 </div>
               </div>
             </div>
@@ -320,15 +654,15 @@
               <div class="editor-card">
                 <h4 class="card-title">Visible Entertainment Apps</h4>
                 <p class="field-help" style="margin-bottom:14px;">Select the entertainment apps shown on the GLZ TV Home dashboard.</p>
-                <div id="visibleApps" class="app-checklist"></div>
+                <div id="visibleApps" class="checkbox-grid"></div>
               </div>
               <div class="editor-card">
                 <h4 class="card-title">Deploy App to this Screen</h4>
-                <div class="inline-action">
-                  <select id="deployApp"></select>
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                  <select id="deployApp" style="flex:1; min-width:240px;"></select>
                   <button id="deployButton" type="button" class="secondary">Push to TV</button>
                 </div>
-                <small class="field-help" style="margin-top:6px;display:block;">Sends a remote installation trigger to open the Play Store package or secure APK installer.</small>
+                <small class="field-help" style="margin-top:8px; display:block;">Sends a remote installation trigger to open the Play Store package or secure APK installer.</small>
               </div>
             </div>
 
@@ -344,24 +678,19 @@
               <div class="editor-card">
                 <h4 class="card-title">App Updates &amp; Diagnostics</h4>
                 <div class="form-grid" style="margin-bottom:14px;">
-                  <label>OTA Release Ring (Update Channel)
+                  <label class="wide">Release Update Ring
                     <select id="updateChannel">
                       <option value="production">Production (Stable Release)</option>
-                      <option value="weekly">Weekly (Early Access)</option>
-                      <option value="biweekly">Biweekly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="testing">Testing (Canary / QA)</option>
+                      <option value="weekly">Weekly (Family &amp; Feature Ring)</option>
+                      <option value="biweekly">Bi-Weekly (Release Candidate)</option>
+                      <option value="monthly">Monthly (Scheduled Milestone)</option>
+                      <option value="testing">Testing (Beta / Nightly Preview)</option>
                     </select>
-                  </label>
-                  <label>Remote OTA Update Trigger
-                    <div class="inline-action" style="margin-top:4px;">
-                      <button id="checkUpdateDeviceBtn" type="button" class="secondary" style="width:100%;">🔄 Check for App Update on TV</button>
-                    </div>
                   </label>
                 </div>
                 <div class="checkbox-grid">
                   <label class="check-card"><input id="autoUpdate" type="checkbox"> <div><strong>Auto-Update GLZ TV</strong><small>Download release APK updates automatically</small></div></label>
-                  <label class="check-card"><input id="wifiOnly" type="checkbox"> <div><strong>Wi-Fi Only Downloads</strong><small>Do not use mobile/metered data</small></div></label>
+                  <label class="check-card"><input id="wifiOnly" type="checkbox"> <div><strong>Wi-Fi Only Downloads</strong><small>Do not use mobile or metered data</small></div></label>
                 </div>
               </div>
             </div>
@@ -370,89 +699,113 @@
 
             <div class="editor-footer-bar">
               <button type="button" class="secondary" id="cancelDeviceEditorBtn">Cancel &amp; Back</button>
-              <button type="button" class="secondary" id="saveDeviceNoSyncBtn">💾 Save Draft (No Sync)</button>
-              <button type="submit" class="primary save-large" id="saveDeviceSyncBtn">Save &amp; Sync to TV</button>
+              <button type="button" class="secondary" id="saveDeviceNoSyncBtn">Save Draft</button>
+              <button type="submit" class="primary" id="saveDeviceSyncBtn">
+                <svg class="icon"><use href="#icon-upload"/></svg>
+                <span>Save &amp; Sync to TV</span>
+              </button>
             </div>
           </form>
         </section>
 
         <!-- EPG View -->
         <section id="epgView" class="hidden">
-          <div class="epg-toolbar">
+          <div class="editor-header" style="margin-bottom:16px;">
             <div>
               <div class="eyebrow">XMLTV PROGRAMME GUIDE</div>
               <h3>EPG Studio</h3>
               <p>Load, inspect, edit and publish complete television schedules.</p>
             </div>
-            <div class="epg-toolbar-actions">
-              <button id="epgExportXml" class="secondary" disabled>⇩ Export XMLTV</button>
-              <button id="epgExportGz" class="secondary" disabled>⇩ Export XML.GZ</button>
-              <button id="epgPublish" class="primary" disabled>⇧ Publish EPG</button>
+            <div class="header-actions">
+              <button id="epgExportXml" class="secondary" disabled>
+                <svg class="icon"><use href="#icon-download"/></svg>
+                <span>Export XMLTV</span>
+              </button>
+              <button id="epgExportGz" class="secondary" disabled>
+                <svg class="icon"><use href="#icon-download"/></svg>
+                <span>Export XML.GZ</span>
+              </button>
+              <button id="epgPublish" class="primary" disabled>
+                <svg class="icon"><use href="#icon-upload"/></svg>
+                <span>Publish EPG</span>
+              </button>
             </div>
           </div>
-          <div class="epg-source-bar">
+          <div style="display:grid; grid-template-columns: 1fr 1.5fr auto auto; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
             <select id="epgPlaylistSelect" aria-label="TV playlist"><option value="">Select a TV playlist…</option></select>
             <input id="epgFetchUrl" type="url" placeholder="https://epg.best/.../guide.xml.gz" aria-label="Guide URL">
-            <button id="epgFetchButton" class="secondary">◎ Fetch URL</button>
-            <button id="epgOpenButton" class="secondary">⇧ Open XMLTV</button>
+            <button id="epgFetchButton" class="secondary">Fetch URL</button>
+            <button id="epgOpenButton" class="secondary">Open XMLTV</button>
             <input id="epgOpenInput" class="hidden" type="file" accept=".xml,.gz,.xml.gz,application/xml,text/xml,application/gzip">
           </div>
-          <div id="epgNotice" class="epg-notice">Select a playlist, then load its managed guide or open an XMLTV source.</div>
-          <div class="epg-workspace">
-            <div class="epg-workspace-tools">
-              <input id="epgChannelFilter" placeholder="⌕ Filter channels by name or ID…">
-              <label>Schedule date<input id="epgScheduleDate" type="date"></label>
-              <button id="epgAddChannel" class="secondary" disabled>＋ Add channel</button>
-              <button id="epgAddProgramme" class="primary" disabled>＋ Add programme</button>
+          <div id="epgNotice" style="padding:10px 14px; background:var(--panel-card); border:1px solid var(--line); border-radius:var(--radius-sm); font-size:12.5px; color:var(--text-muted); margin-bottom:16px;">
+            Select a playlist, then load its managed guide or open an XMLTV source.
+          </div>
+          <div class="editor-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
+              <input id="epgChannelFilter" placeholder="Filter channels by name or ID…" style="flex:1; min-width:220px;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--text-muted);">Schedule date
+                <input id="epgScheduleDate" type="date">
+              </label>
+              <button id="epgAddChannel" class="secondary" disabled>+ Add channel</button>
+              <button id="epgAddProgramme" class="primary" disabled>+ Add programme</button>
             </div>
-            <div id="epgTimeline" class="epg-timeline"><div class="epg-empty">Load an XMLTV guide to begin editing.</div></div>
+            <div id="epgTimeline" style="min-height: 240px; border:1px solid var(--line); border-radius:var(--radius-sm); padding:20px; text-align:center; color:var(--text-muted);">
+              Load an XMLTV guide to begin editing.
+            </div>
           </div>
         </section>
 
         <!-- Box Groups Studio View -->
         <section id="groupsView" class="hidden">
-          <div class="section-toolbar">
+          <div class="editor-header" style="margin-bottom:16px;">
             <div>
               <div class="eyebrow">CHANNEL ACCESS CONTROL &amp; FLEET CLUSTERS</div>
               <h3>Box Groups</h3>
               <p>Assign shared TV lineups and granular channel policy to clusters of televisions.</p>
             </div>
             <div class="header-actions">
-              <button id="addBoxGroup" class="primary">＋ Add box group</button>
+              <button id="addBoxGroup" class="primary">
+                <svg class="icon"><use href="#icon-pair"/></svg>
+                <span>Add box group</span>
+              </button>
             </div>
-          </div>
-          <div class="studio-help">
-            <span><strong>Shared Lineups</strong> assign one master playlist to an entire cluster of screens with one click.</span>
-            <span><strong>Channel Policy</strong> block or allow specific channels per group while letting individual boxes override.</span>
-            <span><strong>Bulk TV Push</strong> push live lineup and policy reloads across all online group screens simultaneously.</span>
           </div>
           <div class="device-toolbar">
             <div class="search-wrap">
-              <input id="groupSearchInput" type="search" placeholder="⌕ Search box groups by name or master lineup…" autocomplete="off">
+              <svg class="icon search-icon"><use href="#icon-search"/></svg>
+              <input id="groupSearchInput" type="search" placeholder="Search box groups by name or master lineup…" autocomplete="off">
             </div>
           </div>
-          <div id="boxGroupList" class="management-list"></div>
+          <div id="boxGroupList"></div>
           <div id="boxGroupEmpty" class="empty hidden">
-            <div class="empty-icon">▦</div>
+            <div class="empty-icon">
+              <svg class="icon-lg"><use href="#icon-groups"/></svg>
+            </div>
             <h3>No box groups yet</h3>
             <p>Create a group such as Puerto Rico Rooms, Lobby TVs, or Sports Bar.</p>
-            <button type="button" class="primary" onclick="$('#addBoxGroup').click()">＋ Add Box Group</button>
+            <button type="button" class="primary" onclick="$('#addBoxGroup').click()">Add Box Group</button>
           </div>
         </section>
 
         <!-- App Library View -->
         <section id="appsView" class="hidden">
-          <div class="section-toolbar">
+          <div class="editor-header" style="margin-bottom:16px;">
             <div>
               <div class="eyebrow">ENTERTAINMENT &amp; UTILITIES</div>
-              <h3>Managed app library</h3>
+              <h3>Managed App Library</h3>
               <p>Publish Play Store listings or HTTPS APKs from your repository to paired TVs.</p>
             </div>
-            <button id="addAppButton" class="primary">＋ Add app</button>
+            <button id="addAppButton" class="primary">
+              <svg class="icon"><use href="#icon-pair"/></svg>
+              <span>Add app</span>
+            </button>
           </div>
-          <div id="appList" class="management-list"></div>
+          <div id="appList"></div>
           <div id="appEmpty" class="empty hidden">
-            <div class="empty-icon">⬡</div>
+            <div class="empty-icon">
+              <svg class="icon-lg"><use href="#icon-apps"/></svg>
+            </div>
             <h3>No managed apps yet</h3>
             <p>Add an app once, then deploy it to any paired television.</p>
           </div>
@@ -460,17 +813,22 @@
 
         <!-- Radio Streams View -->
         <section id="radioView" class="hidden">
-          <div class="section-toolbar">
+          <div class="editor-header" style="margin-bottom:16px;">
             <div>
               <div class="eyebrow">AUDIO BROADCASTS</div>
               <h3>GLZ Radio Streams</h3>
               <p>Manage audio broadcast streams and metadata consumed by glz-radio.</p>
             </div>
-            <button id="addRadioStationButton" class="primary">＋ Add radio station</button>
+            <button id="addRadioStationButton" class="primary">
+              <svg class="icon"><use href="#icon-pair"/></svg>
+              <span>Add radio station</span>
+            </button>
           </div>
-          <div id="radioList" class="management-list"></div>
+          <div id="radioList"></div>
           <div id="radioEmpty" class="empty hidden">
-            <div class="empty-icon">🎙️</div>
+            <div class="empty-icon">
+              <svg class="icon-lg"><use href="#icon-radio"/></svg>
+            </div>
             <h3>No radio streams configured</h3>
             <p>Create live audio stations to broadcast across GLZ Radio app.</p>
           </div>
@@ -478,25 +836,25 @@
 
         <!-- Playlist Studio View -->
         <section id="studioView" class="hidden">
-          <div class="section-toolbar">
+          <div class="editor-header" style="margin-bottom:16px;">
             <div>
               <div class="eyebrow">M3U &amp; XMLTV WORKSPACE</div>
               <h3>Playlist Studio</h3>
               <p>Import, organize, edit and publish channel lineups served to GLZ TV devices.</p>
             </div>
             <div class="header-actions">
-              <button id="addPlaylistButton" class="primary">＋ Add TV playlist</button>
+              <button id="addPlaylistButton" class="primary">
+                <svg class="icon"><use href="#icon-pair"/></svg>
+                <span>Add TV playlist</span>
+              </button>
             </div>
           </div>
-          <div class="studio-help">
-            <span><strong>Click to edit</strong> channel numbers and names directly in the table.</span>
-            <span><strong>Preview stream</strong> test any live HLS stream or video feed right in your browser.</span>
-            <span><strong>EPG editor</strong> imports XML/XML.GZ or fetches a guide from epg.best and publishes it with the M3U.</span>
-          </div>
           <input id="m3uFileInput" class="hidden" type="file" accept=".m3u,.m3u8,audio/x-mpegurl">
-          <div id="playlistList" class="management-list"></div>
+          <div id="playlistList"></div>
           <div id="studioEmpty" class="empty hidden">
-            <div class="empty-icon">🎬</div>
+            <div class="empty-icon">
+              <svg class="icon-lg"><use href="#icon-studio"/></svg>
+            </div>
             <h3>No TV playlists yet</h3>
             <p>Create a channel lineup, then assign it to a television.</p>
           </div>
@@ -504,72 +862,78 @@
 
         <!-- Sites / Properties Studio View -->
         <section id="sitesView" class="hidden">
-          <div class="section-toolbar">
+          <div class="editor-header" style="margin-bottom:16px;">
             <div>
               <div class="eyebrow">LOCATIONS, BUILDINGS &amp; RESORTS</div>
               <h3>Properties</h3>
               <p>Organize televisions by hotel, resort, building, or managed location.</p>
             </div>
             <div class="header-actions">
-              <button id="addSiteButton" class="primary">＋ Add property</button>
+              <button id="addSiteButton" class="primary">
+                <svg class="icon"><use href="#icon-pair"/></svg>
+                <span>Add property</span>
+              </button>
             </div>
-          </div>
-          <div class="studio-help">
-            <span><strong>Property Branding</strong> customize guest portals, hero banners, and Wi-Fi essentials per location.</span>
-            <span><strong>Fleet Distribution</strong> group televisions by resort property to monitor uptime and sync health.</span>
-            <span><strong>Instant Navigation</strong> filter screens or jump straight into the guest experience studio for any property.</span>
           </div>
           <div class="device-toolbar">
             <div class="search-wrap">
-              <input id="siteSearchInput" type="search" placeholder="⌕ Search properties by name or address…" autocomplete="off">
+              <svg class="icon search-icon"><use href="#icon-search"/></svg>
+              <input id="siteSearchInput" type="search" placeholder="Search properties by name or address…" autocomplete="off">
             </div>
           </div>
-          <div id="siteList" class="management-list"></div>
+          <div id="siteList"></div>
           <div id="siteEmpty" class="empty hidden">
-            <div class="empty-icon">⌂</div>
+            <div class="empty-icon">
+              <svg class="icon-lg"><use href="#icon-property"/></svg>
+            </div>
             <h3>No properties yet</h3>
             <p>Create a property before assigning televisions.</p>
-            <button type="button" class="primary" onclick="$('#addSiteButton').click()">＋ Add Property</button>
+            <button type="button" class="primary" onclick="$('#addSiteButton').click()">Add Property</button>
           </div>
         </section>
 
         <!-- Guest Experience Studio View -->
         <section id="experienceView" class="hidden">
-          <div class="editor-header">
+          <div class="editor-header" style="margin-bottom:16px;">
             <div class="editor-breadcrumb">
               <div class="device-hero">
-                <div class="property-icon-lg">✦</div>
                 <div>
                   <div class="eyebrow">GUEST PORTAL &amp; BRANDING STUDIO</div>
                   <h2 id="experiencePropertyTitle">Property Guest Experience</h2>
                   <div class="device-quick-meta">
                     <span id="experienceScreensCount" class="meta-pill">0 Screens Assigned</span>
-                    <span id="experienceOnlineCount" class="status">0 ONLINE</span>
+                    <span id="experienceOnlineCount" class="status-pill online"><span class="status-dot"></span>0 ONLINE</span>
                     <span class="meta-pill">GLZ TV Home Portal</span>
                   </div>
                 </div>
               </div>
             </div>
             <div class="header-actions">
-              <div class="property-select-wrap">
-                <label style="margin:0;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px;">Property:
-                  <select id="experienceSite" style="padding:7px 12px;font-size:13px;width:auto;min-width:180px;"></select>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label style="font-size:12px; font-weight:600; color:var(--text-muted); margin:0;">Property:
+                  <select id="experienceSite" style="padding:6px 10px; width:auto; min-width:160px;"></select>
                 </label>
               </div>
-              <button id="previewExperienceBtn" type="button" class="secondary">👁️ Live TV Preview</button>
-              <button id="saveExperienceDraftTopBtn" type="button" class="secondary">💾 Save Draft</button>
-              <button id="saveExperienceTopBtn" type="button" class="primary">Save &amp; Publish</button>
+              <button id="previewExperienceBtn" type="button" class="secondary">
+                <svg class="icon"><use href="#icon-play"/></svg>
+                <span>TV Preview</span>
+              </button>
+              <button id="saveExperienceDraftTopBtn" type="button" class="secondary">Save Draft</button>
+              <button id="saveExperienceTopBtn" type="button" class="primary">
+                <svg class="icon"><use href="#icon-upload"/></svg>
+                <span>Save &amp; Publish</span>
+              </button>
             </div>
           </div>
 
           <div class="editor-nav-tabs">
-            <button type="button" class="exp-tab active" data-tab="exp-tab-branding">🏨 Branding &amp; Welcome</button>
-            <button type="button" class="exp-tab" data-tab="exp-tab-wifi">📶 Stay Essentials &amp; Wi-Fi</button>
-            <button type="button" class="exp-tab" data-tab="exp-tab-notices">📢 Notices &amp; Announcements</button>
-            <button type="button" class="exp-tab" data-tab="exp-tab-services">🛎️ Concierge &amp; Service Tiles</button>
+            <button type="button" class="exp-tab active" data-tab="exp-tab-branding">Branding &amp; Welcome</button>
+            <button type="button" class="exp-tab" data-tab="exp-tab-wifi">Stay Essentials &amp; Wi-Fi</button>
+            <button type="button" class="exp-tab" data-tab="exp-tab-notices">Notices &amp; Announcements</button>
+            <button type="button" class="exp-tab" data-tab="exp-tab-services">Concierge &amp; Service Tiles</button>
           </div>
 
-          <form id="experienceForm" class="editor-form">
+          <form id="experienceForm" class="editor-form" style="display:flex; flex-direction:column; gap:16px; margin-top:4px;">
             <!-- Tab 1: Branding & Welcome -->
             <div class="exp-pane active" id="exp-tab-branding">
               <div class="editor-card">
@@ -577,19 +941,19 @@
                 <div class="form-grid">
                   <label>Property Name<input id="propertyName" required maxlength="100" placeholder="e.g. GLZ Hotel &amp; Resort"></label>
                   <label>Welcome Message / Tagline<input id="welcomeMessage" required maxlength="180" placeholder="e.g. Relax, explore, and enjoy your stay."></label>
-                  <label class="wide">Logo URL (PNG / SVG)<input id="logoUrl" type="url" placeholder="https://…/logo.png"><small>High-resolution transparent logo displayed on the TV Home bar.</small></label>
-                  <label class="wide">Hero Background Image URL (16:9 4K / 1080p)<input id="heroImageUrl" type="url" placeholder="https://…/hero.jpg"><small>High-definition luxury backdrop displayed behind the Home portal.</small></label>
+                  <label class="wide">Logo URL (PNG / SVG)<input id="logoUrl" type="url" placeholder="https://…/logo.png"><small class="field-help">High-resolution transparent logo displayed on the TV Home bar.</small></label>
+                  <label class="wide">Hero Background Image URL (16:9 4K / 1080p)<input id="heroImageUrl" type="url" placeholder="https://…/hero.jpg"><small class="field-help">High-definition luxury backdrop displayed behind the Home portal.</small></label>
                 </div>
               </div>
               <div class="editor-card" id="brandingPreviewCard">
                 <h4 class="card-title">Live Branding Preview</h4>
-                <div class="branding-live-preview">
-                  <div class="hero-preview-backdrop" id="heroPreviewBackdrop">
-                    <div class="hero-preview-overlay">
-                      <img id="logoPreviewImg" class="logo-preview-img hidden" alt="Logo">
-                      <div class="hero-preview-text">
-                        <strong id="previewPropertyName">GLZ Hotel &amp; Resort</strong>
-                        <span id="previewWelcomeMsg">Relax, explore, and enjoy your stay.</span>
+                <div style="border:1px solid var(--line); border-radius:var(--radius-sm); overflow:hidden; background:var(--panel-card-hover); padding:16px;">
+                  <div style="position:relative; aspect-ratio:16/9; background:#000000; border-radius:var(--radius-sm); overflow:hidden; display:flex; align-items:flex-end; padding:24px;" id="heroPreviewBackdrop">
+                    <div style="display:flex; align-items:center; gap:16px; background:rgba(0,0,0,0.6); padding:14px 18px; border-radius:var(--radius-sm); backdrop-filter:blur(4px);">
+                      <img id="logoPreviewImg" class="hidden" alt="Logo" style="height:36px; object-fit:contain;">
+                      <div>
+                        <strong id="previewPropertyName" style="display:block; font-size:16px; color:#ffffff;">GLZ Hotel &amp; Resort</strong>
+                        <span id="previewWelcomeMsg" style="font-size:12px; color:rgba(255,255,255,0.75);">Relax, explore, and enjoy your stay.</span>
                       </div>
                     </div>
                   </div>
@@ -619,7 +983,7 @@
             <div class="exp-pane" id="exp-tab-notices">
               <div class="editor-card">
                 <h4 class="card-title">Guest Broadcast Notice</h4>
-                <p class="field-help" style="margin-bottom:14px;">Displays an eye-catching announcement card or weather notice on the guest home screen.</p>
+                <p class="field-help" style="margin-bottom:14px;">Displays an announcement card or alert notice on the guest home screen.</p>
                 <div class="form-grid">
                   <label class="wide">Notice Title<input id="noticeTitle" maxlength="100" placeholder="e.g. Sunset Poolside Happy Hour"></label>
                   <label class="wide">Notice Body / Details<textarea id="noticeBody" rows="4" maxlength="500" placeholder="e.g. Join us by the infinity pool daily from 5 PM to 7 PM for complimentary artisanal cocktails."></textarea></label>
@@ -627,18 +991,17 @@
               </div>
             </div>
 
-            <!-- Tab 4: Concierge & Service Tiles (Visual Builder) -->
+            <!-- Tab 4: Concierge & Service Tiles -->
             <div class="exp-pane" id="exp-tab-services">
               <div class="editor-card">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
                   <div>
                     <h4 class="card-title" style="margin:0;">Interactive Guest Service Tiles</h4>
                     <p class="field-help" style="margin:2px 0 0;">Interactive services and links delivered directly to televisions assigned to this property.</p>
                   </div>
-                  <button type="button" id="addServiceTileBtn" class="primary small-btn">＋ Add Service Tile</button>
+                  <button type="button" id="addServiceTileBtn" class="primary small-btn">+ Add Service Tile</button>
                 </div>
-                <div id="serviceTilesList" class="service-tiles-grid"></div>
-                <!-- Hidden fallback for sync compatibility -->
+                <div id="serviceTilesList" class="checkbox-grid"></div>
                 <textarea id="guestServices" class="hidden"></textarea>
               </div>
             </div>
@@ -646,8 +1009,11 @@
             <p id="experienceError" class="error"></p>
 
             <div class="editor-footer-bar">
-              <button type="button" class="secondary" id="saveExperienceDraftBtn">💾 Save Draft (No Sync)</button>
-              <button type="submit" class="primary save-large" id="saveExperiencePublishBtn">Save &amp; Publish to TVs</button>
+              <button type="button" class="secondary" id="saveExperienceDraftBtn">Save Draft</button>
+              <button type="submit" class="primary" id="saveExperiencePublishBtn">
+                <svg class="icon"><use href="#icon-upload"/></svg>
+                <span>Save &amp; Publish to TVs</span>
+              </button>
             </div>
           </form>
         </section>
@@ -660,101 +1026,103 @@
               <h3 id="simDialogTitle">TV Screen Simulation</h3>
               <p class="field-help">Live preview of the guest welcome interface on television displays.</p>
             </div>
-            <button class="icon-button" type="button" id="closeSimDialogBtn">✕</button>
+            <button class="icon-button" type="button" id="closeSimDialogBtn">
+              <svg class="icon"><use href="#icon-close"/></svg>
+            </button>
           </div>
-          <div class="tv-simulator-frame">
-            <div class="tv-sim-hero" id="simHeroBg">
-              <div class="tv-sim-topbar">
-                <div class="tv-sim-logo-wrap">
-                  <img id="simLogo" class="tv-sim-logo hidden" alt="">
-                  <strong id="simPropertyName">GLZ Hotel &amp; Resort</strong>
+          <div style="padding:20px;">
+            <div style="aspect-ratio:16/9; background:#000000; border-radius:var(--radius-sm); overflow:hidden; position:relative; display:flex; flex-direction:column; justify-content:space-between; padding:24px; color:#ffffff;" id="simHeroBg">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <img id="simLogo" class="hidden" alt="" style="height:32px; object-fit:contain;">
+                  <strong id="simPropertyName" style="font-size:16px;">GLZ Hotel &amp; Resort</strong>
                 </div>
-                <div class="tv-sim-clock">3:45 PM · 78°F Sunny</div>
+                <div style="font-size:13px; color:rgba(255,255,255,0.8);">3:45 PM · 78°F Sunny</div>
               </div>
-              <div class="tv-sim-welcome-box">
-                <div class="tv-sim-guest-greeting">WELCOME TO YOUR SUITE</div>
-                <h2 id="simWelcomeMsg">Relax, explore, and enjoy your stay.</h2>
+              <div>
+                <div style="font-size:11px; font-weight:700; letter-spacing:0.1em; color:rgba(255,255,255,0.7); text-transform:uppercase;">WELCOME TO YOUR SUITE</div>
+                <h2 id="simWelcomeMsg" style="font-size:24px; margin-top:4px; color:#ffffff;">Relax, explore, and enjoy your stay.</h2>
               </div>
             </div>
-            <div class="tv-sim-widgets">
-              <div class="tv-sim-card wifi-card">
-                <div class="card-icon">📶</div>
-                <div>
-                  <small>GUEST WI-FI</small>
-                  <strong id="simWifiName">GLZ-Guest</strong>
-                  <p id="simWifiInfo">Connect with your room number</p>
-                </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-top:14px;">
+              <div style="padding:14px; background:var(--panel-card); border:1px solid var(--line); border-radius:var(--radius-sm);">
+                <small style="color:var(--text-muted); font-size:11px; text-transform:uppercase;">GUEST WI-FI</small>
+                <strong id="simWifiName" style="display:block; font-size:13.5px; margin-top:2px;">GLZ-Guest</strong>
+                <p id="simWifiInfo" style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Connect with room number</p>
               </div>
-              <div class="tv-sim-card desk-card">
-                <div class="card-icon">🛎️</div>
-                <div>
-                  <small>FRONT DESK</small>
-                  <strong id="simFrontDesk">Dial 0</strong>
-                  <p id="simCheckout">Checkout: 11:00 AM</p>
-                </div>
+              <div style="padding:14px; background:var(--panel-card); border:1px solid var(--line); border-radius:var(--radius-sm);">
+                <small style="color:var(--text-muted); font-size:11px; text-transform:uppercase;">FRONT DESK</small>
+                <strong id="simFrontDesk" style="display:block; font-size:13.5px; margin-top:2px;">Dial 0</strong>
+                <p id="simCheckout" style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Checkout: 11:00 AM</p>
               </div>
-              <div class="tv-sim-card notice-card" id="simNoticeCard">
-                <div class="card-icon">📢</div>
-                <div>
-                  <small>ANNOUNCEMENT</small>
-                  <strong id="simNoticeTitle">Notice</strong>
-                  <p id="simNoticeBody">No active notices</p>
-                </div>
+              <div style="padding:14px; background:var(--panel-card); border:1px solid var(--line); border-radius:var(--radius-sm);" id="simNoticeCard">
+                <small style="color:var(--text-muted); font-size:11px; text-transform:uppercase;">ANNOUNCEMENT</small>
+                <strong id="simNoticeTitle" style="display:block; font-size:13.5px; margin-top:2px;">Notice</strong>
+                <p id="simNoticeBody" style="font-size:12px; color:var(--text-secondary); margin-top:2px;">No active notices</p>
               </div>
-            </div>
-            <div class="tv-sim-services-row">
-              <div class="tv-sim-services-heading">FEATURED HOTEL SERVICES</div>
-              <div id="simServicesGrid" class="tv-sim-services-grid"></div>
             </div>
           </div>
-          <div class="form-actions" style="margin-top:18px;">
+          <div class="form-actions" style="padding:16px 20px;">
             <button type="button" class="secondary" id="closeSimDialogBtnBottom">Close Preview</button>
           </div>
         </dialog>
 
         <!-- Pair TV View -->
-        <section id="pairView" class="panel hidden">
-          <div class="eyebrow">ADD A SCREEN</div>
-          <h3>Pair a GLZ TV</h3>
-          <p>Open Settings → GLZ Hub on the television. Pairing requests on this network will appear automatically.</p>
-          <div class="pairing-requests">
-            <div class="pairing-heading">
-              <strong>Nearby pairing requests</strong>
-              <span id="pairingScanStatus">Looking for televisions…</span>
+        <section id="pairView" class="hidden">
+          <div class="editor-header" style="margin-bottom:16px;">
+            <div>
+              <div class="eyebrow">ENROLLMENT &amp; ADOPTION</div>
+              <h3>Pair a GLZ TV</h3>
+              <p>Open Settings → GLZ Hub on the television. Pairing requests on this network appear automatically.</p>
+            </div>
+          </div>
+          <div class="editor-card" style="margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <strong style="font-size:13px;">Nearby pairing requests</strong>
+              <span id="pairingScanStatus" class="meta-pill">Looking for televisions…</span>
             </div>
             <div id="pairingRequestList"></div>
           </div>
-          <p class="field-help" style="margin-top: 18px;">Pairing remotely? Enter the code shown on the television instead.</p>
-          <form id="pairForm" class="form-grid">
-            <label>Pairing code<input id="pairingCode" placeholder="GLZ-ABC123" maxlength="10" required></label>
-            <label>Device name<input id="pairDeviceName" placeholder="Living Room"></label>
-            <label>Guest name<input id="pairGuestName" placeholder="Guest"></label>
-            <label class="wide">Property<select id="pairSite"></select></label>
-            <div class="form-actions">
-              <button type="button" class="secondary" data-view-button="devices">Cancel</button>
-              <button type="submit" class="primary">Pair television</button>
-            </div>
-            <p id="pairError" class="error"></p>
-          </form>
+          <div class="editor-card">
+            <h4 class="card-title">Manual Code Entry</h4>
+            <p class="field-help" style="margin-bottom:14px;">Pairing remotely? Enter the 6-character code shown on the television screen.</p>
+            <form id="pairForm" class="form-grid">
+              <label>Pairing code<input id="pairingCode" placeholder="GLZ-ABC123" maxlength="10" required></label>
+              <label>Device name<input id="pairDeviceName" placeholder="Living Room"></label>
+              <label>Guest name<input id="pairGuestName" placeholder="Guest"></label>
+              <label class="wide">Property<select id="pairSite"></select></label>
+              <div class="wide form-actions">
+                <button type="button" class="secondary" data-view-button="devices">Cancel</button>
+                <button type="submit" class="primary">Pair Television</button>
+              </div>
+              <p id="pairError" class="error wide"></p>
+            </form>
+          </div>
         </section>
 
-        <!-- Live Event Channels & Temporary Schedule View -->
-        <section id="eventsView" class="panel hidden">
-          <div class="editor-header">
+        <!-- Live Event Channels View -->
+        <section id="eventsView" class="hidden">
+          <div class="editor-header" style="margin-bottom:16px;">
             <div>
               <div class="eyebrow">LIVE EVENT CHANNELS &amp; TEMPORARY SCHEDULE</div>
               <h2>Temporary Live Event Channels</h2>
-              <p class="field-help">Auto-syncs live event streams from your provider (<code>starlite.best</code>). Schedules 3-hour game windows and injects XMLTV EPG data.</p>
+              <p class="field-help">Auto-syncs live event streams from provider feed. Schedules game active windows and injects XMLTV EPG data.</p>
             </div>
             <div class="header-actions">
-              <button id="browseProviderStreamsBtn" type="button" class="primary" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🔍 <span>Browse &amp; Inject Streams</span></button>
-              <button id="syncConMeFeedBtn" type="button" class="secondary">⚡ <span>Sync Feed</span></button>
-              <button id="checkStreamHealthBtn" type="button" class="secondary">🩺 <span>Check Stream Health</span></button>
-              <button id="addEventChannelBtn" type="button" class="secondary">＋ <span>Add Custom Event</span></button>
+              <button id="browseProviderStreamsBtn" type="button" class="primary">
+                <svg class="icon"><use href="#icon-search"/></svg>
+                <span>Browse &amp; Inject</span>
+              </button>
+              <button id="syncConMeFeedBtn" type="button" class="secondary">
+                <svg class="icon"><use href="#icon-refresh"/></svg>
+                <span>Sync Feed</span>
+              </button>
+              <button id="checkStreamHealthBtn" type="button" class="secondary">Check Health</button>
+              <button id="addEventChannelBtn" type="button" class="secondary">+ Add Custom Event</button>
             </div>
           </div>
 
-          <div class="stats" style="margin-bottom: 20px;">
+          <div class="stats" style="margin-bottom:16px;">
             <article class="stat-card">
               <div class="stat-meta">
                 <span>Total Live Events</span>
@@ -770,36 +1138,529 @@
             <article class="stat-card">
               <div class="stat-meta">
                 <span>Provider Source</span>
-                <strong style="font-size: 13px;">starlite.best/api/list/mygbb8</strong>
+                <strong style="font-size: 13px; font-family:var(--font-mono);">starlite.best/api/list/mygbb8</strong>
               </div>
             </article>
           </div>
 
-          <div class="device-toolbar" style="flex-direction:column; align-items:stretch; gap:12px;">
+          <div class="device-toolbar" style="flex-direction:column; align-items:stretch; gap:10px;">
             <div class="search-wrap" style="width:100%;">
-              <input id="eventSearchInput" type="search" placeholder="⌕ Search live events by title, team, league (MLB, NFL, NBA, MLS, UFC)…" autocomplete="off">
+              <svg class="icon search-icon"><use href="#icon-search"/></svg>
+              <input id="eventSearchInput" type="search" placeholder="Search live events by title, team, league (MLB, NFL, NBA, MLS, UFC)…" autocomplete="off">
             </div>
-
-            <div id="eventSportFilterBar" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-              <button type="button" class="meta-pill active-sport-pill" data-sport-filter="ALL" style="cursor:pointer; font-weight:700;">All Sports</button>
-              <button type="button" class="meta-pill" data-sport-filter="MLB" style="cursor:pointer; font-weight:700;">⚾ MLB</button>
-              <button type="button" class="meta-pill" data-sport-filter="NFL" style="cursor:pointer; font-weight:700;">🏈 NFL</button>
-              <button type="button" class="meta-pill" data-sport-filter="NBA" style="cursor:pointer; font-weight:700;">🏀 NBA</button>
-              <button type="button" class="meta-pill" data-sport-filter="NHL" style="cursor:pointer; font-weight:700;">🏒 NHL</button>
-              <button type="button" class="meta-pill" data-sport-filter="UFC" style="cursor:pointer; font-weight:700;">🥊 UFC / Combat</button>
-              <button type="button" class="meta-pill" data-sport-filter="PPV" style="cursor:pointer; font-weight:700;">⭐ PPV / Specials</button>
-              <button type="button" class="meta-pill" data-sport-filter="CUSTOM" style="cursor:pointer; font-weight:700;">✍ Custom Events</button>
+            <div id="eventSportFilterBar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+              <button type="button" class="filter-pill active-sport-pill active" data-sport-filter="ALL">All Sports</button>
+              <button type="button" class="filter-pill" data-sport-filter="MLB">MLB</button>
+              <button type="button" class="filter-pill" data-sport-filter="NFL">NFL</button>
+              <button type="button" class="filter-pill" data-sport-filter="NBA">NBA</button>
+              <button type="button" class="filter-pill" data-sport-filter="NHL">NHL</button>
+              <button type="button" class="filter-pill" data-sport-filter="UFC">UFC / Combat</button>
+              <button type="button" class="filter-pill" data-sport-filter="PPV">PPV Specials</button>
+              <button type="button" class="filter-pill" data-sport-filter="CUSTOM">Custom</button>
             </div>
           </div>
 
-          <div id="eventsList" class="management-list"></div>
+          <div id="eventsList"></div>
           <div id="eventsEmpty" class="empty hidden">
-            <div class="empty-icon">⚡</div>
+            <div class="empty-icon">
+              <svg class="icon-lg"><use href="#icon-events"/></svg>
+            </div>
             <h3>No Live Events Scheduled</h3>
-            <p>Click "Sync Provider Feed" or "Browse &amp; Inject Streams" to discover live MLB, NFL, NBA, MLS, and UFC game channels from your provider.</p>
+            <p>Click "Sync Provider Feed" or "Browse &amp; Inject Streams" to discover live MLB, NFL, NBA, MLS, and UFC game channels.</p>
             <div style="display:flex; gap:10px; justify-content:center; margin-top:12px;">
-              <button type="button" class="primary" id="browseEventsEmptyBtn" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🔍 Browse &amp; Inject Streams</button>
-              <button type="button" class="secondary" id="syncEventsEmptyBtn">⚡ Sync Provider Feed</button>
+              <button type="button" class="primary" id="browseEventsEmptyBtn">Browse &amp; Inject</button>
+              <button type="button" class="secondary" id="syncEventsEmptyBtn">Sync Feed</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Dedicated Hub Settings & System Administration View -->
+        <section id="settingsView" class="hidden">
+          <div class="editor-header">
+            <div>
+              <div class="eyebrow">SYSTEM CONFIGURATION &amp; FLEET DEFAULTS</div>
+              <h2>Hub Settings &amp; Administration</h2>
+              <p class="field-help">Manage television provisioning baselines, streaming engine parameters, UI themes, and Cloudflare Worker telemetry.</p>
+            </div>
+            <div class="header-actions">
+              <input type="file" id="importSettingsFileInput" accept=".json,application/json" class="hidden">
+              <button id="exportSettingsBtn" type="button" class="secondary">
+                <svg class="icon"><use href="#icon-download"/></svg>
+                <span>Export Backup</span>
+              </button>
+              <button id="importSettingsBtn" type="button" class="secondary">
+                <svg class="icon"><use href="#icon-upload"/></svg>
+                <span>Import Backup</span>
+              </button>
+              <button id="saveAllSettingsBtn" type="button" class="primary">
+                <svg class="icon"><use href="#icon-check"/></svg>
+                <span>Save All Settings</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="editor-nav-tabs">
+            <button type="button" class="settings-tab active" data-set-tab="set-pane-general">
+              <svg class="icon-sm"><use href="#icon-sliders"/></svg>
+              <span>General &amp; Profile</span>
+            </button>
+            <button type="button" class="settings-tab" data-set-tab="set-pane-fleet">
+              <svg class="icon-sm"><use href="#icon-screens"/></svg>
+              <span>Fleet Provisioning</span>
+            </button>
+            <button type="button" class="settings-tab" data-set-tab="set-pane-streaming">
+              <svg class="icon-sm"><use href="#icon-events"/></svg>
+              <span>Streaming &amp; Feeds</span>
+            </button>
+            <button type="button" class="settings-tab" data-set-tab="set-pane-appearance">
+              <svg class="icon-sm"><use href="#icon-palette"/></svg>
+              <span>Appearance &amp; Theme</span>
+            </button>
+            <button type="button" class="settings-tab" data-set-tab="set-pane-system">
+              <svg class="icon-sm"><use href="#icon-shield"/></svg>
+              <span>System &amp; Health</span>
+            </button>
+          </div>
+
+          <div class="settings-panes-wrapper" style="margin-top:16px;">
+            <!-- Pane 1: General & Profile -->
+            <div class="settings-pane active" id="set-pane-general">
+              <div class="editor-card">
+                <h4 class="card-title">Organization &amp; Control Center Identity</h4>
+                <p class="field-help" style="margin-bottom:14px;">Identifies this GLZ Hub instance across guest portals and pairing handshakes.</p>
+                <div class="form-grid">
+                  <label class="wide">Organization / Property Portfolio Name
+                    <input id="hubOrgName" maxlength="120" placeholder="e.g. GLZ TV Hospitality Network">
+                  </label>
+                  <label>Administrator Alert Email
+                    <input id="hubAdminContact" type="email" placeholder="admin@glztech.com">
+                  </label>
+                  <label>Hub Primary Timezone
+                    <div style="display:flex; gap:8px;">
+                      <select id="hubTimezone" style="flex:1;">
+                        <option value="America/Puerto_Rico">America/Puerto_Rico (AST UTC-4)</option>
+                        <option value="America/New_York">America/New_York (EST / EDT)</option>
+                        <option value="America/Chicago">America/Chicago (CST / CDT)</option>
+                        <option value="America/Denver">America/Denver (MST / MDT)</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles (PST / PDT)</option>
+                        <option value="UTC">UTC (Coordinated Universal Time)</option>
+                        <option value="Europe/Madrid">Europe/Madrid (CET)</option>
+                      </select>
+                      <button id="detectTimezoneBtn" type="button" class="secondary small-btn" title="Detect from browser">Auto</button>
+                    </div>
+                  </label>
+                  <label>Weather &amp; Temperature Unit
+                    <select id="hubWeatherUnit">
+                      <option value="fahrenheit">Fahrenheit (°F)</option>
+                      <option value="celsius">Celsius (°C)</option>
+                    </select>
+                  </label>
+                  <label>Fleet Telemetry Auto-Refresh Rate
+                    <select id="hubRefreshInterval">
+                      <option value="15">High Frequency (Every 15s)</option>
+                      <option value="30" selected>Balanced (Every 30s)</option>
+                      <option value="60">Low Bandwidth (Every 60s)</option>
+                      <option value="0">Manual Refresh Only</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <h4 class="card-title">Operator Feedback &amp; Alerts</h4>
+                <div class="toggle-list">
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Sound &amp; Haptic Cues</strong>
+                      <small>Play subtle audio clicks on successful channel saves and fleet sync actions</small>
+                    </div>
+                    <label class="switch">
+                      <input id="hubSoundsEnabled" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Show Offline Screen Alerts</strong>
+                      <small>Highlight televisions in amber/red when heartbeats are overdue</small>
+                    </div>
+                    <label class="switch">
+                      <input id="hubAlertOverdue" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pane 2: Fleet Provisioning Defaults -->
+            <div class="settings-pane hidden" id="set-pane-fleet">
+              <div class="editor-card">
+                <h4 class="card-title">New Television Provisioning Baseline</h4>
+                <p class="field-help" style="margin-bottom:14px;">These baseline settings are automatically provisioned to any newly paired television display.</p>
+                <div class="form-grid">
+                  <label>Default Startup Destination
+                    <select id="defaultStartDestination">
+                      <option value="Home">Home (Guest Portal)</option>
+                      <option value="Live">Live TV Guide</option>
+                      <option value="You">You (Account / Apps)</option>
+                    </select>
+                  </label>
+                  <label>Default TV Theme Preset
+                    <select id="defaultThemeMode">
+                      <option value="dark">Dark Luxury</option>
+                      <option value="midnight">Midnight OLED</option>
+                      <option value="adaptive">Adaptive to Daytime</option>
+                      <option value="ocean">Ocean Blue</option>
+                      <option value="sunset">Sunset Amber</option>
+                      <option value="emerald">Emerald Green</option>
+                      <option value="cyberpunk">Cyberpunk Neon</option>
+                      <option value="light">Light</option>
+                    </select>
+                  </label>
+                  <label>Default OSD Timeout
+                    <select id="defaultOsdTimeout">
+                      <option value="5">5 seconds</option>
+                      <option value="7">7 seconds</option>
+                      <option value="8" selected>8 seconds (Recommended)</option>
+                      <option value="10">10 seconds</option>
+                    </select>
+                  </label>
+                  <label>Default Subtitle / Captions Language
+                    <input id="defaultCaptionsLanguage" maxlength="12" value="en" placeholder="en">
+                  </label>
+                  <label>Default App UI Language
+                    <select id="defaultAppLanguage">
+                      <option value="en" selected>English (en)</option>
+                      <option value="es">Español (es)</option>
+                      <option value="fr">Français (fr)</option>
+                    </select>
+                  </label>
+                  <label>Default Update Ring
+                    <select id="defaultUpdateChannel">
+                      <option value="production" selected>Production (Stable Releases)</option>
+                      <option value="weekly">Weekly (Early Feature Builds)</option>
+                      <option value="beta">Beta / Pre-release (All Builds)</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <h4 class="card-title">Default Display &amp; Power Policies</h4>
+                <div class="toggle-list">
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Auto-Start on Boot</strong>
+                      <small>Launch GLZ TV automatically whenever the television is powered on</small>
+                    </div>
+                    <label class="switch">
+                      <input id="defaultAutoStart" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Resume Last Channel</strong>
+                      <small>Automatically start playback on the previously watched live channel</small>
+                    </div>
+                    <label class="switch">
+                      <input id="defaultResumeLastChannel" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Keep Screen Awake on Home</strong>
+                      <small>Prevent TV screensaver from taking over while guest portal is displayed</small>
+                    </div>
+                    <label class="switch">
+                      <input id="defaultKeepAwakeHome" type="checkbox">
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Enable Sports Bar Kiosk Mode</strong>
+                      <small>Permit muted background TV channels with GLZ Radio audio broadcast</small>
+                    </div>
+                    <label class="switch">
+                      <input id="defaultSportsBarKiosk" type="checkbox">
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <h4 class="card-title">Default App Update Policies</h4>
+                <div class="toggle-list">
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Auto-Update GLZ TV</strong>
+                      <small>Allow televisions to automatically download and prompt new release builds</small>
+                    </div>
+                    <label class="switch">
+                      <input id="defaultAutoUpdate" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Wi-Fi Only Downloads</strong>
+                      <small>Block large APK updates on metered or cellular fallback connections</small>
+                    </div>
+                    <label class="switch">
+                      <input id="defaultWifiOnly" type="checkbox">
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                </div>
+                <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                  <div>
+                    <strong style="font-size:13px; display:block;">Fleet-Wide Alignment</strong>
+                    <small style="color:var(--text-muted);">Apply these baseline settings across all connected televisions in your fleet.</small>
+                  </div>
+                  <button id="applyDefaultsToFleetBtn" type="button" class="secondary">
+                    <svg class="icon-sm"><use href="#icon-upload"/></svg>
+                    <span>Apply Baseline to Fleet</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pane 3: Streaming & Feeds -->
+            <div class="settings-pane hidden" id="set-pane-streaming">
+              <div class="editor-card">
+                <h4 class="card-title">Live Events Provider Source Feed</h4>
+                <p class="field-help" style="margin-bottom:14px;">Master provider feed endpoint for automatic live sports matchup discovery and stream injection.</p>
+                <div class="form-grid">
+                  <label class="wide">Provider Sports Feed URL
+                    <input id="providerFeedUrl" type="url" value="https://starlite.best/api/list/mygbb8" placeholder="https://starlite.best/api/list/…">
+                  </label>
+                  <label>Pre-Game Active Buffer (Hours)
+                    <input id="providerPreBuffer" type="number" min="0" max="24" step="0.5" value="0.5">
+                  </label>
+                  <label>Post-Game Active Buffer (Hours)
+                    <input id="providerPostBuffer" type="number" min="0" max="24" step="0.5" value="0.5">
+                  </label>
+                  <label class="wide">Master XMLTV EPG URL
+                    <input id="masterEpgUrl" type="url" value="https://play.glztech.com/epg.xml.gz" placeholder="https://…">
+                  </label>
+                  <label>Stream Health Probe Timeout (Seconds)
+                    <input id="streamHealthTimeout" type="number" min="2" max="30" value="6">
+                  </label>
+                  <label>Default Box Group Policy
+                    <select id="defaultBoxGroupPolicy">
+                      <option value="allow" selected>Allow all channels in lineup (Blacklist mode)</option>
+                      <option value="block">Block all channels in lineup (Whitelist mode)</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <h4 class="card-title">Web Video Player Engine (HLS.js)</h4>
+                <div class="toggle-list">
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Low Latency Mode (LL-HLS)</strong>
+                      <small>Reduces live broadcast playback delay in the preview player</small>
+                    </div>
+                    <label class="switch">
+                      <input id="hlsLowLatency" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Live Buffer Length</strong>
+                      <small>Max buffer time kept in memory during stream testing</small>
+                    </div>
+                    <select id="hlsBufferLength" style="width:140px;">
+                      <option value="30">30 seconds</option>
+                      <option value="60" selected>60 seconds</option>
+                      <option value="120">120 seconds</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pane 4: Appearance & Theme Studio -->
+            <div class="settings-pane hidden" id="set-pane-appearance">
+              <div class="editor-card">
+                <h4 class="card-title">Hub Interface Theme</h4>
+                <p class="field-help" style="margin-bottom:14px;">Select the master visual palette for the GLZ Hub control center.</p>
+                <div class="theme-picker-grid">
+                  <article class="theme-choice-card" data-theme-pick="dark">
+                    <div class="theme-preview-box dark-preview">
+                      <div class="tp-rail"></div>
+                      <div class="tp-main">
+                        <div class="tp-header"></div>
+                        <div class="tp-cards"><div class="tp-c"></div><div class="tp-c"></div></div>
+                      </div>
+                    </div>
+                    <div class="theme-choice-info">
+                      <strong>Dark Luxury</strong>
+                      <small>Deep slate &amp; glowing sapphire</small>
+                    </div>
+                  </article>
+
+                  <article class="theme-choice-card" data-theme-pick="midnight">
+                    <div class="theme-preview-box midnight-preview">
+                      <div class="tp-rail"></div>
+                      <div class="tp-main">
+                        <div class="tp-header"></div>
+                        <div class="tp-cards"><div class="tp-c"></div><div class="tp-c"></div></div>
+                      </div>
+                    </div>
+                    <div class="theme-choice-info">
+                      <strong>Midnight OLED</strong>
+                      <small>Pure black &amp; razor sharp contrast</small>
+                    </div>
+                  </article>
+
+                  <article class="theme-choice-card" data-theme-pick="light">
+                    <div class="theme-preview-box light-preview">
+                      <div class="tp-rail"></div>
+                      <div class="tp-main">
+                        <div class="tp-header"></div>
+                        <div class="tp-cards"><div class="tp-c"></div><div class="tp-c"></div></div>
+                      </div>
+                    </div>
+                    <div class="theme-choice-info">
+                      <strong>Clean Light</strong>
+                      <small>Executive studio bright mode</small>
+                    </div>
+                  </article>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <h4 class="card-title">Brand Accent Palette</h4>
+                <p class="field-help" style="margin-bottom:14px;">Choose the primary highlight color for buttons, active indicators, and focus rings.</p>
+                <div class="accent-palette-picker">
+                  <button type="button" class="accent-pill-btn active" data-accent-pick="sapphire">
+                    <span class="accent-dot" style="background:#2563eb;"></span>
+                    <span>Sapphire Blue</span>
+                  </button>
+                  <button type="button" class="accent-pill-btn" data-accent-pick="violet">
+                    <span class="accent-dot" style="background:#8b5cf6;"></span>
+                    <span>Cyberpunk Violet</span>
+                  </button>
+                  <button type="button" class="accent-pill-btn" data-accent-pick="emerald">
+                    <span class="accent-dot" style="background:#059669;"></span>
+                    <span>Emerald Green</span>
+                  </button>
+                  <button type="button" class="accent-pill-btn" data-accent-pick="amber">
+                    <span class="accent-dot" style="background:#d97706;"></span>
+                    <span>Sunset Amber</span>
+                  </button>
+                  <button type="button" class="accent-pill-btn" data-accent-pick="crimson">
+                    <span class="accent-dot" style="background:#dc2626;"></span>
+                    <span>Crimson Rose</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <h4 class="card-title">Display Density &amp; Motion</h4>
+                <div class="toggle-list">
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Interface Density Mode</strong>
+                      <small>Comfortable adds generous breathing room; Compact maximizes screens per page</small>
+                    </div>
+                    <select id="hubDensityMode" style="width:160px;">
+                      <option value="comfortable" selected>Comfortable</option>
+                      <option value="compact">Compact Studio</option>
+                    </select>
+                  </div>
+                  <div class="switch-row">
+                    <div class="switch-meta">
+                      <strong>Smooth Animations &amp; Glow Effects</strong>
+                      <small>Subtle micro-animations, modal transitions, and glowing status pills</small>
+                    </div>
+                    <label class="switch">
+                      <input id="enableAnimations" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pane 5: System, Cloudflare & Security -->
+            <div class="settings-pane hidden" id="set-pane-system">
+              <div class="editor-card">
+                <h4 class="card-title">Cloudflare Worker &amp; Edge Infrastructure</h4>
+                <div class="stats" style="margin:14px 0 10px;">
+                  <article class="stat-card">
+                    <div class="stat-meta">
+                      <span>Service Architecture</span>
+                      <strong style="font-size:16px;">Cloudflare Worker</strong>
+                    </div>
+                    <div class="stat-badge text-emerald">RUNNING</div>
+                  </article>
+                  <article class="stat-card">
+                    <div class="stat-meta">
+                      <span>Hub Version</span>
+                      <strong style="font-size:16px;">v3.0.1 (Production)</strong>
+                    </div>
+                    <div class="stat-badge">LATEST</div>
+                  </article>
+                  <article class="stat-card">
+                    <div class="stat-meta">
+                      <span>Live Edge Latency</span>
+                      <strong id="pingHealthResult" style="font-size:16px; font-family:var(--font-mono);">Ready to test</strong>
+                    </div>
+                    <button id="pingHealthBtn" type="button" class="secondary small-btn">Ping Gateway</button>
+                  </article>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <h4 class="card-title">Security &amp; Encryption Specs</h4>
+                <div class="form-grid">
+                  <div class="info-block">
+                    <span class="info-label">Device Token Encryption</span>
+                    <strong class="info-value">256-bit SHA-256 PBKDF2 Hashes</strong>
+                    <p class="info-sub">Raw tokens exist only on the physical television; never stored in plaintext in the database.</p>
+                  </div>
+                  <div class="info-block">
+                    <span class="info-label">Administrator Auth Session</span>
+                    <strong class="info-value">Supabase JWT (RS256)</strong>
+                    <p class="info-sub">Secured via HTTPS bearer tokens and automatic token rotation.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <h4 class="card-title">Configuration Backup &amp; Portability</h4>
+                <p class="field-help" style="margin-bottom:14px;">Export an encrypted snapshot of all properties, box groups, managed apps, guest profiles, and Hub preferences.</p>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                  <button id="exportSettingsBackupBtn" type="button" class="secondary">
+                    <svg class="icon-sm"><use href="#icon-download"/></svg>
+                    <span>Download Hub Backup JSON</span>
+                  </button>
+                  <button id="importSettingsBackupBtn" type="button" class="secondary">
+                    <svg class="icon-sm"><use href="#icon-upload"/></svg>
+                    <span>Restore from Backup JSON</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="editor-card">
+                <h4 class="card-title">Diagnostics &amp; Cache Reset</h4>
+                <p class="field-help" style="margin-bottom:14px;">Clear local browser storage cache or test notifications.</p>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                  <button id="testToastSuccessBtn" type="button" class="secondary small-btn">Test Success Toast</button>
+                  <button id="testToastWarnBtn" type="button" class="secondary small-btn">Test Warning Toast</button>
+                  <button id="testToastErrorBtn" type="button" class="secondary small-btn">Test Error Toast</button>
+                  <button id="clearCacheBtn" type="button" class="danger-button small-btn">Clear Local Storage Cache</button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -815,7 +1676,9 @@
           <div class="eyebrow">EVENT CHANNEL SCHEDULER</div>
           <h3 id="eventDialogTitle">Edit Event Channel</h3>
         </div>
-        <button class="icon-button" type="button" data-close-event>✕</button>
+        <button class="icon-button" type="button" data-close-event>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <input id="eventId" type="hidden">
       <div class="form-grid">
@@ -837,8 +1700,8 @@
         <label class="wide">Logo URL (optional)<input id="eventLogoUrl" type="url" placeholder="https://media.starlite.best/...png"></label>
         <label>Game Start Time (UTC / Local)<input id="eventStartTime" type="datetime-local" required></label>
         <label>Game End Time (UTC / Local)<input id="eventEndTime" type="datetime-local" required></label>
-        <label>Pre-Game Buffer (Hours)<input id="eventPreBuffer" type="number" value="0.5" step="0.5" min="0" max="24"></label>
-        <label>Post-Game Buffer (Hours)<input id="eventPostBuffer" type="number" value="0.5" step="0.5" min="0" max="24"></label>
+        <label>Pre-Game Buffer (Hours)<input id="eventPreBuffer" type="number" value="0.5" min="0" max="24" step="0.5"></label>
+        <label>Post-Game Buffer (Hours)<input id="eventPostBuffer" type="number" value="0.5" min="0" max="24" step="0.5"></label>
         <label class="wide">Status
           <select id="eventStatus">
             <option value="active">Active (Shows on TVs during window)</option>
@@ -864,28 +1727,26 @@
         <div class="eyebrow">PROVIDER FEED EXPLORER</div>
         <h3>Browse &amp; Inject Live Streams</h3>
       </div>
-      <button class="icon-button" type="button" data-close-browse-provider>✕</button>
+      <button class="icon-button" type="button" data-close-browse-provider>
+        <svg class="icon"><use href="#icon-close"/></svg>
+      </button>
     </div>
-
-    <div style="padding: 12px 0 0 0;">
-      <p class="field-help" style="margin-bottom:12px;">Browse all live game streams directly from your provider feed (<code>starlite.best</code>). Select a sport category and click <strong>Inject Stream</strong> on any individual game to instantly add it to GLZ TV!</p>
-
-      <div id="providerSportFilterBar" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
-        <button type="button" class="meta-pill active-prov-pill" data-prov-sport="ALL" style="cursor:pointer; font-weight:700;">All Sports</button>
-        <button type="button" class="meta-pill" data-prov-sport="MLB" style="cursor:pointer; font-weight:700;">⚾ MLB</button>
-        <button type="button" class="meta-pill" data-prov-sport="NFL" style="cursor:pointer; font-weight:700;">🏈 NFL</button>
-        <button type="button" class="meta-pill" data-prov-sport="NBA" style="cursor:pointer; font-weight:700;">🏀 NBA</button>
-        <button type="button" class="meta-pill" data-prov-sport="NHL" style="cursor:pointer; font-weight:700;">🏒 NHL</button>
-        <button type="button" class="meta-pill" data-prov-sport="UFC" style="cursor:pointer; font-weight:700;">🥊 UFC / Combat</button>
-        <button type="button" class="meta-pill" data-prov-sport="OTHER" style="cursor:pointer; font-weight:700;">Other Sports</button>
+    <div style="padding: 16px 20px;">
+      <p class="field-help" style="margin-bottom:12px;">Browse all live game streams directly from your provider feed (<code>starlite.best</code>). Select a sport category and click <strong>Inject Stream</strong> on any game to add it to GLZ TV.</p>
+      <div id="providerSportFilterBar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+        <button type="button" class="filter-pill active-prov-pill active" data-prov-sport="ALL">All Sports</button>
+        <button type="button" class="filter-pill" data-prov-sport="MLB">MLB</button>
+        <button type="button" class="filter-pill" data-prov-sport="NFL">NFL</button>
+        <button type="button" class="filter-pill" data-prov-sport="NBA">NBA</button>
+        <button type="button" class="filter-pill" data-prov-sport="NHL">NHL</button>
+        <button type="button" class="filter-pill" data-prov-sport="UFC">UFC / Combat</button>
+        <button type="button" class="filter-pill" data-prov-sport="OTHER">Other Sports</button>
       </div>
-
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
-        <input id="providerStreamSearch" type="search" placeholder="⌕ Filter provider streams by team, title, or matchup…" style="flex:1; min-width:260px;" autocomplete="off">
-        <button id="injectAllVisibleBtn" type="button" class="primary small-btn" style="background:linear-gradient(135deg,#10b981,#059669); font-weight:700; white-space:nowrap;">⚡ Inject All Visible</button>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+        <input id="providerStreamSearch" type="search" placeholder="Filter provider streams by team, title, or matchup…" style="flex:1; min-width:240px;" autocomplete="off">
+        <button id="injectAllVisibleBtn" type="button" class="primary small-btn">Inject All Visible</button>
       </div>
-
-      <div id="providerStreamsList" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
+      <div id="providerStreamsList" style="max-height: 440px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
         <div style="text-align:center; padding:30px; color:var(--text-muted);">Loading provider feed…</div>
       </div>
     </div>
@@ -899,7 +1760,9 @@
           <div class="eyebrow">BOX GROUP STUDIO</div>
           <h3 id="boxGroupDialogTitle">Add box group</h3>
         </div>
-        <button class="icon-button" type="button" data-close-box-group>✕</button>
+        <button class="icon-button" type="button" data-close-box-group>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <input id="boxGroupId" type="hidden">
       <div class="form-grid">
@@ -911,63 +1774,66 @@
             <option value="block">Block all channels in playlist (only show explicitly allowed)</option>
           </select>
         </label>
-        <fieldset class="wide app-fieldset">
-          <legend>Member Televisions in this Group</legend>
-          <div class="member-boxes-tools">
-            <input id="boxGroupDeviceSearch" class="small-search" placeholder="⌕ Filter member screens…" autocomplete="off">
-            <div style="display:flex;gap:6px;">
+        <fieldset class="wide" style="border:1px solid var(--line); border-radius:var(--radius-sm); padding:12px;">
+          <legend style="padding:0 6px; font-size:12px; font-weight:700; color:var(--text-muted);">Member Televisions in this Group</legend>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+            <input id="boxGroupDeviceSearch" placeholder="Filter screens…" style="flex:1;" autocomplete="off">
+            <div style="display:flex; gap:6px;">
               <button type="button" id="selectAllBoxesBtn" class="secondary small-btn">Select All</button>
               <button type="button" id="clearAllBoxesBtn" class="secondary small-btn">Clear</button>
             </div>
           </div>
-          <div id="boxGroupDevices" class="policy-device-list"></div>
+          <div id="boxGroupDevices" style="max-height:200px; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px;"></div>
         </fieldset>
       </div>
       <p id="boxGroupError" class="error"></p>
       <div class="form-actions">
         <button id="deleteBoxGroup" type="button" class="danger-button hidden" style="margin-right: auto;">Delete Group</button>
         <button type="button" class="secondary" data-close-box-group>Cancel</button>
-        <button type="button" class="secondary" id="saveBoxGroupNoSyncBtn">💾 Save Draft (No Sync)</button>
+        <button type="button" class="secondary" id="saveBoxGroupNoSyncBtn">Save Draft</button>
         <button class="primary" type="submit" id="saveBoxGroupSyncBtn">Save &amp; Push to Boxes</button>
       </div>
     </form>
   </dialog>
 
   <!-- Channel Policy Dialog -->
-  <dialog id="channelPolicyDialog" class="policy-dialog" style="max-width: 860px; width: 94vw;">
+  <dialog id="channelPolicyDialog" style="max-width: 860px; width: 94vw;">
     <form id="channelPolicyForm">
       <div class="dialog-head">
         <div>
           <div class="eyebrow">CHANNEL ACCESS CONTROL</div>
           <h3 id="channelPolicyTitle">Channel Policy</h3>
-          <p id="channelPolicySubtitle"></p>
+          <p id="channelPolicySubtitle" style="font-size:12px; color:var(--text-muted); margin:0;"></p>
         </div>
-        <button class="icon-button" type="button" data-close-channel-policy>✕</button>
+        <button class="icon-button" type="button" data-close-channel-policy>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <input id="channelPolicyTargetType" type="hidden">
       <input id="channelPolicyTargetId" type="hidden">
       <input id="channelPolicyPlaylistId" type="hidden">
-      <div class="policy-controls">
-        <label>Default behavior<select id="channelPolicyDefault"></select></label>
-        <label>Channel group<select id="channelPolicyGroupFilter"><option value="">All channel groups</option></select></label>
-        <label class="policy-search-field">Search<input id="channelPolicySearch" placeholder="Number, channel name, group, or EPG ID…"></label>
-        <div class="policy-bulk">
-          <span>Apply to filtered</span>
-          <button id="policyAllowVisible" type="button" class="secondary small-btn">Allow</button>
-          <button id="policyBlockVisible" type="button" class="secondary small-btn">Block</button>
-          <button id="policyInheritVisible" type="button" class="secondary small-btn">Reset</button>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
+        <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:600; color:var(--text-muted);">Default behavior<select id="channelPolicyDefault"></select></label>
+        <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:600; color:var(--text-muted);">Channel group<select id="channelPolicyGroupFilter"><option value="">All channel groups</option></select></label>
+        <div style="grid-column: 1 / -1; display:flex; gap:10px; align-items:center;">
+          <input id="channelPolicySearch" placeholder="Filter by channel number, name, or group…" style="flex:1;">
+          <div style="display:flex; gap:6px;">
+            <button id="policyAllowVisible" type="button" class="secondary small-btn">Allow Filtered</button>
+            <button id="policyBlockVisible" type="button" class="secondary small-btn">Block Filtered</button>
+            <button id="policyInheritVisible" type="button" class="secondary small-btn">Reset</button>
+          </div>
         </div>
       </div>
-      <div class="policy-summary" id="channelPolicySummary"></div>
-      <div id="channelPolicyList" class="policy-channel-list">
-        <div class="policy-channel-head">
+      <div id="channelPolicySummary" style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"></div>
+      <div id="channelPolicyList" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm);">
+        <div style="display:grid; grid-template-columns: 50px 1.5fr 1fr 90px 100px; gap:8px; padding:8px 12px; background:var(--panel-header); font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--line);">
           <span>CH</span><span>Channel</span><span>Group</span><span>Effective</span><span>Rule</span>
         </div>
       </div>
       <p id="channelPolicyError" class="error"></p>
       <div class="form-actions">
         <button type="button" class="secondary" data-close-channel-policy>Cancel</button>
-        <button type="button" class="secondary" id="savePolicyDraftBtn">💾 Save (No Sync)</button>
+        <button type="button" class="secondary" id="savePolicyDraftBtn">Save Draft</button>
         <button class="primary" type="submit">Save &amp; Push Policy</button>
       </div>
     </form>
@@ -981,22 +1847,24 @@
           <div class="eyebrow">PROPERTY STUDIO</div>
           <h3 id="siteDialogTitle">Add property</h3>
         </div>
-        <button class="icon-button" type="button" data-close-site>✕</button>
+        <button class="icon-button" type="button" data-close-site>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <input id="siteId" type="hidden">
       <div class="form-grid">
         <label>Property Name<input id="siteName" required maxlength="100" placeholder="e.g. GLZ Hotel &amp; Resort San Juan"></label>
         <label>Address or Location<input id="siteAddress" maxlength="240" placeholder="e.g. 1045 Ashford Ave, San Juan, PR"></label>
-        <fieldset class="wide app-fieldset">
-          <legend>Assign Screens to this Property</legend>
-          <div class="member-boxes-tools">
-            <input id="siteDeviceSearch" class="small-search" placeholder="⌕ Filter screens…" autocomplete="off">
-            <div style="display:flex;gap:6px;">
+        <fieldset class="wide" style="border:1px solid var(--line); border-radius:var(--radius-sm); padding:12px;">
+          <legend style="padding:0 6px; font-size:12px; font-weight:700; color:var(--text-muted);">Assign Screens to this Property</legend>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+            <input id="siteDeviceSearch" placeholder="Filter screens…" style="flex:1;" autocomplete="off">
+            <div style="display:flex; gap:6px;">
               <button type="button" id="selectAllSiteBoxesBtn" class="secondary small-btn">Select All</button>
               <button type="button" id="clearAllSiteBoxesBtn" class="secondary small-btn">Clear</button>
             </div>
           </div>
-          <div id="siteDevicesList" class="policy-device-list"></div>
+          <div id="siteDevicesList" style="max-height:200px; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px;"></div>
         </fieldset>
       </div>
       <p id="siteError" class="error"></p>
@@ -1009,13 +1877,16 @@
   </dialog>
 
   <!-- App Dialog -->
-  <dialog id="appDialog">
+  <dialog id="appDialog" style="max-width: 680px; width: 92vw;">
     <form id="appForm">
       <div class="dialog-head">
         <div>
           <div class="eyebrow">APP LIBRARY</div>
           <h3 id="appDialogTitle">Add a managed app</h3>
-        </div><button class="icon-button" type="button" data-close-app>✕</button>
+        </div>
+        <button class="icon-button" type="button" data-close-app>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <input id="appId" type="hidden">
       <div class="form-grid">
@@ -1030,18 +1901,25 @@
         <label class="wide">SHA-256 checksum (recommended)<input id="appSha" maxlength="64"></label>
       </div>
       <p id="appError" class="error"></p>
-      <div class="form-actions"><button id="deleteApp" type="button" class="danger-button hidden">Delete app</button><button type="button" class="secondary" data-close-app>Cancel</button><button id="saveApp" class="primary" type="submit">Add to library</button></div>
+      <div class="form-actions">
+        <button id="deleteApp" type="button" class="danger-button hidden" style="margin-right:auto;">Delete app</button>
+        <button type="button" class="secondary" data-close-app>Cancel</button>
+        <button id="saveApp" class="primary" type="submit">Add to library</button>
+      </div>
     </form>
   </dialog>
 
   <!-- Radio Dialog -->
-  <dialog id="radioDialog">
+  <dialog id="radioDialog" style="max-width: 680px; width: 92vw;">
     <form id="radioForm">
       <div class="dialog-head">
         <div>
           <div class="eyebrow">RADIO STREAMS</div>
           <h3 id="radioDialogTitle">Add radio station</h3>
-        </div><button class="icon-button" type="button" data-close-radio>✕</button>
+        </div>
+        <button class="icon-button" type="button" data-close-radio>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <input id="radioId" type="hidden">
       <div class="form-grid">
@@ -1053,7 +1931,10 @@
         <label class="wide">Logo URL (optional)<input id="radioLogoUrl" type="url" placeholder="https://…/logo.png"></label>
       </div>
       <p id="radioError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-radio>Cancel</button><button class="primary" type="submit">Save radio station</button></div>
+      <div class="form-actions">
+        <button type="button" class="secondary" data-close-radio>Cancel</button>
+        <button class="primary" type="submit">Save radio station</button>
+      </div>
     </form>
   </dialog>
 
@@ -1064,7 +1945,10 @@
         <div>
           <div class="eyebrow">PLAYLIST STUDIO</div>
           <h3 id="playlistDialogTitle">Edit playlist &amp; channels</h3>
-        </div><button class="icon-button" type="button" data-close-playlist>✕</button>
+        </div>
+        <button class="icon-button" type="button" data-close-playlist>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <input id="playlistId" type="hidden">
       <div class="form-grid">
@@ -1074,24 +1958,25 @@
         <label class="wide">Description<textarea id="playlistDescription" rows="2" maxlength="500" placeholder="Primary M3U channel stream lineup for television screens."></textarea></label>
         <label class="wide">Artwork / Group Logo URL<input id="playlistArtworkUrl" type="url" placeholder="https://…/logo.png"></label>
         <label class="wide">XMLTV EPG URL<input id="playlistEpgUrl" type="url" placeholder="https://play.glztech.com/epg.xml.gz"></label>
-        <label class="check wide"><input id="playlistPublished" type="checkbox" checked> Publish this lineup to assigned televisions</label>
+        <label class="check-card wide"><input id="playlistPublished" type="checkbox" checked> <div><strong>Publish Lineup</strong><small>Make channels available to assigned televisions</small></div></label>
       </div>
 
-      <div id="playlistItemsSection" class="playlist-items-section">
-        <div class="playlist-items-header">
-          <div>
-            <h4 class="section-title">Channels / Media Items (<span id="playlistItemCount">0</span>)</h4>
-          </div>
-          <div class="channel-actions-group">
-            <input id="playlistItemFilter" class="small-search" placeholder="⌕ Filter channels…" autocomplete="off">
-            <button type="button" id="addPlaylistItemButton" class="secondary small-btn">＋ Add Channel</button>
+      <div id="playlistItemsSection" style="margin-top:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+          <h4 style="margin:0;">Channels (<span id="playlistItemCount">0</span>)</h4>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="playlistItemFilter" placeholder="Filter channels…" style="width:160px;" autocomplete="off">
+            <button type="button" id="addPlaylistItemButton" class="secondary small-btn">+ Add Channel</button>
           </div>
         </div>
-        <div id="playlistItemsList" class="playlist-items-scroll"></div>
+        <div id="playlistItemsList" style="max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm);"></div>
       </div>
 
       <p id="playlistError" class="error"></p>
-      <div class="form-actions"><button type="button" class="secondary" data-close-playlist>Close</button><button class="primary" type="submit">Save playlist</button></div>
+      <div class="form-actions">
+        <button type="button" class="secondary" data-close-playlist>Close</button>
+        <button class="primary" type="submit">Save playlist</button>
+      </div>
     </form>
   </dialog>
 
@@ -1101,26 +1986,30 @@
       <div>
         <div class="eyebrow">LIVE STREAM TESTER</div>
         <h3 id="streamPreviewTitle">Live Stream Preview</h3>
-        <p id="streamPreviewSubtitle" class="stream-subtitle">HLS / Video Player</p>
+        <p id="streamPreviewSubtitle" style="font-size:12px; color:var(--text-muted); margin:0;">HLS / Video Player</p>
       </div>
-      <button class="icon-button" type="button" id="closeStreamPreview">✕</button>
+      <button class="icon-button" type="button" id="closeStreamPreview">
+        <svg class="icon"><use href="#icon-close"/></svg>
+      </button>
     </div>
-    <div class="video-container">
-      <video id="previewVideo" controls autoplay playsinline></video>
-      <audio id="previewAudio" controls autoplay class="hidden"></audio>
+    <div style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+      <div class="video-container">
+        <video id="previewVideo" controls autoplay playsinline></video>
+        <audio id="previewAudio" controls autoplay class="hidden"></audio>
+      </div>
+      <div class="stream-stats-bar">
+        <div class="stream-stat"><span>Format</span><strong id="statFormat">HLS / Auto</strong></div>
+        <div class="stream-stat"><span>Resolution</span><strong id="statResolution">-- × --</strong></div>
+        <div class="stream-stat"><span>Status</span><strong id="statStatus" class="text-emerald">Connecting…</strong></div>
+        <div class="stream-stat"><span>Buffer</span><strong id="statBuffer">0.0s</strong></div>
+      </div>
+      <div class="stream-url-bar">
+        <input id="streamPreviewUrl" readonly>
+        <button type="button" id="copyStreamUrlBtn" class="secondary small-btn">Copy URL</button>
+        <button type="button" id="openExternalStreamBtn" class="secondary small-btn">External ↗</button>
+      </div>
     </div>
-    <div class="stream-stats-bar">
-      <div class="stream-stat"><span>Format</span><strong id="statFormat">HLS / Auto</strong></div>
-      <div class="stream-stat"><span>Resolution</span><strong id="statResolution">-- × --</strong></div>
-      <div class="stream-stat"><span>Status</span><strong id="statStatus" class="text-emerald">Connecting…</strong></div>
-      <div class="stream-stat"><span>Buffer</span><strong id="statBuffer">0.0s</strong></div>
-    </div>
-    <div class="stream-url-bar">
-      <input id="streamPreviewUrl" readonly>
-      <button type="button" id="copyStreamUrlBtn" class="secondary small-btn">📋 Copy URL</button>
-      <button type="button" id="openExternalStreamBtn" class="secondary small-btn">↗ External</button>
-    </div>
-    <div class="form-actions">
+    <div class="form-actions" style="padding:12px 16px;">
       <button type="button" class="secondary" id="stopAndCloseStreamBtn">Close Stream</button>
     </div>
   </dialog>
@@ -1129,35 +2018,48 @@
   <dialog id="guideDialog" style="max-width: 720px; width: 92vw;">
     <form id="guideForm">
       <div class="dialog-head">
-        <div><div class="eyebrow">XMLTV GUIDE WORKSPACE</div><h3 id="guideDialogTitle">EPG editor</h3></div>
-        <button class="icon-button" type="button" data-close-guide>✕</button>
+        <div>
+          <div class="eyebrow">XMLTV GUIDE WORKSPACE</div>
+          <h3 id="guideDialogTitle">EPG editor</h3>
+        </div>
+        <button class="icon-button" type="button" data-close-guide>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <input id="guidePlaylistId" type="hidden">
       <div class="form-grid">
         <label class="wide">Guide name<input id="guideName" maxlength="120" placeholder="GLZ TV Guide"></label>
         <label class="wide">Fetch guide from HTTPS URL
           <input id="guideSourceUrl" type="url" placeholder="https://epg.best/.../guide.xml.gz">
-          <small>GLZ Hub fetches, validates, stores and republishes the XMLTV guide.</small>
+          <small class="field-help">GLZ Hub fetches, validates, stores and republishes the XMLTV guide.</small>
         </label>
-        <div class="guide-or wide"><span>OR</span></div>
+        <div class="wide" style="text-align:center; color:var(--text-muted); font-size:11px; font-weight:700; text-transform:uppercase;">OR</div>
         <label class="wide">Upload XMLTV guide<input id="guideFile" type="file" accept=".xml,.gz,.xml.gz,application/xml,text/xml,application/gzip"></label>
       </div>
       <div class="guide-status" id="guideStatus"></div>
       <p id="guideError" class="error"></p>
-      <div class="form-actions guide-actions">
-        <button id="downloadGuideXml" type="button" class="secondary" disabled>⇩ Export XML</button>
-        <button id="downloadGuideGz" type="button" class="secondary" disabled>⇩ Export XML.GZ</button>
-        <span class="form-spacer"></span>
+      <div class="form-actions">
+        <button id="downloadGuideXml" type="button" class="secondary" disabled>Export XML</button>
+        <button id="downloadGuideGz" type="button" class="secondary" disabled>Export XML.GZ</button>
+        <span style="flex:1;"></span>
         <button type="button" class="secondary" data-close-guide>Close</button>
-        <button class="primary" type="submit">Import &amp; publish guide</button>
+        <button class="primary" type="submit">Import &amp; publish</button>
       </div>
     </form>
   </dialog>
 
   <!-- EPG Channel Dialog -->
-  <dialog id="epgChannelDialog">
+  <dialog id="epgChannelDialog" style="max-width: 600px; width: 92vw;">
     <form id="epgChannelForm">
-      <div class="dialog-head"><div><div class="eyebrow">EPG CHANNEL</div><h3 id="epgChannelDialogTitle">Add channel</h3></div><button class="icon-button" type="button" data-close-epg-channel>✕</button></div>
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">EPG CHANNEL</div>
+          <h3 id="epgChannelDialogTitle">Add channel</h3>
+        </div>
+        <button class="icon-button" type="button" data-close-epg-channel>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
+      </div>
       <input id="epgOriginalChannelId" type="hidden">
       <div class="form-grid">
         <label>XMLTV channel ID<input id="epgChannelId" required maxlength="120" placeholder="WKAQ.us"></label>
@@ -1165,14 +2067,26 @@
         <label class="wide">Icon URL<input id="epgChannelIcon" type="url" placeholder="https://static.epg.best/...png"></label>
       </div>
       <p id="epgChannelError" class="error"></p>
-      <div class="form-actions"><button id="epgDeleteChannel" type="button" class="danger-button hidden">Delete channel</button><button type="button" class="secondary" data-close-epg-channel>Cancel</button><button class="primary">Save channel</button></div>
+      <div class="form-actions">
+        <button id="epgDeleteChannel" type="button" class="danger-button hidden" style="margin-right:auto;">Delete channel</button>
+        <button type="button" class="secondary" data-close-epg-channel>Cancel</button>
+        <button class="primary" type="submit">Save channel</button>
+      </div>
     </form>
   </dialog>
 
   <!-- EPG Programme Dialog -->
-  <dialog id="epgProgrammeDialog">
+  <dialog id="epgProgrammeDialog" style="max-width: 680px; width: 92vw;">
     <form id="epgProgrammeForm">
-      <div class="dialog-head"><div><div class="eyebrow">PROGRAMME</div><h3 id="epgProgrammeDialogTitle">Add programme</h3></div><button class="icon-button" type="button" data-close-epg-programme>✕</button></div>
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">PROGRAMME</div>
+          <h3 id="epgProgrammeDialogTitle">Add programme</h3>
+        </div>
+        <button class="icon-button" type="button" data-close-epg-programme>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
+      </div>
       <input id="epgProgrammeIndex" type="hidden">
       <div class="form-grid">
         <label class="wide">Channel<select id="epgProgrammeChannel" required></select></label>
@@ -1184,18 +2098,25 @@
         <label class="wide">Description<textarea id="epgProgrammeDescription" rows="4" maxlength="4000"></textarea></label>
       </div>
       <p id="epgProgrammeError" class="error"></p>
-      <div class="form-actions"><button id="epgDeleteProgramme" type="button" class="danger-button hidden">Delete programme</button><button type="button" class="secondary" data-close-epg-programme>Cancel</button><button class="primary">Save programme</button></div>
+      <div class="form-actions">
+        <button id="epgDeleteProgramme" type="button" class="danger-button hidden" style="margin-right:auto;">Delete programme</button>
+        <button type="button" class="secondary" data-close-epg-programme>Cancel</button>
+        <button class="primary" type="submit">Save programme</button>
+      </div>
     </form>
   </dialog>
 
   <!-- Playlist Item Dialog -->
-  <dialog id="playlistItemDialog">
+  <dialog id="playlistItemDialog" style="max-width: 680px; width: 92vw;">
     <form id="playlistItemForm">
       <div class="dialog-head">
         <div>
           <div class="eyebrow">CHANNEL / MEDIA ITEM</div>
           <h3 id="playlistItemDialogTitle">Add channel to playlist</h3>
-        </div><button class="icon-button" type="button" data-close-playlist-item>✕</button>
+        </div>
+        <button class="icon-button" type="button" data-close-playlist-item>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
       </div>
       <input id="itemPlaylistId" type="hidden">
       <input id="itemId" type="hidden">
@@ -1207,16 +2128,42 @@
         <label>Position / Order<input id="itemPosition" type="number" value="0"></label>
         <label class="wide">Stream URL<input id="itemMediaUrl" type="url" required placeholder="https://nbculocallive.akamaized.net/…/master.m3u8"></label>
         <label class="wide">Channel Logo URL (tvg-logo)<input id="itemTvgLogo" type="url" placeholder="https://static.epg.best/us/WKAQ.us.png"></label>
-        <label class="check wide"><input id="itemHidden" type="checkbox"> Hide this channel from the published lineup</label>
+        <label class="check-card wide"><input id="itemHidden" type="checkbox"> <div><strong>Hide Channel</strong><small>Do not show this channel on published television lineups</small></div></label>
       </div>
       <p id="itemError" class="error"></p>
       <div class="form-actions">
-        <button id="previewCurrentItemBtn" type="button" class="secondary" style="margin-right: auto;">▶ Preview stream</button>
+        <button id="previewCurrentItemBtn" type="button" class="secondary" style="margin-right: auto;">
+          <svg class="icon"><use href="#icon-play"/></svg>
+          <span>Preview Stream</span>
+        </button>
         <button id="deleteCurrentChannel" type="button" class="danger-button hidden">Delete channel</button>
         <button type="button" class="secondary" data-close-playlist-item>Cancel</button>
         <button class="primary" type="submit">Save item</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Global Command Palette & Quick Navigator -->
+  <dialog id="commandPaletteDialog" class="command-palette-dialog">
+    <div class="command-palette-head">
+      <div class="command-search-wrap">
+        <svg class="icon"><use href="#icon-search"/></svg>
+        <input id="commandSearchInput" type="search" placeholder="Type a screen, room, channel, playlist, or setting…" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="icon-button" type="button" id="closeCommandPaletteBtn" aria-label="Close palette">
+        <svg class="icon"><use href="#icon-close"/></svg>
+      </button>
+    </div>
+    <div class="command-palette-body">
+      <div id="commandResultsList" class="command-results-list"></div>
+      <div class="command-palette-footer">
+        <div class="command-hints">
+          <span><kbd>↑</kbd> <kbd>↓</kbd> to navigate</span>
+          <span><kbd>↵</kbd> to select</span>
+          <span><kbd>ESC</kbd> to close</span>
+        </div>
+      </div>
+    </div>
   </dialog>
 
   <!-- Modern Notification Toast Container -->
@@ -1225,7 +2172,8 @@
     <span id="toastMessage" class="toast-msg">Notification</span>
   </div>
 
-  <script type="module" src="/app.js?v=2.3.1"></script>
+  <script type="module" src="/app.js?v=3.0.1"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"8a9d9fbda9c14c53b3dec2f41df6f690","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 
 </html>

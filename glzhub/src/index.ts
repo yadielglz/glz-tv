@@ -302,12 +302,43 @@ async function listDevices(request: Request, env: Env): Promise<Response> {
   const sanitized = devices.map((raw) => {
     const d = enrichDeviceRecord(raw);
     const isOnline = d.last_seen_at && new Date(String(d.last_seen_at)).getTime() > tenMinutesAgo;
-    if (!isOnline && ["queued", "syncing"].includes(String(d.sync_status))) {
-      return { ...d, sync_status: "complete", sync_message: null, sync_progress: 0 };
+    if (!isOnline && d.sync_status === "syncing") {
+      return { ...d, sync_status: "queued", sync_message: "Interrupted (will resume on connect)", sync_progress: 0 };
     }
     return d;
   });
   return json({ devices: sanitized });
+}
+
+async function syncAllDevices(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const devices = await supabaseJson(
+    env,
+    `/rest/v1/devices?owner_id=eq.${user.id}&select=id,config_version,last_seen_at`
+  ) as Record<string, unknown>[];
+  if (!Array.isArray(devices) || devices.length === 0) {
+    return json({ ok: true, syncedCount: 0, onlineCount: 0, totalDevices: 0 });
+  }
+  const token = crypto.randomUUID();
+  const pushedAt = new Date().toISOString();
+  const tenMinutesAgo = Date.now() - 10 * 60_000;
+  let onlineCount = 0;
+  await Promise.all(devices.map((device) => {
+    const isOnline = device.last_seen_at && new Date(String(device.last_seen_at)).getTime() > tenMinutesAgo;
+    if (isOnline) onlineCount++;
+    return supabaseJson(env, `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}&owner_id=eq.${user.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        config_version: Number(device.config_version || 0) + 1,
+        force_refresh_token: token,
+        sync_status: "queued",
+        sync_progress: 0,
+        sync_message: isOnline ? "Waiting for TV sync" : "Queued (TV offline)",
+        sync_updated_at: pushedAt
+      })
+    });
+  }));
+  return json({ ok: true, syncedCount: devices.length, onlineCount, totalDevices: devices.length });
 }
 
 async function updateDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
@@ -378,17 +409,13 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
 
   const tenMinutesAgo = Date.now() - 10 * 60_000;
   const isOnline = currentRows[0].last_seen_at && (new Date(String(currentRows[0].last_seen_at)).getTime() > tenMinutesAgo);
-  const shouldSync = input.queue_sync !== false && input.sync !== false && isOnline;
+  const shouldSync = input.queue_sync !== false && input.sync !== false;
 
   if (shouldSync) {
     patch.config_version = Number(currentRows[0].config_version || 0) + 1;
     patch.sync_status = "queued";
     patch.sync_progress = 0;
-    patch.sync_message = "Waiting for TV";
-  } else if (!isOnline) {
-    patch.sync_status = "complete";
-    patch.sync_progress = 0;
-    patch.sync_message = null;
+    patch.sync_message = isOnline ? "Waiting for TV sync" : "Queued (TV offline, will sync on boot)";
   }
 
   patch.updated_at = new Date().toISOString();
@@ -433,9 +460,6 @@ async function forceRefreshDevice(request: Request, env: Env, deviceId: string):
 
   const tenMinutesAgo = Date.now() - 10 * 60_000;
   const isOnline = currentRows[0].last_seen_at && (new Date(String(currentRows[0].last_seen_at)).getTime() > tenMinutesAgo);
-  if (!isOnline) {
-    return json({ error: "Cannot sync: Device is currently offline. Please power on the TV to refresh." }, 400);
-  }
 
   const token = new Date().toISOString();
   const patch = {
@@ -444,7 +468,7 @@ async function forceRefreshDevice(request: Request, env: Env, deviceId: string):
     updated_at: token,
     sync_status: "queued",
     sync_progress: 0,
-    sync_message: "Waiting for TV",
+    sync_message: isOnline ? "Waiting for TV" : "Force refresh queued (TV offline)",
     sync_updated_at: token
   };
   const devices = await supabaseJson(
@@ -463,7 +487,7 @@ async function forceRefreshDevice(request: Request, env: Env, deviceId: string):
       payload: { timestamp: token }
     })
   });
-  return json({ ok: true, device: enrichDeviceRecord(devices[0]) });
+  return json({ ok: true, device: enrichDeviceRecord(devices[0]), isOnline: Boolean(isOnline) });
 }
 
 async function checkUpdateDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
@@ -523,6 +547,18 @@ async function unpairDevice(request: Request, env: Env, deviceId: string): Promi
 
 async function deviceConfig(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
+  if (device.sync_status === "queued") {
+    supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}`, {
+      method: "PATCH",
+      headers: { prefer: "return=minimal" },
+      body: JSON.stringify({
+        sync_status: "syncing",
+        sync_progress: 25,
+        sync_message: "TV applying configuration",
+        sync_updated_at: new Date().toISOString()
+      })
+    }).catch(() => null);
+  }
   const origin = new URL(request.url).origin;
   const managedPlaylistUrl = `${origin}/api/v1/devices/playlist.m3u`;
   let managedEpgUrl: unknown = null;
@@ -682,15 +718,22 @@ async function channelPolicy(request: Request, env: Env, targetType: string, tar
     const tenMinutesAgo = Date.now() - 10 * 60_000;
     const refreshFilter = targetType === 'device' ? `id=eq.${encodeURIComponent(targetId)}` : `box_group_id=eq.${encodeURIComponent(targetId)}`;
     const affectedDevices = await supabaseJson(env, `/rest/v1/devices?owner_id=eq.${user.id}&${refreshFilter}&select=id,config_version,last_seen_at`) as Record<string, unknown>[];
-    const onlineDevices = affectedDevices.filter((d) => d.last_seen_at && new Date(String(d.last_seen_at)).getTime() > tenMinutesAgo);
-    pushedDevicesCount = onlineDevices.length;
-    await Promise.all(onlineDevices.map((device) => supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}&owner_id=eq.${user.id}`, {
-      method: "PATCH", body: JSON.stringify({
-        config_version: Number(device.config_version || 0) + 1,
-        force_refresh_token: crypto.randomUUID(),
-        sync_status: "queued", sync_progress: 0, sync_message: "Updating channel policy", sync_updated_at: new Date().toISOString()
-      })
-    })));
+    pushedDevicesCount = affectedDevices.length;
+    const token = crypto.randomUUID();
+    const tokenTime = new Date().toISOString();
+    await Promise.all(affectedDevices.map((device) => {
+      const isOnline = device.last_seen_at && new Date(String(device.last_seen_at)).getTime() > tenMinutesAgo;
+      return supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}&owner_id=eq.${user.id}`, {
+        method: "PATCH", body: JSON.stringify({
+          config_version: Number(device.config_version || 0) + 1,
+          force_refresh_token: token,
+          sync_status: "queued",
+          sync_progress: 0,
+          sync_message: isOnline ? "Updating channel policy" : "Queued (TV offline)",
+          sync_updated_at: tokenTime
+        })
+      });
+    }));
   }
   return json({ ok: true, rules: rules.length, pushedDevices: pushedDevicesCount });
 }
@@ -749,17 +792,22 @@ async function updateGuestExperience(request: Request, env: Env): Promise<Respon
     const siteDevices = await supabaseJson(env,
       `/rest/v1/devices?owner_id=eq.${user.id}&site_id=eq.${encodeURIComponent(siteId)}&select=id,config_version,last_seen_at`
     ) as Record<string, unknown>[];
-    const onlineDevices = siteDevices.filter((d) => d.last_seen_at && new Date(String(d.last_seen_at)).getTime() > tenMinutesAgo);
-    pushedCount = onlineDevices.length;
+    pushedCount = siteDevices.length;
     const token = new Date().toISOString();
-    await Promise.all(onlineDevices.map((d) => supabaseJson(env,
-      `/rest/v1/devices?id=eq.${encodeURIComponent(String(d.id))}&owner_id=eq.${user.id}`,
-      { method: "PATCH", body: JSON.stringify({
-        config_version: Number(d.config_version || 0) + 1,
-        force_refresh_token: token,
-        sync_status: "queued", sync_progress: 0, sync_message: "Updating guest experience", sync_updated_at: token
-      }) }
-    )));
+    await Promise.all(siteDevices.map((d) => {
+      const isOnline = d.last_seen_at && new Date(String(d.last_seen_at)).getTime() > tenMinutesAgo;
+      return supabaseJson(env,
+        `/rest/v1/devices?id=eq.${encodeURIComponent(String(d.id))}&owner_id=eq.${user.id}`,
+        { method: "PATCH", body: JSON.stringify({
+          config_version: Number(d.config_version || 0) + 1,
+          force_refresh_token: token,
+          sync_status: "queued",
+          sync_progress: 0,
+          sync_message: isOnline ? "Updating guest experience" : "Queued (TV offline)",
+          sync_updated_at: token
+        }) }
+      );
+    }));
   }
 
   return json({ profile: profiles[0], pushedDevices: pushedCount });
@@ -1796,19 +1844,23 @@ async function pushPlaylist(request: Request, env: Env, playlistId: string): Pro
   ) as Record<string, unknown>[];
   const pushedAt = new Date().toISOString();
   const tenMinutesAgo = Date.now() - 10 * 60_000;
-  const onlineDevices = devices.filter((device) => {
-    return device.last_seen_at && new Date(String(device.last_seen_at)).getTime() > tenMinutesAgo;
-  });
-
-  await Promise.all(onlineDevices.map((device) => supabaseJson(env,
-    `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}&owner_id=eq.${user.id}`,
-    { method: "PATCH", body: JSON.stringify({
-      config_version: Number(device.config_version || 0) + 1,
-      force_refresh_token: token,
-      sync_status: "queued", sync_progress: 0, sync_message: "Waiting for TV", sync_updated_at: pushedAt
-    }) }
-  )));
-  return json({ ok: true, pushedDevices: onlineDevices.length, totalDevices: devices.length });
+  let onlineCount = 0;
+  await Promise.all(devices.map((device) => {
+    const isOnline = device.last_seen_at && new Date(String(device.last_seen_at)).getTime() > tenMinutesAgo;
+    if (isOnline) onlineCount++;
+    return supabaseJson(env,
+      `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}&owner_id=eq.${user.id}`,
+      { method: "PATCH", body: JSON.stringify({
+        config_version: Number(device.config_version || 0) + 1,
+        force_refresh_token: token,
+        sync_status: "queued",
+        sync_progress: 0,
+        sync_message: isOnline ? "Waiting for TV" : "Queued (TV offline)",
+        sync_updated_at: pushedAt
+      }) }
+    );
+  }));
+  return json({ ok: true, pushedDevices: devices.length, onlineDevices: onlineCount, totalDevices: devices.length });
 }
 
 interface ParsedEventChannel {
@@ -2571,6 +2623,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (path === "/api/v1/enrollment/claim" && request.method === "POST") return claimEnrollment(request, env);
   if (path === "/api/v1/admin/enrollments" && request.method === "GET") return listNearbyEnrollments(request, env);
   if (path === "/api/v1/admin/devices" && request.method === "GET") return listDevices(request, env);
+  if (path === "/api/v1/admin/devices/sync-all" && request.method === "POST") return syncAllDevices(request, env);
   if (path === "/api/v1/admin/box-groups" && request.method === "GET") return listBoxGroups(request, env);
   if (path === "/api/v1/admin/box-groups" && request.method === "POST") return createBoxGroup(request, env);
   if (path === "/api/v1/admin/sites" && request.method === "GET") return listSites(request, env);

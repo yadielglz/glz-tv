@@ -25,6 +25,11 @@ async function api(path, options = {}) {
   if (state.session?.access_token) headers.authorization = `Bearer ${state.session.access_token}`;
   const response = await fetch(path, { ...options, headers });
   const result = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    localStorage.removeItem("glzhub_session");
+    state.session = null;
+    showApp();
+  }
   if (!response.ok) throw new Error(result.error || `Request failed (${response.status})`);
   return result;
 }
@@ -53,11 +58,17 @@ function restoreSession() {
 }
 
 function showApp() {
-  $("#inviteView").classList.toggle("hidden", !inviteToken);
-  $("#authView").classList.toggle("hidden", Boolean(state.session) || Boolean(inviteToken));
-  $("#appView").classList.toggle("hidden", !state.session || Boolean(inviteToken));
-  $("#signOut").classList.toggle("hidden", !state.session);
-  $("#accountEmail").textContent = state.session?.user?.email || "Not signed in";
+  const authed = Boolean(state.session) && !inviteToken;
+  const shell = $(".shell");
+  if (shell) shell.classList.toggle("unauthed", !authed);
+  $("#inviteView")?.classList.toggle("hidden", !inviteToken);
+  $("#authView")?.classList.toggle("hidden", authed || Boolean(inviteToken));
+  $("#appView")?.classList.toggle("hidden", !authed);
+  $("#mainRail")?.classList.toggle("hidden", !authed);
+  $(".mobile-top-bar")?.classList.toggle("hidden", !authed);
+  $("#signOut")?.classList.toggle("hidden", !authed);
+  const accountEmail = $("#accountEmail");
+  if (accountEmail) accountEmail.textContent = state.session?.user?.email || "Not signed in";
 }
 
 $("#inviteForm").addEventListener("submit", async (event) => {
@@ -101,12 +112,43 @@ function showView(name) {
   $("#studioView").classList.toggle("hidden", name !== "studio");
   $("#epgView").classList.toggle("hidden", name !== "epg");
   $("#pairView").classList.toggle("hidden", name !== "pair");
-  $("#pairButton").classList.toggle("hidden", name === "pair" || name === "device-editor");
-  $("#pageTitle").textContent = name === "pair" ? "Pair a television" :
-    name === "apps" ? "App management" : name === "groups" ? "Box Groups" : name === "sites" ? "Properties" :
-      name === "experience" ? "Guest experience" : name === "radio" ? "Radio Streams" :
-        name === "events" ? "Live Event Channels" :
-          name === "studio" ? "Playlist Studio" : name === "epg" ? "EPG Studio" : "Your TVs";
+  $("#settingsView")?.classList.toggle("hidden", name !== "settings");
+  $("#pairButton").classList.toggle("hidden", name === "pair" || name === "device-editor" || name === "settings");
+
+  const pageTitles = {
+    pair: "Pair a television",
+    apps: "App management",
+    groups: "Box Groups",
+    sites: "Properties",
+    experience: "Guest experience",
+    radio: "Radio Streams",
+    events: "Live Event Channels",
+    studio: "Playlist Studio",
+    epg: "EPG Studio",
+    settings: "Hub Settings & Administration",
+    devices: "Your TVs"
+  };
+  $("#pageTitle").textContent = pageTitles[name] || "Your TVs";
+
+  const breadcrumbSections = {
+    devices: { section: "Fleet Management", current: "Devices" },
+    groups: { section: "Fleet Management", current: "Box Groups" },
+    sites: { section: "Fleet Management", current: "Properties" },
+    pair: { section: "Fleet Management", current: "Pair a TV" },
+    studio: { section: "Broadcast & Channels", current: "TV Playlists" },
+    events: { section: "Broadcast & Channels", current: "Live Events" },
+    epg: { section: "Broadcast & Channels", current: "EPG Studio" },
+    radio: { section: "Broadcast & Channels", current: "Radio Streams" },
+    experience: { section: "Hospitality & Apps", current: "Guest Experience" },
+    apps: { section: "Hospitality & Apps", current: "App Library" },
+    settings: { section: "System", current: "Hub Settings & Administration" }
+  };
+  const bc = breadcrumbSections[name] || { section: "Fleet Management", current: "Your TVs" };
+  const bcSectionEl = $("#bcSection");
+  const bcCurrentEl = $("#bcCurrent");
+  if (bcSectionEl) bcSectionEl.textContent = bc.section;
+  if (bcCurrentEl) bcCurrentEl.textContent = bc.current;
+
   $$(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === (name === "device-editor" ? "devices" : name)));
   if (name === "pair") loadPairingRequests();
   if (name === "radio") loadRadioStations();
@@ -114,6 +156,8 @@ function showView(name) {
   if (name === "studio") loadPlaylists();
   if (name === "epg") openEpgStudio();
   if (name === "groups") loadBoxGroups();
+  if (name === "settings") renderSettings();
+  updateNavBadges();
 }
 
 function isOnline(device) {
@@ -150,30 +194,61 @@ function escapeHtml(value = "") {
   return div.innerHTML;
 }
 
+function formatRelativeTime(isoDate) {
+  if (!isoDate) return "Never";
+  const diffSec = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000);
+  if (diffSec < 15) return "Just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return new Date(isoDate).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
 let activeDeviceFilter = "all";
 let deviceSearchQuery = "";
 
 function renderDevices() {
   const total = state.devices.length;
   const onlineCount = state.devices.filter(isOnline).length;
-  const syncingCount = state.devices.filter((d) => isOnline(d) && ["queued", "syncing"].includes(d.sync_status)).length;
+  const syncingCount = state.devices.filter((d) => ["queued", "syncing"].includes(d.sync_status)).length;
   const attentionCount = state.devices.filter((d) => Boolean(d.last_error)).length;
 
-  $("#deviceCount").textContent = total;
-  $("#onlineCount").textContent = onlineCount;
-  $("#attentionCount").textContent = attentionCount;
+  const devCountEl = $("#deviceCount");
+  if (devCountEl) devCountEl.textContent = total;
+  const onlineCountEl = $("#onlineCount");
+  if (onlineCountEl) onlineCountEl.textContent = onlineCount;
+  const syncingCountEl = $("#syncingCount");
+  if (syncingCountEl) syncingCountEl.textContent = syncingCount;
+  const attentionCountEl = $("#attentionCount");
+  if (attentionCountEl) attentionCountEl.textContent = attentionCount;
 
-  const fleetScore = total > 0 ? Math.round((onlineCount / total) * 100) : 100;
-  const badge = $("#fleetScoreBadge");
-  if (badge) {
-    badge.textContent = `${fleetScore}% HEALTH`;
-    badge.style.color = fleetScore >= 80 ? "var(--success)" : (fleetScore >= 50 ? "var(--amber)" : "var(--danger)");
+  const fleetBadge = $("#fleetScoreBadge");
+  if (fleetBadge) {
+    fleetBadge.textContent = total > 0 ? `${onlineCount} / ${total} ONLINE` : "NO SCREENS";
+    fleetBadge.style.color = onlineCount === total && total > 0 ? "var(--success)" : "var(--text-muted)";
+  }
+
+  const syncBadge = $("#syncingBadge");
+  if (syncBadge) {
+    syncBadge.textContent = syncingCount > 0 ? `${syncingCount} IN PROGRESS` : "IN SYNC";
+    syncBadge.style.color = syncingCount > 0 ? "var(--accent)" : "var(--text-muted)";
+  }
+
+  const attentionBadge = $("#attentionIndicator");
+  if (attentionBadge) {
+    attentionBadge.textContent = attentionCount > 0 ? `${attentionCount} ATTENTION` : "ALL CLEAR";
+    attentionBadge.style.color = attentionCount > 0 ? "var(--danger)" : "var(--success)";
   }
 
   const query = deviceSearchQuery.trim().toLowerCase();
   const filtered = state.devices.filter((device) => {
     const isDevOnline = isOnline(device);
-    const isDevSyncing = isDevOnline && ["queued", "syncing"].includes(device.sync_status);
+    const isDevSyncing = ["queued", "syncing"].includes(device.sync_status);
 
     if (activeDeviceFilter === "online" && !isDevOnline) return false;
     if (activeDeviceFilter === "syncing" && !isDevSyncing) return false;
@@ -186,7 +261,7 @@ function renderDevices() {
     return text.includes(query);
   });
 
-  $("#emptyState").classList.toggle("hidden", total > 0);
+  $("#emptyState")?.classList.toggle("hidden", total > 0);
 
   if (total === 0) {
     $("#deviceGrid").innerHTML = "";
@@ -194,7 +269,7 @@ function renderDevices() {
   }
 
   if (filtered.length === 0) {
-    $("#deviceGrid").innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:14px;">No screens match the current filter.</div>`;
+    $("#deviceGrid").innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13.5px;">No screens match the current filter.</div>`;
     return;
   }
 
@@ -202,35 +277,59 @@ function renderDevices() {
     filtered.map((device) => {
       const activity = deviceActivity(device);
       const isDevOnline = isOnline(device);
-      const statusClass = isDevOnline ? (device.sync_status === "syncing" ? "syncing" : "") : "offline";
-      const statusLabel = isDevOnline ? (device.sync_status === "syncing" ? "SYNCING" : "ONLINE") : "OFFLINE";
+      let statusPillClass = "offline";
+      let statusLabel = "OFFLINE";
+      if (isDevOnline) {
+        if (device.sync_status === "syncing") {
+          statusPillClass = "syncing";
+          statusLabel = "SYNCING";
+        } else if (device.sync_status === "queued") {
+          statusPillClass = "queued";
+          statusLabel = "QUEUED";
+        } else if (device.last_error) {
+          statusPillClass = "attention";
+          statusLabel = "ALERT";
+        } else {
+          statusPillClass = "online";
+          statusLabel = "ONLINE";
+        }
+      } else if (device.sync_status === "queued") {
+        statusPillClass = "queued";
+        statusLabel = "QUEUED";
+      }
 
       const ring = String(device.update_channel || "production").toLowerCase();
-      const ringBadge = ring !== "production" ? ` <small class="meta-pill" style="font-size:10px;padding:1px 6px;margin-left:4px;">${escapeHtml(ring.toUpperCase())}</small>` : "";
-
+      const ringBadge = ring === "beta"
+        ? ` <span class="meta-pill" style="font-size:10px;padding:1px 5px;color:#f59e0b;border-color:rgba(245,158,11,0.35);">BETA</span>`
+        : ring === "weekly"
+          ? ` <span class="meta-pill" style="font-size:10px;padding:1px 5px;color:#38bdf8;border-color:rgba(56,189,248,0.35);">WEEKLY</span>`
+          : "";
       return `
     <button class="device-row" data-device-id="${device.id}">
       <span class="device-identity">
-        <span class="screen-icon"></span>
+        <span class="device-screen-badge ${isDevOnline ? "online" : ""}">
+          <svg class="icon"><use href="#icon-screens"/></svg>
+        </span>
         <span>
           <strong>${escapeHtml(device.name)}</strong>
           <small>Welcome, ${escapeHtml(device.guest_name)}${device.room_number ? ` · Rm ${escapeHtml(device.room_number)}` : ""}</small>
         </span>
       </span>
       <span data-label="Property">${escapeHtml(state.sites.find((site) => site.id === device.site_id)?.name || "Unassigned")}</span>
-      <span><span class="status ${statusClass}">${statusLabel}</span></span>
+      <span><span class="status-pill ${statusPillClass}"><span class="status-dot"></span>${statusLabel}</span></span>
       <span data-label="Activity"><span class="activity ${activity.className}">${escapeHtml(activity.label)}${activity.progress == null ? "" : ` · ${activity.progress}%`}</span>${activity.progress == null ? "" : `<span class="sync-track"><span style="width:${activity.progress}%"></span></span>`}</span>
       <span data-label="App">v${escapeHtml(device.app_version || "1.0")}${ringBadge}</span>
-      <span data-label="Last contact">${device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}${device.last_error ? `<small class="attention" style="color:var(--danger);display:block;margin-top:2px;">${escapeHtml(device.last_error)}</small>` : ""}</span>
+      <span data-label="Last contact" title="${device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : ''}">${formatRelativeTime(device.last_seen_at)}${device.last_error ? `<small class="attention" style="color:var(--danger);display:block;margin-top:2px;">${escapeHtml(device.last_error)}</small>` : ""}</span>
     </button>`;
     }).join("");
 
   $$(".device-row").forEach((row) => row.addEventListener("click", () => openDevice(row.dataset.deviceId)));
+  updateNavBadges();
 }
 
 let deviceActivityRefresh = false;
 async function refreshDeviceActivity() {
-  if (!state.session || $("#devicesView").classList.contains("hidden") || deviceActivityRefresh) return;
+  if (!state.session || $("#devicesView")?.classList.contains("hidden") || deviceActivityRefresh) return;
   deviceActivityRefresh = true;
   try {
     const result = await api("/api/v1/admin/devices");
@@ -261,6 +360,11 @@ async function loadDevices() {
   renderSiteSelectors();
   renderExperience();
   renderBoxGroups();
+  updateNavBadges();
+}
+
+async function loadBoxGroups() {
+  return loadDevices();
 }
 
 async function loadPairingRequests() {
@@ -337,19 +441,21 @@ function renderSites() {
     return `
       <article class="site-card" data-site-id="${site.id}">
         <div class="card-main-info">
-          <div class="site-glyph-lg">⌂</div>
+          <div class="card-glyph-badge">
+            <svg class="icon"><use href="#icon-property"/></svg>
+          </div>
           <div class="card-details">
             <h4>${escapeHtml(site.name)}</h4>
             <p>${escapeHtml(site.address || "No address entered")}</p>
             <div class="card-meta-pills">
               <span class="meta-pill">${devices.length} Screen${devices.length === 1 ? "" : "s"}</span>
-              <span class="status ${onlineCount > 0 ? "" : "offline"}">${onlineCount} ONLINE</span>
+              <span class="status-pill ${onlineCount > 0 ? "online" : "offline"}"><span class="status-dot"></span>${onlineCount} ONLINE</span>
             </div>
           </div>
         </div>
         <div class="card-action-bar">
-          <button type="button" class="secondary open-site-experience" data-site-id="${site.id}" title="Open guest portal & branding">✦ Guest Portal</button>
-          <button type="button" class="secondary filter-site-tvs" data-site-id="${site.id}" title="View screens for this property">📺 Screens</button>
+          <button type="button" class="secondary open-site-experience" data-site-id="${site.id}" title="Open guest portal & branding">Guest Experience</button>
+          <button type="button" class="secondary filter-site-tvs" data-site-id="${site.id}" title="View screens for this property">Screens</button>
           <button type="button" class="secondary edit-site-btn" data-site-id="${site.id}">Edit</button>
         </div>
       </article>
@@ -381,6 +487,7 @@ function renderSites() {
     e.stopPropagation();
     openSite(btn.dataset.siteId);
   }));
+  updateNavBadges();
 }
 
 function updateBrandingPreview() {
@@ -416,7 +523,7 @@ function renderServiceTiles(services = []) {
   const container = $("#serviceTilesList");
   if (!container) return;
   if (!services.length) {
-    container.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px;border:1px dashed var(--line);border-radius:var(--radius-md);font-size:13px;">No interactive guest service tiles configured. Click "＋ Add Service Tile" above to create amenities, spa, dining, or room service cards.</div>`;
+    container.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px;border:1px dashed var(--line);border-radius:var(--radius-md);font-size:13px;">No interactive guest service tiles configured. Click "+ Add Service Tile" above to create amenities, spa, dining, or room service cards.</div>`;
     return;
   }
   container.innerHTML = services.map((s, idx) => `
@@ -489,15 +596,31 @@ function renderExperience() {
 }
 
 function renderApps() {
-  $("#appEmpty").classList.toggle("hidden", state.apps.length > 0);
-  $("#appList").innerHTML = state.apps.map((app) => `<article class="app-row" data-app-id="${app.id}">
-    <span class="app-glyph">${escapeHtml(app.name.slice(0, 1).toUpperCase())}</span>
-    <span><strong>${escapeHtml(app.name)}</strong><small>${escapeHtml(app.package_name)}</small></span>
-    <span class="source-badge">${app.source_type === "play_store" ? "PLAY STORE" : "REPOSITORY"}</span>
-    <span>${escapeHtml(app.version_name || "Latest")}</span>
-    <button type="button" class="secondary edit-app" data-app-id="${app.id}">Edit</button>
-  </article>`).join("");
+  $("#appEmpty")?.classList.toggle("hidden", state.apps.length > 0);
+  const container = $("#appList");
+  if (!container) return;
+  container.innerHTML = state.apps.map((app) => `
+    <article class="group-card" data-app-id="${app.id}">
+      <div class="card-main-info">
+        <div class="card-glyph-badge">
+          <svg class="icon"><use href="#icon-apps"/></svg>
+        </div>
+        <div class="card-details">
+          <h4>${escapeHtml(app.name)}</h4>
+          <p style="font-family:var(--font-mono); font-size:11.5px;">${escapeHtml(app.package_name)}</p>
+          <div class="card-meta-pills">
+            <span class="source-badge meta-pill">${app.source_type === "play_store" ? "GOOGLE PLAY STORE" : "HTTPS REPOSITORY"}</span>
+            <span class="meta-pill">v${escapeHtml(app.version_name || "Latest")}</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-action-bar">
+        <button type="button" class="secondary edit-app" data-app-id="${app.id}">Edit</button>
+      </div>
+    </article>
+  `).join("");
   $$(".edit-app").forEach((button) => button.addEventListener("click", () => openApp(button.dataset.appId)));
+  updateNavBadges();
 }
 
 function openApp(id = "") {
@@ -538,8 +661,28 @@ async function openDevice(id) {
   const isDevOnline = isOnline(device);
   const statusEl = $("#editorDeviceStatus");
   if (statusEl) {
-    statusEl.className = `status ${isDevOnline ? (device.sync_status === "syncing" ? "syncing" : "") : "offline"}`;
-    statusEl.textContent = isDevOnline ? (device.sync_status === "syncing" ? "SYNCING" : "ONLINE") : "OFFLINE";
+    let statusClass = "offline";
+    let statusLabel = "OFFLINE";
+    if (isDevOnline) {
+      if (device.sync_status === "syncing") {
+        statusClass = "syncing";
+        statusLabel = "SYNCING";
+      } else if (device.sync_status === "queued") {
+        statusClass = "queued";
+        statusLabel = "QUEUED";
+      } else if (device.last_error) {
+        statusClass = "attention";
+        statusLabel = "ALERT";
+      } else {
+        statusClass = "online";
+        statusLabel = "ONLINE";
+      }
+    } else if (device.sync_status === "queued") {
+      statusClass = "queued";
+      statusLabel = "QUEUED";
+    }
+    statusEl.className = `status-pill ${statusClass}`;
+    statusEl.innerHTML = `<span class="status-dot"></span>${statusLabel}`;
   }
   const modelEl = $("#editorDeviceModel");
   if (modelEl) modelEl.textContent = device.model || "Android TV";
@@ -547,8 +690,12 @@ async function openDevice(id) {
   const siteObj = state.sites.find((s) => s.id === device.site_id);
   if (siteEl) siteEl.textContent = siteObj?.name || "Unassigned Property";
   const versionEl = $("#editorDeviceVersion");
-  const ring = String(device.update_channel || "production").toLowerCase();
-  if (versionEl) versionEl.textContent = `App v${device.app_version || "1.0"}${ring !== "production" ? ` · ${ring.toUpperCase()}` : ""}`;
+  if (versionEl) versionEl.textContent = `App v${device.app_version || "1.0"}`;
+  const ringEl = $("#editorDeviceUpdateRing");
+  if (ringEl) {
+    const ch = String(device.update_channel || "production").toLowerCase();
+    ringEl.textContent = ch === "beta" ? "Ring: Beta" : ch === "weekly" ? "Ring: Weekly" : "Ring: Production";
+  }
 
   $("#deviceName").value = device.name || "";
   $("#guestName").value = device.guest_name || "";
@@ -586,16 +733,16 @@ async function openDevice(id) {
   $("#startDestination").value = device.start_destination || "Home";
   $("#themeMode").value = device.theme_mode || "adaptive";
   $("#osdTimeoutSeconds").value = String(device.osd_timeout_seconds || 8);
+  if ($("#appLanguage")) $("#appLanguage").value = device.app_language || "en";
   $("#captionsEnabled").checked = Boolean(device.captions_enabled);
   $("#captionsLanguage").value = device.captions_language || "en";
-  if ($("#appLanguage")) $("#appLanguage").value = device.app_language || "en";
   $("#autoStart").checked = Boolean(device.auto_start);
   $("#resumeLastChannel").checked = device.resume_last_channel !== false;
   $("#keepAwakeHome").checked = Boolean(device.keep_awake_home);
   $("#sportsBarKioskEnabled").checked = Boolean(device.sports_bar_kiosk_enabled);
+  if ($("#updateChannel")) $("#updateChannel").value = device.update_channel || "production";
   $("#autoUpdate").checked = device.auto_update !== false;
   $("#wifiOnly").checked = Boolean(device.wifi_only);
-  if ($("#updateChannel")) $("#updateChannel").value = device.update_channel || "production";
   const enabledApps = new Set(
     (device.visible_apps || []).map((app) => typeof app === "string" ? app : app.packageName)
   );
@@ -614,9 +761,12 @@ async function openDevice(id) {
     refreshBtn.title = isDevOnline ? "Trigger an instant EPG & M3U reload on the TV" : "Device is offline (Power on TV to sync)";
     refreshBtn.style.opacity = isDevOnline ? "1" : "0.5";
   }
-  const checkUpdateBtn = $("#checkUpdateDeviceBtn");
+
+  const checkUpdateBtn = $("#checkUpdateDevice");
   if (checkUpdateBtn) {
-    checkUpdateBtn.title = "Queue a remote OTA update check on this TV";
+    checkUpdateBtn.disabled = !isDevOnline;
+    checkUpdateBtn.title = isDevOnline ? "Prompt TV to check for OTA APK updates on its assigned ring" : "Device is offline (Power on TV to check)";
+    checkUpdateBtn.style.opacity = isDevOnline ? "1" : "0.5";
   }
 
   // Reset to first tab
@@ -641,10 +791,10 @@ function showToast(message, type = "info", duration = 3000) {
   else toastEl.textContent = message;
 
   if (iconEl) {
-    iconEl.textContent = type === "success" ? "✓" : (type === "error" ? "✕" : (type === "warning" ? "⚠" : "ℹ"));
+    iconEl.textContent = type === "success" ? "✓" : (type === "error" ? "✕" : (type === "warning" ? "!" : "i"));
   }
 
-  toastEl.className = `toast toast-${type} show`;
+  toastEl.className = `toast ${type} toast-${type} show`;
   clearTimeout(toastEl._timer);
   toastEl._timer = setTimeout(() => {
     toastEl.classList.remove("show");
@@ -777,22 +927,458 @@ $("#mobileRefreshBtn")?.addEventListener("click", () => {
   showToast("Refreshing status…", "info");
 });
 
-/* ----- Light / dark theme ----- */
-function applyTheme(theme) {
-  const next = theme === "dark" ? "dark" : "light";
-  document.documentElement.setAttribute("data-theme", next);
-  try { localStorage.setItem("glzhub-theme", next); } catch (e) {}
+/* ----- Design System, Settings & Theme Engine ----- */
+const SETTINGS_KEY = "glzhub_settings";
+const DEFAULT_SETTINGS = {
+  orgName: "GLZ TV Hospitality Network",
+  adminContact: "admin@glztech.com",
+  timezone: "America/Puerto_Rico",
+  weatherUnit: "fahrenheit",
+  refreshInterval: 30,
+  soundsEnabled: true,
+  alertOverdue: true,
+  startDestination: "Home",
+  themeMode: "dark",
+  osdTimeout: 8,
+  captionsLanguage: "en",
+  appLanguage: "en",
+  updateChannel: "production",
+  autoStart: true,
+  resumeLastChannel: true,
+  keepAwakeHome: false,
+  sportsBarKiosk: false,
+  autoUpdate: true,
+  wifiOnly: false,
+  providerFeedUrl: "https://starlite.best/api/list/mygbb8",
+  providerPreBuffer: 0.5,
+  providerPostBuffer: 0.5,
+  masterEpgUrl: "https://play.glztech.com/epg.xml.gz",
+  streamHealthTimeout: 6,
+  defaultBoxGroupPolicy: "allow",
+  hlsLowLatency: true,
+  hlsBufferLength: 60,
+  hubTheme: "dark",
+  hubAccent: "sapphire",
+  hubDensity: "comfortable",
+  animationsEnabled: true
+};
+
+function getSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettings(partial) {
+  const current = getSettings();
+  const updated = { ...current, ...partial };
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
+  } catch {}
+  return updated;
+}
+
+function applyTheme(theme, accent, density) {
+  const curSettings = getSettings();
+  const chosenTheme = theme || curSettings.hubTheme || "dark";
+  const chosenAccent = accent || curSettings.hubAccent || "sapphire";
+  const chosenDensity = density || curSettings.hubDensity || "comfortable";
+
+  document.documentElement.setAttribute("data-theme", chosenTheme);
+  document.documentElement.setAttribute("data-accent", chosenAccent);
+  document.documentElement.setAttribute("data-density", chosenDensity);
+
+  try {
+    localStorage.setItem("glzhub-theme", chosenTheme);
+    localStorage.setItem("glzhub-accent", chosenAccent);
+  } catch {}
+
   const meta = $("#themeColorMeta");
-  if (meta) meta.setAttribute("content", next === "dark" ? "#0d1117" : "#ffffff");
+  if (meta) {
+    meta.setAttribute("content", chosenTheme === "light" ? "#f8fafc" : (chosenTheme === "midnight" ? "#000000" : "#080d1a"));
+  }
+
   $$("#themeToggle, #themeToggleMobile").forEach((btn) => {
-    btn.textContent = next === "dark" ? "☀" : "◐";
-    btn.title = next === "dark" ? "Switch to light theme" : "Switch to dark theme";
+    btn.innerHTML = chosenTheme === "dark" || chosenTheme === "midnight"
+      ? `<svg class="icon"><use href="#icon-sun"/></svg>`
+      : `<svg class="icon"><use href="#icon-moon"/></svg>`;
+    btn.title = chosenTheme === "dark" || chosenTheme === "midnight"
+      ? "Switch to light theme"
+      : "Switch to dark theme";
+  });
+
+  saveSettings({ hubTheme: chosenTheme, hubAccent: chosenAccent, hubDensity: chosenDensity });
+
+  $$(".theme-choice-card").forEach((c) => {
+    c.classList.toggle("active", c.dataset.themePick === chosenTheme);
+  });
+  $$(".accent-pill-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.accentPick === chosenAccent);
   });
 }
+
 function toggleTheme() {
-  applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  const current = document.documentElement.getAttribute("data-theme");
+  const next = current === "light" ? "dark" : "light";
+  applyTheme(next);
 }
-applyTheme(document.documentElement.getAttribute("data-theme") || "light");
+
+function updateNavBadges() {
+  const onlineCount = state.devices.filter(isOnline).length;
+  const total = state.devices.length;
+  const devBadge = $("#navCountDevices");
+  if (devBadge) devBadge.textContent = total > 0 ? `${onlineCount}/${total}` : "0";
+
+  const groupBadge = $("#navCountGroups");
+  if (groupBadge) groupBadge.textContent = String(state.groups.length);
+
+  const siteBadge = $("#navCountSites");
+  if (siteBadge) siteBadge.textContent = String(state.sites.length);
+
+  const plBadge = $("#navCountPlaylists");
+  if (plBadge) plBadge.textContent = String(state.playlists.length);
+
+  const radioBadge = $("#navCountRadio");
+  if (radioBadge) radioBadge.textContent = String(state.stations.length);
+
+  const appBadge = $("#navCountApps");
+  if (appBadge) appBadge.textContent = String(state.apps.length);
+
+  const fleetText = $("#fleetHealthText");
+  if (fleetText) {
+    fleetText.textContent = total > 0
+      ? `${onlineCount} of ${total} Online · Edge v3.0.1`
+      : "Fleet Ready · Cloudflare Edge";
+  }
+}
+
+function renderSettings() {
+  const s = getSettings();
+  if ($("#hubOrgName")) $("#hubOrgName").value = s.orgName;
+  if ($("#hubAdminContact")) $("#hubAdminContact").value = s.adminContact;
+  if ($("#hubTimezone")) $("#hubTimezone").value = s.timezone;
+  if ($("#hubWeatherUnit")) $("#hubWeatherUnit").value = s.weatherUnit;
+  if ($("#hubRefreshInterval")) $("#hubRefreshInterval").value = String(s.refreshInterval);
+  if ($("#hubSoundsEnabled")) $("#hubSoundsEnabled").checked = Boolean(s.soundsEnabled);
+  if ($("#hubAlertOverdue")) $("#hubAlertOverdue").checked = Boolean(s.alertOverdue);
+
+  if ($("#defaultStartDestination")) $("#defaultStartDestination").value = s.startDestination;
+  if ($("#defaultThemeMode")) $("#defaultThemeMode").value = s.themeMode;
+  if ($("#defaultOsdTimeout")) $("#defaultOsdTimeout").value = String(s.osdTimeout);
+  if ($("#defaultCaptionsLanguage")) $("#defaultCaptionsLanguage").value = s.captionsLanguage;
+  if ($("#defaultAppLanguage")) $("#defaultAppLanguage").value = s.appLanguage || "en";
+  if ($("#defaultUpdateChannel")) $("#defaultUpdateChannel").value = s.updateChannel || "production";
+  if ($("#defaultAutoStart")) $("#defaultAutoStart").checked = Boolean(s.autoStart);
+  if ($("#defaultResumeLastChannel")) $("#defaultResumeLastChannel").checked = Boolean(s.resumeLastChannel);
+  if ($("#defaultKeepAwakeHome")) $("#defaultKeepAwakeHome").checked = Boolean(s.keepAwakeHome);
+  if ($("#defaultSportsBarKiosk")) $("#defaultSportsBarKiosk").checked = Boolean(s.sportsBarKiosk);
+  if ($("#defaultAutoUpdate")) $("#defaultAutoUpdate").checked = Boolean(s.autoUpdate);
+  if ($("#defaultWifiOnly")) $("#defaultWifiOnly").checked = Boolean(s.wifiOnly);
+
+  if ($("#providerFeedUrl")) $("#providerFeedUrl").value = s.providerFeedUrl;
+  if ($("#providerPreBuffer")) $("#providerPreBuffer").value = s.providerPreBuffer;
+  if ($("#providerPostBuffer")) $("#providerPostBuffer").value = s.providerPostBuffer;
+  if ($("#masterEpgUrl")) $("#masterEpgUrl").value = s.masterEpgUrl;
+  if ($("#streamHealthTimeout")) $("#streamHealthTimeout").value = s.streamHealthTimeout;
+  if ($("#defaultBoxGroupPolicy")) $("#defaultBoxGroupPolicy").value = s.defaultBoxGroupPolicy;
+  if ($("#hlsLowLatency")) $("#hlsLowLatency").checked = Boolean(s.hlsLowLatency);
+  if ($("#hlsBufferLength")) $("#hlsBufferLength").value = String(s.hlsBufferLength);
+
+  if ($("#hubDensityMode")) $("#hubDensityMode").value = s.hubDensity;
+  if ($("#enableAnimations")) $("#enableAnimations").checked = Boolean(s.animationsEnabled);
+
+  $$(".theme-choice-card").forEach((card) => {
+    card.classList.toggle("active", card.dataset.themePick === s.hubTheme);
+  });
+  $$(".accent-pill-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.accentPick === s.hubAccent);
+  });
+}
+
+/* ----- Command Palette System ----- */
+let selectedCommandIndex = 0;
+let currentCommandItems = [];
+
+function openCommandPalette() {
+  const dialog = $("#commandPaletteDialog");
+  const input = $("#commandSearchInput");
+  if (!dialog) return;
+  selectedCommandIndex = 0;
+  dialog.showModal();
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+  renderCommandResults("");
+}
+
+function closeCommandPalette() {
+  const dialog = $("#commandPaletteDialog");
+  if (dialog?.open) dialog.close();
+}
+
+function renderCommandResults(query = "") {
+  const container = $("#commandResultsList");
+  if (!container) return;
+  const q = query.trim().toLowerCase();
+  const items = [];
+
+  const navViews = [
+    { id: "devices", title: "Devices Fleet", sub: "View and manage all active televisions", icon: "screens", category: "Navigation" },
+    { id: "settings", title: "Hub Settings", sub: "Fleet defaults, streaming engine, appearance, health", icon: "settings", category: "Navigation" },
+    { id: "studio", title: "TV Playlists", sub: "Manage M3U channels and channel lineups", icon: "studio", category: "Navigation" },
+    { id: "events", title: "Live Event Channels", sub: "Auto-synced temporary live sports channels", icon: "events", category: "Navigation" },
+    { id: "experience", title: "Guest Experience", sub: "Resort branding, Wi-Fi info, service tiles", icon: "experience", category: "Navigation" },
+    { id: "epg", title: "EPG Studio", sub: "XMLTV schedules, programmes, and guides", icon: "epg", category: "Navigation" },
+    { id: "groups", title: "Box Groups", sub: "Group box assignments and channel policies", icon: "groups", category: "Navigation" },
+    { id: "sites", title: "Properties", sub: "Locations, resorts, and site screen grouping", icon: "property", category: "Navigation" },
+    { id: "radio", title: "Radio Streams", sub: "Public radio station catalog", icon: "radio", category: "Navigation" },
+    { id: "apps", title: "App Library", sub: "Managed Play Store and APK apps", icon: "apps", category: "Navigation" },
+    { id: "pair", title: "Pair a TV", sub: "Enroll a new television onto GLZ Hub", icon: "pair", category: "Navigation" }
+  ];
+
+  navViews.forEach((v) => {
+    if (!q || v.title.toLowerCase().includes(q) || v.sub.toLowerCase().includes(q)) {
+      items.push({
+        type: "view",
+        title: v.title,
+        sub: v.sub,
+        icon: v.icon,
+        category: v.category,
+        action: () => { closeCommandPalette(); showView(v.id); }
+      });
+    }
+  });
+
+  const actions = [
+    { title: "Sync Entire Fleet", sub: "Push latest configurations to all online TVs", icon: "upload", category: "Actions", action: () => { closeCommandPalette(); syncAllDevices(); } },
+    { title: "Refresh Dashboard", sub: "Query latest device telemetry and heartbeats", icon: "refresh", category: "Actions", action: () => { closeCommandPalette(); loadDevices(); toast("Fleet refreshed"); } },
+    { title: "Toggle Dark / Light Theme", sub: "Switch color scheme", icon: "sun", category: "Actions", action: () => { toggleTheme(); closeCommandPalette(); } },
+    { title: "Export Hub Backup", sub: "Download JSON archive of all settings & lineups", icon: "download", category: "Actions", action: () => { closeCommandPalette(); exportHubBackup(); } }
+  ];
+
+  actions.forEach((a) => {
+    if (!q || a.title.toLowerCase().includes(q) || a.sub.toLowerCase().includes(q)) {
+      items.push({ ...a, type: "action" });
+    }
+  });
+
+  (state.devices || []).forEach((d) => {
+    const text = `${d.name} ${d.guest_name} ${d.room_number || ""} ${d.model || ""}`.toLowerCase();
+    if (q && text.includes(q)) {
+      const site = state.sites.find((s) => s.id === d.site_id)?.name || "Unassigned";
+      items.push({
+        type: "device",
+        title: d.name || "Untitled Screen",
+        sub: `Rm ${d.room_number || "—"} · ${site} (${isOnline(d) ? "Online" : "Offline"})`,
+        icon: "screens",
+        category: "Televisions",
+        badge: isOnline(d) ? "ONLINE" : "OFFLINE",
+        action: () => { closeCommandPalette(); openDevice(d.id); }
+      });
+    }
+  });
+
+  (state.playlists || []).forEach((pl) => {
+    const text = `${pl.title} ${pl.category || ""}`.toLowerCase();
+    if (q && text.includes(q)) {
+      items.push({
+        type: "playlist",
+        title: pl.title,
+        sub: `${(pl.playlist_items || []).length} channels · ${pl.category || "TV"}`,
+        icon: "studio",
+        category: "Playlists",
+        action: () => { closeCommandPalette(); showView("studio"); }
+      });
+    }
+  });
+
+  (state.events || []).forEach((ev) => {
+    const text = `${ev.title} ${ev.sport_league || ""}`.toLowerCase();
+    if (q && text.includes(q)) {
+      items.push({
+        type: "event",
+        title: ev.title,
+        sub: `${ev.sport_league} · CH ${ev.channel_number || "30-01"}`,
+        icon: "events",
+        category: "Live Events",
+        badge: isEventActive(ev) ? "LIVE" : "SCHEDULED",
+        action: () => { closeCommandPalette(); showView("events"); }
+      });
+    }
+  });
+
+  currentCommandItems = items;
+  if (selectedCommandIndex >= items.length) selectedCommandIndex = 0;
+
+  if (items.length === 0) {
+    container.innerHTML = `<div style="padding:32px; text-align:center; color:var(--text-muted); font-size:13px;">No results found for "${escapeHtml(query)}"</div>`;
+    return;
+  }
+
+  let html = "";
+  let lastCat = "";
+  items.forEach((item, index) => {
+    if (item.category !== lastCat) {
+      lastCat = item.category;
+      html += `<div class="command-group-heading">${escapeHtml(lastCat)}</div>`;
+    }
+    const isSelected = index === selectedCommandIndex;
+    html += `
+      <button type="button" class="command-item ${isSelected ? "selected" : ""}" data-idx="${index}">
+        <span class="command-item-main">
+          <svg class="icon"><use href="#icon-${item.icon}"/></svg>
+          <span class="command-item-title">${escapeHtml(item.title)}</span>
+          <span class="command-item-sub">${escapeHtml(item.sub)}</span>
+        </span>
+        ${item.badge ? `<span class="command-item-badge">${escapeHtml(item.badge)}</span>` : ""}
+      </button>
+    `;
+  });
+
+  container.innerHTML = html;
+  $$(".command-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.idx);
+      if (currentCommandItems[idx]) currentCommandItems[idx].action();
+    });
+  });
+}
+
+function exportHubBackup() {
+  const settings = getSettings();
+  const backup = {
+    version: "3.0.0",
+    exported_at: new Date().toISOString(),
+    settings,
+    sites: state.sites,
+    groups: state.groups,
+    apps: state.apps,
+    playlists: (state.playlists || []).map((pl) => ({
+      id: pl.id,
+      title: pl.title,
+      category: pl.category,
+      description: pl.description,
+      artwork_url: pl.artwork_url,
+      epg_url: pl.epg_url,
+      is_published: pl.is_published,
+      items: pl.playlist_items || []
+    })),
+    experience: state.experience
+  };
+  const jsonStr = JSON.stringify(backup, null, 2);
+  const blob = new Blob([jsonStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const dateStr = new Date().toISOString().split("T")[0];
+  a.download = `glzhub-backup-${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Hub configuration backup exported", "success");
+}
+
+function importHubBackup(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data || typeof data !== "object") throw new Error("Invalid backup format");
+      if (data.settings) {
+        saveSettings(data.settings);
+        renderSettings();
+      }
+      showToast("Hub configuration restored from backup", "success");
+    } catch (err) {
+      showToast(`Import failed: ${err.message}`, "error");
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function pingGateway() {
+  const el = $("#pingHealthResult");
+  if (el) el.textContent = "Pinging…";
+  const start = performance.now();
+  try {
+    const res = await fetch("/api/health");
+    const dur = Math.round(performance.now() - start);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      if (el) el.textContent = `${dur}ms · Healthy (${data.service})`;
+      showToast(`Gateway ping: ${dur}ms (Healthy)`, "success");
+    } else {
+      if (el) el.textContent = `Error ${res.status}`;
+      showToast(`Gateway returned status ${res.status}`, "warning");
+    }
+  } catch (err) {
+    if (el) el.textContent = "Offline / Failed";
+    showToast(`Gateway ping failed: ${err.message}`, "error");
+  }
+}
+
+async function applyDefaultsToFleet() {
+  const s = getSettings();
+  const count = state.devices.length;
+  if (!count) {
+    showToast("No televisions connected to apply baseline to.", "warning");
+    return;
+  }
+  if (!confirm(`Apply provisioning baseline across all ${count} connected televisions?`)) {
+    return;
+  }
+  showToast(`Applying baseline to ${count} televisions…`, "info");
+  let updatedCount = 0;
+  for (const device of state.devices) {
+    try {
+      await api(`/api/v1/admin/devices/${device.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          start_destination: s.startDestination,
+          theme_mode: s.themeMode,
+          osd_timeout_seconds: Number(s.osdTimeout),
+          captions_language: s.captionsLanguage,
+          app_language: s.appLanguage || "en",
+          update_channel: s.updateChannel || "production",
+          auto_start: s.autoStart,
+          resume_last_channel: s.resumeLastChannel,
+          keep_awake_home: s.keepAwakeHome,
+          sports_bar_kiosk_enabled: s.sportsBarKiosk,
+          auto_update: s.autoUpdate,
+          wifi_only: s.wifiOnly
+        })
+      });
+      updatedCount++;
+    } catch (err) {
+      console.error(`Failed to update device ${device.id}:`, err);
+    }
+  }
+  await loadDevices();
+  showToast(`Baseline provisioned to ${updatedCount} televisions!`, "success");
+}
+
+async function syncAllDevices() {
+  const btn = $("#syncAllScreensButton");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await api("/api/v1/admin/devices/sync-all", { method: "POST" });
+    showToast(`Broadcast sync queued for ${res.queued ?? state.devices.length} screens`, "success");
+    await loadDevices();
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+applyTheme(localStorage.getItem("glzhub-theme") || "dark", localStorage.getItem("glzhub-accent") || "sapphire");
 $$("#themeToggle, #themeToggleMobile").forEach((btn) => btn.addEventListener("click", toggleTheme));
 
 $("#deviceSearchInput")?.addEventListener("input", (event) => {
@@ -812,6 +1398,21 @@ $$("#deviceFilterPills .filter-pill").forEach((pill) => {
 $("#refreshDashboardButton")?.addEventListener("click", () => {
   refreshDeviceActivity();
   showToast("Dashboard refreshed", "info");
+});
+
+$("#syncAllScreensButton")?.addEventListener("click", async () => {
+  const btn = $("#syncAllScreensButton");
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    const res = await api("/api/v1/admin/devices/sync-all", { method: "POST" });
+    showToast(`Fleet sync broadcasted to ${res.syncedCount || 0} screens`, "success");
+    await refreshDeviceActivity();
+  } catch (err) {
+    showToast(err.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 if ("serviceWorker" in navigator) {
@@ -879,16 +1480,16 @@ async function saveDeviceSettings(syncToTv = true) {
         start_destination: $("#startDestination").value,
         theme_mode: $("#themeMode").value,
         osd_timeout_seconds: Number($("#osdTimeoutSeconds").value || 8),
+        app_language: $("#appLanguage") ? $("#appLanguage").value : "en",
         captions_enabled: $("#captionsEnabled").checked,
         captions_language: $("#captionsLanguage").value || "en",
-        app_language: $("#appLanguage")?.value || "en",
         auto_start: $("#autoStart").checked,
         resume_last_channel: $("#resumeLastChannel").checked,
         keep_awake_home: $("#keepAwakeHome").checked,
         sports_bar_kiosk_enabled: $("#sportsBarKioskEnabled").checked,
+        update_channel: $("#updateChannel") ? $("#updateChannel").value : "production",
         auto_update: $("#autoUpdate").checked,
         wifi_only: $("#wifiOnly").checked,
-        update_channel: $("#updateChannel")?.value || "production",
         visible_apps: $$("#visibleApps input:checked").map((input) => input.value),
         queue_sync: syncToTv
       })
@@ -925,20 +1526,24 @@ $("#forceRefreshDevice").addEventListener("click", async () => {
   $("#deviceError").textContent = "";
   try {
     await api(`/api/v1/admin/devices/${id}/force-refresh`, { method: "POST" });
-    showToast("⚡ Force refresh signal sent to TV", "success");
+    showToast("Force refresh signal sent to TV", "success");
   } catch (error) {
     $("#deviceError").textContent = error.message;
     showToast(error.message, "error");
   }
 });
 
-$("#checkUpdateDeviceBtn")?.addEventListener("click", async () => {
+$("#checkUpdateDevice")?.addEventListener("click", async () => {
   const id = $("#deviceId").value;
   if (!id) return;
   $("#deviceError").textContent = "";
   try {
-    await api(`/api/v1/admin/devices/${id}/check-update`, { method: "POST" });
-    showToast("🔄 Remote OTA update check queued for TV", "success");
+    const channel = $("#updateChannel") ? $("#updateChannel").value : "production";
+    await api(`/api/v1/admin/devices/${id}/check-update`, {
+      method: "POST",
+      body: JSON.stringify({ updateChannel: channel })
+    });
+    showToast(`OTA update check (${channel}) queued for TV`, "success");
   } catch (error) {
     $("#deviceError").textContent = error.message;
     showToast(error.message, "error");
@@ -1290,7 +1895,177 @@ $("#refreshDashboardButton").addEventListener("click", async () => {
 $("#pairButton").addEventListener("click", () => showView("pair"));
 $$("[data-open-pair]").forEach((button) => button.addEventListener("click", () => showView("pair")));
 $$("[data-view-button]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.viewButton)));
+$$("[data-view-jump]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.viewJump)));
 $$(".nav").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
+
+// User Profile & Settings navigation
+$("#userChipBtn")?.addEventListener("click", () => showView("settings"));
+$("#userChipBtn")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    showView("settings");
+  }
+});
+
+// Command Palette Navigation & Search
+$("#globalSearchTriggerBtn")?.addEventListener("click", openCommandPalette);
+$("#mobileSearchBtn")?.addEventListener("click", openCommandPalette);
+$("#closeCommandPaletteBtn")?.addEventListener("click", closeCommandPalette);
+$("#commandSearchInput")?.addEventListener("input", (e) => renderCommandResults(e.target.value));
+
+$("#commandSearchInput")?.addEventListener("keydown", (e) => {
+  const items = $$(".command-item");
+  if (!items.length) return;
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    selectedCommandIndex = (selectedCommandIndex + 1) % items.length;
+    items.forEach((item, idx) => item.classList.toggle("selected", idx === selectedCommandIndex));
+    items[selectedCommandIndex]?.scrollIntoView({ block: "nearest" });
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    selectedCommandIndex = (selectedCommandIndex - 1 + items.length) % items.length;
+    items.forEach((item, idx) => item.classList.toggle("selected", idx === selectedCommandIndex));
+    items[selectedCommandIndex]?.scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    if (currentCommandItems[selectedCommandIndex]) {
+      currentCommandItems[selectedCommandIndex].action();
+    }
+  } else if (e.key === "Escape") {
+    closeCommandPalette();
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    const dialog = $("#commandPaletteDialog");
+    if (dialog?.open) {
+      closeCommandPalette();
+    } else {
+      openCommandPalette();
+    }
+  }
+});
+
+// Settings Center Event Listeners
+$$(".settings-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    $$(".settings-tab").forEach((t) => t.classList.remove("active"));
+    $$(".settings-pane").forEach((p) => p.classList.add("hidden"));
+    tab.classList.add("active");
+    const target = $(`#${tab.dataset.setTab}`);
+    if (target) target.classList.remove("hidden");
+  });
+});
+
+$$(".theme-choice-card").forEach((card) => {
+  card.addEventListener("click", () => {
+    const theme = card.dataset.themePick;
+    applyTheme(theme);
+    showToast(`Theme switched to ${theme === "dark" ? "Dark Luxury" : (theme === "midnight" ? "Midnight OLED" : "Clean Light")}`, "info");
+  });
+});
+
+$$(".accent-pill-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const accent = btn.dataset.accentPick;
+    const curTheme = document.documentElement.getAttribute("data-theme") || "dark";
+    applyTheme(curTheme, accent);
+    showToast(`Accent palette updated to ${accent}`, "info");
+  });
+});
+
+$("#detectTimezoneBtn")?.addEventListener("click", () => {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz) {
+      let optionExists = false;
+      const select = $("#hubTimezone");
+      if (select) {
+        for (let i = 0; i < select.options.length; i++) {
+          if (select.options[i].value === tz) {
+            select.selectedIndex = i;
+            optionExists = true;
+            break;
+          }
+        }
+        if (!optionExists) {
+          const opt = document.createElement("option");
+          opt.value = tz;
+          opt.textContent = `${tz} (Detected)`;
+          select.appendChild(opt);
+          select.value = tz;
+        }
+        showToast(`Detected timezone: ${tz}`, "success");
+      }
+    }
+  } catch {
+    showToast("Could not detect timezone", "warning");
+  }
+});
+
+$("#saveAllSettingsBtn")?.addEventListener("click", () => {
+  const updated = {
+    orgName: $("#hubOrgName")?.value || DEFAULT_SETTINGS.orgName,
+    adminContact: $("#hubAdminContact")?.value || DEFAULT_SETTINGS.adminContact,
+    timezone: $("#hubTimezone")?.value || DEFAULT_SETTINGS.timezone,
+    weatherUnit: $("#hubWeatherUnit")?.value || DEFAULT_SETTINGS.weatherUnit,
+    refreshInterval: Number($("#hubRefreshInterval")?.value || 30),
+    soundsEnabled: Boolean($("#hubSoundsEnabled")?.checked),
+    alertOverdue: Boolean($("#hubAlertOverdue")?.checked),
+
+    startDestination: $("#defaultStartDestination")?.value || DEFAULT_SETTINGS.startDestination,
+    themeMode: $("#defaultThemeMode")?.value || DEFAULT_SETTINGS.themeMode,
+    osdTimeout: Number($("#defaultOsdTimeout")?.value || 8),
+    captionsLanguage: $("#defaultCaptionsLanguage")?.value || "en",
+    appLanguage: $("#defaultAppLanguage")?.value || "en",
+    updateChannel: $("#defaultUpdateChannel")?.value || "production",
+    autoStart: Boolean($("#defaultAutoStart")?.checked),
+    resumeLastChannel: Boolean($("#defaultResumeLastChannel")?.checked),
+    keepAwakeHome: Boolean($("#defaultKeepAwakeHome")?.checked),
+    sportsBarKiosk: Boolean($("#defaultSportsBarKiosk")?.checked),
+    autoUpdate: Boolean($("#defaultAutoUpdate")?.checked),
+    wifiOnly: Boolean($("#defaultWifiOnly")?.checked),
+
+    providerFeedUrl: $("#providerFeedUrl")?.value || DEFAULT_SETTINGS.providerFeedUrl,
+    providerPreBuffer: Number($("#providerPreBuffer")?.value ?? 0.5),
+    providerPostBuffer: Number($("#providerPostBuffer")?.value ?? 0.5),
+    masterEpgUrl: $("#masterEpgUrl")?.value || DEFAULT_SETTINGS.masterEpgUrl,
+    streamHealthTimeout: Number($("#streamHealthTimeout")?.value || 6),
+    defaultBoxGroupPolicy: $("#defaultBoxGroupPolicy")?.value || "allow",
+    hlsLowLatency: Boolean($("#hlsLowLatency")?.checked),
+    hlsBufferLength: Number($("#hlsBufferLength")?.value || 60),
+
+    hubDensity: $("#hubDensityMode")?.value || "comfortable",
+    animationsEnabled: Boolean($("#enableAnimations")?.checked)
+  };
+  saveSettings(updated);
+  showToast("All Hub settings saved successfully!", "success");
+});
+
+$("#pingHealthBtn")?.addEventListener("click", pingGateway);
+$("#applyDefaultsToFleetBtn")?.addEventListener("click", applyDefaultsToFleet);
+$("#exportSettingsBtn")?.addEventListener("click", exportHubBackup);
+$("#exportSettingsBackupBtn")?.addEventListener("click", exportHubBackup);
+$("#importSettingsBtn")?.addEventListener("click", () => $("#importSettingsFileInput")?.click());
+$("#importSettingsBackupBtn")?.addEventListener("click", () => $("#importSettingsFileInput")?.click());
+$("#importSettingsFileInput")?.addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  if (file) importHubBackup(file);
+});
+
+$("#testToastSuccessBtn")?.addEventListener("click", () => showToast("Success: Configuration synced cleanly across all displays", "success"));
+$("#testToastWarnBtn")?.addEventListener("click", () => showToast("Warning: Television Rm 302 heartbeat delayed >10m", "warning"));
+$("#testToastErrorBtn")?.addEventListener("click", () => showToast("Error: Provider feed timeout after 6s", "error"));
+$("#clearCacheBtn")?.addEventListener("click", () => {
+  if (confirm("Reset local storage and restore default preferences?")) {
+    localStorage.removeItem(SETTINGS_KEY);
+    localStorage.removeItem("glzhub-theme");
+    localStorage.removeItem("glzhub-accent");
+    location.reload();
+  }
+});
 
 $("#visibleApps").innerHTML = APP_CATALOG.map(([name, packageName]) => `
   <label class="app-option">
@@ -1303,7 +2078,12 @@ await loadPublicConfig();
 restoreSession();
 showApp();
 if (state.session) {
-  loadDevices().catch(() => { });
+  loadDevices().catch((err) => {
+    console.warn("Session expired or rejected:", err);
+    localStorage.removeItem("glzhub_session");
+    state.session = null;
+    showApp();
+  });
   loadPlaylists().catch(() => { });
 }
 
@@ -1325,48 +2105,52 @@ function renderRadioStations() {
 
   if (state.stations.length > 0) {
     const card = document.createElement("article");
-    card.style.cssText = "border: 1px solid var(--line); border-radius: 16px; background: #0c1827; overflow: hidden;";
+    card.className = "editor-card";
+    card.style.padding = "0";
+    card.style.overflow = "hidden";
 
     card.innerHTML = `
-      <div style="padding: 16px 20px; background: var(--panel-2); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div style="width: 38px; height: 38px; border-radius: 10px; background: var(--lime); color: var(--ink); display: grid; place-items: center; font-weight: 900; font-size: 18px;">📻</div>
+      <div style="padding: 14px 20px; background: var(--panel-header); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="card-glyph-badge" style="width:34px; height:34px;">
+            <svg class="icon"><use href="#icon-radio"/></svg>
+          </div>
           <div>
-            <h4 style="margin: 0; font-size: 16px; color: var(--text);">Active Radio Broadcast Streams (${state.stations.length} stations)</h4>
-            <small style="color: var(--muted);">Live audio streams broadcasted to GLZ Radio mobile and web engines</small>
+            <h4 style="margin: 0; font-size: 14px;">Active Radio Broadcast Streams (${state.stations.length})</h4>
+            <small style="color: var(--text-muted); font-size: 11.5px;">Live audio streams broadcasted to GLZ Radio mobile and web engines</small>
           </div>
         </div>
       </div>
-      <div style="max-height: 540px; overflow-y: auto;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+      <div style="max-height: 520px; overflow-y: auto;">
+        <table class="studio-table">
           <thead>
-            <tr style="border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; background: #091321;">
-              <th style="padding: 10px 18px;">Station Name</th>
-              <th style="padding: 10px 18px; width: 140px;">Station Code</th>
-              <th style="padding: 10px 18px; width: 130px;">Genre</th>
-              <th style="padding: 10px 18px;">Audio Stream URL</th>
-              <th style="padding: 10px 18px; width: 140px; text-align: right;">Actions</th>
+            <tr>
+              <th>Station Name</th>
+              <th style="width: 140px;">Station Code</th>
+              <th style="width: 130px;">Genre</th>
+              <th>Audio Stream URL</th>
+              <th style="width: 150px; text-align: right;">Actions</th>
             </tr>
           </thead>
           <tbody>
             ${state.stations.map((station) => `
-              <tr style="border-bottom: 1px solid rgba(38,58,82,0.5); transition: background 0.15s;" onmouseover="this.style.background='#132438'" onmouseout="this.style.background='transparent'">
-                <td style="padding: 12px 18px; font-weight: 700; color: var(--text);">
+              <tr>
+                <td style="font-weight: 600; color: var(--text-main);">
                   <div style="display: flex; align-items: center; gap: 10px;">
-                    ${station.logo_url ? `<img src="${escapeHtml(station.logo_url)}" style="width: 26px; height: 26px; object-fit: contain; border-radius: 4px;" onerror="this.style.display='none'">` : ''}
+                    ${station.logo_url ? `<img src="${escapeHtml(station.logo_url)}" style="width: 24px; height: 24px; object-fit: contain; border-radius: 4px;" onerror="this.style.display='none'">` : ''}
                     <span>${escapeHtml(station.name)}</span>
                   </div>
                 </td>
-                <td style="padding: 12px 18px; color: var(--orange); font-family: monospace; font-weight: 850;">${escapeHtml(station.station_code)}</td>
-                <td style="padding: 12px 18px;"><span class="source-badge" style="background: rgba(198,250,77,0.12); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--lime);">${escapeHtml(station.genre)}</span></td>
-                <td style="padding: 12px 18px; color: var(--muted); font-family: monospace; font-size: 11px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                  <a href="${escapeHtml(station.stream_url)}" target="_blank" style="color: #60a5fa; text-decoration: none;">${escapeHtml(station.stream_url)}</a>
+                <td><code style="color: var(--accent); font-weight: 700;">${escapeHtml(station.station_code)}</code></td>
+                <td><span class="meta-pill">${escapeHtml(station.genre)}</span></td>
+                <td>
+                  <a href="${escapeHtml(station.stream_url)}" target="_blank" style="font-family: var(--font-mono); font-size: 11.5px; max-width: 300px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(station.stream_url)}</a>
                 </td>
-                <td style="padding: 12px 18px; text-align: right;">
-                  <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
-                    <button type="button" class="secondary preview-radio-stream" data-url="${escapeHtml(station.stream_url)}" data-name="${escapeHtml(station.name)}" style="padding: 4px 10px; font-size: 11px;">▶ Listen</button>
-                    <button type="button" class="secondary edit-radio" data-id="${station.id}" style="padding: 4px 10px; font-size: 11px;">Edit</button>
-                    <button type="button" class="danger-button delete-radio" data-id="${station.id}" style="padding: 4px 10px; font-size: 11px; margin: 0;">Delete</button>
+                <td style="text-align: right;">
+                  <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+                    <button type="button" class="secondary small-btn preview-radio-stream" data-url="${escapeHtml(station.stream_url)}" data-name="${escapeHtml(station.name)}">Listen</button>
+                    <button type="button" class="secondary small-btn edit-radio" data-id="${station.id}">Edit</button>
+                    <button type="button" class="danger-button small-btn delete-radio" data-id="${station.id}">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -1381,6 +2165,7 @@ function renderRadioStations() {
   $$(".preview-radio-stream").forEach((btn) => btn.addEventListener("click", () => previewStream(btn.dataset.url, btn.dataset.name, true)));
   $$(".edit-radio").forEach((btn) => btn.addEventListener("click", () => openRadioDialog(btn.dataset.id)));
   $$(".delete-radio").forEach((btn) => btn.addEventListener("click", () => deleteRadioStation(btn.dataset.id)));
+  updateNavBadges();
 }
 
 function openRadioDialog(id = null) {
@@ -1467,31 +2252,31 @@ function renderPlaylists() {
     card.innerHTML = `
       <div class="studio-card-head">
         <div style="display: flex; align-items: center; gap: 14px;">
-          <div style="width: 42px; height: 42px; border-radius: 10px; background: var(--orange); color: var(--ink); display: grid; place-items: center; font-weight: 900; font-size: 18px;">📺</div>
+          <div class="card-glyph-badge"><svg class="icon"><use href="#icon-playlists"/></svg></div>
           <div>
             <div style="display: flex; align-items: center; gap: 10px;">
-              <h4 style="margin: 0; font-size: 18px; color: var(--text);">${escapeHtml(pl.title)}</h4>
-              <span class="studio-badge ${pl.is_published ? "published" : ""}">${pl.is_published ? "PUBLISHED" : "DRAFT"}</span>
-              <span class="studio-badge">${escapeHtml(pl.category).toUpperCase()}</span>
+              <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-main);">${escapeHtml(pl.title)}</h4>
+              <span class="status-pill ${pl.is_published ? "online" : "offline"}">${pl.is_published ? "Published" : "Draft"}</span>
+              <span class="meta-pill font-mono">${escapeHtml(pl.category).toUpperCase()}</span>
             </div>
-            <small style="color: var(--muted); margin-top: 4px; display: block;">${escapeHtml(pl.description || "No description provided")} • <strong>${items.length} channels</strong>${pl.epg_url ? " • EPG connected" : ""}</small>
+            <small style="color: var(--text-muted); margin-top: 4px; display: block;">${escapeHtml(pl.description || "No description provided")} • <strong>${items.length} channels</strong>${pl.epg_url ? " • EPG connected" : ""}</small>
           </div>
         </div>
         <div class="studio-card-actions">
-          <button type="button" class="secondary import-playlist" data-id="${pl.id}">⇧ Import M3U</button>
-          <button type="button" class="secondary export-playlist" data-id="${pl.id}">⇩ Export M3U</button>
-          <button type="button" class="secondary edit-guide" data-id="${pl.id}">▤ EPG editor</button>
-          <button type="button" class="secondary push-playlist" data-id="${pl.id}">↻ Push to TVs</button>
+          <button type="button" class="secondary import-playlist" data-id="${pl.id}">Import M3U</button>
+          <button type="button" class="secondary export-playlist" data-id="${pl.id}">Export M3U</button>
+          <button type="button" class="secondary edit-guide" data-id="${pl.id}">EPG Studio</button>
+          <button type="button" class="secondary push-playlist" data-id="${pl.id}">Push to Fleet</button>
           <button type="button" class="secondary toggle-playlist" data-id="${pl.id}">${pl.is_published ? "Unpublish" : "Publish"}</button>
           <button type="button" class="secondary edit-playlist" data-id="${pl.id}">Settings</button>
-          <button type="button" class="primary add-channel-item" data-id="${pl.id}">＋ Channel</button>
+          <button type="button" class="primary add-channel-item" data-id="${pl.id}">+ Add Channel</button>
           <button type="button" class="danger-button delete-playlist" data-id="${pl.id}" style="margin:0;">Delete</button>
         </div>
       </div>
       <div class="studio-filter"><input class="playlist-filter" placeholder="Search channels, groups, EPG IDs or URLs…"></div>
       <div>
         ${items.length === 0 ? `
-          <div style="padding: 30px; text-align: center; color: var(--muted); font-size: 14px;">
+          <div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 13px;">
             No channels yet. Import an M3U file or add the first channel manually.
           </div>
         ` : `
@@ -1505,17 +2290,17 @@ function renderPlaylists() {
                   const meta = item.metadata || {};
                   const searchable = [item.title, item.media_url, meta.group, meta.tvg_id, meta.tvg_chno].filter(Boolean).join(" ").toLowerCase();
                   return `<tr class="studio-channel-row" draggable="true" data-playlist-id="${pl.id}" data-item-id="${item.id}" data-search="${escapeHtml(searchable)}">
-                    <td style="color:var(--orange);font-weight:900;">↕ ${item.position || 0}</td>
+                    <td style="color:var(--text-muted);font-weight:600;font-variant-numeric:tabular-nums;text-align:center;">#${item.position || 0}</td>
                     <td><input class="studio-inline-field inline-channel-number" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.tvg_chno || "")}" aria-label="Channel number" placeholder="—" maxlength="20"></td>
-                    <td><div class="studio-channel-title">${meta.tvg_logo ? `<img src="${escapeHtml(meta.tvg_logo)}" alt="">` : "<span>▣</span>"}<input class="studio-inline-field inline-channel-name" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(item.title)}" aria-label="Channel name" maxlength="120"></div></td>
+                    <td><div class="studio-channel-title">${meta.tvg_logo ? `<img class="channel-logo-thumb" src="${escapeHtml(meta.tvg_logo)}" alt="">` : `<span class="channel-logo-thumb" style="display:inline-grid;place-items:center;"><svg class="icon" style="width:14px;height:14px;color:var(--text-muted);"><use href="#icon-screens"/></svg></span>`}<input class="studio-inline-field inline-channel-name" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(item.title)}" aria-label="Channel name" maxlength="120"></div></td>
                     <td><input class="studio-inline-field inline-channel-group" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.group || "")}" aria-label="Channel group" placeholder="—" maxlength="100"></td>
                     <td><input class="studio-inline-field inline-channel-epg" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.tvg_id || "")}" aria-label="EPG ID" placeholder="—" maxlength="120"></td>
                     <td><input class="studio-inline-field inline-channel-url" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(item.media_url)}" aria-label="Stream URL" maxlength="2048"></td>
-                    <td><button type="button" class="studio-badge channel-visibility ${meta.hidden ? "hidden-channel" : "published"}" data-playlist-id="${pl.id}" data-item-id="${item.id}" data-hidden="${meta.hidden === true}">${meta.hidden ? "HIDDEN" : "VISIBLE"}</button></td>
+                    <td><button type="button" class="status-pill ${meta.hidden ? "offline" : "online"} channel-visibility" data-playlist-id="${pl.id}" data-item-id="${item.id}" data-hidden="${meta.hidden === true}">${meta.hidden ? "Hidden" : "Visible"}</button></td>
                     <td>
                       <div style="display:flex;gap:6px;align-items:center;">
-                        <button type="button" class="secondary preview-channel-stream" data-url="${escapeHtml(item.media_url)}" data-title="${escapeHtml(item.title)}" style="padding:5px 8px;" title="Test Stream">▶ Test</button>
-                        <button type="button" class="secondary edit-playlist-item" data-item-id="${item.id}" data-playlist-id="${pl.id}" style="padding:5px 8px;">Edit</button>
+                        <button type="button" class="secondary preview-channel-stream" data-url="${escapeHtml(item.media_url)}" data-title="${escapeHtml(item.title)}" style="padding:4px 8px;" title="Test Stream">Test</button>
+                        <button type="button" class="secondary edit-playlist-item" data-item-id="${item.id}" data-playlist-id="${pl.id}" style="padding:4px 8px;">Edit</button>
                       </div>
                     </td>
                   </tr>`;
@@ -1584,8 +2369,10 @@ function renderPlaylists() {
     btn.disabled = true;
     try {
       const result = await api(`/api/v1/admin/playlists/${btn.dataset.id}/push`, { method: "POST" });
-      const count = result.pushedDevices || 0;
-      showToast(count > 0 ? `Lineup queued for sync on ${count} online TV${count === 1 ? "" : "s"}.` : `No online TVs assigned to this lineup to sync.`, count > 0 ? "success" : "warning");
+      const count = result.totalDevices || result.pushedDevices || 0;
+      const onlineCount = result.onlineDevices || 0;
+      showToast(count > 0 ? `Lineup queued for sync on ${count} TV${count === 1 ? "" : "s"} (${onlineCount} active now).` : `No TVs assigned to this lineup.`, count > 0 ? "success" : "warning");
+      await loadDevices();
     } catch (error) { showToast(error.message, "error"); }
     finally { btn.disabled = false; }
   }));
@@ -1604,6 +2391,7 @@ function renderPlaylists() {
   }));
   $$(".delete-playlist").forEach((btn) => btn.addEventListener("click", () => deletePlaylist(btn.dataset.id)));
   wirePlaylistDragging();
+  updateNavBadges();
 }
 
 async function saveInlineChannelField(input) {
@@ -1870,12 +2658,12 @@ function renderPlaylistItems(playlist) {
     const meta = item.metadata || {};
     return `
     <div class="channel-item-row">
-      ${meta.tvg_logo ? `<img class="channel-logo-thumb" src="${escapeHtml(meta.tvg_logo)}" alt="">` : `<span class="channel-logo-thumb" style="display:grid;place-items:center;font-size:11px;">📺</span>`}
+      ${meta.tvg_logo ? `<img class="channel-logo-thumb" src="${escapeHtml(meta.tvg_logo)}" alt="">` : `<span class="channel-logo-thumb" style="display:inline-grid;place-items:center;"><svg class="icon" style="width:14px;height:14px;color:var(--text-muted);"><use href="#icon-screens"/></svg></span>`}
       <div class="channel-info-meta">
         <strong>#${item.position || 0} ${escapeHtml(item.title)}</strong>
         <small><span>${escapeHtml(meta.group || "Ungrouped")}</span>${meta.tvg_id ? `<span>EPG: ${escapeHtml(meta.tvg_id)}</span>` : ""}</small>
       </div>
-      <button type="button" class="secondary preview-item-stream small-btn" data-url="${escapeHtml(item.media_url)}" data-title="${escapeHtml(item.title)}">▶ Test</button>
+      <button type="button" class="secondary preview-item-stream small-btn" data-url="${escapeHtml(item.media_url)}" data-title="${escapeHtml(item.title)}">Test</button>
       <button type="button" class="danger-button delete-playlist-item small-btn" data-item-id="${item.id}" data-playlist-id="${playlist.id}">Delete</button>
     </div>
   `;
@@ -2068,20 +2856,20 @@ function renderBoxGroups() {
     return `
       <article class="group-card" data-id="${group.id}">
         <div class="card-main-info">
-          <div class="group-glyph">▦</div>
+          <div class="card-glyph-badge"><svg class="icon"><use href="#icon-groups"/></svg></div>
           <div class="card-details">
             <h4>${escapeHtml(group.name)}</h4>
             <p>${escapeHtml(playlist ? `${playlist.title} (${(playlist.playlist_items || []).length} channels)` : "No master playlist")}</p>
             <div class="card-meta-pills">
               <span class="meta-pill">${devices.length} Box${devices.length === 1 ? "" : "es"}</span>
-              <span class="status ${onlineCount > 0 ? "" : "offline"}">${onlineCount} ONLINE</span>
-              <span class="policy-badge ${isBlockPolicy ? "block" : "allow"}">${isBlockPolicy ? "ONLY EXPLICITLY ALLOWED" : "ALL CHANNELS UNLESS BLOCKED"}</span>
+              <span class="status-pill ${onlineCount > 0 ? "online" : "offline"}">${onlineCount} Online</span>
+              <span class="policy-badge ${isBlockPolicy ? "block" : "allow"}">${isBlockPolicy ? "Strict Whitelist" : "Open Lineup"}</span>
             </div>
           </div>
         </div>
         <div class="card-action-bar">
-          <button type="button" class="secondary edit-group-policy" data-id="${group.id}">🔒 Channel Policy</button>
-          <button type="button" class="secondary push-group-boxes" data-id="${group.id}" ${onlineCount === 0 ? "disabled title='No online boxes to sync'" : ""}>↻ Push to TVs</button>
+          <button type="button" class="secondary edit-group-policy" data-id="${group.id}">Channel Policy</button>
+          <button type="button" class="secondary push-group-boxes" data-id="${group.id}" ${devices.length === 0 ? "disabled title='No boxes assigned'" : ""}>Push to Fleet</button>
           <button type="button" class="secondary edit-box-group" data-id="${group.id}">Edit</button>
         </div>
       </article>
@@ -2095,22 +2883,23 @@ function renderBoxGroups() {
     try {
       const group = state.groups.find((g) => g.id === btn.dataset.id);
       if (!group) return;
-      const groupOnlineBoxes = state.devices.filter((d) => d.box_group_id === group.id && isOnline(d));
-      if (!groupOnlineBoxes.length) {
-        showToast("No online boxes in this group to sync.", "warning");
+      const groupBoxes = state.devices.filter((d) => d.box_group_id === group.id);
+      if (!groupBoxes.length) {
+        showToast("No boxes assigned to this group.", "warning");
         return;
       }
       const token = new Date().toISOString();
-      await Promise.all(groupOnlineBoxes.map((d) => api(`/api/v1/admin/devices/${d.id}`, {
+      const onlineBoxes = groupBoxes.filter(isOnline);
+      await Promise.all(groupBoxes.map((d) => api(`/api/v1/admin/devices/${d.id}`, {
         method: "PATCH",
         body: JSON.stringify({
           force_refresh_token: token,
           sync_status: "queued",
-          sync_message: "Updating lineup",
+          sync_message: isOnline(d) ? "Updating lineup" : "Queued (TV offline)",
           queue_sync: true
         })
       })));
-      showToast(`Lineup refresh pushed to ${groupOnlineBoxes.length} online TV${groupOnlineBoxes.length === 1 ? "" : "s"}.`, "success");
+      showToast(`Lineup refresh queued for ${groupBoxes.length} TV${groupBoxes.length === 1 ? "" : "s"} (${onlineBoxes.length} active now).`, "success");
       await loadDevices();
     } catch (err) {
       showToast(err.message, "error");
@@ -2118,6 +2907,7 @@ function renderBoxGroups() {
       btn.disabled = false;
     }
   }));
+  updateNavBadges();
 }
 
 function openBoxGroup(id = "") {
@@ -2605,12 +3395,9 @@ async function loadEventChannels() {
 function isEventActive(event) {
   if (event.status === "disabled" || event.status === "expired") return false;
   const start = new Date(event.start_time).getTime();
-  const rawEnd = new Date(event.end_time).getTime();
-  const end = (!Number.isFinite(rawEnd) || rawEnd <= start || (rawEnd - start) > 3.5 * 3600_000)
-    ? start + 3 * 3600_000
-    : rawEnd;
-  const preBuffer = Math.min(Math.max(Number(event.pre_buffer_hours ?? 0.5) || 0.5, 0), 1) * 3600_000;
-  const postBuffer = Math.min(Math.max(Number(event.post_buffer_hours ?? 0.5) || 0.5, 0), 1.5) * 3600_000;
+  const end = new Date(event.end_time).getTime();
+  const preBuffer = (Number.isFinite(Number(event.pre_buffer_hours)) ? Number(event.pre_buffer_hours) : 0.5) * 3600_000;
+  const postBuffer = (Number.isFinite(Number(event.post_buffer_hours)) ? Number(event.post_buffer_hours) : 0.5) * 3600_000;
   const now = Date.now();
   return now >= (start - preBuffer) && now <= (end + postBuffer);
 }
@@ -2652,26 +3439,26 @@ function renderEventChannels() {
     const startDate = new Date(event.start_time);
     const endDate = new Date(event.end_time);
 
-    let statusBadge = `<span class="policy-badge allow">ACTIVE ON TVs</span>`;
+    let statusBadge = `<span class="status-pill online">Active on TVs</span>`;
     if (event.status === "disabled") {
-      statusBadge = `<span class="policy-badge block">DISABLED</span>`;
+      statusBadge = `<span class="status-pill offline">Disabled</span>`;
     } else if (event.status === "expired" || Date.now() > endDate.getTime() + (event.post_buffer_hours * 3600_000)) {
-      statusBadge = `<span class="meta-pill">EXPIRED</span>`;
+      statusBadge = `<span class="status-pill offline">Expired</span>`;
     } else if (!active) {
-      statusBadge = `<span class="meta-pill">SCHEDULED</span>`;
+      statusBadge = `<span class="status-pill queued">Scheduled</span>`;
     }
 
-    const healthText = event.health_status || (event.is_online === false ? "Offline" : "Unknown");
-    const healthClass = event.is_online !== false ? "policy-badge allow" : "policy-badge block";
+    const healthText = event.health_status || (event.is_online === false ? "Offline" : "Live");
+    const healthClass = event.is_online !== false ? "status-pill online" : "status-pill offline";
     const healthBadge = `<span class="${healthClass}">${escapeHtml(healthText)}</span>`;
 
-    const leagueBadge = `<span class="meta-pill" style="font-weight:700;color:var(--accent);">${escapeHtml(event.sport_league || "SPORTS")}</span>`;
-    const chnoBadge = `<span class="meta-pill" style="font-weight:700;background:rgba(196,255,77,0.15);color:var(--accent-emerald, #c4ff4d);">CH ${escapeHtml(event.channel_number || "30-01")}</span>`;
+    const leagueBadge = `<span class="meta-pill font-mono">${escapeHtml(event.sport_league || "SPORTS")}</span>`;
+    const chnoBadge = `<span class="meta-pill font-mono">CH ${escapeHtml(event.channel_number || "30-01")}</span>`;
 
     return `
       <article class="group-card" data-id="${event.id}">
         <div class="card-main-info">
-          <div class="group-glyph">⚡</div>
+          <div class="card-glyph-badge"><svg class="icon"><use href="#icon-events"/></svg></div>
           <div class="card-details">
             <h4>${chnoBadge} ${escapeHtml(event.title)} ${leagueBadge}</h4>
             <p>${escapeHtml(event.group_title || "Major League Sports (Events)")} · tvg-id: <code>${escapeHtml(event.tvg_id)}</code></p>
@@ -2746,17 +3533,17 @@ function renderProviderStreams() {
     const alreadyInjected = stream.alreadyInjected || existingTvgIds.has(stream.tvgId);
     const startDate = new Date(stream.startTime);
 
-    const leagueBadge = `<span class="meta-pill" style="font-weight:700;color:var(--accent);">${escapeHtml(stream.sportLeague || "SPORTS")}</span>`;
-    const chnoBadge = `<span class="meta-pill" style="font-weight:700;background:rgba(196,255,77,0.15);color:var(--accent-emerald, #c4ff4d);">CH ${escapeHtml(stream.channelNumber || "30-01")}</span>`;
+    const leagueBadge = `<span class="meta-pill font-mono">${escapeHtml(stream.sportLeague || "SPORTS")}</span>`;
+    const chnoBadge = `<span class="meta-pill font-mono">CH ${escapeHtml(stream.channelNumber || "30-01")}</span>`;
 
     const injectBtn = alreadyInjected
-      ? `<button type="button" class="secondary small-btn" disabled style="opacity:0.7; font-weight:700;">✓ Injected</button>`
-      : `<button type="button" class="primary small-btn inject-single-btn" data-idx="${idx}" style="font-weight:700; background:linear-gradient(135deg,#6366f1,#8b5cf6);">💉 Inject Stream</button>`;
+      ? `<button type="button" class="secondary small-btn" disabled>Injected</button>`
+      : `<button type="button" class="primary small-btn inject-single-btn" data-idx="${idx}">Inject Stream</button>`;
 
     return `
-      <div class="channel-item-row" style="padding:10px 14px; background:var(--surface-variant, rgba(255,255,255,0.03)); border-radius:8px;">
+      <div class="channel-item-row" style="padding:10px 14px; background:var(--panel-card); border:1px solid var(--line); border-radius:var(--radius-sm);">
         <div class="channel-info-meta" style="flex:1;">
-          <strong style="font-size:14px;">${chnoBadge} ${escapeHtml(stream.title)} ${leagueBadge}</strong>
+          <strong style="font-size:13.5px;">${chnoBadge} ${escapeHtml(stream.title)} ${leagueBadge}</strong>
           <small style="margin-top:4px;">
             <span>${escapeHtml(stream.groupTitle)}</span> · 
             <span>tvg-id: <code>${escapeHtml(stream.tvgId)}</code></span> · 
@@ -2764,7 +3551,7 @@ function renderProviderStreams() {
           </small>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
-          <button type="button" class="secondary small-btn preview-prov-stream" data-url="${escapeHtml(stream.streamUrl)}" data-title="${escapeHtml(stream.title)}">▶ Test</button>
+          <button type="button" class="secondary small-btn preview-prov-stream" data-url="${escapeHtml(stream.streamUrl)}" data-title="${escapeHtml(stream.title)}">Test</button>
           ${injectBtn}
         </div>
       </div>
@@ -2791,7 +3578,7 @@ function renderProviderStreams() {
       } catch (err) {
         showToast(`Injection failed: ${err.message}`, "error");
         btn.disabled = false;
-        btn.textContent = "💉 Inject Stream";
+        btn.textContent = "Inject Stream";
       }
     });
   });
