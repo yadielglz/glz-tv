@@ -46,13 +46,36 @@ public final class M3uParser {
             String group = attributes.getOrDefault("group-title", "Other");
             String number = first(attributes, "tvg-chno", "ch-number", "channel-number", "tvg-num");
             String logoUrl = attributes.getOrDefault("tvg-logo", "");
+            String eventTitle = first(attributes, "x-event-title", "event-title");
+            String eventLeague = first(attributes, "x-event-league", "event-league");
+            long eventStartMillis = parseEventTimeMillis(first(attributes, "x-event-start", "event-start"));
+            long eventEndMillis = parseEventTimeMillis(first(attributes, "x-event-end", "event-end"));
 
             channels.add(new Channel(id, name, group, number, logoUrl,
-                    resolveUrl(playlistUrl, line), new HashMap<>(pendingHeaders)));
+                    resolveUrl(playlistUrl, line), new HashMap<>(pendingHeaders),
+                    eventTitle, eventLeague, eventStartMillis, eventEndMillis));
             pendingInfo = null;
             pendingHeaders = new HashMap<>();
         }
         return channels;
+    }
+
+    private static long parseEventTimeMillis(String raw) {
+        if (raw == null || raw.isBlank()) return 0L;
+        String trimmed = raw.trim();
+        try {
+            return Long.parseLong(trimmed);
+        } catch (NumberFormatException ignored) {
+            try {
+                java.text.SimpleDateFormat iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US);
+                iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                String clean = trimmed.replaceAll("\\.\\d+", "").replace("Z", "");
+                java.util.Date parsed = iso.parse(clean);
+                return parsed != null ? parsed.getTime() : 0L;
+            } catch (Exception ignored2) {
+                return 0L;
+            }
+        }
     }
 
     private static Map<String, String> attributes(String line) {

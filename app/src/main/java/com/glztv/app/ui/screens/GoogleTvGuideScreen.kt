@@ -120,15 +120,23 @@ fun GoogleTvGuideScreen(
     }
 
     // Categories derived from channels
-    val categories = remember(channels) {
+    val hasLiveEvents = remember(channels) { channels.any { it.isLiveEvent() } }
+    val categories = remember(channels, hasLiveEvents) {
         val groups = channels.mapNotNull { it.group.takeIf(String::isNotBlank) }.distinct()
-        listOf("ALL", "FAVORITES", "RECENT") + groups
+        buildList {
+            add("ALL")
+            add("FAVORITES")
+            if (hasLiveEvents) add("LIVE EVENTS")
+            add("RECENT")
+            addAll(groups)
+        }
     }
 
     val filteredChannels = remember(channels, selectedCategory, favorites) {
         when (selectedCategory) {
             "ALL" -> channels
             "FAVORITES" -> channels.filter { it.id in favorites }
+            "LIVE EVENTS" -> channels.filter { it.isLiveEvent() }
             "RECENT" -> channels.take(15)
             else -> channels.filter { it.group.equals(selectedCategory, ignoreCase = true) }
         }

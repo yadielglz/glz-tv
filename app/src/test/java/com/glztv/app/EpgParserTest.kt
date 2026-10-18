@@ -208,5 +208,41 @@ class EpgParserTest {
         assertEquals("Show 2", current2?.title)
         assertEquals("Show 3", next2?.title)
     }
+
+    @Test
+    fun synthesizesFallbackProgrammeForLiveEventChannelsWithoutCollidingOnSportsPpvName() {
+        val now = 1760750000000L
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tv>
+              <channel id="event.1">
+                <display-name>SPORTS PPV</display-name>
+              </channel>
+              <programme channel="event.1" start="20251018000000 +0000" stop="20251018050000 +0000">
+                <title>First Event Only</title>
+                <desc>Event 1</desc>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        val guide = EpgParser.parse(xml)
+        val secondEventChannel = Channel(
+            "event.2",
+            "SPORTS PPV",
+            "Major League Sports (Events)",
+            "30-01",
+            "",
+            "https://example.com/event2.m3u8",
+            emptyMap(),
+            "Lakers vs Celtics",
+            "NBA",
+            now - 1800_000L,
+            now + 5400_000L
+        )
+
+        val current = guide.nowProgrammeForChannel(secondEventChannel, now)
+        assertEquals("Lakers vs Celtics", current?.title)
+        assertTrue(current?.description?.contains("NBA") == true)
+    }
 }
 

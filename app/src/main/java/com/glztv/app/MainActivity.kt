@@ -683,7 +683,17 @@ internal fun TvScreen(
         }
         report(35, "Radio stations updated")
         for (command in syncResult.commands) {
-            handleManagedHubCommand(context, prefs, client, command) {
+            handleManagedHubCommand(
+                context = context,
+                prefs = prefs,
+                client = client,
+                command = command,
+                onCheckUpdate = {
+                    val msg = checkForAppUpdate()
+                    if (availableUpdate != null) showUpdateModal = true
+                    msg
+                }
+            ) {
                 loadSources(forceRefresh = true)
             }
         }
@@ -699,6 +709,10 @@ internal fun TvScreen(
         if (syncedLang != appLanguage) {
             appLanguage = syncedLang
             onLanguageChanged(syncedLang)
+        }
+        val syncedUpdateChannel = prefs.getString(UPDATE_CHANNEL, currentUpdateChannel) ?: currentUpdateChannel
+        if (syncedUpdateChannel != currentUpdateChannel) {
+            currentUpdateChannel = syncedUpdateChannel
         }
         captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
         captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
@@ -758,7 +772,17 @@ internal fun TvScreen(
         }.getOrNull()
         initialSync?.commands?.let { commands ->
             for (command in commands) {
-                handleManagedHubCommand(context, prefs, client, command) {
+                handleManagedHubCommand(
+                    context = context,
+                    prefs = prefs,
+                    client = client,
+                    command = command,
+                    onCheckUpdate = {
+                        val msg = checkForAppUpdate()
+                        if (availableUpdate != null) showUpdateModal = true
+                        msg
+                    }
+                ) {
                     loadSources(forceRefresh = true)
                 }
             }
@@ -776,6 +800,10 @@ internal fun TvScreen(
             if (initialSyncedLang != appLanguage) {
                 appLanguage = initialSyncedLang
                 onLanguageChanged(initialSyncedLang)
+            }
+            val initialSyncedUpdateChannel = prefs.getString(UPDATE_CHANNEL, currentUpdateChannel) ?: currentUpdateChannel
+            if (initialSyncedUpdateChannel != currentUpdateChannel) {
+                currentUpdateChannel = initialSyncedUpdateChannel
             }
             hubStatus = GlzHubManager.pairingCode(prefs)?.let { "Pairing code: $it" }
                 ?: if (GlzHubManager.isEnrolled(prefs)) "Connected to GLZ Hub"
@@ -830,7 +858,17 @@ internal fun TvScreen(
                 runCatching { withContext(Dispatchers.IO) { GlzHubManager.commands(prefs, client) } }
                     .onSuccess { commands ->
                         for (command in commands) {
-                            handleManagedHubCommand(context, prefs, client, command) {
+                            handleManagedHubCommand(
+                                context = context,
+                                prefs = prefs,
+                                client = client,
+                                command = command,
+                                onCheckUpdate = {
+                                    val msg = checkForAppUpdate()
+                                    if (availableUpdate != null) showUpdateModal = true
+                                    msg
+                                }
+                            ) {
                                 loadSources(forceRefresh = true)
                             }
                         }
@@ -844,7 +882,17 @@ internal fun TvScreen(
                 nextConfigSyncAt = now + 5 * 60_000L
                 nextHeartbeatAt = minOf(nextHeartbeatAt, now + 90_000L)
                 for (command in result.commands) {
-                    handleManagedHubCommand(context, prefs, client, command) {
+                    handleManagedHubCommand(
+                        context = context,
+                        prefs = prefs,
+                        client = client,
+                        command = command,
+                        onCheckUpdate = {
+                            val msg = checkForAppUpdate()
+                            if (availableUpdate != null) showUpdateModal = true
+                            msg
+                        }
+                    ) {
                         loadSources(forceRefresh = true)
                     }
                 }
@@ -862,6 +910,10 @@ internal fun TvScreen(
                     if (loopSyncedLang != appLanguage) {
                         appLanguage = loopSyncedLang
                         onLanguageChanged(loopSyncedLang)
+                    }
+                    val loopSyncedUpdateChannel = prefs.getString(UPDATE_CHANNEL, currentUpdateChannel) ?: currentUpdateChannel
+                    if (loopSyncedUpdateChannel != currentUpdateChannel) {
+                        currentUpdateChannel = loopSyncedUpdateChannel
                     }
                     captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
                     captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
@@ -885,7 +937,7 @@ internal fun TvScreen(
             }
         }
     }
-    LaunchedEffect(prefs.getBoolean(AUTO_UPDATE_CHECK, true)) {
+    LaunchedEffect(prefs.getBoolean(AUTO_UPDATE_CHECK, true), currentUpdateChannel) {
         if (!prefs.getBoolean(AUTO_UPDATE_CHECK, true)) return@LaunchedEffect
         delay(6_000L)
         while (true) {
@@ -3189,6 +3241,7 @@ private suspend fun handleManagedHubCommand(
     prefs: SharedPreferences,
     client: OkHttpClient,
     command: GlzHubManager.HubCommand,
+    onCheckUpdate: suspend () -> String = { "Update check completed" },
     onForceRefresh: suspend () -> Unit
 ) {
     when (command) {
@@ -3198,6 +3251,17 @@ private suspend fun handleManagedHubCommand(
                 runCatching {
                     GlzHubManager.completeCommand(
                         prefs, client, command.id, true, "EPG and M3U force refresh completed on TV"
+                    )
+                }
+            }
+        }
+        is GlzHubManager.CheckUpdateCommand -> {
+            val message = runCatching { onCheckUpdate() }
+                .getOrElse { "Update check failed: ${it.message}" }
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    GlzHubManager.completeCommand(
+                        prefs, client, command.id, !message.startsWith("Update check failed"), message
                     )
                 }
             }

@@ -50,7 +50,8 @@ class GlzSyncWorker(
             GlzHubManager.heartbeat(prefs, client)
             PlaylistRepository(applicationContext, preferences, client).load(forceRefresh = true)
             EpgRepository(applicationContext, preferences, client).load(forceRefresh = true)
-            GithubUpdateManager.check(client)?.let { update ->
+            val updateChannel = GithubUpdateManager.UpdateChannel.from(prefs.getString("update_channel", null))
+            GithubUpdateManager.check(client, updateChannel)?.let { update ->
                 prefs.edit()
                     .putString("background_update_version", update.version)
                     .putString("background_update_url", update.releaseUrl)

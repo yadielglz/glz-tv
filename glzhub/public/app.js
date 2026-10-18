@@ -205,6 +205,9 @@ function renderDevices() {
       const statusClass = isDevOnline ? (device.sync_status === "syncing" ? "syncing" : "") : "offline";
       const statusLabel = isDevOnline ? (device.sync_status === "syncing" ? "SYNCING" : "ONLINE") : "OFFLINE";
 
+      const ring = String(device.update_channel || "production").toLowerCase();
+      const ringBadge = ring !== "production" ? ` <small class="meta-pill" style="font-size:10px;padding:1px 6px;margin-left:4px;">${escapeHtml(ring.toUpperCase())}</small>` : "";
+
       return `
     <button class="device-row" data-device-id="${device.id}">
       <span class="device-identity">
@@ -217,7 +220,7 @@ function renderDevices() {
       <span data-label="Property">${escapeHtml(state.sites.find((site) => site.id === device.site_id)?.name || "Unassigned")}</span>
       <span><span class="status ${statusClass}">${statusLabel}</span></span>
       <span data-label="Activity"><span class="activity ${activity.className}">${escapeHtml(activity.label)}${activity.progress == null ? "" : ` · ${activity.progress}%`}</span>${activity.progress == null ? "" : `<span class="sync-track"><span style="width:${activity.progress}%"></span></span>`}</span>
-      <span data-label="App">v${escapeHtml(device.app_version || "1.0")}</span>
+      <span data-label="App">v${escapeHtml(device.app_version || "1.0")}${ringBadge}</span>
       <span data-label="Last contact">${device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}${device.last_error ? `<small class="attention" style="color:var(--danger);display:block;margin-top:2px;">${escapeHtml(device.last_error)}</small>` : ""}</span>
     </button>`;
     }).join("");
@@ -544,7 +547,8 @@ async function openDevice(id) {
   const siteObj = state.sites.find((s) => s.id === device.site_id);
   if (siteEl) siteEl.textContent = siteObj?.name || "Unassigned Property";
   const versionEl = $("#editorDeviceVersion");
-  if (versionEl) versionEl.textContent = `App v${device.app_version || "1.0"}`;
+  const ring = String(device.update_channel || "production").toLowerCase();
+  if (versionEl) versionEl.textContent = `App v${device.app_version || "1.0"}${ring !== "production" ? ` · ${ring.toUpperCase()}` : ""}`;
 
   $("#deviceName").value = device.name || "";
   $("#guestName").value = device.guest_name || "";
@@ -584,12 +588,14 @@ async function openDevice(id) {
   $("#osdTimeoutSeconds").value = String(device.osd_timeout_seconds || 8);
   $("#captionsEnabled").checked = Boolean(device.captions_enabled);
   $("#captionsLanguage").value = device.captions_language || "en";
+  if ($("#appLanguage")) $("#appLanguage").value = device.app_language || "en";
   $("#autoStart").checked = Boolean(device.auto_start);
   $("#resumeLastChannel").checked = device.resume_last_channel !== false;
   $("#keepAwakeHome").checked = Boolean(device.keep_awake_home);
   $("#sportsBarKioskEnabled").checked = Boolean(device.sports_bar_kiosk_enabled);
   $("#autoUpdate").checked = device.auto_update !== false;
   $("#wifiOnly").checked = Boolean(device.wifi_only);
+  if ($("#updateChannel")) $("#updateChannel").value = device.update_channel || "production";
   const enabledApps = new Set(
     (device.visible_apps || []).map((app) => typeof app === "string" ? app : app.packageName)
   );
@@ -607,6 +613,10 @@ async function openDevice(id) {
     refreshBtn.disabled = !isDevOnline;
     refreshBtn.title = isDevOnline ? "Trigger an instant EPG & M3U reload on the TV" : "Device is offline (Power on TV to sync)";
     refreshBtn.style.opacity = isDevOnline ? "1" : "0.5";
+  }
+  const checkUpdateBtn = $("#checkUpdateDeviceBtn");
+  if (checkUpdateBtn) {
+    checkUpdateBtn.title = "Queue a remote OTA update check on this TV";
   }
 
   // Reset to first tab
@@ -871,12 +881,14 @@ async function saveDeviceSettings(syncToTv = true) {
         osd_timeout_seconds: Number($("#osdTimeoutSeconds").value || 8),
         captions_enabled: $("#captionsEnabled").checked,
         captions_language: $("#captionsLanguage").value || "en",
+        app_language: $("#appLanguage")?.value || "en",
         auto_start: $("#autoStart").checked,
         resume_last_channel: $("#resumeLastChannel").checked,
         keep_awake_home: $("#keepAwakeHome").checked,
         sports_bar_kiosk_enabled: $("#sportsBarKioskEnabled").checked,
         auto_update: $("#autoUpdate").checked,
         wifi_only: $("#wifiOnly").checked,
+        update_channel: $("#updateChannel")?.value || "production",
         visible_apps: $$("#visibleApps input:checked").map((input) => input.value),
         queue_sync: syncToTv
       })
@@ -914,6 +926,19 @@ $("#forceRefreshDevice").addEventListener("click", async () => {
   try {
     await api(`/api/v1/admin/devices/${id}/force-refresh`, { method: "POST" });
     showToast("⚡ Force refresh signal sent to TV", "success");
+  } catch (error) {
+    $("#deviceError").textContent = error.message;
+    showToast(error.message, "error");
+  }
+});
+
+$("#checkUpdateDeviceBtn")?.addEventListener("click", async () => {
+  const id = $("#deviceId").value;
+  if (!id) return;
+  $("#deviceError").textContent = "";
+  try {
+    await api(`/api/v1/admin/devices/${id}/check-update`, { method: "POST" });
+    showToast("🔄 Remote OTA update check queued for TV", "success");
   } catch (error) {
     $("#deviceError").textContent = error.message;
     showToast(error.message, "error");

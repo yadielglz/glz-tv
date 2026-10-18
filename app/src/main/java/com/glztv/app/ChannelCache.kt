@@ -30,7 +30,11 @@ object ChannelCache {
                         item.optString("number"),
                         item.optString("logoUrl"),
                         item.optString("streamUrl"),
-                        headers
+                        headers,
+                        item.optString("eventTitle", ""),
+                        item.optString("eventLeague", ""),
+                        item.optLong("eventStartMillis", 0L),
+                        item.optLong("eventEndMillis", 0L)
                     )
                 )
             }
@@ -52,6 +56,10 @@ object ChannelCache {
                         .put("logoUrl", channel.logoUrl)
                         .put("streamUrl", channel.streamUrl)
                         .put("headers", headers)
+                        .put("eventTitle", channel.eventTitle)
+                        .put("eventLeague", channel.eventLeague)
+                        .put("eventStartMillis", channel.eventStartMillis)
+                        .put("eventEndMillis", channel.eventEndMillis)
                 )
             }
             val root = JSONObject()

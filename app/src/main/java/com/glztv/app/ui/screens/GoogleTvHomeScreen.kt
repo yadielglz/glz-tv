@@ -243,6 +243,10 @@ fun GoogleTvHomeScreen(
         channels.take(15)
     }
 
+    val eventChannels = remember(channels) {
+        channels.filter { it.isLiveEvent() }
+    }
+
     val favoriteChannels = remember(channels, favorites) {
         val favs = channels.filter { it.id in favorites }
         if (favs.isNotEmpty()) favs
@@ -431,6 +435,26 @@ fun GoogleTvHomeScreen(
                         contentPadding = PaddingValues(vertical = 4.dp)
                     ) {
                         itemsIndexed(liveChannels, key = { index, ch -> "live-hl-${ch.id.ifBlank { "c" }}-$index" }) { _, ch ->
+                            LiveShowCard(
+                                channel = ch,
+                                guide = guide,
+                                now = now,
+                                onClick = { onWatchChannel(ch) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // RAIL 2B: LIVE SPORTS & EVENTS (Auto-surfaced when active event channels exist)
+            if (eventChannels.isNotEmpty()) {
+                item(key = "rail-live-events") {
+                    RailHeader(title = "LIVE SPORTS & EVENTS (${eventChannels.size})", icon = Icons.Default.Bolt, iconTint = GoogleTvTokens.StarGold)
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp)
+                    ) {
+                        itemsIndexed(eventChannels, key = { index, ch -> "live-ev-${ch.id.ifBlank { "e" }}-$index" }) { _, ch ->
                             LiveShowCard(
                                 channel = ch,
                                 guide = guide,

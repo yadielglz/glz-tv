@@ -60,6 +60,10 @@ object GlzHubManager {
         override val id: String
     ) : HubCommand
 
+    data class CheckUpdateCommand(
+        override val id: String
+    ) : HubCommand
+
     fun installationId(prefs: SharedPreferences): String {
         prefs.getString(INSTALLATION_ID, null)?.let { return it }
         return UUID.randomUUID().toString().also {
@@ -247,12 +251,18 @@ object GlzHubManager {
             editor.putInt("osd_timeout_seconds", config.optInt("osdTimeoutSeconds", 8))
         }
         if (config.has("autoUpdate")) {
-            editor.putBoolean("auto_update", config.optBoolean("autoUpdate", true))
+            val autoUpdate = config.optBoolean("autoUpdate", true)
+            editor.putBoolean("auto_update", autoUpdate)
+            editor.putBoolean("auto_update_check", autoUpdate)
         }
         if (config.has("wifiOnly")) {
-            editor.putBoolean("wifi_only", config.optBoolean("wifiOnly", false))
+            val wifiOnly = config.optBoolean("wifiOnly", false)
+            editor.putBoolean("wifi_only", wifiOnly)
+            editor.putBoolean("wifi_only_updates", wifiOnly)
         }
-        config.stringOrNull("updateChannel")?.let { editor.putString("update_channel", it.lowercase()) }
+        config.stringOrNull("updateChannel")?.let {
+            editor.putString("update_channel", GithubUpdateManager.UpdateChannel.from(it).id)
+        }
         if (forceRefreshTriggered) {
             editor.putString("last_force_refresh_token", forceRefreshToken)
         }
@@ -311,6 +321,8 @@ object GlzHubManager {
                 if (id.isBlank()) continue
                 if (action == "force_refresh") {
                     add(ForceRefreshCommand(id))
+                } else if (action == "check_update") {
+                    add(CheckUpdateCommand(id))
                 } else if (action == "install_app") {
                     val payload = item.optJSONObject("payload") ?: continue
                     val packageName = payload.optString("packageName")
@@ -348,6 +360,8 @@ object GlzHubManager {
         val token = prefs.getString(DEVICE_TOKEN, null) ?: return
         val payload = JSONObject()
             .put("appVersion", BuildConfig.VERSION_NAME)
+            .put("updateChannel", prefs.getString("update_channel", null) ?: "production")
+            .put("appLanguage", prefs.getString(APP_LANGUAGE, "en") ?: "en")
             .put("activity", JSONObject()
                 .put("type", prefs.getString(ACTIVITY_TYPE, "idle"))
                 .put("label", prefs.getString(ACTIVITY_LABEL, null))

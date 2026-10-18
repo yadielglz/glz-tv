@@ -295,6 +295,12 @@
                     </select>
                   </label>
                   <label>Closed Captions Language<input id="captionsLanguage" maxlength="12" placeholder="en"></label>
+                  <label>App Interface Language
+                    <select id="appLanguage">
+                      <option value="en">English (Default)</option>
+                      <option value="es">Español (Spanish)</option>
+                    </select>
+                  </label>
                 </div>
               </div>
               <div class="editor-card">
@@ -337,6 +343,22 @@
               </div>
               <div class="editor-card">
                 <h4 class="card-title">App Updates &amp; Diagnostics</h4>
+                <div class="form-grid" style="margin-bottom:14px;">
+                  <label>OTA Release Ring (Update Channel)
+                    <select id="updateChannel">
+                      <option value="production">Production (Stable Release)</option>
+                      <option value="weekly">Weekly (Early Access)</option>
+                      <option value="biweekly">Biweekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="testing">Testing (Canary / QA)</option>
+                    </select>
+                  </label>
+                  <label>Remote OTA Update Trigger
+                    <div class="inline-action" style="margin-top:4px;">
+                      <button id="checkUpdateDeviceBtn" type="button" class="secondary" style="width:100%;">🔄 Check for App Update on TV</button>
+                    </div>
+                  </label>
+                </div>
                 <div class="checkbox-grid">
                   <label class="check-card"><input id="autoUpdate" type="checkbox"> <div><strong>Auto-Update GLZ TV</strong><small>Download release APK updates automatically</small></div></label>
                   <label class="check-card"><input id="wifiOnly" type="checkbox"> <div><strong>Wi-Fi Only Downloads</strong><small>Do not use mobile/metered data</small></div></label>

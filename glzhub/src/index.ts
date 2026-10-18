@@ -264,6 +264,34 @@ async function claimEnrollment(request: Request, env: Env): Promise<Response> {
   return json({ device: created[0] }, 201);
 }
 
+const VALID_UPDATE_CHANNELS = new Set(["production", "weekly", "biweekly", "monthly", "testing"]);
+
+function normalizeUpdateChannel(value: unknown): string {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "family") return "weekly";
+  if (raw === "rc") return "biweekly";
+  if (raw === "beta") return "testing";
+  return VALID_UPDATE_CHANNELS.has(raw) ? raw : "production";
+}
+
+function normalizeAppLanguage(value: unknown): string {
+  const raw = String(value ?? "").trim().toLowerCase();
+  return raw.startsWith("es") ? "es" : "en";
+}
+
+function enrichDeviceRecord(d: Record<string, unknown>): Record<string, unknown> {
+  const rules = (d.schedule_rules && typeof d.schedule_rules === "object" && !Array.isArray(d.schedule_rules))
+    ? d.schedule_rules as Record<string, unknown>
+    : {};
+  const updateChannel = normalizeUpdateChannel(d.update_channel ?? rules.update_channel ?? "production");
+  const appLanguage = normalizeAppLanguage(d.app_language ?? rules.app_language ?? "en");
+  return {
+    ...d,
+    update_channel: updateChannel,
+    app_language: appLanguage
+  };
+}
+
 async function listDevices(request: Request, env: Env): Promise<Response> {
   const user = await adminUser(request, env);
   const devices = await supabaseJson(
@@ -271,7 +299,8 @@ async function listDevices(request: Request, env: Env): Promise<Response> {
     `/rest/v1/devices?owner_id=eq.${user.id}&select=*&order=created_at.desc`
   ) as Record<string, unknown>[];
   const tenMinutesAgo = Date.now() - 10 * 60_000;
-  const sanitized = devices.map((d) => {
+  const sanitized = devices.map((raw) => {
+    const d = enrichDeviceRecord(raw);
     const isOnline = d.last_seen_at && new Date(String(d.last_seen_at)).getTime() > tenMinutesAgo;
     if (!isOnline && ["queued", "syncing"].includes(String(d.sync_status))) {
       return { ...d, sync_status: "complete", sync_message: null, sync_progress: 0 };
@@ -286,7 +315,7 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
   const input = await body(request);
   const currentRows = await supabaseJson(
     env,
-    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=config_version,last_seen_at,sync_status`
+    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=config_version,last_seen_at,sync_status,schedule_rules`
   ) as Record<string, unknown>[];
   if (!currentRows[0]) return json({ error: "Device not found." }, 404);
   const allowed = [
@@ -295,9 +324,25 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
     "captions_enabled", "captions_language", "auto_start", "resume_last_channel",
     "osd_timeout_seconds", "auto_update", "wifi_only", "keep_awake_home", "home_preview_channel_id",
     "custom_connection_label", "custom_isp_name", "sports_bar_kiosk_enabled",
+    "update_channel", "app_language",
     "room_number", "arrival_date", "departure_date", "site_id", "assigned_playlist_id", "box_group_id"
   ];
   const patch = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
+  const existingRules = (currentRows[0].schedule_rules && typeof currentRows[0].schedule_rules === "object" && !Array.isArray(currentRows[0].schedule_rules))
+    ? { ...(currentRows[0].schedule_rules as Record<string, unknown>) }
+    : {};
+  if ("update_channel" in input) {
+    const normalizedRing = normalizeUpdateChannel(input.update_channel);
+    patch.update_channel = normalizedRing;
+    existingRules.update_channel = normalizedRing;
+    patch.schedule_rules = existingRules;
+  }
+  if ("app_language" in input) {
+    const normalizedLang = normalizeAppLanguage(input.app_language);
+    patch.app_language = normalizedLang;
+    existingRules.app_language = normalizedLang;
+    patch.schedule_rules = existingRules;
+  }
   if ("site_id" in input) {
     const siteId = optionalString(input.site_id, "siteId", 64);
     if (siteId) {
@@ -348,17 +393,34 @@ async function updateDevice(request: Request, env: Env, deviceId: string): Promi
 
   patch.updated_at = new Date().toISOString();
   patch.sync_updated_at = patch.updated_at;
-  const devices = await supabaseJson(
-    env,
-    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=*`,
-    {
-      method: "PATCH",
-      headers: { prefer: "return=representation" },
-      body: JSON.stringify(patch)
-    }
-  ) as Record<string, unknown>[];
+  let devices: Record<string, unknown>[];
+  try {
+    devices = await supabaseJson(
+      env,
+      `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=*`,
+      {
+        method: "PATCH",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify(patch)
+      }
+    ) as Record<string, unknown>[];
+  } catch (err) {
+    // Fallback if migration 028 (update_channel / app_language columns) hasn't been applied yet
+    const fallbackPatch = { ...patch };
+    delete fallbackPatch.update_channel;
+    delete fallbackPatch.app_language;
+    devices = await supabaseJson(
+      env,
+      `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=*`,
+      {
+        method: "PATCH",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify(fallbackPatch)
+      }
+    ) as Record<string, unknown>[];
+  }
   if (!devices[0]) return json({ error: "Device not found." }, 404);
-  return json({ device: devices[0], isOnline: Boolean(isOnline) });
+  return json({ device: enrichDeviceRecord(devices[0]), isOnline: Boolean(isOnline) });
 }
 
 async function forceRefreshDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
@@ -401,7 +463,42 @@ async function forceRefreshDevice(request: Request, env: Env, deviceId: string):
       payload: { timestamp: token }
     })
   });
-  return json({ ok: true, device: devices[0] });
+  return json({ ok: true, device: enrichDeviceRecord(devices[0]) });
+}
+
+async function checkUpdateDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const currentRows = await supabaseJson(
+    env,
+    `/rest/v1/devices?id=eq.${encodeURIComponent(deviceId)}&owner_id=eq.${user.id}&select=config_version,last_seen_at`
+  ) as Record<string, unknown>[];
+  if (!currentRows[0]) return json({ error: "Device not found." }, 404);
+
+  const tenMinutesAgo = Date.now() - 10 * 60_000;
+  const isOnline = currentRows[0].last_seen_at && (new Date(String(currentRows[0].last_seen_at)).getTime() > tenMinutesAgo);
+  if (!isOnline) {
+    return json({ error: "Cannot check for updates: Device is currently offline." }, 400);
+  }
+
+  const nowIso = new Date().toISOString();
+  await supabaseJson(env, "/rest/v1/device_commands?select=*", {
+    method: "POST", headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      owner_id: user.id, device_id: deviceId, action: "check_update",
+      payload: { timestamp: nowIso }
+    })
+  }).catch(async () => {
+    // Fallback if migration 028 check constraint hasn't been applied yet
+    await supabaseJson(env, "/rest/v1/device_commands?select=*", {
+      method: "POST", headers: { prefer: "return=representation" },
+      body: JSON.stringify({
+        owner_id: user.id, device_id: deviceId, action: "force_refresh",
+        payload: { timestamp: nowIso, checkUpdate: true }
+      })
+    });
+  });
+
+  return json({ ok: true });
 }
 
 async function unpairDevice(request: Request, env: Env, deviceId: string): Promise<Response> {
@@ -458,6 +555,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     ) as Record<string, unknown>[];
   }
   const profile = profiles[0] ?? {};
+  const enrichedDevice = enrichDeviceRecord(device);
   return json({
     version: device.config_version,
     experienceVersion: profile.updated_at ?? "default",
@@ -474,6 +572,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     startDestination: device.start_destination,
     captionsEnabled: device.captions_enabled,
     captionsLanguage: device.captions_language,
+    appLanguage: enrichedDevice.app_language ?? "en",
     autoStart: device.auto_start,
     resumeLastChannel: device.resume_last_channel,
     keepAwakeHome: device.keep_awake_home ?? false,
@@ -482,6 +581,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     osdTimeoutSeconds: device.osd_timeout_seconds ?? 8,
     autoUpdate: device.auto_update ?? true,
     wifiOnly: device.wifi_only ?? false,
+    updateChannel: enrichedDevice.update_channel ?? "production",
     forceRefreshToken: device.force_refresh_token ?? null,
     guestExperience: {
       propertyName: profile.property_name ?? "",
@@ -1593,7 +1693,7 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
     const winEnd = new Date(endTime.getTime() + postBuffer);
 
     channelNodes += `  <channel id="${tvgId}">\n`;
-    channelNodes += `    <display-name>SPORTS PPV</display-name>\n`;
+    channelNodes += `    <display-name>${tvgId}</display-name>\n`;
     channelNodes += `    <display-name>CH ${channelNumber}</display-name>\n`;
     if (logoUrl) {
       channelNodes += `    <icon src="${logoUrl}" />\n`;
@@ -2375,15 +2475,26 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
     for (const event of sortedEvents) {
       if (!isEventActiveAndValid(event, now)) continue;
       const channelDisplayName = "SPORTS PPV";
-        const mediaUrl = String(event.stream_url || "");
-        const tvgId = event.tvg_id ? ` tvg-id="${cleanAttribute(event.tvg_id)}"` : "";
-        const tvgName = ` tvg-name="SPORTS PPV"`;
-        const chnoValue = String(event.channel_number || `30-${String(activeIndex).padStart(2, '0')}`);
-        const tvgChno = ` tvg-chno="${cleanAttribute(chnoValue)}"`;
-        const tvgLogo = event.logo_url ? ` tvg-logo="${cleanAttribute(event.logo_url)}"` : "";
-        const channelGroup = cleanAttribute(event.group_title || "Major League Sports (Events)");
-        m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
-        activeIndex++;
+      const mediaUrl = String(event.stream_url || "");
+      const tvgIdVal = String(event.tvg_id || `event.channel.${activeIndex}`);
+      const tvgId = ` tvg-id="${cleanAttribute(tvgIdVal)}"`;
+      const tvgName = ` tvg-name="SPORTS PPV"`;
+      const chnoValue = String(event.channel_number || `30-${String(activeIndex).padStart(2, '0')}`);
+      const tvgChno = ` tvg-chno="${cleanAttribute(chnoValue)}"`;
+      const tvgLogo = event.logo_url ? ` tvg-logo="${cleanAttribute(event.logo_url)}"` : "";
+      const channelGroup = cleanAttribute(event.group_title || "Major League Sports (Events)");
+      const eventTitleAttr = ` x-event-title="${cleanAttribute(event.title || "Live Sports Event")}"`;
+      const eventLeagueAttr = ` x-event-league="${cleanAttribute(event.sport_league || "SPORTS")}"`;
+      const startMs = new Date(String(event.start_time || "")).getTime();
+      const endMs = new Date(String(event.end_time || "")).getTime();
+      const preBufferMs = (Number(event.pre_buffer_hours) || 1) * 3600_000;
+      const postBufferMs = (Number(event.post_buffer_hours) || 1.5) * 3600_000;
+      const winStartMs = Number.isFinite(startMs) ? startMs - preBufferMs : now - 3600_000;
+      const winEndMs = Number.isFinite(endMs) ? endMs + postBufferMs : now + 3 * 3600_000;
+      const eventStartAttr = ` x-event-start="${Math.round(winStartMs)}"`;
+      const eventEndAttr = ` x-event-end="${Math.round(winEndMs)}"`;
+      m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo}${eventTitleAttr}${eventLeagueAttr}${eventStartAttr}${eventEndAttr} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
+      activeIndex++;
     }
   }
 
@@ -2449,6 +2560,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (adminDevice && request.method === "DELETE") return unpairDevice(request, env, adminDevice[1]);
   const forceRefresh = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/force-refresh$/i);
   if (forceRefresh && request.method === "POST") return forceRefreshDevice(request, env, forceRefresh[1]);
+  const checkUpdate = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/check-update$/i);
+  if (checkUpdate && request.method === "POST") return checkUpdateDevice(request, env, checkUpdate[1]);
   const adminGroup = path.match(/^\/api\/v1\/admin\/box-groups\/([0-9a-f-]+)$/i);
   if (adminGroup && request.method === "PATCH") return updateBoxGroup(request, env, adminGroup[1]);
   if (adminGroup && request.method === "DELETE") return deleteBoxGroup(request, env, adminGroup[1]);

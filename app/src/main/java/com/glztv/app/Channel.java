@@ -15,10 +15,22 @@ public final class Channel {
     public final String streamUrl;
     public final Map<String, String> headers;
     public final String monogram;
+    public final String eventTitle;
+    public final String eventLeague;
+    public final long eventStartMillis;
+    public final long eventEndMillis;
 
     public Channel(String id, String name, String group, String number, String logoUrl,
                    String streamUrl,
                    Map<String, String> headers) {
+        this(id, name, group, number, logoUrl, streamUrl, headers, "", "", 0L, 0L);
+    }
+
+    public Channel(String id, String name, String group, String number, String logoUrl,
+                   String streamUrl,
+                   Map<String, String> headers,
+                   String eventTitle, String eventLeague,
+                   long eventStartMillis, long eventEndMillis) {
         this.id = id != null ? id : "";
         this.name = name != null ? name : "";
         this.group = group != null ? group : "";
@@ -27,6 +39,17 @@ public final class Channel {
         this.streamUrl = streamUrl != null ? streamUrl : "";
         this.headers = headers != null ? Collections.unmodifiableMap(headers) : Collections.emptyMap();
         this.monogram = computeMonogram(this.name);
+        this.eventTitle = eventTitle != null ? eventTitle.trim() : "";
+        this.eventLeague = eventLeague != null ? eventLeague.trim() : "";
+        this.eventStartMillis = Math.max(0L, eventStartMillis);
+        this.eventEndMillis = Math.max(0L, eventEndMillis);
+    }
+
+    public boolean isLiveEvent() {
+        if (!eventTitle.isEmpty()) return true;
+        String groupUpper = group.toUpperCase();
+        if (groupUpper.contains("EVENTS") || groupUpper.contains("PPV")) return true;
+        return number.startsWith("31-") || number.startsWith("30-") || number.startsWith("29-");
     }
 
     private static String computeMonogram(String name) {
@@ -62,17 +85,21 @@ public final class Channel {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Channel channel = (Channel) o;
-        return Objects.equals(id, channel.id) &&
+        return eventStartMillis == channel.eventStartMillis &&
+               eventEndMillis == channel.eventEndMillis &&
+               Objects.equals(id, channel.id) &&
                Objects.equals(name, channel.name) &&
                Objects.equals(group, channel.group) &&
                Objects.equals(number, channel.number) &&
                Objects.equals(logoUrl, channel.logoUrl) &&
-               Objects.equals(streamUrl, channel.streamUrl);
+               Objects.equals(streamUrl, channel.streamUrl) &&
+               Objects.equals(eventTitle, channel.eventTitle) &&
+               Objects.equals(eventLeague, channel.eventLeague);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, group, number, logoUrl, streamUrl);
+        return Objects.hash(id, name, group, number, logoUrl, streamUrl, eventTitle, eventLeague, eventStartMillis, eventEndMillis);
     }
 }
 

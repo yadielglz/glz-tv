@@ -31,16 +31,16 @@ data class EpgGuide(
         buildMap {
             channelNames.forEach { (id, name) ->
                 val norm = normalize(name)
-                if (norm.isNotBlank()) putIfAbsent(norm, id)
+                if (norm.isNotBlank() && norm !in GENERIC_EVENT_NAMES) putIfAbsent(norm, id)
                 val cleanNorm = normalize(cleanChannelName(name))
-                if (cleanNorm.isNotBlank()) putIfAbsent(cleanNorm, id)
+                if (cleanNorm.isNotBlank() && cleanNorm !in GENERIC_EVENT_NAMES) putIfAbsent(cleanNorm, id)
             }
             allChannelNames.forEach { (id, names) ->
                 names.forEach { name ->
                     val norm = normalize(name)
-                    if (norm.isNotBlank()) putIfAbsent(norm, id)
+                    if (norm.isNotBlank() && norm !in GENERIC_EVENT_NAMES) putIfAbsent(norm, id)
                     val cleanNorm = normalize(cleanChannelName(name))
-                    if (cleanNorm.isNotBlank()) putIfAbsent(cleanNorm, id)
+                    if (cleanNorm.isNotBlank() && cleanNorm !in GENERIC_EVENT_NAMES) putIfAbsent(cleanNorm, id)
                 }
             }
         }
@@ -48,6 +48,7 @@ data class EpgGuide(
 
     companion object {
         val Empty = EpgGuide(emptyMap(), emptyMap(), emptyMap(), emptyMap())
+        private val GENERIC_EVENT_NAMES = setOf("sportsppv", "ppv", "liveevent", "liveevents")
     }
 
     val programmeCount: Int get() = programmes.values.sumOf(List<Programme>::size)
@@ -60,6 +61,10 @@ data class EpgGuide(
         val cleanName = cleanChannelName(channel.name)
         val normClean = normalize(cleanName)
         val normRaw = normalize(channel.name)
+
+        if (normClean in GENERIC_EVENT_NAMES || normRaw in GENERIC_EVENT_NAMES) {
+            return null
+        }
 
         if (normClean.isNotBlank()) {
             exactNormalizedNameMap[normClean]?.let { return it }
@@ -84,13 +89,33 @@ data class EpgGuide(
     }
 
     fun forChannel(channel: Channel): List<Programme> {
-        val cacheKey = "${channel.id}\u0000${channel.name}"
+        val cacheKey = "${channel.id}\u0000${channel.name}\u0000${channel.eventTitle}\u0000${channel.eventStartMillis}\u0000${channel.eventEndMillis}"
         return synchronized(programmeMatchCache) {
             programmeMatchCache.getOrPut(cacheKey) {
                 programmes[channel.id]?.takeIf(List<Programme>::isNotEmpty)
-                    ?: findMatchedChannelId(channel)?.let(programmes::get).orEmpty()
+                    ?: findMatchedChannelId(channel)?.let(programmes::get)?.takeIf(List<Programme>::isNotEmpty)
+                    ?: fallbackEventProgramme(channel)
             }
         }
+    }
+
+    private fun fallbackEventProgramme(channel: Channel): List<Programme> {
+        val title = channel.eventTitle.trim()
+        if (title.isEmpty()) return emptyList()
+        val now = System.currentTimeMillis()
+        val start = if (channel.eventStartMillis > 0L) channel.eventStartMillis else now - 30 * 60_000L
+        val end = if (channel.eventEndMillis > start) channel.eventEndMillis else start + 4 * 3600_000L
+        val league = channel.eventLeague.ifBlank { "SPORTS" }
+        val desc = "Live $league Event · $title"
+        return listOf(
+            Programme(
+                channelId = channel.id.ifBlank { channel.name },
+                startMillis = start,
+                endMillis = end,
+                title = title,
+                description = desc
+            )
+        )
     }
 
     fun nowProgrammeForChannel(channel: Channel, nowMillis: Long): Programme? {

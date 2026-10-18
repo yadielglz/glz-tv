@@ -83,4 +83,27 @@ class M3uParserTest {
         assertEquals("Local", channel.group)
         assertEquals("2.1", channel.number)
     }
+
+    @Test
+    fun parsesLiveEventMetadataAttributes() {
+        val channels = M3uParser.parse(
+            """
+                #EXTM3U
+                #EXTINF:-1 tvg-id="event.ufc.310" tvg-name="SPORTS PPV" tvg-chno="31-01" x-event-title="UFC 310: Main Card" x-event-league="UFC" x-event-start="1760745600000" x-event-end="1760760000000" group-title="Major League Sports (Events)",SPORTS PPV
+                https://example.com/ufc310.m3u8
+            """.trimIndent(),
+            "https://example.com/list.m3u",
+            emptyMap()
+        )
+
+        val channel = channels.single()
+        assertEquals("event.ufc.310", channel.id)
+        assertEquals("SPORTS PPV", channel.name)
+        assertEquals("31-01", channel.number)
+        assertEquals("UFC 310: Main Card", channel.eventTitle)
+        assertEquals("UFC", channel.eventLeague)
+        assertEquals(1760745600000L, channel.eventStartMillis)
+        assertEquals(1760760000000L, channel.eventEndMillis)
+        assertTrue(channel.isLiveEvent)
+    }
 }
