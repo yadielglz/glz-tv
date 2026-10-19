@@ -591,6 +591,9 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     ) as Record<string, unknown>[];
   }
   const profile = profiles[0] ?? {};
+  const movies = await supabaseJson(env,
+    `/rest/v1/movies?owner_id=eq.${device.owner_id}&is_active=eq.true&show_on_home=eq.true&select=id,title,stream_url,poster_url,backdrop_url,description,release_year,runtime_minutes,genres,request_headers&order=sort_order.asc,created_at.desc`
+  ) as Record<string, unknown>[];
   const enrichedDevice = enrichDeviceRecord(device);
   return json({
     version: device.config_version,
@@ -619,6 +622,18 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     wifiOnly: device.wifi_only ?? false,
     updateChannel: enrichedDevice.update_channel ?? "production",
     forceRefreshToken: device.force_refresh_token ?? null,
+    movies: movies.map((movie) => ({
+      id: movie.id,
+      title: movie.title,
+      streamUrl: movie.stream_url,
+      posterUrl: movie.poster_url ?? null,
+      backdropUrl: movie.backdrop_url ?? null,
+      description: movie.description ?? "",
+      releaseYear: movie.release_year ?? null,
+      runtimeMinutes: movie.runtime_minutes ?? null,
+      genres: movie.genres ?? [],
+      requestHeaders: movie.request_headers ?? {}
+    })),
     guestExperience: {
       propertyName: profile.property_name ?? "",
       welcomeMessage: profile.welcome_message ?? "",
@@ -996,7 +1011,7 @@ async function heartbeat(request: Request, env: Env): Promise<Response> {
   const activityType = activity
     ? requiredString(activity.type, "activity type", 20)
     : null;
-  if (activityType && !["idle", "channel", "radio", "sports_bar", "app"].includes(activityType)) {
+  if (activityType && !["idle", "channel", "radio", "sports_bar", "app", "movie"].includes(activityType)) {
     throw new Error("Invalid activity type");
   }
   const patch: Record<string, unknown> = {
@@ -1171,6 +1186,139 @@ async function publicRadioCatalog(request: Request, env: Env): Promise<Response>
     "/rest/v1/radio_stations?is_active=eq.true&select=station_code,name,genre,stream_url,logo_url,epg_channel_id,bitrate,request_headers&order=station_code.asc"
   ) as Record<string, unknown>[];
   return radioCatalogResponse(request, rows.map(publicRadioStation));
+}
+
+function moviePayload(input: Record<string, unknown>, partial = false): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  if (!partial || input.title !== undefined) patch.title = requiredString(input.title, "title", 180);
+  if (!partial || input.streamUrl !== undefined || input.stream_url !== undefined) {
+    const streamUrl = requiredString(input.streamUrl ?? input.stream_url, "stream URL");
+    let protocol = "";
+    try { protocol = new URL(streamUrl).protocol; } catch { throw new Error("Invalid stream URL"); }
+    if (protocol !== "https:" && protocol !== "http:") throw new Error("Invalid stream URL");
+    patch.stream_url = streamUrl;
+  }
+  for (const [camel, snake, max] of [
+    ["posterUrl", "poster_url", 2048], ["backdropUrl", "backdrop_url", 2048],
+    ["description", "description", 2000], ["externalId", "external_id", 100]
+  ] as const) {
+    if (!partial || input[camel] !== undefined || input[snake] !== undefined) {
+      const value = optionalString(input[camel] ?? input[snake], camel, max);
+      if (value && (camel === "posterUrl" || camel === "backdropUrl") && !isHttpsUrl(value)) throw new Error(`Invalid ${camel}`);
+      patch[snake] = value;
+    }
+  }
+  const integer = (camel: string, snake: string, min: number, max: number) => {
+    if (partial && input[camel] === undefined && input[snake] === undefined) return;
+    const raw = input[camel] ?? input[snake];
+    if (raw === null || raw === "" || raw === undefined) { patch[snake] = null; return; }
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value < min || value > max) throw new Error(`Invalid ${camel}`);
+    patch[snake] = value;
+  };
+  integer("releaseYear", "release_year", 1888, 2200);
+  integer("runtimeMinutes", "runtime_minutes", 1, 10000);
+  if (!partial && input.sortOrder === undefined && input.sort_order === undefined) patch.sort_order = 0;
+  else integer("sortOrder", "sort_order", -100000, 100000);
+  if (!partial || input.genres !== undefined) {
+    const genres = input.genres ?? [];
+    if (!Array.isArray(genres)) throw new Error("Invalid genres");
+    patch.genres = genres.map((genre) => requiredString(genre, "genre", 60)).slice(0, 20);
+  }
+  if (!partial || input.requestHeaders !== undefined || input.request_headers !== undefined) {
+    const headers = input.requestHeaders ?? input.request_headers ?? {};
+    if (!headers || typeof headers !== "object" || Array.isArray(headers)) throw new Error("Invalid request headers");
+    patch.request_headers = headers;
+  }
+  for (const [camel, snake, fallback] of [["isActive", "is_active", true], ["showOnHome", "show_on_home", true]] as const) {
+    if (!partial || input[camel] !== undefined || input[snake] !== undefined) {
+      const value = input[camel] ?? input[snake] ?? fallback;
+      if (typeof value !== "boolean") throw new Error(`Invalid ${camel}`);
+      patch[snake] = value;
+    }
+  }
+  return patch;
+}
+
+async function bumpMovieConfigVersions(env: Env, ownerId: string): Promise<void> {
+  const devices = await supabaseJson(env,
+    `/rest/v1/devices?owner_id=eq.${ownerId}&select=id,config_version`
+  ) as Record<string, unknown>[];
+  await Promise.all(devices.map((device) => supabaseJson(env,
+    `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}`,
+    { method: "PATCH", body: JSON.stringify({ config_version: Number(device.config_version ?? 0) + 1 }) }
+  )));
+}
+
+async function listMovies(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const movies = await supabaseJson(env,
+    `/rest/v1/movies?owner_id=eq.${user.id}&select=*&order=sort_order.asc,created_at.desc`
+  ) as Record<string, unknown>[];
+  return json({ movies });
+}
+
+async function createMovie(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const payload = moviePayload(await body(request));
+  const rows = await supabaseJson(env, "/rest/v1/movies?select=*", {
+    method: "POST", headers: { prefer: "return=representation" },
+    body: JSON.stringify({ owner_id: user.id, ...payload })
+  }) as Record<string, unknown>[];
+  await bumpMovieConfigVersions(env, user.id);
+  return json({ movie: rows[0] }, 201);
+}
+
+async function updateMovie(request: Request, env: Env, movieId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const patch = { ...moviePayload(await body(request), true), updated_at: new Date().toISOString() };
+  const rows = await supabaseJson(env,
+    `/rest/v1/movies?id=eq.${encodeURIComponent(movieId)}&owner_id=eq.${user.id}&select=*`,
+    { method: "PATCH", headers: { prefer: "return=representation" }, body: JSON.stringify(patch) }
+  ) as Record<string, unknown>[];
+  if (!rows[0]) return json({ error: "Movie not found." }, 404);
+  await bumpMovieConfigVersions(env, user.id);
+  return json({ movie: rows[0] });
+}
+
+async function deleteMovie(request: Request, env: Env, movieId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  await supabaseJson(env, `/rest/v1/movies?id=eq.${encodeURIComponent(movieId)}&owner_id=eq.${user.id}`, { method: "DELETE" });
+  await bumpMovieConfigVersions(env, user.id);
+  return json({ ok: true });
+}
+
+async function searchMovieMetadata(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const query = requiredString(new URL(request.url).searchParams.get("q"), "search query", 120);
+  const searchUrl = new URL("https://www.wikidata.org/w/api.php");
+  searchUrl.search = new URLSearchParams({ action: "wbsearchentities", search: query, language: "en", uselang: "en", type: "item", limit: "10", format: "json" }).toString();
+  const searchResponse = await fetch(searchUrl, { headers: { "user-agent": "GLZHub/1.0 (movie metadata lookup)" } });
+  if (!searchResponse.ok) return json({ error: "Metadata provider unavailable." }, 502);
+  const searchData = await searchResponse.json<{ search?: Array<{ id: string; label?: string; description?: string }> }>();
+  const candidates = (searchData.search ?? []).filter((item) => /film|movie|television/i.test(item.description ?? "")).slice(0, 8);
+  if (!candidates.length) return json({ results: [] });
+  const entityUrl = new URL("https://www.wikidata.org/w/api.php");
+  entityUrl.search = new URLSearchParams({ action: "wbgetentities", ids: candidates.map((item) => item.id).join("|"), props: "claims", format: "json" }).toString();
+  const entityResponse = await fetch(entityUrl, { headers: { "user-agent": "GLZHub/1.0 (movie metadata lookup)" } });
+  const entityData = entityResponse.ok ? await entityResponse.json<{ entities?: Record<string, { claims?: Record<string, Array<{ mainsnak?: { datavalue?: { value?: unknown } } }>> }> }>() : { entities: {} };
+  const results = candidates.map((item) => {
+    const claims = entityData.entities?.[item.id]?.claims ?? {};
+    const value = (property: string) => claims[property]?.[0]?.mainsnak?.datavalue?.value as Record<string, unknown> | string | undefined;
+    const date = value("P577") as Record<string, unknown> | undefined;
+    const duration = value("P2047") as Record<string, unknown> | undefined;
+    const image = value("P18");
+    const filename = typeof image === "string" ? image : "";
+    return {
+      externalId: item.id, title: item.label ?? query, description: item.description ?? "",
+      releaseYear: typeof date?.time === "string" ? Number(String(date.time).slice(1, 5)) : null,
+      runtimeMinutes: duration?.amount ? Math.round(
+        Number(duration.amount) * (String(duration.unit ?? "").endsWith("Q11574") ? 1 / 60 : String(duration.unit ?? "").endsWith("Q25235") ? 60 : 1)
+      ) : null,
+      posterUrl: filename ? `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}?width=600` : null
+    };
+  });
+  return json({ provider: "Wikidata / Wikimedia Commons", results });
 }
 
 async function listPlaylists(request: Request, env: Env): Promise<Response> {
@@ -2719,6 +2867,13 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   const adminEvent = path.match(/^\/api\/v1\/admin\/event-channels\/([0-9a-f-]+)$/i);
   if (adminEvent && request.method === "PATCH") return updateEventChannel(request, env, adminEvent[1]);
   if (adminEvent && request.method === "DELETE") return deleteEventChannel(request, env, adminEvent[1]);
+
+  if (path === "/api/v1/admin/movies/metadata-search" && request.method === "GET") return searchMovieMetadata(request, env);
+  if (path === "/api/v1/admin/movies" && request.method === "GET") return listMovies(request, env);
+  if (path === "/api/v1/admin/movies" && request.method === "POST") return createMovie(request, env);
+  const adminMovie = path.match(/^\/api\/v1\/admin\/movies\/([0-9a-f-]+)$/i);
+  if (adminMovie && request.method === "PATCH") return updateMovie(request, env, adminMovie[1]);
+  if (adminMovie && request.method === "DELETE") return deleteMovie(request, env, adminMovie[1]);
 
   if (path === "/api/v1/admin/playlists" && request.method === "GET") return listPlaylists(request, env);
   if (path === "/api/v1/admin/epg/fetch" && request.method === "GET") return fetchGuidePreview(request, env);

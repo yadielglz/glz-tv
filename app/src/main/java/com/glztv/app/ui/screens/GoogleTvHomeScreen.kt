@@ -32,7 +32,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Hotel
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PlayArrow
@@ -70,6 +72,7 @@ import coil3.compose.AsyncImage
 import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 import com.glztv.app.GuestExperience
+import com.glztv.app.Movie
 import com.glztv.app.RadioStation
 import com.glztv.app.model.EntertainmentApp
 import com.glztv.app.model.NetworkInfo
@@ -150,8 +153,10 @@ fun GoogleTvHomeScreen(
     favorites: Set<String>,
     recentChannels: List<Channel>,
     radioStations: List<RadioStation> = emptyList(),
+    movies: List<Movie> = emptyList(),
     currentRadioStation: RadioStation? = null,
     onPlayRadioStation: (RadioStation) -> Unit = {},
+    onWatchMovie: (Movie) -> Unit = {},
     entertainmentApps: List<EntertainmentApp>,
     guestName: String,
     experience: GuestExperience,
@@ -370,6 +375,20 @@ fun GoogleTvHomeScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 20.dp)
         ) {
+            if (movies.isNotEmpty()) {
+                item(key = "rail-movies") {
+                    RailHeader(title = "MOVIES ON GLZ", icon = Icons.Default.PlayArrow, iconTint = GoogleTvTokens.BlueAccent)
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(vertical = 6.dp)
+                    ) {
+                        itemsIndexed(movies, key = { index, movie -> "movie-${movie.id}-$index" }) { _, movie ->
+                            MoviePosterCard(movie = movie, onClick = { onWatchMovie(movie) })
+                        }
+                    }
+                }
+            }
+
             // RAIL 1: JUMP BACK IN / FEATURED LINEUP
             item(key = "rail-recent") {
                 val title = if (recentChannels.isNotEmpty() || resumeChannel != null) "JUMP BACK IN" else "FEATURED LINEUP"
@@ -2144,6 +2163,55 @@ private fun RailHeader(
     }
 }
 
+@Composable
+private fun MoviePosterCard(movie: Movie, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF17202D),
+        modifier = Modifier
+            .width(132.dp)
+            .height(198.dp)
+            .googleTvFocusable(
+                shape = RoundedCornerShape(10.dp),
+                focusedScale = 1.06f,
+                onFocusChange = { focused = it }
+            )
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            if (movie.posterUrl.isNotBlank()) {
+                AsyncImage(
+                    model = movie.posterUrl,
+                    contentDescription = movie.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(Modifier.fillMaxSize().background(Color(0xFF243447)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = GoogleTvTokens.BlueAccent, modifier = Modifier.size(48.dp))
+                }
+            }
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = .94f)))
+                )
+            )
+            Column(Modifier.align(Alignment.BottomStart).padding(10.dp)) {
+                Text(
+                    movie.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                )
+                val details = listOfNotNull(
+                    movie.releaseYear?.toString(), movie.runtimeMinutes?.let { "$it min" }
+                ).joinToString(" · ")
+                if (details.isNotBlank()) Text(details, color = Color.White.copy(alpha = .72f), fontSize = 10.sp)
+            }
+            if (focused) Box(Modifier.fillMaxSize().border(2.dp, GoogleTvTokens.BlueAccent, RoundedCornerShape(10.dp)))
+        }
+    }
+}
+
 /**
  * Recent Channel Card (Rail 1)
  */
@@ -2592,6 +2660,33 @@ private fun SkeletonCard(
  * Quick Tune Side Drawer.
  * Replicates the player's left-hand channel drawer, sliding in from the right edge on the Home Screen.
  */
+private fun quickTuneEventPrefix(channel: Channel): String? {
+    val number = channel.number.trim()
+    return listOf("29", "30", "31").firstOrNull { prefix ->
+        number == prefix || number.startsWith("$prefix-")
+    }
+}
+
+private fun quickTuneRows(
+    channels: List<Channel>,
+    collapsedPrefixes: Set<String>
+): List<Pair<String?, Channel?>> = buildList {
+    val emittedPrefixes = mutableSetOf<String>()
+    channels.forEach { channel ->
+        val prefix = quickTuneEventPrefix(channel)
+        if (prefix == null) {
+            add(null to channel)
+        } else if (emittedPrefixes.add(prefix)) {
+            add(prefix to null)
+            if (prefix !in collapsedPrefixes) {
+                channels.filter { quickTuneEventPrefix(it) == prefix }.forEach { grouped ->
+                    add(null to grouped)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun QuickTuneDrawer(
     channels: List<Channel>,
@@ -2607,9 +2702,15 @@ private fun QuickTuneDrawer(
 
     val listState = rememberLazyListState()
     val initialFocusRequester = remember { FocusRequester() }
+    var collapsedEventPrefixes by remember {
+        mutableStateOf(setOf("29", "30", "31") - setOfNotNull(activeChannel?.let(::quickTuneEventPrefix)))
+    }
+    val drawerRows = remember(channels, collapsedEventPrefixes) {
+        quickTuneRows(channels, collapsedEventPrefixes)
+    }
 
-    val targetFocusIndex = remember(channels, activeChannel) {
-        val idx = channels.indexOfFirst { it.id == activeChannel?.id }
+    val targetFocusIndex = remember(drawerRows, activeChannel) {
+        val idx = drawerRows.indexOfFirst { it.second?.id == activeChannel?.id }
         if (idx >= 0) idx else 0
     }
 
@@ -2827,7 +2928,73 @@ private fun QuickTuneDrawer(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                itemsIndexed(channels, key = { index, ch -> "qt-$index-${ch.id}" }) { index, item ->
+                itemsIndexed(
+                    drawerRows,
+                    key = { index, row -> row.second?.let { "qt-$index-${it.id}" } ?: "qt-group-${row.first}" }
+                ) { index, row ->
+                    val prefix = row.first
+                    val item = row.second
+                    if (item == null && prefix != null) {
+                        val groupedCount = channels.count { quickTuneEventPrefix(it) == prefix }
+                        val collapsed = prefix in collapsedEventPrefixes
+                        var headerFocused by remember(prefix) { mutableStateOf(false) }
+                        val label = when (prefix) {
+                            "29" -> "PPV & COMBAT EVENTS"
+                            "30" -> "MAJOR SPORTS EVENTS"
+                            else -> "MLB EVENTS"
+                        }
+                        Surface(
+                            onClick = {
+                                collapsedEventPrefixes = if (collapsed) {
+                                    collapsedEventPrefixes - prefix
+                                } else {
+                                    collapsedEventPrefixes + prefix
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(if (index == targetFocusIndex) Modifier.focusRequester(initialFocusRequester) else Modifier)
+                                .googleTvFocusable(
+                                    shape = RoundedCornerShape(12.dp),
+                                    focusedScale = 1.02f,
+                                    onFocusChange = { headerFocused = it }
+                                ),
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (headerFocused) Color.White else GoogleTvTokens.BlueAccent.copy(alpha = 0.13f),
+                            contentColor = if (headerFocused) Color.Black else Color.White
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (headerFocused) Color.Black.copy(alpha = 0.10f) else GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
+                                ) {
+                                    Text(
+                                        prefix,
+                                        Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(label, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                                    Text(
+                                        "$groupedCount channel${if (groupedCount == 1) "" else "s"} · EPG",
+                                        fontSize = 10.sp,
+                                        color = if (headerFocused) Color.Black.copy(alpha = 0.65f) else GoogleTvTokens.TextSecondary
+                                    )
+                                }
+                                Icon(
+                                    if (collapsed) Icons.Default.ChevronRight else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = if (collapsed) "Expand channel $prefix" else "Collapse channel $prefix",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    } else if (item != null) {
                     val isTuned = item.id == activeChannel?.id
                     var isFocused by remember(item.id) { mutableStateOf(false) }
                     val itemProgramme = remember(item.id, guide, now) {
@@ -2911,6 +3078,7 @@ private fun QuickTuneDrawer(
                                 }
                             }
                         }
+                    }
                     }
                 }
             }

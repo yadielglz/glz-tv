@@ -366,6 +366,8 @@ internal fun TvScreen(
     val channels = remember { mutableStateListOf<Channel>() }
     var guide by remember { mutableStateOf(EpgGuide.Empty) }
     var selected by remember { mutableStateOf<Channel?>(null) }
+    var selectedMovie by remember { mutableStateOf<Movie?>(null) }
+    var managedMovies by remember { mutableStateOf(Movie.fromPreferences(prefs)) }
     var multiViewSecondary by remember { mutableStateOf<Channel?>(null) }
     var playerActive by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Add an M3U playlist to start watching.") }
@@ -921,6 +923,7 @@ internal fun TvScreen(
                     keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
                     homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
                     sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
+                    managedMovies = Movie.fromPreferences(prefs)
                     reportHubSync(35, "Configuration received")
                     loadSources(forceRefresh = true) { percent, message ->
                         reportHubSync(percent, message)
@@ -997,7 +1000,7 @@ internal fun TvScreen(
         GlzHubManager.reportActivity(prefs, "channel", it.name)
         prefs.edit().putString(LAST_CHANNEL_ID, it.id).apply()
     }
-    val immersive = (section == AppSection.Live && selected != null && playerActive) ||
+    val immersive = selectedMovie != null || (section == AppSection.Live && selected != null && playerActive) ||
         section == AppSection.SportsBarKiosk
 
     LaunchedEffect(sportsBarKioskEnabled) {
@@ -1068,7 +1071,17 @@ internal fun TvScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(if (immersive || section == AppSection.Live || section == AppSection.Home) PaddingValues(0.dp) else padding)) {
             if (immersive) {
-                if (section == AppSection.SportsBarKiosk) {
+                if (selectedMovie != null) {
+                    MoviePlaybackScreen(
+                        movie = selectedMovie!!,
+                        captionsEnabled = captionsEnabled,
+                        captionLanguage = captionLanguage,
+                        onExit = {
+                            selectedMovie = null
+                            GlzHubManager.reportActivity(prefs, "idle")
+                        }
+                    )
+                } else if (section == AppSection.SportsBarKiosk) {
                     SportsBarKioskScreen(
                         channels = ordered,
                         prefs = prefs,
@@ -1183,9 +1196,15 @@ internal fun TvScreen(
                         }
                     },
                     radioStations = radioStations,
+                    movies = managedMovies,
                     currentRadioStation = currentRadioStation,
                     onPlayRadioStation = { station ->
                         playRadioStation(station)
+                    },
+                    onWatchMovie = { movie ->
+                        stopRadio()
+                        selectedMovie = movie
+                        GlzHubManager.reportActivity(prefs, "movie", movie.title)
                     },
                     entertainmentApps = managedEntertainmentApps,
                     guestName = guestName,
@@ -4033,6 +4052,26 @@ private fun ppvChannelPrefix(channel: Channel): String? {
     }
 }
 
+private fun ppvDrawerRows(
+    channels: List<Channel>,
+    collapsedPrefixes: Set<String>
+): List<Pair<String?, Channel?>> = buildList {
+    val emittedPrefixes = mutableSetOf<String>()
+    channels.forEach { item ->
+        val prefix = ppvChannelPrefix(item)
+        if (prefix == null) {
+            add(null to item)
+        } else if (emittedPrefixes.add(prefix)) {
+            add(prefix to null)
+            if (prefix !in collapsedPrefixes) {
+                channels.filter { ppvChannelPrefix(it) == prefix }.forEach { grouped ->
+                    add(null to grouped)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ChannelCard(
     channel: Channel, selected: Boolean, favorite: Boolean,
@@ -4229,22 +4268,7 @@ private fun ImmersivePlayerScreen(
     val firstServiceFocus = remember { FocusRequester() }
     val osdActionFocus = remember { FocusRequester() }
     val drawerRows = remember(channels, collapsedPpvPrefixes) {
-        buildList<Pair<String?, Channel?>> {
-            val emittedPrefixes = mutableSetOf<String>()
-            channels.forEach { item ->
-                val prefix = ppvChannelPrefix(item)
-                if (prefix == null) {
-                    add(null to item)
-                } else if (emittedPrefixes.add(prefix)) {
-                    add(prefix to null)
-                    if (prefix !in collapsedPpvPrefixes) {
-                        channels.filter { ppvChannelPrefix(it) == prefix }.forEach { grouped ->
-                            add(null to grouped)
-                        }
-                    }
-                }
-            }
-        }
+        ppvDrawerRows(channels, collapsedPpvPrefixes)
     }
     val selectedDrawerIndex = drawerRows.indexOfFirst { it.second?.id == channel.id }.coerceAtLeast(0)
     val channelListState = rememberLazyListState(
@@ -4309,14 +4333,18 @@ private fun ImmersivePlayerScreen(
             onExit()
         }
     }
-    LaunchedEffect(channel.id, drawer, drawerRows) {
+    LaunchedEffect(channel.id, drawer) {
         when (drawer) {
             PlayerDrawer.None -> playerFocus.requestFocus()
             PlayerDrawer.Channels -> {
-                ppvChannelPrefix(channel)?.let { prefix ->
-                    collapsedPpvPrefixes = collapsedPpvPrefixes - prefix
-                }
-                runCatching { channelListState.scrollToItem((selectedDrawerIndex - 2).coerceAtLeast(0)) }
+                val expandedPrefixes = ppvChannelPrefix(channel)?.let { prefix ->
+                    collapsedPpvPrefixes - prefix
+                } ?: collapsedPpvPrefixes
+                collapsedPpvPrefixes = expandedPrefixes
+                val focusIndex = ppvDrawerRows(channels, expandedPrefixes)
+                    .indexOfFirst { it.second?.id == channel.id }
+                    .coerceAtLeast(0)
+                runCatching { channelListState.scrollToItem((focusIndex - 2).coerceAtLeast(0)) }
                 delay(PANEL_ANIM_IN.toLong())
                 runCatching { selectedChannelFocus.requestFocus() }
             }
@@ -5703,6 +5731,36 @@ private fun SportsBarKioskScreen(
 }
 
 @Composable
+private fun MoviePlaybackScreen(
+    movie: Movie,
+    captionsEnabled: Boolean,
+    captionLanguage: String,
+    onExit: () -> Unit
+) {
+    BackHandler(onBack = onExit)
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        VideoPlayer(
+            channel = movie.asChannel(),
+            captionsEnabled = captionsEnabled,
+            captionLanguage = captionLanguage,
+            showControls = true,
+            modifier = Modifier.fillMaxSize()
+        )
+        Column(
+            Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .75f), Color.Transparent)))
+                .padding(28.dp)
+        ) {
+            Text(movie.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            val details = listOfNotNull(movie.releaseYear?.toString(), movie.runtimeMinutes?.let { "$it min" }).joinToString(" · ")
+            if (details.isNotBlank()) Text(details, color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
+        }
+    }
+}
+
+@Composable
 private fun VideoPlayer(
     channel: Channel,
     captionsEnabled: Boolean,
@@ -5712,6 +5770,7 @@ private fun VideoPlayer(
     createMediaSession: Boolean = true,
     keepScreenOn: Boolean = true,
     cropVideo: Boolean = false,
+    showControls: Boolean = false,
     controlState: PlaybackControlState? = null,
     preferredAudioLanguage: String? = null,
     onAudioLanguageChanged: (String?) -> Unit = {},
@@ -5948,10 +6007,10 @@ private fun VideoPlayer(
                     this.keepScreenOn = keepScreenOn
                     resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                     else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    useController = false
-                    controllerAutoShow = false
-                    isFocusable = false
-                    isFocusableInTouchMode = false
+                    useController = showControls
+                    controllerAutoShow = showControls
+                    isFocusable = showControls
+                    isFocusableInTouchMode = showControls
                     (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
                 }
             },
@@ -5960,6 +6019,8 @@ private fun VideoPlayer(
                 it.keepScreenOn = keepScreenOn
                 it.resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                it.useController = showControls
+                it.controllerAutoShow = showControls
                 (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
             },
             modifier = Modifier.fillMaxSize()

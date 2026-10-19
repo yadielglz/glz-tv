@@ -1,6 +1,6 @@
 const state = {
   config: null, session: null, devices: [], apps: [], sites: [],
-  experience: null, selectedSiteId: null, enrollments: [], stations: [], playlists: [], groups: []
+  experience: null, selectedSiteId: null, enrollments: [], stations: [], playlists: [], movies: [], movieMetadataResults: [], groups: []
 };
 const epgState = { doc: null, playlistId: "", dirty: false, sourceUrl: "" };
 const inviteParams = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -109,6 +109,7 @@ function showView(name) {
   $("#experienceView").classList.toggle("hidden", name !== "experience");
   $("#radioView").classList.toggle("hidden", name !== "radio");
   $("#eventsView")?.classList.toggle("hidden", name !== "events");
+  $("#moviesView")?.classList.toggle("hidden", name !== "movies");
   $("#studioView").classList.toggle("hidden", name !== "studio");
   $("#epgView").classList.toggle("hidden", name !== "epg");
   $("#pairView").classList.toggle("hidden", name !== "pair");
@@ -123,6 +124,7 @@ function showView(name) {
     experience: "Guest experience",
     radio: "Radio Streams",
     events: "Live Event Channels",
+    movies: "Movie Library",
     studio: "Playlist Studio",
     epg: "EPG Studio",
     settings: "Hub Settings & Administration",
@@ -137,6 +139,7 @@ function showView(name) {
     pair: { section: "Fleet Management", current: "Pair a TV" },
     studio: { section: "Broadcast & Channels", current: "TV Playlists" },
     events: { section: "Broadcast & Channels", current: "Live Events" },
+    movies: { section: "Broadcast & Channels", current: "Movies" },
     epg: { section: "Broadcast & Channels", current: "EPG Studio" },
     radio: { section: "Broadcast & Channels", current: "Radio Streams" },
     experience: { section: "Hospitality & Apps", current: "Guest Experience" },
@@ -153,6 +156,7 @@ function showView(name) {
   if (name === "pair") loadPairingRequests();
   if (name === "radio") loadRadioStations();
   if (name === "events") loadEventChannels();
+  if (name === "movies") loadMovies();
   if (name === "studio") loadPlaylists();
   if (name === "epg") openEpgStudio();
   if (name === "groups") loadBoxGroups();
@@ -181,6 +185,9 @@ function deviceActivity(device) {
   }
   if (device.activity_type === "radio" && device.activity_label) {
     return { label: `Listening · ${device.activity_label}`, className: "listening" };
+  }
+  if (device.activity_type === "movie" && device.activity_label) {
+    return { label: `Watching movie · ${device.activity_label}`, className: "watching" };
   }
   if (device.activity_type === "app" && device.activity_label) {
     return { label: `App launched · ${device.activity_label}`, className: "app-active" };
@@ -1044,6 +1051,9 @@ function updateNavBadges() {
 
   const radioBadge = $("#navCountRadio");
   if (radioBadge) radioBadge.textContent = String(state.stations.length);
+
+  const movieBadge = $("#navCountMovies");
+  if (movieBadge) movieBadge.textContent = String(state.movies.length);
 
   const appBadge = $("#navCountApps");
   if (appBadge) appBadge.textContent = String(state.apps.length);
@@ -2085,6 +2095,7 @@ if (state.session) {
     showApp();
   });
   loadPlaylists().catch(() => { });
+  loadMovies().catch(() => { });
 }
 
 async function loadRadioStations() {
@@ -2222,6 +2233,155 @@ async function deleteRadioStation(id) {
     showToast(error.message);
   }
 }
+
+async function loadMovies() {
+  try {
+    const { movies } = await api("/api/v1/admin/movies");
+    state.movies = movies || [];
+    renderMovies();
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+function renderMovies() {
+  const container = $("#movieList");
+  const empty = $("#movieEmpty");
+  if (!container || !empty) return;
+  empty.classList.toggle("hidden", state.movies.length > 0);
+  container.innerHTML = state.movies.map((movie) => `
+    <article class="movie-admin-card ${movie.is_active && movie.show_on_home ? "" : "movie-muted"}">
+      <div class="movie-admin-poster">
+        ${movie.poster_url ? `<img src="${escapeHtml(movie.poster_url)}" alt="" loading="lazy">` : `<div class="movie-poster-placeholder"><svg class="icon-lg"><use href="#icon-play"/></svg></div>`}
+        <span class="movie-visibility-badge">${movie.is_active ? (movie.show_on_home ? "On Home" : "Hidden from Home") : "Inactive"}</span>
+      </div>
+      <div class="movie-admin-copy">
+        <h4>${escapeHtml(movie.title)}</h4>
+        <p>${[movie.release_year, movie.runtime_minutes ? `${movie.runtime_minutes} min` : "", ...(movie.genres || []).slice(0, 2)].filter(Boolean).map((value) => escapeHtml(String(value))).join(" · ") || "Movie stream"}</p>
+        <small>${escapeHtml(movie.description || "No description yet.")}</small>
+        <div class="movie-admin-actions">
+          <button class="secondary small-btn preview-movie" data-id="${movie.id}">Preview</button>
+          <button class="secondary small-btn toggle-movie-home" data-id="${movie.id}">${movie.show_on_home ? "Take off Home" : "Show on Home"}</button>
+          <button class="primary small-btn edit-movie" data-id="${movie.id}">Edit</button>
+        </div>
+      </div>
+    </article>
+  `).join("");
+  $$(".edit-movie").forEach((button) => button.addEventListener("click", () => openMovieDialog(button.dataset.id)));
+  $$(".preview-movie").forEach((button) => button.addEventListener("click", () => {
+    const movie = state.movies.find((item) => item.id === button.dataset.id);
+    if (movie) previewStream(movie.stream_url, movie.title);
+  }));
+  $$(".toggle-movie-home").forEach((button) => button.addEventListener("click", async () => {
+    const movie = state.movies.find((item) => item.id === button.dataset.id);
+    if (!movie) return;
+    try {
+      await api(`/api/v1/admin/movies/${movie.id}`, { method: "PATCH", body: JSON.stringify({ showOnHome: !movie.show_on_home }) });
+      await loadMovies();
+      showToast(movie.show_on_home ? "Movie removed from TV Home." : "Movie added to TV Home.", "success");
+    } catch (error) { showToast(error.message, "error"); }
+  }));
+  updateNavBadges();
+}
+
+function openMovieDialog(id = null) {
+  const movie = state.movies.find((item) => item.id === id);
+  $("#movieId").value = movie?.id || "";
+  $("#movieExternalId").value = movie?.external_id || "";
+  $("#movieTitle").value = movie?.title || "";
+  $("#movieStreamUrl").value = movie?.stream_url || "";
+  $("#moviePosterUrl").value = movie?.poster_url || "";
+  $("#movieBackdropUrl").value = movie?.backdrop_url || "";
+  $("#movieReleaseYear").value = movie?.release_year || "";
+  $("#movieRuntime").value = movie?.runtime_minutes || "";
+  $("#movieGenres").value = (movie?.genres || []).join(", ");
+  $("#movieSortOrder").value = movie?.sort_order ?? 0;
+  $("#movieDescription").value = movie?.description || "";
+  $("#movieActive").checked = movie?.is_active ?? true;
+  $("#movieShowOnHome").checked = movie?.show_on_home ?? true;
+  $("#movieDialogTitle").textContent = movie ? "Edit movie" : "Add movie";
+  $("#movieMetadataStatus").textContent = "Uses Wikidata and Wikimedia Commons; every field remains editable.";
+  $("#movieMetadataResults").classList.add("hidden");
+  state.movieMetadataResults = [];
+  $("#movieError").textContent = "";
+  $("#deleteMovieButton").classList.toggle("hidden", !movie);
+  $("#movieDialog").showModal();
+}
+
+$("#addMovieButton")?.addEventListener("click", () => openMovieDialog());
+$$('[data-close-movie]').forEach((button) => button.addEventListener("click", () => $("#movieDialog").close()));
+
+$("#lookupMovieMetadata")?.addEventListener("click", async () => {
+  const title = $("#movieTitle").value.trim();
+  if (!title) { $("#movieError").textContent = "Enter a title before searching."; return; }
+  const status = $("#movieMetadataStatus");
+  status.textContent = "Searching open metadata…";
+  try {
+    const { results, provider } = await api(`/api/v1/admin/movies/metadata-search?q=${encodeURIComponent(title)}`);
+    state.movieMetadataResults = results || [];
+    const chooser = $("#movieMetadataResults");
+    chooser.innerHTML = state.movieMetadataResults.map((item, index) => `<option value="${index}">${escapeHtml(item.title)}${item.releaseYear ? ` (${item.releaseYear})` : ""} — ${escapeHtml(item.description || "film")}</option>`).join("");
+    chooser.classList.toggle("hidden", !state.movieMetadataResults.length);
+    const match = state.movieMetadataResults[0];
+    if (!match) { status.textContent = "No film match found. You can enter metadata manually."; return; }
+    $("#movieExternalId").value = match.externalId || "";
+    $("#movieTitle").value = match.title || title;
+    $("#movieDescription").value = match.description || $("#movieDescription").value;
+    $("#movieReleaseYear").value = match.releaseYear || "";
+    $("#movieRuntime").value = match.runtimeMinutes || "";
+    $("#moviePosterUrl").value = match.posterUrl || $("#moviePosterUrl").value;
+    status.textContent = `Filled from ${provider}. Review before saving.`;
+  } catch (error) { status.textContent = error.message; }
+});
+
+$("#movieMetadataResults")?.addEventListener("change", (event) => {
+  const match = state.movieMetadataResults[Number(event.target.value)];
+  if (!match) return;
+  $("#movieExternalId").value = match.externalId || "";
+  $("#movieTitle").value = match.title || $("#movieTitle").value;
+  $("#movieDescription").value = match.description || $("#movieDescription").value;
+  $("#movieReleaseYear").value = match.releaseYear || "";
+  $("#movieRuntime").value = match.runtimeMinutes || "";
+  $("#moviePosterUrl").value = match.posterUrl || $("#moviePosterUrl").value;
+  $("#movieMetadataStatus").textContent = "Selected metadata match applied. Review before saving.";
+});
+
+$("#movieForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const id = $("#movieId").value;
+  const numberOrNull = (selector) => $(selector).value ? Number($(selector).value) : null;
+  const payload = {
+    title: $("#movieTitle").value,
+    streamUrl: $("#movieStreamUrl").value,
+    posterUrl: $("#moviePosterUrl").value || null,
+    backdropUrl: $("#movieBackdropUrl").value || null,
+    description: $("#movieDescription").value || null,
+    externalId: $("#movieExternalId").value || null,
+    releaseYear: numberOrNull("#movieReleaseYear"),
+    runtimeMinutes: numberOrNull("#movieRuntime"),
+    sortOrder: Number($("#movieSortOrder").value || 0),
+    genres: $("#movieGenres").value.split(",").map((value) => value.trim()).filter(Boolean),
+    isActive: $("#movieActive").checked,
+    showOnHome: $("#movieShowOnHome").checked
+  };
+  try {
+    await api(id ? `/api/v1/admin/movies/${id}` : "/api/v1/admin/movies", { method: id ? "PATCH" : "POST", body: JSON.stringify(payload) });
+    $("#movieDialog").close();
+    await loadMovies();
+    showToast("Movie saved and TV sync queued.", "success");
+  } catch (error) { $("#movieError").textContent = error.message; }
+});
+
+$("#deleteMovieButton")?.addEventListener("click", async () => {
+  const id = $("#movieId").value;
+  if (!id || !confirm("Delete this movie from GLZ Hub?")) return;
+  try {
+    await api(`/api/v1/admin/movies/${id}`, { method: "DELETE" });
+    $("#movieDialog").close();
+    await loadMovies();
+    showToast("Movie deleted.", "success");
+  } catch (error) { $("#movieError").textContent = error.message; }
+});
 
 async function loadPlaylists() {
   try {

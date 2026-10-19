@@ -22,6 +22,7 @@ object GlzHubManager {
     const val GUEST_EXPERIENCE = "hub_guest_experience"
     const val APP_LANGUAGE = "app_language"
     const val SPORTS_BAR_KIOSK_ENABLED = "sports_bar_kiosk_enabled"
+    const val MANAGED_MOVIES = "hub_managed_movies"
     private const val ACTIVITY_TYPE = "hub_activity_type"
     private const val ACTIVITY_LABEL = "hub_activity_label"
     private const val ACTIVITY_PACKAGE = "hub_activity_package"
@@ -197,9 +198,11 @@ object GlzHubManager {
         val forceRefreshTriggered =
             forceRefreshToken != null && forceRefreshToken != previousForceRefreshToken
         val appPackages = config.optJSONArray("visibleApps").toPackageSet()
+        val needsMovieHydration = config.has("movies") && !prefs.contains(MANAGED_MOVIES)
         if (version == previousVersion &&
             experienceVersion == previousExperienceVersion &&
-            !forceRefreshTriggered
+            !forceRefreshTriggered &&
+            !needsMovieHydration
         ) {
             return SyncResult(false, null, visibleApps(prefs), commands(prefs, client))
         }
@@ -268,6 +271,9 @@ object GlzHubManager {
         }
         config.optJSONObject("guestExperience")?.let {
             editor.putString(GUEST_EXPERIENCE, it.toString())
+        }
+        if (config.has("movies")) {
+            editor.putString(MANAGED_MOVIES, config.optJSONArray("movies")?.toString() ?: "[]")
         }
         config.optJSONObject("requestHeaders")?.let { headers ->
             editor.putString(

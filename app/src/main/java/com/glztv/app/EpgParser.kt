@@ -92,9 +92,14 @@ data class EpgGuide(
         val cacheKey = "${channel.id}\u0000${channel.name}\u0000${channel.eventTitle}\u0000${channel.eventStartMillis}\u0000${channel.eventEndMillis}"
         return synchronized(programmeMatchCache) {
             programmeMatchCache.getOrPut(cacheKey) {
-                programmes[channel.id]?.takeIf(List<Programme>::isNotEmpty)
+                val matched = programmes[channel.id]?.takeIf(List<Programme>::isNotEmpty)
                     ?: findMatchedChannelId(channel)?.let(programmes::get)?.takeIf(List<Programme>::isNotEmpty)
                     ?: fallbackEventProgramme(channel)
+                if (channel.isMusicChoiceChannel()) {
+                    matched.map { it.withCleanMusicChoiceMetadata(channel.name) }
+                } else {
+                    matched
+                }
             }
         }
     }
@@ -190,6 +195,39 @@ data class EpgGuide(
             logo
         }
     }
+}
+
+private val musicChoiceTechnicalMarker = Regex(
+    "(?:h_\\d{2,}|al_c/|https?://|\\.m3u8(?:[?/#]|$))",
+    RegexOption.IGNORE_CASE
+)
+
+private fun Channel.isMusicChoiceChannel(): Boolean {
+    val channelNumber = number.trim()
+    return channelNumber == "135" || channelNumber == "136" ||
+        name.contains("Music Choice", ignoreCase = true) ||
+        group.contains("Music Choice", ignoreCase = true)
+}
+
+private fun Programme.withCleanMusicChoiceMetadata(channelName: String): Programme {
+    val marker = musicChoiceTechnicalMarker.find(title)
+    if (marker == null) return this
+
+    val readablePrefix = title.substring(0, marker.range.first)
+        .trim(' ', '-', '|', ',', ':', '/', '_')
+        .takeIf { candidate -> candidate.length >= 2 && candidate.any(Char::isLetter) }
+    val readableDescription = description.trim()
+        .takeIf { candidate ->
+            candidate.length in 2..120 &&
+                candidate.any(Char::isLetter) &&
+                !musicChoiceTechnicalMarker.containsMatchIn(candidate)
+        }
+    val fallbackTitle = channelName.trim().ifBlank { "Music Choice" }
+
+    return copy(
+        title = readablePrefix ?: readableDescription ?: fallbackTitle,
+        description = description.takeUnless(musicChoiceTechnicalMarker::containsMatchIn).orEmpty()
+    )
 }
 
 

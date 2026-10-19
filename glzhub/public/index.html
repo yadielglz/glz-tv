@@ -27,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=3.0.1">
+  <link rel="stylesheet" href="/styles.css?v=3.0.2">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 </head>
 
@@ -263,6 +263,11 @@
             <svg class="icon"><use href="#icon-events"/></svg>
             <span>Live events</span>
             <span class="nav-badge-live hidden" id="navLiveBadge">● LIVE</span>
+          </button>
+          <button class="nav" data-view="movies">
+            <svg class="icon"><use href="#icon-play"/></svg>
+            <span>Movies</span>
+            <span class="nav-badge" id="navCountMovies">0</span>
           </button>
           <button class="nav" data-view="epg">
             <svg class="icon"><use href="#icon-epg"/></svg>
@@ -831,6 +836,27 @@
             </div>
             <h3>No radio streams configured</h3>
             <p>Create live audio stations to broadcast across GLZ Radio app.</p>
+          </div>
+        </section>
+
+        <!-- Playlist Studio View -->
+        <section id="moviesView" class="hidden">
+          <div class="editor-header" style="margin-bottom:16px;">
+            <div>
+              <div class="eyebrow">VIDEO ON DEMAND</div>
+              <h3>Movie Library</h3>
+              <p>Add HLS movies, enrich them with open metadata, and choose what appears on TV home screens.</p>
+            </div>
+            <button id="addMovieButton" class="primary">
+              <svg class="icon"><use href="#icon-pair"/></svg>
+              <span>Add movie</span>
+            </button>
+          </div>
+          <div id="movieList" class="movie-admin-grid"></div>
+          <div id="movieEmpty" class="empty hidden">
+            <div class="empty-icon"><svg class="icon-lg"><use href="#icon-play"/></svg></div>
+            <h3>No movies yet</h3>
+            <p>Add an M3U8 stream and publish it to the poster carousel on paired TVs.</p>
           </div>
         </section>
 
@@ -2111,6 +2137,42 @@
   </dialog>
 
   <!-- Playlist Item Dialog -->
+  <dialog id="movieDialog" style="max-width: 760px; width: 92vw;">
+    <form id="movieForm">
+      <div class="dialog-head">
+        <div><div class="eyebrow">HOME MOVIE CAROUSEL</div><h3 id="movieDialogTitle">Add movie</h3></div>
+        <button class="icon-button" type="button" data-close-movie><svg class="icon"><use href="#icon-close"/></svg></button>
+      </div>
+      <input id="movieId" type="hidden">
+      <input id="movieExternalId" type="hidden">
+      <div class="form-grid">
+        <label class="wide">Title<input id="movieTitle" required maxlength="180" placeholder="Movie title"></label>
+        <div class="wide metadata-lookup-row">
+          <button id="lookupMovieMetadata" type="button" class="secondary"><svg class="icon"><use href="#icon-search"/></svg><span>Find free metadata</span></button>
+          <select id="movieMetadataResults" class="hidden" aria-label="Metadata match"></select>
+          <small id="movieMetadataStatus">Uses Wikidata and Wikimedia Commons; every field remains editable.</small>
+        </div>
+        <label class="wide">M3U8 / HLS Stream URL<input id="movieStreamUrl" type="url" required placeholder="https://…/master.m3u8"></label>
+        <label>Poster URL<input id="moviePosterUrl" type="url" placeholder="https://…/poster.jpg"></label>
+        <label>Backdrop URL<input id="movieBackdropUrl" type="url" placeholder="https://…/backdrop.jpg"></label>
+        <label>Release year<input id="movieReleaseYear" type="number" min="1888" max="2200"></label>
+        <label>Runtime (minutes)<input id="movieRuntime" type="number" min="1" max="10000"></label>
+        <label>Genres<input id="movieGenres" placeholder="Drama, Comedy"></label>
+        <label>Sort order<input id="movieSortOrder" type="number" value="0"></label>
+        <label class="wide">Description<textarea id="movieDescription" rows="3" maxlength="2000"></textarea></label>
+        <label class="check-card"><input id="movieActive" type="checkbox" checked><div><strong>Active</strong><small>Allow this movie to be delivered</small></div></label>
+        <label class="check-card"><input id="movieShowOnHome" type="checkbox" checked><div><strong>Show on Home</strong><small>Include in the TV poster carousel</small></div></label>
+      </div>
+      <p id="movieError" class="error"></p>
+      <div class="form-actions">
+        <button id="deleteMovieButton" type="button" class="danger-button hidden" style="margin-right:auto;">Delete movie</button>
+        <button type="button" class="secondary" data-close-movie>Cancel</button>
+        <button class="primary" type="submit">Save movie</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Playlist Item Dialog -->
   <dialog id="playlistItemDialog" style="max-width: 680px; width: 92vw;">
     <form id="playlistItemForm">
       <div class="dialog-head">
@@ -2176,7 +2238,7 @@
     <span id="toastMessage" class="toast-msg">Notification</span>
   </div>
 
-  <script type="module" src="/app.js?v=3.0.1"></script>
+  <script type="module" src="/app.js?v=3.0.2"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"8a9d9fbda9c14c53b3dec2f41df6f690","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 

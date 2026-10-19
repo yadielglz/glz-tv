@@ -244,5 +244,55 @@ class EpgParserTest {
         assertEquals("Lakers vs Celtics", current?.title)
         assertTrue(current?.description?.contains("NBA") == true)
     }
+
+    @Test
+    fun replacesMusicChoiceTransportArtifactsWithReadableMetadata() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tv>
+              <channel id="music-choice-135">
+                <display-name>Music Choice Hit List</display-name>
+              </channel>
+              <programme channel="music-choice-135" start="20260729180000 +0000" stop="20260729190000 +0000">
+                <title>h_1330,al_c/session/segment_0042.m3u8</title>
+                <desc>Today's Hit Music</desc>
+              </programme>
+              <channel id="music-choice-136">
+                <display-name>Music Choice '80s</display-name>
+              </channel>
+              <programme channel="music-choice-136" start="20260729180000 +0000" stop="20260729190000 +0000">
+                <title>Take On Me | h_1330,al_c/session/index.m3u8</title>
+                <desc>h_1330,al_c/session/description.m3u8</desc>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        val guide = EpgParser.parse(xml)
+        val channel135 = Channel(
+            "music-choice-135", "Music Choice Hit List", "Music Choice", "135", "", "", emptyMap()
+        )
+        val channel136 = Channel(
+            "music-choice-136", "Music Choice '80s", "Music Choice", "136", "", "", emptyMap()
+        )
+
+        assertEquals("Today's Hit Music", guide.forChannel(channel135).single().title)
+        assertEquals("Take On Me", guide.forChannel(channel136).single().title)
+        assertEquals("", guide.forChannel(channel136).single().description)
+    }
+
+    @Test
+    fun preservesValidMusicChoiceProgrammeTitles() {
+        val xml = """
+            <tv>
+              <channel id="music-choice"><display-name>Music Choice</display-name></channel>
+              <programme channel="music-choice" start="20260729180000 +0000" stop="20260729190000 +0000">
+                <title>Billboard Top 20</title><desc>Commercial-free music.</desc>
+              </programme>
+            </tv>
+        """.trimIndent()
+
+        val channel = Channel("music-choice", "Music Choice", "Music", "135", "", "", emptyMap())
+        assertEquals("Billboard Top 20", EpgParser.parse(xml).forChannel(channel).single().title)
+    }
 }
 
