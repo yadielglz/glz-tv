@@ -53,13 +53,19 @@ Log Wrangler into the intended Cloudflare account:
 npx wrangler login
 ```
 
-Add the three production secrets:
+Add the four production secrets. `TMDB_API_TOKEN` is the API Read Access Token
+from the TMDB account API settings page; it powers current movie metadata lookup.
 
 ```bash
 npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_PUBLISHABLE_KEY
 npx wrangler secret put SUPABASE_SECRET_KEY
+npx wrangler secret put TMDB_API_TOKEN
 ```
+
+TMDB requires attribution and may require a commercial API agreement depending
+on the deployment. Keep the attribution card in the Hub's System settings and
+review the current [TMDB API terms](https://www.themoviedb.org/api-terms-of-use).
 
 Deploy:
 

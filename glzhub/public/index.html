@@ -845,7 +845,7 @@
             <div>
               <div class="eyebrow">VIDEO ON DEMAND</div>
               <h3>Movie Library</h3>
-              <p>Add HLS movies, enrich them with open metadata, and choose what appears on TV home screens.</p>
+              <p>Add HLS movies, enrich them with current TMDB metadata, and choose what appears on TV home screens.</p>
             </div>
             <button id="addMovieButton" class="primary">
               <svg class="icon"><use href="#icon-pair"/></svg>
@@ -1664,6 +1664,14 @@
               </div>
 
               <div class="editor-card">
+                <h4 class="card-title">Movie Metadata Credits</h4>
+                <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" aria-label="Visit The Movie Database">
+                  <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg" alt="TMDB" style="width:70px; height:auto; margin:10px 0;">
+                </a>
+                <p class="field-help">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+              </div>
+
+              <div class="editor-card">
                 <h4 class="card-title">Configuration Backup &amp; Portability</h4>
                 <p class="field-help" style="margin-bottom:14px;">Export an encrypted snapshot of all properties, box groups, managed apps, guest profiles, and Hub preferences.</p>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -2148,9 +2156,9 @@
       <div class="form-grid">
         <label class="wide">Title<input id="movieTitle" required maxlength="180" placeholder="Movie title"></label>
         <div class="wide metadata-lookup-row">
-          <button id="lookupMovieMetadata" type="button" class="secondary"><svg class="icon"><use href="#icon-search"/></svg><span>Find free metadata</span></button>
+          <button id="lookupMovieMetadata" type="button" class="secondary"><svg class="icon"><use href="#icon-search"/></svg><span>Find movie metadata</span></button>
           <select id="movieMetadataResults" class="hidden" aria-label="Metadata match"></select>
-          <small id="movieMetadataStatus">Uses Wikidata and Wikimedia Commons; every field remains editable.</small>
+          <small id="movieMetadataStatus">Searches TMDB for current movie data; every field remains editable.</small>
         </div>
         <label class="wide">M3U8 / HLS Stream URL<input id="movieStreamUrl" type="url" required placeholder="https://…/master.m3u8"></label>
         <label>Poster URL<input id="moviePosterUrl" type="url" placeholder="https://…/poster.jpg"></label>

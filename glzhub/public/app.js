@@ -2300,7 +2300,7 @@ function openMovieDialog(id = null) {
   $("#movieActive").checked = movie?.is_active ?? true;
   $("#movieShowOnHome").checked = movie?.show_on_home ?? true;
   $("#movieDialogTitle").textContent = movie ? "Edit movie" : "Add movie";
-  $("#movieMetadataStatus").textContent = "Uses Wikidata and Wikimedia Commons; every field remains editable.";
+  $("#movieMetadataStatus").textContent = "Searches TMDB for current movie data; every field remains editable.";
   $("#movieMetadataResults").classList.add("hidden");
   state.movieMetadataResults = [];
   $("#movieError").textContent = "";
@@ -2315,7 +2315,7 @@ $("#lookupMovieMetadata")?.addEventListener("click", async () => {
   const title = $("#movieTitle").value.trim();
   if (!title) { $("#movieError").textContent = "Enter a title before searching."; return; }
   const status = $("#movieMetadataStatus");
-  status.textContent = "Searching open metadata…";
+  status.textContent = "Searching TMDB…";
   try {
     const { results, provider } = await api(`/api/v1/admin/movies/metadata-search?q=${encodeURIComponent(title)}`);
     state.movieMetadataResults = results || [];
@@ -2324,12 +2324,7 @@ $("#lookupMovieMetadata")?.addEventListener("click", async () => {
     chooser.classList.toggle("hidden", !state.movieMetadataResults.length);
     const match = state.movieMetadataResults[0];
     if (!match) { status.textContent = "No film match found. You can enter metadata manually."; return; }
-    $("#movieExternalId").value = match.externalId || "";
-    $("#movieTitle").value = match.title || title;
-    $("#movieDescription").value = match.description || $("#movieDescription").value;
-    $("#movieReleaseYear").value = match.releaseYear || "";
-    $("#movieRuntime").value = match.runtimeMinutes || "";
-    $("#moviePosterUrl").value = match.posterUrl || $("#moviePosterUrl").value;
+    applyMovieMetadata(match, title);
     status.textContent = `Filled from ${provider}. Review before saving.`;
   } catch (error) { status.textContent = error.message; }
 });
@@ -2337,14 +2332,20 @@ $("#lookupMovieMetadata")?.addEventListener("click", async () => {
 $("#movieMetadataResults")?.addEventListener("change", (event) => {
   const match = state.movieMetadataResults[Number(event.target.value)];
   if (!match) return;
+  applyMovieMetadata(match);
+  $("#movieMetadataStatus").textContent = "Selected TMDB match applied. Review before saving.";
+});
+
+function applyMovieMetadata(match, fallbackTitle = "") {
   $("#movieExternalId").value = match.externalId || "";
-  $("#movieTitle").value = match.title || $("#movieTitle").value;
+  $("#movieTitle").value = match.title || fallbackTitle || $("#movieTitle").value;
   $("#movieDescription").value = match.description || $("#movieDescription").value;
   $("#movieReleaseYear").value = match.releaseYear || "";
   $("#movieRuntime").value = match.runtimeMinutes || "";
   $("#moviePosterUrl").value = match.posterUrl || $("#moviePosterUrl").value;
-  $("#movieMetadataStatus").textContent = "Selected metadata match applied. Review before saving.";
-});
+  $("#movieBackdropUrl").value = match.backdropUrl || $("#movieBackdropUrl").value;
+  if (match.genres?.length) $("#movieGenres").value = match.genres.join(", ");
+}
 
 $("#movieForm")?.addEventListener("submit", async (event) => {
   event.preventDefault();

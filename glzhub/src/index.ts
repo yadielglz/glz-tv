@@ -4,6 +4,7 @@ interface Env {
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
   SUPABASE_SECRET_KEY: string;
+  TMDB_API_TOKEN: string;
 }
 
 type JsonValue = Record<string, unknown> | unknown[];
@@ -1291,34 +1292,61 @@ async function deleteMovie(request: Request, env: Env, movieId: string): Promise
 async function searchMovieMetadata(request: Request, env: Env): Promise<Response> {
   await adminUser(request, env);
   const query = requiredString(new URL(request.url).searchParams.get("q"), "search query", 120);
-  const searchUrl = new URL("https://www.wikidata.org/w/api.php");
-  searchUrl.search = new URLSearchParams({ action: "wbsearchentities", search: query, language: "en", uselang: "en", type: "item", limit: "10", format: "json" }).toString();
-  const searchResponse = await fetch(searchUrl, { headers: { "user-agent": "GLZHub/1.0 (movie metadata lookup)" } });
-  if (!searchResponse.ok) return json({ error: "Metadata provider unavailable." }, 502);
-  const searchData = await searchResponse.json<{ search?: Array<{ id: string; label?: string; description?: string }> }>();
-  const candidates = (searchData.search ?? []).filter((item) => /film|movie|television/i.test(item.description ?? "")).slice(0, 8);
-  if (!candidates.length) return json({ results: [] });
-  const entityUrl = new URL("https://www.wikidata.org/w/api.php");
-  entityUrl.search = new URLSearchParams({ action: "wbgetentities", ids: candidates.map((item) => item.id).join("|"), props: "claims", format: "json" }).toString();
-  const entityResponse = await fetch(entityUrl, { headers: { "user-agent": "GLZHub/1.0 (movie metadata lookup)" } });
-  const entityData = entityResponse.ok ? await entityResponse.json<{ entities?: Record<string, { claims?: Record<string, Array<{ mainsnak?: { datavalue?: { value?: unknown } } }>> }> }>() : { entities: {} };
-  const results = candidates.map((item) => {
-    const claims = entityData.entities?.[item.id]?.claims ?? {};
-    const value = (property: string) => claims[property]?.[0]?.mainsnak?.datavalue?.value as Record<string, unknown> | string | undefined;
-    const date = value("P577") as Record<string, unknown> | undefined;
-    const duration = value("P2047") as Record<string, unknown> | undefined;
-    const image = value("P18");
-    const filename = typeof image === "string" ? image : "";
-    return {
-      externalId: item.id, title: item.label ?? query, description: item.description ?? "",
-      releaseYear: typeof date?.time === "string" ? Number(String(date.time).slice(1, 5)) : null,
-      runtimeMinutes: duration?.amount ? Math.round(
-        Number(duration.amount) * (String(duration.unit ?? "").endsWith("Q11574") ? 1 / 60 : String(duration.unit ?? "").endsWith("Q25235") ? 60 : 1)
-      ) : null,
-      posterUrl: filename ? `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}?width=600` : null
-    };
-  });
-  return json({ provider: "Wikidata / Wikimedia Commons", results });
+  if (!env.TMDB_API_TOKEN) return json({ error: "Movie metadata lookup is not configured." }, 503);
+
+  type TmdbMovie = {
+    id: number;
+    title?: string;
+    overview?: string;
+    release_date?: string;
+    poster_path?: string | null;
+    backdrop_path?: string | null;
+    runtime?: number | null;
+    genres?: Array<{ name?: string }>;
+  };
+
+  const headers = {
+    accept: "application/json",
+    authorization: `Bearer ${env.TMDB_API_TOKEN}`
+  };
+  const searchUrl = new URL("https://api.themoviedb.org/3/search/movie");
+  searchUrl.search = new URLSearchParams({
+    query,
+    language: "en-US",
+    region: "US",
+    include_adult: "false",
+    page: "1"
+  }).toString();
+  const searchResponse = await fetch(searchUrl, { headers });
+  if (!searchResponse.ok) {
+    console.error(JSON.stringify({ message: "TMDB movie search failed", status: searchResponse.status }));
+    return json({ error: "Movie metadata provider unavailable." }, 502);
+  }
+  const searchData = await searchResponse.json<{ results?: TmdbMovie[] }>();
+  const candidates = (searchData.results ?? []).slice(0, 8);
+  const details = await Promise.all(candidates.map(async (candidate): Promise<TmdbMovie> => {
+    const detailUrl = new URL(`https://api.themoviedb.org/3/movie/${candidate.id}`);
+    detailUrl.searchParams.set("language", "en-US");
+    const response = await fetch(detailUrl, { headers });
+    if (!response.ok) {
+      console.error(JSON.stringify({ message: "TMDB movie details failed", movieId: candidate.id, status: response.status }));
+      return candidate;
+    }
+    return response.json<TmdbMovie>();
+  }));
+  const imageUrl = (path: string | null | undefined, size: "w500" | "w1280") =>
+    path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
+  const results = details.map((movie) => ({
+    externalId: `tmdb:${movie.id}`,
+    title: movie.title ?? query,
+    description: movie.overview ?? "",
+    releaseYear: /^\d{4}-/.test(movie.release_date ?? "") ? Number(movie.release_date?.slice(0, 4)) : null,
+    runtimeMinutes: Number.isInteger(movie.runtime) && Number(movie.runtime) > 0 ? movie.runtime : null,
+    genres: (movie.genres ?? []).map((genre) => genre.name).filter((name): name is string => Boolean(name)),
+    posterUrl: imageUrl(movie.poster_path, "w500"),
+    backdropUrl: imageUrl(movie.backdrop_path, "w1280")
+  }));
+  return json({ provider: "TMDB", results });
 }
 
 async function listPlaylists(request: Request, env: Env): Promise<Response> {
