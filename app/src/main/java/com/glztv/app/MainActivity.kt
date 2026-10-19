@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -4025,6 +4026,13 @@ private fun ChannelPane(
     }
 }
 
+private fun ppvChannelPrefix(channel: Channel): String? {
+    val number = channel.number.trim()
+    return listOf("29", "30", "31").firstOrNull { prefix ->
+        number == prefix || number.startsWith("$prefix-")
+    }
+}
+
 @Composable
 private fun ChannelCard(
     channel: Channel, selected: Boolean, favorite: Boolean,
@@ -4213,13 +4221,34 @@ private fun ImmersivePlayerScreen(
     var showOsd by remember { mutableStateOf(false) }
     var selectingMultiViewChannel by remember { mutableStateOf(false) }
     var showDiagnostics by remember { mutableStateOf(false) }
+    var collapsedPpvPrefixes by remember {
+        mutableStateOf(setOf("29", "30", "31") - setOfNotNull(ppvChannelPrefix(channel)))
+    }
     val playerFocus = remember { FocusRequester() }
     val selectedChannelFocus = remember { FocusRequester() }
     val firstServiceFocus = remember { FocusRequester() }
     val osdActionFocus = remember { FocusRequester() }
-    val selectedIndex = channels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
+    val drawerRows = remember(channels, collapsedPpvPrefixes) {
+        buildList<Pair<String?, Channel?>> {
+            val emittedPrefixes = mutableSetOf<String>()
+            channels.forEach { item ->
+                val prefix = ppvChannelPrefix(item)
+                if (prefix == null) {
+                    add(null to item)
+                } else if (emittedPrefixes.add(prefix)) {
+                    add(prefix to null)
+                    if (prefix !in collapsedPpvPrefixes) {
+                        channels.filter { ppvChannelPrefix(it) == prefix }.forEach { grouped ->
+                            add(null to grouped)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    val selectedDrawerIndex = drawerRows.indexOfFirst { it.second?.id == channel.id }.coerceAtLeast(0)
     val channelListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = (selectedIndex - 2).coerceAtLeast(0)
+        initialFirstVisibleItemIndex = (selectedDrawerIndex - 2).coerceAtLeast(0)
     )
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     val currentProgramme = remember(channel.id, guide, now) {
@@ -4280,11 +4309,14 @@ private fun ImmersivePlayerScreen(
             onExit()
         }
     }
-    LaunchedEffect(channel.id, drawer) {
+    LaunchedEffect(channel.id, drawer, drawerRows) {
         when (drawer) {
             PlayerDrawer.None -> playerFocus.requestFocus()
             PlayerDrawer.Channels -> {
-                runCatching { channelListState.scrollToItem((selectedIndex - 2).coerceAtLeast(0)) }
+                ppvChannelPrefix(channel)?.let { prefix ->
+                    collapsedPpvPrefixes = collapsedPpvPrefixes - prefix
+                }
+                runCatching { channelListState.scrollToItem((selectedDrawerIndex - 2).coerceAtLeast(0)) }
                 delay(PANEL_ANIM_IN.toLong())
                 runCatching { selectedChannelFocus.requestFocus() }
             }
@@ -4636,7 +4668,72 @@ private fun ImmersivePlayerScreen(
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        itemsIndexed(channels, key = { index, ch -> "ch-drawer-$index-${ch.id}" }) { _, item ->
+                        itemsIndexed(
+                            drawerRows,
+                            key = { index, row -> row.second?.let { "ch-drawer-$index-${it.id}" } ?: "ppv-drawer-${row.first}" }
+                        ) { _, row ->
+                            val prefix = row.first
+                            val item = row.second
+                            if (item == null && prefix != null) {
+                                val groupedCount = channels.count { ppvChannelPrefix(it) == prefix }
+                                val collapsed = prefix in collapsedPpvPrefixes
+                                var headerFocused by remember(prefix) { mutableStateOf(false) }
+                                val label = when (prefix) {
+                                    "29" -> "PPV & COMBAT EVENTS"
+                                    "30" -> "MAJOR SPORTS EVENTS"
+                                    else -> "MLB EVENTS"
+                                }
+                                Surface(
+                                    onClick = {
+                                        collapsedPpvPrefixes = if (collapsed) {
+                                            collapsedPpvPrefixes - prefix
+                                        } else {
+                                            collapsedPpvPrefixes + prefix
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .googleTvFocusable(
+                                            shape = RoundedCornerShape(12.dp),
+                                            focusedScale = 1.02f,
+                                            onFocusChange = { headerFocused = it }
+                                        ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (headerFocused) Color.White else GoogleTvTokens.BlueAccent.copy(alpha = 0.13f),
+                                    contentColor = if (headerFocused) Color.Black else Color.White
+                                ) {
+                                    Row(
+                                        Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (headerFocused) Color.Black.copy(alpha = 0.10f) else GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
+                                        ) {
+                                            Text(
+                                                prefix,
+                                                Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Black
+                                            )
+                                        }
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(label, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                                            Text(
+                                                "$groupedCount channel${if (groupedCount == 1) "" else "s"}",
+                                                fontSize = 10.sp,
+                                                color = if (headerFocused) Color.Black.copy(alpha = 0.65f) else GoogleTvTokens.TextSecondary
+                                            )
+                                        }
+                                        Icon(
+                                            if (collapsed) Icons.Default.ChevronRight else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = if (collapsed) "Expand channel $prefix" else "Collapse channel $prefix",
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            } else if (item != null) {
                             val isTuned = item.id == channel.id
                             var isFocused by remember(item.id) { mutableStateOf(false) }
                             val itemProgramme = remember(item.id, guide, now) {
@@ -4739,6 +4836,7 @@ private fun ImmersivePlayerScreen(
                                         )
                                     }
                                 }
+                            }
                             }
                         }
                     }

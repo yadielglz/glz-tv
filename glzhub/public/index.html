@@ -750,8 +750,8 @@
               <button id="epgAddChannel" class="secondary" disabled>+ Add channel</button>
               <button id="epgAddProgramme" class="primary" disabled>+ Add programme</button>
             </div>
-            <div id="epgTimeline" style="min-height: 240px; border:1px solid var(--line); border-radius:var(--radius-sm); padding:20px; text-align:center; color:var(--text-muted);">
-              Load an XMLTV guide to begin editing.
+            <div id="epgTimeline" class="epg-timeline">
+              <div class="epg-empty">Load an XMLTV guide to begin editing.</div>
             </div>
           </div>
         </section>
@@ -1146,13 +1146,14 @@
           <div class="device-toolbar" style="flex-direction:column; align-items:stretch; gap:10px;">
             <div class="search-wrap" style="width:100%;">
               <svg class="icon search-icon"><use href="#icon-search"/></svg>
-              <input id="eventSearchInput" type="search" placeholder="Search live events by title, team, league (MLB, NFL, NBA, MLS, UFC)…" autocomplete="off">
+              <input id="eventSearchInput" type="search" placeholder="Search live events by title, team, or league…" autocomplete="off">
             </div>
             <div id="eventSportFilterBar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
               <button type="button" class="filter-pill active-sport-pill active" data-sport-filter="ALL">All Sports</button>
               <button type="button" class="filter-pill" data-sport-filter="MLB">MLB</button>
               <button type="button" class="filter-pill" data-sport-filter="NFL">NFL</button>
               <button type="button" class="filter-pill" data-sport-filter="NBA">NBA</button>
+              <button type="button" class="filter-pill" data-sport-filter="NCAA">NCAA Football</button>
               <button type="button" class="filter-pill" data-sport-filter="NHL">NHL</button>
               <button type="button" class="filter-pill" data-sport-filter="UFC">UFC / Combat</button>
               <button type="button" class="filter-pill" data-sport-filter="PPV">PPV Specials</button>
@@ -1166,7 +1167,7 @@
               <svg class="icon-lg"><use href="#icon-events"/></svg>
             </div>
             <h3>No Live Events Scheduled</h3>
-            <p>Click "Sync Provider Feed" or "Browse &amp; Inject Streams" to discover live MLB, NFL, NBA, MLS, and UFC game channels.</p>
+            <p>Sync approved MLB, NBA, NFL, NCAA football, NHL, UFC, and boxing event channels, or browse the provider feed for a manual injection.</p>
             <div style="display:flex; gap:10px; justify-content:center; margin-top:12px;">
               <button type="button" class="primary" id="browseEventsEmptyBtn">Browse &amp; Inject</button>
               <button type="button" class="secondary" id="syncEventsEmptyBtn">Sync Feed</button>
@@ -1688,8 +1689,10 @@
             <option value="MLB">MLB (Baseball)</option>
             <option value="NFL">NFL (Football)</option>
             <option value="NBA">NBA (Basketball)</option>
+            <option value="NCAA">NCAA (College Football)</option>
             <option value="MLS">MLS (Soccer)</option>
             <option value="UFC">UFC / Combat Sports</option>
+            <option value="BOXING">Boxing PPV</option>
             <option value="NHL">NHL (Hockey)</option>
             <option value="SPORTS">Other Sports</option>
           </select>
@@ -1738,6 +1741,7 @@
         <button type="button" class="filter-pill" data-prov-sport="MLB">MLB</button>
         <button type="button" class="filter-pill" data-prov-sport="NFL">NFL</button>
         <button type="button" class="filter-pill" data-prov-sport="NBA">NBA</button>
+        <button type="button" class="filter-pill" data-prov-sport="NCAA">NCAA Football</button>
         <button type="button" class="filter-pill" data-prov-sport="NHL">NHL</button>
         <button type="button" class="filter-pill" data-prov-sport="UFC">UFC / Combat</button>
         <button type="button" class="filter-pill" data-prov-sport="OTHER">Other Sports</button>

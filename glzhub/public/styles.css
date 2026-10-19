@@ -1901,6 +1901,215 @@ input::placeholder, textarea::placeholder {
   background: var(--accent-soft);
 }
 
+/* EPG Studio timeline */
+.epg-timeline {
+  min-height: 240px;
+  max-height: calc(100vh - 310px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-card);
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.epg-grid {
+  --epg-label-width: 240px;
+  --epg-hour-width: 100px;
+  position: relative;
+  width: calc(var(--epg-label-width) + 2400px);
+  min-width: 100%;
+  background: var(--panel-card);
+}
+
+.epg-hours,
+.epg-channel-line {
+  display: grid;
+  grid-template-columns: var(--epg-label-width) 2400px;
+}
+
+.epg-hours {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  height: 36px;
+  background: var(--panel-header);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.epg-corner {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-right: 1px solid var(--line-strong);
+  background: var(--panel-header);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.epg-hour-scale {
+  position: relative;
+  height: 36px;
+  background-image: repeating-linear-gradient(to right, transparent 0 99px, var(--line) 99px 100px);
+}
+
+.epg-hour {
+  position: absolute;
+  top: 0;
+  width: var(--epg-hour-width);
+  padding: 10px 8px 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.epg-channel-line {
+  min-height: 64px;
+  border-bottom: 1px solid var(--line);
+}
+
+.epg-channel-line:last-child {
+  border-bottom: 0;
+}
+
+.epg-channel-label {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-right: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: var(--panel-card);
+  color: var(--text-main);
+  text-align: left;
+}
+
+.epg-channel-label:hover:not(:disabled) {
+  background: var(--panel-card-hover);
+}
+
+.epg-channel-label:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.epg-channel-label img,
+.epg-channel-label > span:first-child {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  max-width: 36px;
+  max-height: 36px;
+  object-fit: contain;
+  border-radius: var(--radius-xs);
+  background: var(--panel-header);
+}
+
+.epg-channel-label > span:first-child {
+  display: grid;
+  place-items: center;
+}
+
+.epg-channel-label > span:last-child {
+  min-width: 0;
+}
+
+.epg-channel-label strong,
+.epg-channel-label small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epg-channel-label strong {
+  font-size: 12px;
+}
+
+.epg-channel-label small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+}
+
+.epg-programmes {
+  position: relative;
+  min-height: 64px;
+  background-image: repeating-linear-gradient(to right, transparent 0 99px, var(--line) 99px 100px);
+}
+
+.epg-programme {
+  position: absolute;
+  top: 6px;
+  height: 52px;
+  min-width: 28px;
+  overflow: hidden;
+  padding: 7px 9px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: var(--text-main);
+  text-align: left;
+}
+
+.epg-programme:hover,
+.epg-programme:focus-visible {
+  border-color: var(--accent);
+  background: var(--panel-card-hover);
+  outline: none;
+}
+
+.epg-programme strong,
+.epg-programme small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epg-programme strong {
+  font-size: 11px;
+}
+
+.epg-programme small {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.epg-now-line {
+  position: absolute;
+  z-index: 7;
+  top: 36px;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+  background: var(--danger);
+}
+
+.epg-empty {
+  display: grid;
+  min-height: 238px;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+}
+
 /* ==========================================================================
    Modals & Dialogs (Unified Flat System)
    ========================================================================== */

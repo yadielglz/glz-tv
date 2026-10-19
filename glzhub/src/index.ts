@@ -1996,18 +1996,21 @@ function detectSportLeague(tvgId: string, groupTitle: string, title: string): st
   if (text.includes("MLB")) return "MLB";
   if (text.includes("NFL")) return "NFL";
   if (text.includes("NBA")) return "NBA";
-  if (text.includes("NCAA") || text.includes("SEC") || text.includes("BIG10") || text.includes("BIG 10") || text.includes("ACC") || text.includes("CFB")) return "NCAA";
-  if (text.includes("MLS")) return "MLS";
-  if (text.includes("UFC") || text.includes("MMA") || text.includes("PFL") || text.includes("BOXING")) return "UFC";
-  if (text.includes("TENNIS") || text.includes("ATP") || text.includes("WTA") || text.includes("WIMBLEDON")) return "TENNIS";
+  if (text.includes("NCAA") || text.includes("NCAAF") || text.includes("COLLEGE FOOTBALL") || text.includes("CFB")) return "NCAA";
   if (text.includes("NHL")) return "NHL";
+  if (text.includes("BOXING")) return "BOXING";
+  if (text.includes("UFC")) return "UFC";
+  if (text.includes("MLS")) return "MLS";
+  if (text.includes("MMA") || text.includes("PFL")) return "MMA";
+  if (text.includes("TENNIS") || text.includes("ATP") || text.includes("WTA") || text.includes("WIMBLEDON")) return "TENNIS";
   return "SPORTS";
 }
 
 const DEFAULT_EVENT_LOGOS: Record<string, string> = {
   MLB: "https://i.ibb.co/P0Gr6v6/mlb.png",
   NFL: "https://i.ibb.co/WNJnTdTH/nfl.png",
-  UFC: "https://i.ibb.co/zW8RRPKF/specevent.png"
+  UFC: "https://i.ibb.co/zW8RRPKF/specevent.png",
+  BOXING: "https://i.ibb.co/zW8RRPKF/specevent.png"
 };
 
 // Named channels that keep their own scraped logo instead of the generic MLB default
@@ -2021,11 +2024,18 @@ function resolveEventLogoUrl(sportLeague: string, title: string, tvgName: string
   return DEFAULT_EVENT_LOGOS[sportLeague] ?? null;
 }
 
-function isLiveEventChannel(groupTitle: string, title: string, tvgId: string): boolean {
+function isDuplicateMainSportsNetwork(groupTitle: string, title: string, tvgId: string, tvgName = ""): boolean {
+  const fullText = `${groupTitle} ${title} ${tvgId} ${tvgName}`.toUpperCase();
+  return /\bNBA\s*(?:TV|TELEVISION)\b/.test(fullText) ||
+         /\bMLB\s*(?:TV|NETWORK)\b/.test(fullText) ||
+         /\bNFL\s*NETWORK\b/.test(fullText);
+}
+
+function isLiveEventChannel(groupTitle: string, title: string, tvgId: string, tvgName = ""): boolean {
   const groupUpper = groupTitle.toUpperCase();
   const titleUpper = title.toUpperCase();
   const tvgIdUpper = tvgId.toUpperCase();
-  const fullText = `${groupUpper} ${titleUpper} ${tvgIdUpper}`;
+  const fullText = `${groupUpper} ${titleUpper} ${tvgIdUpper} ${tvgName.toUpperCase()}`;
 
   // 1. Strictly exclude DE (German) channels & non-US / foreign German feeds
   const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(groupUpper) ||
@@ -2038,13 +2048,17 @@ function isLiveEventChannel(groupTitle: string, title: string, tvgId: string): b
   const isPlaceholder = /\b(WILL START SOON|OFFLINE|OFF-LINE|NO EVENT|STREAM UNAVAILABLE|TEST|EMPTY|FEED OFFLINE|STANDBY|CHANNEL UNAVAILABLE|TEMPORARILY OFFLINE|NOT AVAILABLE|NO BROADCAST|NO SIGNAL|STREAM DOWN|OFF AIR|SIGN OFF|CHANNEL OFFLINE|STREAMING SOON|EVENT ENDED|FEED DOWN|TBD)\b/i.test(fullText);
   if (isPlaceholder) return false;
 
-  // 3. Strictly target MLB & NFL ONLY!
-  const isMlbOrNfl = /\b(MLB|NFL)\b/i.test(fullText) ||
-                     /^(MLB|NFL):/i.test(titleUpper) ||
-                     /\b(BASEBALL|FOOTBALL)\b/i.test(fullText);
-  if (!isMlbOrNfl) return false;
+  // 3. Linear sports networks already live in the main playlist and must never
+  // be duplicated as temporary event channels.
+  if (isDuplicateMainSportsNetwork(groupTitle, title, tvgId, tvgName)) return false;
 
-  // 4. Match explicit Event/PPV groups or matchup patterns (vs / @)
+  // 4. Auto-ingest only the approved US leagues and premium combat events.
+  // Avoid generic "football" because that also catches unrelated international feeds.
+  const isApprovedLeague = /\b(MLB|NBA|NFL|NHL|NCAA|NCAAF|CFB|COLLEGE\s+FOOTBALL|UFC|BOXING)\b/i.test(fullText);
+  if (!isApprovedLeague) return false;
+
+  // 5. Require event context rather than treating every league-branded stream
+  // as a temporary game. Provider event groups and matchup titles both qualify.
   const isEventGroup = groupUpper.includes("EVENTS") || groupUpper.includes("PPV") || groupUpper.includes("SPORTS");
   const containsMatchup = /\b(vs\.?|@)\b/i.test(titleUpper) || /\b(vs\.?|@)\b/i.test(tvgIdUpper);
 
@@ -2079,7 +2093,7 @@ function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
     const scrapedLogoUrl = tvgLogoMatch ? tvgLogoMatch[1] : "";
 
     // Strictly filter: only ingest live event and live sports streams!
-    if (!isLiveEventChannel(groupTitle, title, tvgId)) {
+    if (!isLiveEventChannel(groupTitle, title, tvgId, tvgName)) {
       pendingExtInf = null;
       continue;
     }
@@ -2115,13 +2129,13 @@ function getChannelPrefix(sportLeague: string, title: string, groupTitle: string
     return "31";
   }
 
-  // Tier 2: NBA Events and other US Major Sports -> 30-XX
-  const isUSMajor = /\b(NBA|NFL|NCAA|SEC|BIG10|BIG\s*10|BIG12|ACC|CFB|COLLEGE\s*FOOTBALL|MLS|NHL|UFC|MMA|PFL|WWE|BOXING|TENNIS|ATP|WTA|WIMBLEDON|US\s*OPEN)\b/i.test(fullText);
-  if (isUSMajor || ["NBA", "NFL", "NCAA", "UFC", "TENNIS", "MLS", "NHL"].includes(sportLeague)) {
+  // Tier 2: NBA, NFL, college football, and NHL events -> 30-XX
+  const isUSMajor = /\b(NBA|NFL|NCAA|NCAAF|CFB|COLLEGE\s*FOOTBALL|NHL)\b/i.test(fullText);
+  if (isUSMajor || ["NBA", "NFL", "NCAA", "NHL"].includes(sportLeague)) {
     return "30";
   }
 
-  // Tier 3: All other events / General PPV -> 29-XX
+  // Tier 3: UFC, boxing, and manually selected PPV events -> 29-XX
   return "29";
 }
 
@@ -2166,7 +2180,13 @@ async function listEventChannels(request: Request, env: Env): Promise<Response> 
   const rows = await supabaseJson(env,
     "/rest/v1/event_channels?select=*"
   ) as Record<string, unknown>[];
-  return json({ events: sortEventChannels(rows || []) });
+  const visibleRows = (rows || []).filter((event) => event.auto_ingested !== true || isLiveEventChannel(
+    String(event.group_title || ""),
+    String(event.title || ""),
+    String(event.tvg_id || ""),
+    String(event.tvg_name || "")
+  ));
+  return json({ events: sortEventChannels(visibleRows) });
 }
 
 async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChannel[]): Promise<unknown> {
@@ -2245,6 +2265,23 @@ async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChanne
   }
 }
 
+async function pruneAutoIngestedEventChannels(env: Env, retainedTvgIds: Set<string>): Promise<void> {
+  const existingRows = await supabaseJson(env,
+    "/rest/v1/event_channels?auto_ingested=eq.true&select=id,tvg_id"
+  ).catch(() => []) as Record<string, unknown>[];
+
+  const staleIds = existingRows
+    .filter((row) => !retainedTvgIds.has(String(row.tvg_id || "")))
+    .map((row) => String(row.id || ""))
+    .filter(Boolean);
+
+  await Promise.all(staleIds.map((id) =>
+    supabaseJson(env, `/rest/v1/event_channels?id=eq.${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    }).catch((error) => console.error(`Could not prune stale event channel ${id}:`, error))
+  ));
+}
+
 async function ingestEventChannels(request: Request, env: Env): Promise<Response> {
   await adminUser(request, env);
   try {
@@ -2275,6 +2312,7 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
     const renumbered = assignCategoryChannelNumbers(deduplicated);
 
     const result = await saveIngestedEventChannels(env, renumbered);
+    await pruneAutoIngestedEventChannels(env, new Set(renumbered.map((item) => item.tvgId)));
     await pushConfigUpdateToAllDevices(env);
     return json({ ok: true, ingestedCount: deduplicated.length, events: result });
   } catch (err) {
@@ -2309,9 +2347,9 @@ function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
     const groupTitle = groupTitleMatch ? groupTitleMatch[1] : "Major League Sports (Events)";
     const scrapedLogoUrl = tvgLogoMatch ? tvgLogoMatch[1] : "";
 
-    const fullText = `${groupTitle} ${title} ${tvgId}`.toUpperCase();
+    const fullText = `${groupTitle} ${title} ${tvgId} ${tvgName}`.toUpperCase();
     const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(fullText) || /^(DE|GER):/i.test(title);
-    if (isGerman) {
+    if (isGerman || isDuplicateMainSportsNetwork(groupTitle, title, tvgId, tvgName)) {
       pendingExtInf = null;
       continue;
     }
@@ -2553,6 +2591,12 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
     let activeIndex = 1;
     for (const event of sortedEvents) {
       if (!isEventActiveAndValid(event, now)) continue;
+      if (event.auto_ingested === true && !isLiveEventChannel(
+        String(event.group_title || ""),
+        String(event.title || ""),
+        String(event.tvg_id || ""),
+        String(event.tvg_name || "")
+      )) continue;
       const channelDisplayName = "SPORTS PPV";
       const mediaUrl = String(event.stream_url || "");
       const tvgIdVal = String(event.tvg_id || `event.channel.${activeIndex}`);
@@ -2756,6 +2800,7 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
         const deduplicated = sortEventChannels(Array.from(uniqueMap.values()));
         const renumbered = assignCategoryChannelNumbers(deduplicated);
         await saveIngestedEventChannels(env, renumbered).catch((err) => console.error("Auto-ingest save error:", err));
+        await pruneAutoIngestedEventChannels(env, new Set(renumbered.map((item) => item.tvgId)));
         ingested = deduplicated.length;
       }
     }

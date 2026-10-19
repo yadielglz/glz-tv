@@ -3244,7 +3244,7 @@ function renderEpgTimeline() {
     </div>`;
   }).join("");
   const now = new Date();
-  const nowLine = now >= dayStart && now < dayEnd ? `<div class="epg-now-line" style="left:${170 + (now - dayStart) / 36_000}px"></div>` : "";
+  const nowLine = now >= dayStart && now < dayEnd ? `<div class="epg-now-line" style="left:${240 + (now - dayStart) / 36_000}px"></div>` : "";
   $("#epgTimeline").innerHTML = channels.length ? `<div class="epg-grid">${nowLine}<div class="epg-hours"><div class="epg-corner">${playlist ? "ASSIGNED CH" : "CHANNEL"}</div><div class="epg-hour-scale">${hours}</div></div>${rows}</div>` : `<div class="epg-empty">No channels match this filter.</div>`;
   $$(".epg-channel-label[data-channel-id]:not([disabled])").forEach((button) => button.addEventListener("click", () => openEpgChannelEditor(button.dataset.channelId)));
   $$(".epg-programme").forEach((button) => button.addEventListener("click", () => openEpgProgrammeEditor(Number(button.dataset.programmeIndex))));
@@ -3414,6 +3414,7 @@ function renderEventChannels() {
       if (activeSportFilter === "MLB" && !sp.includes("MLB") && !title.includes("MLB")) return false;
       if (activeSportFilter === "NFL" && !sp.includes("NFL") && !title.includes("NFL")) return false;
       if (activeSportFilter === "NBA" && !sp.includes("NBA") && !title.includes("NBA")) return false;
+      if (activeSportFilter === "NCAA" && !["NCAA", "NCAAF", "CFB", "COLLEGE FOOTBALL"].some(k => sp.includes(k) || title.includes(k))) return false;
       if (activeSportFilter === "NHL" && !sp.includes("NHL") && !title.includes("NHL")) return false;
       if (activeSportFilter === "UFC" && !["UFC", "MMA", "PFL", "BOXING"].some(k => sp.includes(k) || title.includes(k))) return false;
       if (activeSportFilter === "PPV" && !sp.includes("PPV") && !title.includes("PPV")) return false;
@@ -3508,9 +3509,10 @@ function getVisibleProviderStreams() {
       if (activeProvSport === "MLB" && !sp.includes("MLB") && !title.includes("MLB")) return false;
       if (activeProvSport === "NFL" && !sp.includes("NFL") && !title.includes("NFL")) return false;
       if (activeProvSport === "NBA" && !sp.includes("NBA") && !title.includes("NBA")) return false;
+      if (activeProvSport === "NCAA" && !["NCAA", "NCAAF", "CFB", "COLLEGE FOOTBALL"].some(k => sp.includes(k) || title.includes(k))) return false;
       if (activeProvSport === "NHL" && !sp.includes("NHL") && !title.includes("NHL")) return false;
       if (activeProvSport === "UFC" && !["UFC", "MMA", "PFL", "BOXING"].some(k => sp.includes(k) || title.includes(k))) return false;
-      if (activeProvSport === "OTHER" && ["MLB", "NFL", "NBA", "NHL", "UFC"].some(k => sp.includes(k) || title.includes(k))) return false;
+      if (activeProvSport === "OTHER" && ["MLB", "NFL", "NBA", "NCAA", "NCAAF", "CFB", "COLLEGE FOOTBALL", "NHL", "UFC", "MMA", "PFL", "BOXING"].some(k => sp.includes(k) || title.includes(k))) return false;
     }
     if (!query) return true;
     return `${stream.title} ${stream.sportLeague} ${stream.tvgId} ${stream.groupTitle}`.toLowerCase().includes(query);
