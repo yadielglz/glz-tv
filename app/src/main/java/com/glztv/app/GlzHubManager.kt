@@ -238,6 +238,7 @@ object GlzHubManager {
         config.stringOrNull("startDestination")?.let { editor.putString("start_destination", it) }
         if (config.has("captionsEnabled")) editor.putBoolean("captions_enabled", config.optBoolean("captionsEnabled"))
         config.stringOrNull("captionsLanguage")?.let { editor.putString("captions_language", it) }
+        config.stringOrNull("openSubtitlesApiKey")?.let { editor.putString("opensubtitles_api_key", it) }
         if (config.has("keepAwakeHome")) editor.putBoolean("keep_awake_home", config.optBoolean("keepAwakeHome"))
         if (config.has("sportsBarKioskEnabled")) {
             editor.putBoolean(SPORTS_BAR_KIOSK_ENABLED, config.optBoolean("sportsBarKioskEnabled"))

@@ -5,6 +5,15 @@ import androidx.compose.runtime.Immutable
 import org.json.JSONObject
 
 @Immutable
+data class SubtitleTrack(
+    val id: String,
+    val language: String,
+    val label: String,
+    val uri: String,
+    val mimeType: String = "application/x-subrip"
+)
+
+@Immutable
 data class Movie(
     val id: String,
     val title: String,
@@ -15,7 +24,8 @@ data class Movie(
     val releaseYear: Int? = null,
     val runtimeMinutes: Int? = null,
     val genres: List<String> = emptyList(),
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String> = emptyMap(),
+    val subtitles: List<SubtitleTrack> = emptyList()
 ) {
     fun asChannel(): Channel = Channel(
         "movie:$id", title, "Movies", "", posterUrl, streamUrl, headers
@@ -34,6 +44,21 @@ data class Movie(
                     if (id.isBlank() || title.isBlank() || streamUrl.isBlank()) return@mapNotNull null
                     val genresJson = item.optJSONArray("genres")
                     val headersJson = item.optJSONObject("requestHeaders") ?: JSONObject()
+                    val subtitlesJson = item.optJSONArray("subtitles")
+                    val parsedSubtitles = if (subtitlesJson == null) emptyList() else (0 until subtitlesJson.length()).mapNotNull { i ->
+                        val subObj = subtitlesJson.optJSONObject(i) ?: return@mapNotNull null
+                        val uri = subObj.optString("url").ifBlank { subObj.optString("uri") }.trim()
+                        val lang = subObj.optString("language").ifBlank { subObj.optString("lang") }.trim()
+                        val label = subObj.optString("label").ifBlank { lang.uppercase() }.trim()
+                        if (uri.isBlank() || lang.isBlank()) null
+                        else SubtitleTrack(
+                            id = subObj.optString("id").ifBlank { "$id-$lang-$i" },
+                            language = lang,
+                            label = label,
+                            uri = uri,
+                            mimeType = subObj.optString("mimeType").ifBlank { "application/x-subrip" }
+                        )
+                    }
                     Movie(
                         id = id,
                         title = title,
@@ -46,7 +71,8 @@ data class Movie(
                         genres = if (genresJson == null) emptyList() else (0 until genresJson.length()).mapNotNull {
                             genresJson.optString(it).takeIf(String::isNotBlank)
                         },
-                        headers = headersJson.keys().asSequence().associateWith { headersJson.optString(it) }
+                        headers = headersJson.keys().asSequence().associateWith { headersJson.optString(it) },
+                        subtitles = parsedSubtitles
                     )
                 }
             }.getOrDefault(emptyList())

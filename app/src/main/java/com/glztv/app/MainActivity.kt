@@ -162,6 +162,7 @@ import com.glztv.app.data.EpgRepository
 import com.glztv.app.data.PlaylistRepository
 import com.glztv.app.data.PreferencesRepository
 import com.glztv.app.data.WeatherRepository
+import com.glztv.app.data.OpenSubtitlesRepository
 import com.glztv.app.data.createPermissiveOkHttpClient
 import com.glztv.app.player.RecentChannelManager
 import com.glztv.app.player.PlaybackControlState
@@ -174,6 +175,7 @@ import com.glztv.app.player.PlaybackPerformance
 import com.glztv.app.player.PlaybackDiagnosticsPanel
 import com.glztv.app.player.SpeedTestResult
 import com.glztv.app.player.StreamSpeedTester
+import com.glztv.app.ui.components.MovieSubtitleDialog
 import com.glztv.app.ui.components.StreamSpeedTestDialog
 import com.glztv.app.ui.screens.AmbientScreensaverScreen
 import com.glztv.app.ui.theme.GlzTheme
@@ -364,6 +366,7 @@ internal fun TvScreen(
     val playlistRepository = remember { PlaylistRepository(context, sourcePreferences, client) }
     val epgRepository = remember { EpgRepository(context, sourcePreferences, client) }
     val weatherRepository = remember { WeatherRepository(client) }
+    val openSubtitlesRepository = remember { OpenSubtitlesRepository(client, prefs) }
     val scope = rememberCoroutineScope()
     val channels = remember { mutableStateListOf<Channel>() }
     var guide by remember { mutableStateOf(EpgGuide.Empty) }
@@ -1078,6 +1081,16 @@ internal fun TvScreen(
                         movie = selectedMovie!!,
                         captionsEnabled = captionsEnabled,
                         captionLanguage = captionLanguage,
+                        prefs = prefs,
+                        openSubtitlesRepository = openSubtitlesRepository,
+                        onCaptionsChanged = { enabled, lang ->
+                            captionsEnabled = enabled
+                            captionLanguage = lang
+                            prefs.edit()
+                                .putBoolean(CAPTIONS_ENABLED, enabled)
+                                .putString(CAPTION_LANGUAGE, lang)
+                                .apply()
+                        },
                         onExit = {
                             selectedMovie = null
                             GlzHubManager.reportActivity(prefs, "idle")
@@ -5737,27 +5750,204 @@ private fun MoviePlaybackScreen(
     movie: Movie,
     captionsEnabled: Boolean,
     captionLanguage: String,
+    prefs: SharedPreferences,
+    openSubtitlesRepository: OpenSubtitlesRepository,
+    onCaptionsChanged: (Boolean, String) -> Unit = { _, _ -> },
     onExit: () -> Unit
 ) {
-    BackHandler(onBack = onExit)
+    val context = LocalContext.current
+    var localCaptionsEnabled by remember { mutableStateOf(captionsEnabled) }
+    var currentCaptionLanguage by remember { mutableStateOf(captionLanguage.ifBlank { "es" }) }
+    var activeSubtitles by remember(movie.id) { mutableStateOf(movie.subtitles) }
+    var subtitleStatus by remember { mutableStateOf<String?>(null) }
+    var showSubtitleDialog by remember { mutableStateOf(false) }
+    var autoSearched by remember(movie.id) { mutableStateOf(false) }
+
+    // Load cached subtitles on mount
+    LaunchedEffect(movie.id) {
+        val cached = openSubtitlesRepository.getAllCachedSubtitles(context, movie.id)
+        if (cached.isNotEmpty()) {
+            activeSubtitles = (movie.subtitles + cached).distinctBy { "${it.language}_${it.uri}" }
+        }
+    }
+
+    // Auto-search OpenSubtitles if captions enabled and not already cached for current language
+    LaunchedEffect(movie.id, localCaptionsEnabled, currentCaptionLanguage) {
+        if (!localCaptionsEnabled || autoSearched) return@LaunchedEffect
+        val hasSubForLang = activeSubtitles.any { it.language.equals(currentCaptionLanguage, ignoreCase = true) }
+        if (!hasSubForLang) {
+            autoSearched = true
+            subtitleStatus = "Searching subtitles (${currentCaptionLanguage.uppercase()})…"
+            val results = openSubtitlesRepository.search(movie.title, movie.releaseYear, currentCaptionLanguage)
+            if (results.isNotEmpty()) {
+                val best = results.first()
+                subtitleStatus = "Downloading subtitles…"
+                val downloaded = openSubtitlesRepository.downloadSubtitle(context, movie.id, best)
+                if (downloaded != null) {
+                    val track = SubtitleTrack(
+                        id = "os_${best.fileId}",
+                        language = best.language.lowercase(),
+                        label = best.label,
+                        uri = Uri.fromFile(downloaded).toString()
+                    )
+                    activeSubtitles = (activeSubtitles + track).distinctBy { "${it.language}_${it.uri}" }
+                    subtitleStatus = "Subtitles applied (${best.language.uppercase()})"
+                    delay(3000)
+                    subtitleStatus = null
+                } else {
+                    subtitleStatus = "Could not download subtitles"
+                    delay(3000)
+                    subtitleStatus = null
+                }
+            } else {
+                subtitleStatus = "No subtitles found on OpenSubtitles"
+                delay(3000)
+                subtitleStatus = null
+            }
+        }
+    }
+
+    BackHandler(onBack = {
+        if (showSubtitleDialog) {
+            showSubtitleDialog = false
+        } else {
+            onExit()
+        }
+    })
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         VideoPlayer(
             channel = movie.asChannel(),
-            captionsEnabled = captionsEnabled,
-            captionLanguage = captionLanguage,
+            captionsEnabled = localCaptionsEnabled,
+            captionLanguage = currentCaptionLanguage,
+            extraSubtitles = activeSubtitles,
             showControls = true,
             modifier = Modifier.fillMaxSize()
         )
-        Column(
-            Modifier
+        Row(
+            modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .75f), Color.Transparent)))
-                .padding(28.dp)
+                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .8f), Color.Transparent)))
+                .padding(28.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
         ) {
-            Text(movie.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            val details = listOfNotNull(movie.releaseYear?.toString(), movie.runtimeMinutes?.let { "$it min" }).joinToString(" · ")
-            if (details.isNotBlank()) Text(details, color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(movie.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                val details = listOfNotNull(
+                    movie.releaseYear?.toString(),
+                    movie.runtimeMinutes?.let { "$it min" },
+                    movie.genres.takeIf { it.isNotEmpty() }?.joinToString(", ")
+                ).joinToString(" · ")
+                if (details.isNotBlank()) {
+                    Text(details, color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
+                }
+
+                if (subtitleStatus != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Black.copy(alpha = 0.7f),
+                        border = BorderStroke(1.dp, GoogleTvTokens.BlueAccent.copy(alpha = 0.5f))
+                    ) {
+                        Text(
+                            text = subtitleStatus!!,
+                            color = GoogleTvTokens.BlueAccent,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            // Quick Actions: CC Toggle & Subtitles Menu
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    onClick = {
+                        val newEnabled = !localCaptionsEnabled
+                        localCaptionsEnabled = newEnabled
+                        onCaptionsChanged(newEnabled, currentCaptionLanguage)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (localCaptionsEnabled) GoogleTvTokens.BlueAccent else Color.White.copy(alpha = 0.15f),
+                    modifier = Modifier.googleTvFocusable(shape = RoundedCornerShape(12.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ClosedCaption,
+                            contentDescription = "Toggle CC",
+                            tint = if (localCaptionsEnabled) Color.Black else Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = if (localCaptionsEnabled) "CC: ${currentCaptionLanguage.uppercase()}" else "CC: OFF",
+                            color = if (localCaptionsEnabled) Color.Black else Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Surface(
+                    onClick = { showSubtitleDialog = true },
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.15f),
+                    modifier = Modifier.googleTvFocusable(shape = RoundedCornerShape(12.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Search Subtitles",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Subtitles",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showSubtitleDialog) {
+            MovieSubtitleDialog(
+                movie = movie,
+                captionsEnabled = localCaptionsEnabled,
+                captionLanguage = currentCaptionLanguage,
+                activeSubtitles = activeSubtitles,
+                openSubtitlesRepository = openSubtitlesRepository,
+                onToggleCaptions = { enabled ->
+                    localCaptionsEnabled = enabled
+                    onCaptionsChanged(enabled, currentCaptionLanguage)
+                },
+                onSelectLanguage = { lang ->
+                    currentCaptionLanguage = lang
+                    onCaptionsChanged(localCaptionsEnabled, lang)
+                },
+                onApplySubtitleTrack = { track ->
+                    localCaptionsEnabled = true
+                    currentCaptionLanguage = track.language
+                    activeSubtitles = (activeSubtitles + track).distinctBy { "${it.language}_${it.uri}" }
+                    onCaptionsChanged(true, track.language)
+                },
+                onDismiss = { showSubtitleDialog = false }
+            )
         }
     }
 }
@@ -5775,6 +5965,7 @@ private fun VideoPlayer(
     showControls: Boolean = false,
     controlState: PlaybackControlState? = null,
     preferredAudioLanguage: String? = null,
+    extraSubtitles: List<SubtitleTrack> = emptyList(),
     onAudioLanguageChanged: (String?) -> Unit = {},
     onSubtitleChanged: (Boolean, String?) -> Unit = { _, _ -> },
     onPlaybackError: (PlaybackErrorCategory) -> Unit = {},
@@ -5914,7 +6105,15 @@ private fun VideoPlayer(
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    LaunchedEffect(activeUrl, captionsEnabled, captionLanguage, preferredAudioLanguage, retryAttempt) {
+    LaunchedEffect(player, captionsEnabled, captionLanguage, preferredAudioLanguage) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !captionsEnabled)
+            .setPreferredTextLanguage(captionLanguage.ifBlank { null })
+            .setPreferredAudioLanguage(preferredAudioLanguage)
+            .setSelectUndeterminedTextLanguage(captionsEnabled)
+            .build()
+    }
+    LaunchedEffect(activeUrl, extraSubtitles, retryAttempt) {
         if (retryAttempt > 0) delay((1L shl (retryAttempt - 1)) * 1_000L)
         httpFactory
             .setDefaultRequestProperties(channel.headers)
@@ -5925,10 +6124,20 @@ private fun VideoPlayer(
             .setPreferredAudioLanguage(preferredAudioLanguage)
             .setSelectUndeterminedTextLanguage(captionsEnabled)
             .build()
-        player.stop()
+
+        val subtitleConfigs = extraSubtitles.map { sub ->
+            MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.uri))
+                .setMimeType(sub.mimeType)
+                .setLanguage(sub.language.lowercase())
+                .setLabel(sub.label)
+                .setSelectionFlags(if (captionsEnabled && sub.language.equals(captionLanguage, ignoreCase = true)) C.SELECTION_FLAG_DEFAULT else 0)
+                .build()
+        }
+
         val mediaItem = MediaItem.Builder()
                 .setUri(activeUrl)
                 .setMediaId(channel.id)
+                .setSubtitleConfigurations(subtitleConfigs)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(channel.name)
@@ -5943,7 +6152,8 @@ private fun VideoPlayer(
                     )?.let(::setMimeType)
                 }
                 .build()
-        player.setMediaItem(mediaItem, true)
+        val isSameSource = player.currentMediaItem?.mediaId == channel.id
+        player.setMediaItem(mediaItem, !isSameSource)
         player.prepare()
         player.playWhenReady = true
     }
