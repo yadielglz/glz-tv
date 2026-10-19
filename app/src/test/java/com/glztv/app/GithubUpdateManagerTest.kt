@@ -43,6 +43,16 @@ class GithubUpdateManagerTest {
     }
 
     @Test
+    fun stableMoviePlaybackFixIsVisibleOnEveryUpdateChannel() {
+        UpdateChannel.values().forEach { channel ->
+            assertTrue(
+                "Stable 1.43.2.03 must be visible on ${channel.id}",
+                GithubUpdateManager.matchesChannel("v1.43.2.03", channel)
+            )
+        }
+    }
+
+    @Test
     fun parsesWeekDayReleaseDateCorrectly() {
         val millis = GithubUpdateManager.parseReleaseDate("1.42.6.02")
         org.junit.Assert.assertNotNull(millis)

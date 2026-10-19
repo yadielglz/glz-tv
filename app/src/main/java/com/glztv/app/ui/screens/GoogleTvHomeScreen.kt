@@ -230,8 +230,6 @@ fun GoogleTvHomeScreen(
     val heroChannel = remember(channels, previewChannel) {
         previewChannel ?: channels.firstOrNull()
     }
-    var selectedGenre by remember { mutableStateOf("ALL") }
-
     val activeChannel = heroChannel
 
     // Deduplicated recent channels list with fallback to top lineup so rail is never empty
@@ -259,23 +257,16 @@ fun GoogleTvHomeScreen(
         else emptyList()
     }
 
-    val availableGenres = remember(channels) {
-        val genres = channels.mapNotNull { it.group.takeIf(String::isNotBlank) }.distinct()
-        if (genres.isNotEmpty()) listOf("ALL") + genres.take(8)
-        else emptyList()
-    }
-
-    val genreFilteredChannels = remember(channels, selectedGenre) {
-        if (selectedGenre == "ALL") channels.take(10)
-        else channels.filter { it.group.equals(selectedGenre, ignoreCase = true) }.take(10)
-    }
-
     var showQuickTune by remember { mutableStateOf(false) }
     val watchLiveFocusRequester = remember { FocusRequester() }
     val favFocusRequester = remember { FocusRequester() }
     val liveGuideFocusRequester = remember { FocusRequester() }
     val quickTuneFocusRequester = remember { FocusRequester() }
     val radioPlayerFocusRequester = remember { FocusRequester() }
+    val radioRailFocusRequester = remember { FocusRequester() }
+    val movieRailFocusRequester = remember { FocusRequester() }
+    val favoritesRailFocusRequester = remember { FocusRequester() }
+    val appsRailFocusRequester = remember { FocusRequester() }
 
     val isRadioPlaying = radioPlaying && currentRadioStation != null
 
@@ -375,20 +366,6 @@ fun GoogleTvHomeScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 20.dp)
         ) {
-            if (movies.isNotEmpty()) {
-                item(key = "rail-movies") {
-                    RailHeader(title = "MOVIES ON GLZ", icon = Icons.Default.PlayArrow, iconTint = GoogleTvTokens.BlueAccent)
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(vertical = 6.dp)
-                    ) {
-                        itemsIndexed(movies, key = { index, movie -> "movie-${movie.id}-$index" }) { _, movie ->
-                            MoviePosterCard(movie = movie, onClick = { onWatchMovie(movie) })
-                        }
-                    }
-                }
-            }
-
             // RAIL 1: JUMP BACK IN / FEATURED LINEUP
             item(key = "rail-recent") {
                 val title = if (recentChannels.isNotEmpty() || resumeChannel != null) "JUMP BACK IN" else "FEATURED LINEUP"
@@ -493,11 +470,18 @@ fun GoogleTvHomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(vertical = 4.dp)
                     ) {
-                        itemsIndexed(radioStations, key = { index, st -> "radio-${st.code}-$index" }) { _, st ->
+                        itemsIndexed(radioStations, key = { index, st -> "radio-${st.code}-$index" }) { index, st ->
                             RadioStationCard(
                                 station = st,
                                 isCurrent = currentRadioStation?.code == st.code,
                                 isPlaying = currentRadioStation?.code == st.code && radioPlaying,
+                                modifier = if (index == 0) Modifier
+                                    .focusRequester(radioRailFocusRequester)
+                                    .focusProperties {
+                                        if (movies.isNotEmpty()) down = movieRailFocusRequester
+                                        else if (favoriteChannels.isNotEmpty()) down = favoritesRailFocusRequester
+                                        else down = appsRailFocusRequester
+                                    } else Modifier,
                                 onClick = { onPlayRadioStation(st) }
                             )
                         }
@@ -505,7 +489,32 @@ fun GoogleTvHomeScreen(
                 }
             }
 
-            // RAIL 4: FAVORITES OR POPULAR CHANNELS
+            // RAIL 4: MOVIES (directly below GLZ Radio; replaces Browse by Genre)
+            if (movies.isNotEmpty()) {
+                item(key = "rail-movies") {
+                    RailHeader(title = "MOVIES ON GLZ", icon = Icons.Default.PlayArrow, iconTint = GoogleTvTokens.BlueAccent)
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(vertical = 6.dp)
+                    ) {
+                        itemsIndexed(movies, key = { index, movie -> "movie-${movie.id}-$index" }) { index, movie ->
+                            MoviePosterCard(
+                                movie = movie,
+                                modifier = if (index == 0) Modifier
+                                    .focusRequester(movieRailFocusRequester)
+                                    .focusProperties {
+                                        if (radioStations.isNotEmpty()) up = radioRailFocusRequester
+                                        if (favoriteChannels.isNotEmpty()) down = favoritesRailFocusRequester
+                                        else down = appsRailFocusRequester
+                                    } else Modifier,
+                                onClick = { onWatchMovie(movie) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // RAIL 5: FAVORITES OR POPULAR CHANNELS
             if (favoriteChannels.isNotEmpty()) {
                 item(key = "rail-favorites") {
                     val hasFavs = favorites.isNotEmpty()
@@ -517,70 +526,19 @@ fun GoogleTvHomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(vertical = 4.dp)
                     ) {
-                        itemsIndexed(favoriteChannels, key = { index, ch -> "fav-${ch.id.ifBlank { "c" }}-$index" }) { _, ch ->
+                        itemsIndexed(favoriteChannels, key = { index, ch -> "fav-${ch.id.ifBlank { "c" }}-$index" }) { index, ch ->
                             FavoriteChannelCard(
                                 channel = ch,
                                 guide = guide,
                                 now = now,
                                 isStar = hasFavs,
-                                onClick = { onWatchChannel(ch) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // RAIL 5: BROWSE BY GENRE
-            if (availableGenres.size > 1) {
-                item(key = "rail-genres") {
-                    RailHeader(title = "BROWSE BY GENRE", icon = Icons.Default.CalendarMonth)
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp)
-                    ) {
-                        itemsIndexed(availableGenres, key = { index, genre -> "genre-chip-$genre-$index" }) { _, genre ->
-                            val isSelected = genre.equals(selectedGenre, ignoreCase = true)
-                            var isFocused by remember { mutableStateOf(false) }
-                            Surface(
-                                onClick = { selectedGenre = genre },
-                                shape = CircleShape,
-                                color = when {
-                                    isFocused -> Color.White
-                                    isSelected -> GoogleTvTokens.BlueAccent
-                                    else -> Color.White.copy(alpha = 0.08f)
-                                },
-                                contentColor = when {
-                                    isFocused -> Color.Black
-                                    isSelected -> Color(0xFF001F2A)
-                                    else -> Color.White
-                                },
-                                modifier = Modifier.googleTvFocusable(
-                                    shape = CircleShape,
-                                    focusedScale = 1.06f,
-                                    onFocusChange = { isFocused = it }
-                                )
-                            ) {
-                                Text(
-                                    text = genre.uppercase(),
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = 0.5.sp
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp)
-                    ) {
-                        itemsIndexed(genreFilteredChannels, key = { index, ch -> "genre-ch-${ch.id.ifBlank { "c" }}-$index" }) { _, ch ->
-                            RecentChannelCard(
-                                channel = ch,
-                                guide = guide,
-                                now = now,
+                                modifier = if (index == 0) Modifier
+                                    .focusRequester(favoritesRailFocusRequester)
+                                    .focusProperties {
+                                        if (movies.isNotEmpty()) up = movieRailFocusRequester
+                                        else if (radioStations.isNotEmpty()) up = radioRailFocusRequester
+                                        down = appsRailFocusRequester
+                                    } else Modifier,
                                 onClick = { onWatchChannel(ch) }
                             )
                         }
@@ -604,9 +562,16 @@ fun GoogleTvHomeScreen(
                     contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
                     if (isFamilyMode && visibleInstalled.isNotEmpty()) {
-                        itemsIndexed(visibleInstalled, key = { index, app -> "installed-${app.packageName}-$index" }) { _, app ->
+                        itemsIndexed(visibleInstalled, key = { index, app -> "installed-${app.packageName}-$index" }) { index, app ->
                             InstalledAppCard(
                                 app = app,
+                                modifier = if (index == 0) Modifier
+                                    .focusRequester(appsRailFocusRequester)
+                                    .focusProperties {
+                                        if (favoriteChannels.isNotEmpty()) up = favoritesRailFocusRequester
+                                        else if (movies.isNotEmpty()) up = movieRailFocusRequester
+                                        else if (radioStations.isNotEmpty()) up = radioRailFocusRequester
+                                    } else Modifier,
                                 onClick = {
                                     if (contextMenuApp == null) {
                                         LauncherAppsManager.launchApp(context, app.packageName)
@@ -619,9 +584,16 @@ fun GoogleTvHomeScreen(
                         }
                     } else {
                         // Streaming & Entertainment Apps (Android TV styled cards)
-                        itemsIndexed(entertainmentApps, key = { index, app -> "app-${app.packageName}-$index" }) { _, app ->
+                        itemsIndexed(entertainmentApps, key = { index, app -> "app-${app.packageName}-$index" }) { index, app ->
                             EntertainmentAppCard(
                                 app = app,
+                                modifier = if (index == 0) Modifier
+                                    .focusRequester(appsRailFocusRequester)
+                                    .focusProperties {
+                                        if (favoriteChannels.isNotEmpty()) up = favoritesRailFocusRequester
+                                        else if (movies.isNotEmpty()) up = movieRailFocusRequester
+                                        else if (radioStations.isNotEmpty()) up = radioRailFocusRequester
+                                    } else Modifier,
                                 onClick = { onLaunchApp(app) }
                             )
                         }
@@ -764,6 +736,7 @@ fun GoogleTvHomeScreen(
 @Composable
 private fun InstalledAppCard(
     app: LauncherAppItem,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -783,7 +756,7 @@ private fun InstalledAppCard(
     val cardHeight = 84.dp
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .width(cardWidth)
             .height(cardHeight)
             .googleTvFocusable(
@@ -949,6 +922,7 @@ private fun InstalledAppCard(
 @Composable
 private fun EntertainmentAppCard(
     app: EntertainmentApp,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -981,7 +955,7 @@ private fun EntertainmentAppCard(
 
     Surface(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .width(cardWidth)
             .height(cardHeight)
             .googleTvFocusable(
@@ -2164,13 +2138,13 @@ private fun RailHeader(
 }
 
 @Composable
-private fun MoviePosterCard(movie: Movie, onClick: () -> Unit) {
+private fun MoviePosterCard(movie: Movie, modifier: Modifier = Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(10.dp),
         color = Color(0xFF17202D),
-        modifier = Modifier
+        modifier = modifier
             .width(132.dp)
             .height(198.dp)
             .googleTvFocusable(
@@ -2391,6 +2365,7 @@ private fun RadioStationCard(
     station: RadioStation,
     isCurrent: Boolean,
     isPlaying: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -2399,7 +2374,7 @@ private fun RadioStationCard(
 
     Surface(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .width(cardWidth)
             .height(cardHeight)
             .googleTvFocusable(
@@ -2510,6 +2485,7 @@ private fun FavoriteChannelCard(
     guide: EpgGuide,
     now: Long,
     isStar: Boolean = true,
+    modifier: Modifier = Modifier,
     onFocus: () -> Unit = {},
     onClick: () -> Unit
 ) {
@@ -2520,7 +2496,7 @@ private fun FavoriteChannelCard(
 
     Surface(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .width(180.dp)
             .height(78.dp)
             .googleTvFocusable(

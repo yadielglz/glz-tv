@@ -2,6 +2,7 @@ package com.glztv.app.player
 
 import android.net.Uri
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.MimeTypes
 import androidx.media3.datasource.HttpDataSource
 
 enum class PlaybackErrorCategory {
@@ -24,6 +25,13 @@ data class PlaybackDiagnostics(
 )
 
 object PlaybackErrorCategorizer {
+    fun mediaMimeType(streamUrl: String, forceHls: Boolean = false): String? {
+        val decodedUrl = runCatching { Uri.decode(streamUrl) }.getOrDefault(streamUrl)
+        return if (forceHls || decodedUrl.contains(".m3u8", ignoreCase = true)) {
+            MimeTypes.APPLICATION_M3U8
+        } else null
+    }
+
     fun categorize(error: Throwable): PlaybackErrorCategory {
         val causes = generateSequence(error) { it.cause }.toList()
         val httpCode = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
@@ -51,7 +59,7 @@ object PlaybackErrorCategorizer {
     fun protocol(streamUrl: String): String? {
         val uri = runCatching { Uri.parse(streamUrl) }.getOrNull() ?: return null
         return when {
-            uri.lastPathSegment?.contains(".m3u8", true) == true -> "HLS"
+            mediaMimeType(streamUrl) == MimeTypes.APPLICATION_M3U8 -> "HLS"
             uri.scheme.equals("http", true) || uri.scheme.equals("https", true) -> "HTTP"
             else -> uri.scheme?.uppercase()
         }

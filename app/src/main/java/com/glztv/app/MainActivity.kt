@@ -140,6 +140,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import android.view.SurfaceView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
@@ -148,6 +149,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -5783,7 +5785,10 @@ private fun VideoPlayer(
         DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
     }
     val player = remember {
-        ExoPlayer.Builder(context)
+        ExoPlayer.Builder(
+            context,
+            DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+        )
             .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
             .build()
     }
@@ -5921,8 +5926,7 @@ private fun VideoPlayer(
             .setSelectUndeterminedTextLanguage(captionsEnabled)
             .build()
         player.stop()
-        player.setMediaItem(
-            MediaItem.Builder()
+        val mediaItem = MediaItem.Builder()
                 .setUri(activeUrl)
                 .setMediaId(channel.id)
                 .setMediaMetadata(
@@ -5932,9 +5936,14 @@ private fun VideoPlayer(
                         .setArtworkUri(channel.logoUrl.takeIf { it.isNotBlank() }?.let(Uri::parse))
                         .build()
                 )
-                .build(),
-            true
-        )
+                .apply {
+                    PlaybackErrorCategorizer.mediaMimeType(
+                        activeUrl,
+                        forceHls = channel.id.startsWith("movie:")
+                    )?.let(::setMimeType)
+                }
+                .build()
+        player.setMediaItem(mediaItem, true)
         player.prepare()
         player.playWhenReady = true
     }
