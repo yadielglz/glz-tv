@@ -142,3 +142,17 @@ test('receiver load failure restores channel selection and reports the error', a
   assert.equal($('liveChannels').inert, false);
   assert.equal($('liveCast').disabled, false);
 });
+
+test('relative or malformed optional artwork cannot prevent casting', async () => {
+  makePlayer(async () => ({ playlists: [{ ...playlists[0], playlist_items: [
+    item('1', 'Relative logo', { tvg_logo: '/logos/channel.png' }),
+    item('2', 'Invalid logo', { tvg_logo: 'https://[' })
+  ] }] })).open();
+  await tick(); $('liveCast').click(); await tick();
+  document.querySelector('.live-channel').click(); await tick();
+  document.querySelectorAll('.live-channel')[1].click(); await tick();
+  assert.equal(loads.length, 2);
+  assert.equal(loads[0].media.metadata.title, 'Relative logo');
+  assert.equal(loads[1].media.metadata.title, 'Invalid logo');
+  assert.equal(loads[0].media.metadata.images, undefined);
+});

@@ -128,7 +128,9 @@ export function createLiveTV({ api, stopPreview }) {
       media.metadata = new chrome.cast.media.GenericMediaMetadata();
       media.metadata.title = selected.title || "Glz TV";
       media.metadata.subtitle = selected.group;
-      if (selected.logo && new URL(selected.logo).protocol === "https:") media.metadata.images = [new chrome.cast.Image(selected.logo)];
+      try {
+        if (selected.logo && new URL(selected.logo).protocol === "https:") media.metadata.images = [new chrome.cast.Image(selected.logo)];
+      } catch { /* Optional artwork must never prevent a valid stream from casting. */ }
       const request = new chrome.cast.media.LoadRequest(media); request.autoplay = true;
       castBusy = true; $("liveChannels").inert = true; updateCast(); status("Loading channel on TV…");
       await session().loadMedia(request);
