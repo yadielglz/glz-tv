@@ -1,3 +1,6 @@
+import { createLiveTV } from "/live-tv.js?v=3.0.3";
+
+const liveTV = createLiveTV({ api, stopPreview: stopStreamPreview });
 const state = {
   config: null, session: null, devices: [], apps: [], sites: [],
   experience: null, selectedSiteId: null, enrollments: [], stations: [], playlists: [], movies: [], movieMetadataResults: [], groups: []
@@ -59,6 +62,7 @@ function restoreSession() {
 
 function showApp() {
   const authed = Boolean(state.session) && !inviteToken;
+  if (!authed) { liveTV.reset(); stopStreamPreview(); }
   const shell = $(".shell");
   if (shell) shell.classList.toggle("unauthed", !authed);
   $("#inviteView")?.classList.toggle("hidden", !inviteToken);
@@ -99,6 +103,8 @@ $("#inviteForm").addEventListener("submit", async (event) => {
 });
 
 function showView(name) {
+  if (name === "live") liveTV.open(); else liveTV.leave();
+  $("#liveView").classList.toggle("hidden", name !== "live");
   toggleMobileNav(false);
   $("#mainAppHeader").classList.toggle("hidden", name === "device-editor");
   $("#devicesView").classList.toggle("hidden", name !== "devices");
@@ -117,6 +123,7 @@ function showView(name) {
   $("#pairButton").classList.toggle("hidden", name === "pair" || name === "device-editor" || name === "settings");
 
   const pageTitles = {
+    live: "Live TV",
     pair: "Pair a television",
     apps: "App management",
     groups: "Box Groups",
@@ -133,6 +140,7 @@ function showView(name) {
   $("#pageTitle").textContent = pageTitles[name] || "Your TVs";
 
   const breadcrumbSections = {
+    live: { section: "Broadcast & Channels", current: "Live TV" },
     devices: { section: "Fleet Management", current: "Devices" },
     groups: { section: "Fleet Management", current: "Box Groups" },
     sites: { section: "Fleet Management", current: "Properties" },
@@ -1138,6 +1146,7 @@ function renderCommandResults(query = "") {
   const items = [];
 
   const navViews = [
+    { id: "live", title: "Live TV", sub: "Watch managed channels and cast to your TV", icon: "play", category: "Navigation" },
     { id: "devices", title: "Devices Fleet", sub: "View and manage all active televisions", icon: "screens", category: "Navigation" },
     { id: "settings", title: "Hub Settings", sub: "Fleet defaults, streaming engine, appearance, health", icon: "settings", category: "Navigation" },
     { id: "studio", title: "TV Playlists", sub: "Manage M3U channels and channel lineups", icon: "studio", category: "Navigation" },

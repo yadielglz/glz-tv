@@ -27,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=3.0.2">
+  <link rel="stylesheet" href="/styles.css?v=3.0.3">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 </head>
 
@@ -254,6 +254,10 @@
           <div class="nav-group-title">
             <span>Broadcast &amp; Channels</span>
           </div>
+          <button class="nav" data-view="live">
+            <svg class="icon"><use href="#icon-play"/></svg>
+            <span>Live TV</span>
+          </button>
           <button class="nav" data-view="studio">
             <svg class="icon"><use href="#icon-studio"/></svg>
             <span>TV playlists</span>
@@ -714,6 +718,36 @@
         </section>
 
         <!-- EPG View -->
+        <section id="liveView" class="hidden" aria-label="Live TV player">
+          <div class="live-layout">
+            <div class="live-player-panel">
+              <video id="liveVideo" controls playsinline preload="none" aria-label="Live TV playback"></video>
+              <div class="live-player-info">
+                <span class="live-eyebrow">GLZ TV · LIVE</span>
+                <h2 id="liveNow">Choose a channel</h2>
+                <p id="liveStatus" role="status" aria-live="polite">Choose a channel to watch or cast.</p>
+                <div class="live-actions">
+                  <button id="liveCast" type="button" class="primary" disabled>Cast to TV</button>
+                  <button id="liveRemotePause" type="button" class="secondary" hidden>Pause TV</button>
+                  <button id="liveStop" type="button" class="secondary" disabled>Stop</button>
+                  <button id="liveDisconnect" type="button" class="secondary" hidden>Disconnect TV</button>
+                </div>
+                <p id="liveCastHelp" class="live-help">Loading Google Cast support…</p>
+              </div>
+            </div>
+            <div class="live-browser">
+              <div class="live-filters">
+                <label>Playlist<select id="livePlaylist"><option value="">All published playlists</option></select></label>
+                <label>Group<select id="liveGroup"><option value="">All groups</option></select></label>
+                <label class="live-search-label">Find a channel<input id="liveSearch" type="search" placeholder="Name, number, or group…" autocomplete="off"></label>
+                <div class="live-list-heading"><span id="liveCount">0 channels</span><button id="liveReload" class="secondary" type="button">Refresh</button></div>
+              </div>
+              <p id="liveEmpty" class="live-help">No channels found. Try another filter or publish a TV playlist in Playlist Studio.</p>
+              <div id="liveChannels" class="live-channels" aria-label="Channels"></div>
+            </div>
+          </div>
+        </section>
+
         <section id="epgView" class="hidden">
           <div class="editor-header" style="margin-bottom:16px;">
             <div>
@@ -2246,7 +2280,7 @@
     <span id="toastMessage" class="toast-msg">Notification</span>
   </div>
 
-  <script type="module" src="/app.js?v=3.0.2"></script>
+  <script type="module" src="/app.js?v=3.0.3"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"8a9d9fbda9c14c53b3dec2f41df6f690","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 
