@@ -111,6 +111,37 @@ contains only active stations, a content-derived `version`, and an `ETag`.
 Clients should retain the `ETag` and send `If-None-Match` on later refreshes;
 the Hub returns `304 Not Modified` when the station catalog has not changed.
 
+## Live TV web player and Google Cast
+
+The **Live TV** tab plays the signed-in administrator's published TV playlists.
+It uses the existing owner-scoped `/api/v1/admin/playlists` endpoint; hidden
+channels and radio entries are excluded. Playlist and group filters, channel
+search, and refresh work on phones, tablets, and desktop.
+
+On Android, open `https://glzhub.glztech.com` in Chrome, sign in, open **Live TV**,
+choose a channel, then tap **Cast to TV** and select a compatible Vizio SmartCast,
+Chromecast, or Google TV device on the same Wi-Fi. You can also connect first and
+then choose a channel. Switch channels from the list; use **Pause TV**, **Stop**,
+or **Disconnect TV** to control playback. Leaving the tab stops local video while
+an existing Cast session continues. Signing out stops playback and ends the Cast
+session. iPhone browsers do not support the Google Cast Web Sender SDK.
+
+The sender uses Google's Default Media Receiver, so no custom receiver ID,
+developer registration, or TV modification is required. Only the media URL and
+channel metadata go to the receiver; Hub authorization tokens are never sent.
+Receiver support on a particular TV still requires testing on that device.
+
+Phone playback uses the existing HLS.js library or native HLS support, plus direct
+MP4/WebM video. DASH URLs can be sent to Cast but are not played locally by this
+tab. HTTPS pages require HTTPS streams for local playback. The receiver must be
+able to reach the original stream and support its codecs, authentication, and
+CORS configuration. Streams needing custom headers/cookies, raw MPEG-TS feeds,
+or inaccessible local addresses may fail. This feature does not proxy or
+transcode streams. If playback fails, the tab reports an actionable message.
+
+Validation: `npm run check`, `node --check public/live-tv.js`, and
+`node --test tests/live-tv.test.mjs`.
+
 ## Device and app management
 
 Apply both SQL migrations in order. Migration `002_app_management.sql` adds expanded

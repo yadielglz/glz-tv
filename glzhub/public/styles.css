@@ -1,5 +1,42 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+/* Live TV and phone Cast sender */
+.live-layout { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,1fr); gap:24px; align-items:start; }
+.live-player-panel,.live-browser { min-width:0; border:1px solid var(--line); border-radius:16px; overflow:hidden; background:var(--panel-bg); }
+.live-player-panel { position:sticky; top:20px; }
+#liveVideo { display:block; width:100%; aspect-ratio:16/9; background:#000; }
+.live-player-info,.live-filters { padding:20px; }
+.live-eyebrow { color:var(--accent); font-size:11px; font-weight:800; letter-spacing:.12em; }
+#liveNow { margin:10px 0; font-size:24px; overflow-wrap:anywhere; }
+#liveStatus { min-height:3em; color:var(--text-secondary); font-size:14px; line-height:1.5; }
+.live-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.live-actions button { min-height:44px; max-width:100%; overflow-wrap:anywhere; }
+.live-help { color:var(--text-muted); font-size:13px; line-height:1.6; padding:0 20px; }
+.live-player-info .live-help { padding:0; margin:16px 0 0; }
+.live-filters { display:grid; grid-template-columns:1fr 1fr; gap:12px; border-bottom:1px solid var(--line); }
+.live-filters label { display:flex; flex-direction:column; gap:6px; min-width:0; font-size:12px; color:var(--text-secondary); }
+.live-filters input,.live-filters select { width:100%; min-width:0; min-height:44px; }
+.live-search-label,.live-list-heading { grid-column:1/-1; }
+.live-list-heading { display:flex; align-items:center; justify-content:space-between; color:var(--text-muted); font-size:12px; }
+.live-channels { max-height:65vh; overflow-y:auto; overscroll-behavior:contain; padding:8px; }
+.live-channel { display:flex; align-items:center; gap:12px; text-align:left; width:100%; min-height:70px; padding:12px; border:1px solid transparent; border-radius:10px; background:transparent; color:var(--text-main); }
+.live-channel:hover { background:var(--panel-card-hover); }
+.live-channel[aria-pressed="true"] { background:var(--accent-soft); border-color:var(--accent); }
+.live-channel:focus-visible { outline:3px solid var(--accent); outline-offset:-3px; }
+.live-artwork { position:relative; display:grid; place-items:center; flex:0 0 44px; height:44px; background:var(--panel-card-hover); border-radius:8px; font-size:12px; font-weight:700; overflow:hidden; }
+.live-artwork img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:var(--panel-bg); }
+.live-channel-label { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.live-channel-label strong { font-size:14px; overflow-wrap:anywhere; }
+.live-channel-label small { font-size:12px; color:var(--text-muted); }
+#liveView [hidden] { display:none !important; }
+@media(max-width:900px) {
+  .live-layout { grid-template-columns:1fr; gap:16px; }
+  .live-player-panel { position:static; }
+  .live-player-info,.live-filters { padding:16px; }
+  #liveNow { font-size:20px; }
+  .live-channels { max-height:55vh; }
+}
+
 /* ==========================================================================
    GLZ Hub Design System — Professional Flat UI/UX Tokens
    Light: Clean Enterprise Neutral | Dark: Slate / Zinc OLED
