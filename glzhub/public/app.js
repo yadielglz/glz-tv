@@ -1,4 +1,4 @@
-import { createLiveTV } from "/live-tv.js?v=3.0.3";
+import { createLiveTV } from "/live-tv.js?v=3.0.4";
 
 const liveTV = createLiveTV({ api, stopPreview: stopStreamPreview });
 const state = {

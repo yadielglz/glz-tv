@@ -44,6 +44,7 @@ beforeEach(() => {
     AutoJoinPolicy: { ORIGIN_SCOPED: 'origin' }, Image: class { constructor(url) { this.url = url; } },
     media: { DEFAULT_MEDIA_RECEIVER_APP_ID: 'CC1AD845', StreamType: { LIVE: 'LIVE' },
       MediaInfo: class { constructor(contentId, contentType) { Object.assign(this, { contentId, contentType }); } },
+      EditTracksInfoRequest: class { constructor(activeTrackIds) { this.activeTrackIds = activeTrackIds; } },
       GenericMediaMetadata: class {}, LoadRequest: class { constructor(media) { this.media = media; } } }
   } };
   globalThis.cast = dom.window.cast = { framework }; globalThis.chrome = dom.window.chrome = chrome;
@@ -155,4 +156,68 @@ test('relative or malformed optional artwork cannot prevent casting', async () =
   assert.equal(loads[0].media.metadata.title, 'Relative logo');
   assert.equal(loads[1].media.metadata.title, 'Invalid logo');
   assert.equal(loads[0].media.metadata.images, undefined);
+});
+
+test('Cast CC selector discovers languages, preserves audio and turns captions off', async () => {
+  makePlayer().open(); await tick(); $('liveCast').click(); await tick();
+  const listeners = new Set(), edits = [];
+  const media = {
+    media: { tracks: [{ trackId: 7, type: 'AUDIO' }, { trackId: 10, type: 'TEXT', language: 'en', name: 'English' }, { trackId: 11, type: 'TEXT', language: 'es', name: 'Español' }] },
+    activeTrackIds: [7],
+    addUpdateListener: cb => listeners.add(cb), removeUpdateListener: cb => listeners.delete(cb),
+    editTracksInfo(request, success) { edits.push(request.activeTrackIds); this.activeTrackIds = request.activeTrackIds; listeners.forEach(cb => cb(true)); success(); }
+  };
+  activeSession.getMediaSession = () => media; mediaEvents.change();
+  assert.equal($('liveCaptions').disabled, false);
+  assert.deepEqual(Array.from($('liveCaptions').options).map(o => o.textContent), ['Off', 'English', 'Español']);
+  $('liveCaptions').value = 'cast:11'; $('liveCaptions').dispatchEvent(new window.Event('change')); await tick();
+  assert.deepEqual(edits[0], [7, 11]); assert.equal($('liveCaptions').value, 'cast:11');
+  $('liveCaptions').value = 'off'; $('liveCaptions').dispatchEvent(new window.Event('change')); await tick();
+  assert.deepEqual(edits[1], [7]); assert.equal($('liveCaptions').value, 'off');
+  media.media.tracks = []; media.activeTrackIds = []; listeners.forEach(cb => cb(true));
+  assert.equal($('liveCaptions').disabled, true);
+  assert.match($('liveCaptionHelp').textContent, /No caption tracks/);
+  player.reset(); assert.equal(listeners.size, 0);
+});
+
+test('failed Cast caption selection restores actual receiver state', async () => {
+  makePlayer().open(); await tick(); $('liveCast').click(); await tick();
+  activeSession.getMediaSession = () => media;
+  const media = { media: { tracks: [{ trackId: 4, type: 'TEXT', language: 'en' }] }, activeTrackIds: [], editTracksInfo(_r, _ok, fail) { fail('unsupported'); } };
+  mediaEvents.change();
+  $('liveCaptions').value = 'cast:4'; $('liveCaptions').dispatchEvent(new window.Event('change')); await tick();
+  assert.equal($('liveCaptions').value, 'off'); assert.equal($('liveCaptions').disabled, false);
+  assert.match($('liveStatus').textContent, /Could not change TV captions/);
+});
+
+test('native CC tracks are discovered and selected without exposing metadata tracks', async () => {
+  const tracks = [{ kind: 'captions', label: 'English CC', mode: 'disabled' }, { kind: 'subtitles', language: 'es', mode: 'disabled' }, { kind: 'metadata', mode: 'hidden' }];
+  Object.defineProperty($('liveVideo'), 'textTracks', { value: tracks });
+  makePlayer().open(); await tick(); document.querySelector('.live-channel').click(); await tick();
+  $('liveVideo').dispatchEvent(new window.Event('loadedmetadata'));
+  assert.equal($('liveCaptions').options.length, 3);
+  $('liveCaptions').value = 'native:1'; $('liveCaptions').dispatchEvent(new window.Event('change'));
+  assert.equal(tracks[1].mode, 'showing'); assert.equal(tracks[2].mode, 'hidden');
+  $('liveCaptions').value = 'off'; $('liveCaptions').dispatchEvent(new window.Event('change'));
+  assert.equal(tracks[1].mode, 'disabled');
+  $('liveStop').click(); assert.equal($('liveCaptions').disabled, true);
+});
+
+test('HLS CC selector loads a subtitle rendition and disables it on Off', async () => {
+  let instance;
+  window.Hls = class {
+    static Events = { MANIFEST_PARSED: 'manifest', ERROR: 'error', SUBTITLE_TRACKS_UPDATED: 'subtitles', SUBTITLE_TRACK_SWITCH: 'switch' };
+    static isSupported() { return true; }
+    constructor() { instance = this; this.events = {}; this.subtitleTracks = []; this.subtitleTrack = -1; this.subtitleDisplay = false; }
+    on(name, cb) { this.events[name] = cb; } loadSource() {} attachMedia() {} destroy() {}
+  };
+  const subtitle = { kind: 'subtitles', label: 'Español', mode: 'showing' };
+  Object.defineProperty($('liveVideo'), 'textTracks', { value: [subtitle] });
+  makePlayer().open(); await tick(); document.querySelector('.live-channel').click(); await tick();
+  instance.subtitleTracks = [{ name: 'Español', lang: 'es' }]; instance.events.subtitles();
+  $('liveCaptions').value = 'hls:0'; $('liveCaptions').dispatchEvent(new window.Event('change'));
+  assert.equal(instance.subtitleTrack, 0); assert.equal(instance.subtitleDisplay, true);
+  assert.equal(subtitle.mode, 'showing', 'HLS selected subtitles must remain visible');
+  $('liveCaptions').value = 'off'; $('liveCaptions').dispatchEvent(new window.Event('change'));
+  assert.equal(instance.subtitleTrack, -1); assert.equal(instance.subtitleDisplay, false); assert.equal(subtitle.mode, 'disabled');
 });

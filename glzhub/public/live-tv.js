@@ -20,15 +20,89 @@ export function createLiveTV({ api, stopPreview }) {
   let playlists = [], channels = [], selected = null, hls = null, generation = 0, catalogGeneration = 0;
   let context = null, remote = null, controller = null, castLoading = null, visible = false;
   let castBusy = false;
+  let captionBusy = false, captionRenderKey = "", captionMedia = null;
   const status = message => { $("liveStatus").textContent = message; };
   const session = () => context?.getCurrentSession();
   const connected = () => Boolean(session());
   const option = (value, label) => new Option(label, value);
 
+  const captionLabel = (track, index) => track.name || track.label || track.language || track.lang || `Track ${index + 1}`;
+  const isText = track => track.type === "TEXT";
+  const onMediaUpdate = () => syncCaptions();
+
+  function syncCaptions() {
+    const media = connected() ? session()?.getMediaSession?.() : null;
+    if (media !== captionMedia) {
+      captionMedia?.removeUpdateListener?.(onMediaUpdate);
+      captionMedia = media;
+      captionMedia?.addUpdateListener?.(onMediaUpdate);
+    }
+    let tracks = [], active = "off";
+    if (connected()) {
+      const all = media?.media?.tracks || remote?.mediaInfo?.tracks || [];
+      tracks = castBusy || remote?.isMediaLoaded === false || media?.playerState === "IDLE" ? [] : all.filter(isText).map((track, index) => ({ value: `cast:${track.trackId}`, label: captionLabel(track, index) }));
+      const activeIds = media?.activeTrackIds || [];
+      active = tracks.find(track => activeIds.includes(Number(track.value.slice(5))))?.value || "off";
+    } else if (selected && visible) {
+      tracks = (hls?.subtitleTracks || []).map((track, index) => ({ value: `hls:${index}`, label: captionLabel(track, index) }));
+      // Native tracks include in-band CEA captions discovered while HLS plays.
+      Array.from(video.textTracks || []).forEach((track, index) => {
+        if (!["captions", "subtitles"].includes(track.kind)) return;
+        // HLS manifest subtitles use HLS.js selection so their segments are loaded.
+        if (hls?.subtitleTracks?.length && track.kind === "subtitles") return;
+        tracks.push({ value: `native:${index}`, label: captionLabel(track, index) });
+        if (track.mode === "showing") active = `native:${index}`;
+      });
+      if (hls?.subtitleDisplay !== false && hls?.subtitleTrack >= 0 && tracks.some(t => t.value === `hls:${hls.subtitleTrack}`)) active = `hls:${hls.subtitleTrack}`;
+    }
+    $("liveCaptionLabel").textContent = connected() ? "CC · Captions on TV" : "CC · Captions on this device";
+    const key = JSON.stringify([tracks, active, castBusy, captionBusy]);
+    if (key !== captionRenderKey) {
+      captionRenderKey = key;
+      $("liveCaptions").replaceChildren(option("off", "Off"), ...tracks.map(t => option(t.value, t.label)));
+      $("liveCaptions").value = active;
+      $("liveCaptions").disabled = !tracks.length || castBusy || captionBusy;
+    }
+    $("liveCaptionHelp").textContent = castBusy ? "Loading caption tracks from TV…" : tracks.length
+      ? "Choose a language or Off. Available captions depend on the channel."
+      : "No caption tracks reported. Captions may appear after the channel starts playing.";
+  }
+
+  async function changeCaptions() {
+    const value = $("liveCaptions").value;
+    if (connected()) {
+      const media = session()?.getMediaSession?.();
+      if (!media) { syncCaptions(); return; }
+      const token = generation;
+      // Preserve any active audio/video track IDs while replacing only text tracks.
+      const textIds = (media.media?.tracks || []).filter(isText).map(t => t.trackId);
+      const activeIds = (media.activeTrackIds || []).filter(id => !textIds.includes(id));
+      if (value !== "off") {
+        const id = Number(value.slice(5));
+        if (!textIds.includes(id)) { syncCaptions(); return; }
+        activeIds.push(id);
+      }
+      captionBusy = true; syncCaptions();
+      try {
+        await new Promise((resolve, reject) => media.editTracksInfo(new chrome.cast.media.EditTracksInfoRequest(activeIds), resolve, reject));
+      } catch {
+        if (token === generation && media === session()?.getMediaSession?.()) status("Could not change TV captions. Please try again; this channel or TV may not support that track.");
+      } finally { captionBusy = false; syncCaptions(); }
+    } else {
+      if (hls) { hls.subtitleTrack = value.startsWith("hls:") ? Number(value.slice(4)) : -1; hls.subtitleDisplay = value.startsWith("hls:"); }
+      Array.from(video.textTracks || []).forEach((track, index) => {
+        if (value.startsWith("hls:") && track.kind === "subtitles") return;
+        if (["captions", "subtitles"].includes(track.kind)) track.mode = value === `native:${index}` ? "showing" : "disabled";
+      });
+      syncCaptions();
+    }
+  }
+
   function stopLocal() {
     generation++;
     hls?.destroy(); hls = null;
     video.pause(); video.removeAttribute("src"); video.load();
+    syncCaptions();
   }
 
   function render() {
@@ -100,6 +174,9 @@ export function createLiveTV({ api, stopPreview }) {
     const play = () => video.play().catch(() => { if (token === generation) status("Tap Play on the video to start."); });
     if (type === "application/x-mpegURL" && !video.canPlayType(type) && window.Hls?.isSupported()) {
       hls = new window.Hls();
+      for (const event of [window.Hls.Events.SUBTITLE_TRACKS_UPDATED, window.Hls.Events.SUBTITLE_TRACK_SWITCH]) {
+        if (event) hls.on(event, () => { if (token === generation) syncCaptions(); });
+      }
       hls.on(window.Hls.Events.MANIFEST_PARSED, () => { if (token === generation) play(); });
       hls.on(window.Hls.Events.ERROR, (_event, data) => {
         if (data.fatal && token === generation) { stopLocal(); status("Unable to play this channel. The stream may be offline, require special headers, or block browser playback (CORS)."); }
@@ -147,6 +224,7 @@ export function createLiveTV({ api, stopPreview }) {
     $("liveRemotePause").hidden = !isConnected;
     $("liveRemotePause").disabled = castBusy || !remote?.isMediaLoaded || !remote?.canPause;
     $("liveRemotePause").textContent = remote?.isPaused ? "Resume TV" : "Pause TV";
+    syncCaptions();
   }
 
   function initCast() {
@@ -186,12 +264,15 @@ export function createLiveTV({ api, stopPreview }) {
   $("liveRemotePause").addEventListener("click", () => controller?.playOrPause());
   $("liveStop").addEventListener("click", () => {
     stopLocal(); if (connected()) controller?.stop();
-    selected = null; $("liveNow").textContent = "Choose a channel"; $("liveStop").disabled = true; render(); status("Playback stopped.");
+    selected = null; $("liveNow").textContent = "Choose a channel"; $("liveStop").disabled = true; render(); syncCaptions(); status("Playback stopped.");
   });
   $("livePlaylist").addEventListener("change", filterPlaylist);
   $("liveGroup").addEventListener("change", render);
   $("liveSearch").addEventListener("input", render);
   $("liveReload").addEventListener("click", load);
+  $("liveCaptions").addEventListener("change", changeCaptions);
+  for (const event of ["addtrack", "removetrack", "change"]) video.textTracks?.addEventListener?.(event, syncCaptions);
+  video.addEventListener("loadedmetadata", syncCaptions);
   video.addEventListener("playing", () => { if (!connected()) status("Playing on this device."); });
   video.addEventListener("error", () => { if (video.hasAttribute("src")) status("Stream unavailable or unsupported. Try another channel or Cast to TV."); });
   return {
@@ -205,6 +286,7 @@ export function createLiveTV({ api, stopPreview }) {
       $("liveGroup").replaceChildren(option("", "All groups"));
       $("liveSearch").value = ""; $("liveNow").textContent = "Choose a channel";
       $("liveStop").disabled = true; $("liveReload").disabled = false; render(); status("Choose a channel to watch or cast.");
+      syncCaptions();
     }
   };
 }

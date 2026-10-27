@@ -126,6 +126,13 @@ or **Disconnect TV** to control playback. Leaving the tab stops local video whil
 an existing Cast session continues. Signing out stops playback and ends the Cast
 session. iPhone browsers do not support the Google Cast Web Sender SDK.
 
+The **CC · Captions** selector lists text tracks reported by the active Cast
+receiver, native video player, or HLS playlist. Choose a language or **Off**;
+while casting this changes captions on the TV. Tracks discovered after playback
+starts appear automatically. Switching caption languages preserves active
+audio/video tracks. The selector is disabled when no compatible captions are
+reported. It does not generate captions or transfer phone-rendered text to the TV.
+
 The sender uses Google's Default Media Receiver, so no custom receiver ID,
 developer registration, or TV modification is required. Only the media URL and
 channel metadata go to the receiver; Hub authorization tokens are never sent.
