@@ -85,6 +85,12 @@ function ParseCatalog(data as String, defaultHeaders as Dynamic) as Object
                         title = ExtTitle(info)
                         if title = "" then title = "Live channel"
                         channel = { title: title, url: line, group: Attribute(info, "group-title"), number: Attribute(info, "tvg-chno"), logo: Attribute(info, "tvg-logo"), headers: CopyHeaders(headers) }
+                        channel["id"] = Attribute(info, "tvg-id")
+                        if channel.id = "" then channel["id"] = title
+                        channel["eventTitle"] = Attribute(info, "x-event-title")
+                        channel["league"] = Attribute(info, "x-event-league")
+                        channel["eventStart"] = EventSeconds(Attribute(info, "x-event-start"))
+                        channel["eventEnd"] = EventSeconds(Attribute(info, "x-event-end"))
                         channels.Push(channel)
                     else
                         dropped++

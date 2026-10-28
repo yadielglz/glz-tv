@@ -185,3 +185,17 @@ and publishes TV channel lineups. Each paired television can be assigned one lin
 unassigned television receives all published TV playlists owned by its Hub
 administrator. Radio stations are managed separately and never enter the TV
 M3U output.
+
+## Native Roku guide
+
+`GET /api/v1/devices/guide` requires the paired device Bearer token. It returns
+now/next summaries only for channels in the device's filtered managed M3U lineup.
+`?channel=<tvg-id-or-title>` also returns up to 96 programme entries over the next
+24 hours for that assigned channel; an unassigned channel returns 404.
+
+Assigned XMLTV feeds are decompressed and projected on the Worker. Up to four
+sources share a 20 MiB decoded limit, and raw source results are cached for 120
+seconds by source URL and configured headers. Device credentials never go to
+external feeds. Active event metadata provides PPV details when XMLTV is missing.
+Feed errors return partial data with `guideError`; playback remains independent.
+Deploy this Worker with the Roku 26.X27.2300 update; no SQL migration is needed.

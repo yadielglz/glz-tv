@@ -1,3 +1,5 @@
+import { lineupChannels, projectGuide } from "./roku-guide";
+
 interface Env {
   ASSETS: Fetcher;
   EPG_BUCKET: R2Bucket;
@@ -2819,6 +2821,48 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
   });
 }
 
+// Return a bounded JSON guide instead of making older Roku TVs inflate XMLTV.
+async function getRokuGuide(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const device = await deviceForToken(request, env);
+  // Reuse the exact managed lineup so device/group policies apply to guide access.
+  const lineup = lineupChannels(await (await getDeviceM3UPlaylist(request, env)).text());
+  const selected = new URL(request.url).searchParams.get("channel") || "";
+  if (selected && !lineup.some(c => c.id === selected)) return json({ error: "Channel not assigned to this Roku." }, 404);
+  let assigned = device.assigned_playlist_id;
+  if (!assigned && device.box_group_id) {
+    const groups = await supabaseJson(env, `/rest/v1/box_groups?id=eq.${encodeURIComponent(String(device.box_group_id))}&owner_id=eq.${device.owner_id}&select=playlist_id`) as Record<string, unknown>[];
+    assigned = groups[0]?.playlist_id;
+  }
+  const filter = assigned ? `id=eq.${encodeURIComponent(String(assigned))}` : "is_published=eq.true&order=created_at.asc";
+  const playlists = await supabaseJson(env, `/rest/v1/playlists?owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&${filter}&select=epg_url`) as Record<string, unknown>[];
+  const sources = assigned ? playlists.map(p => p.epg_url) : [device.epg_url || null, ...playlists.map(p => p.epg_url)];
+  const urls = [...new Set(sources.filter((s): s is string => typeof s === "string" && /^https?:\/\//i.test(s)))].slice(0,4);
+  if (!urls.length) urls.push("https://play.glztech.com/epg.xml.gz");
+  let xml = "", failures = 0;
+  // Cache decompressed guides briefly; no device bearer token is sent upstream.
+  const sourceHeaders = device.request_headers && typeof device.request_headers === "object" ? device.request_headers as Record<string,string> : {};
+  for (const url of urls) {
+    const cacheId = await sha256(url + JSON.stringify(sourceHeaders));
+    const cacheKey = new Request(`${new URL(request.url).origin}/__internal/roku-guide/${cacheId}`);
+    try {
+      let cached = await caches.default.match(cacheKey);
+      if (!cached) {
+        const local = new URL(url).origin === new URL(request.url).origin ? new URL(url).pathname.match(/^\/api\/v1\/guides\/([0-9a-f-]+)\.xml(?:\.gz)?$/i) : null;
+        const source = local ? await exportManagedGuide(request, env, ctx, local[1], false) : await fetch(url, { headers: { ...sourceHeaders, "user-agent":"GlzHub-RokuGuide/1.0", accept:"application/xml,text/xml,application/gzip,*/*" }, signal: AbortSignal.timeout(12000) });
+        if (!source.ok) throw new Error("Guide unavailable");
+        const text = await xmlTextFromResponse(source);
+        if (text.length + xml.length > 20 * 1024 * 1024 || !/<tv(?:\s|>)/i.test(text)) throw new Error("Invalid guide");
+        cached = new Response(text, {headers:{"content-type":"application/xml", "cache-control":"max-age=120"}});
+        ctx.waitUntil(caches.default.put(cacheKey,cached.clone()).catch(()=>undefined));
+      }
+      const part = await cached.text();
+      if (part.length + xml.length > 20 * 1024 * 1024) throw new Error("Guide too large");
+      xml += part;
+    } catch { failures++; }
+  }
+  return json({ ...projectGuide(xml,lineup,Math.floor(Date.now()/1000),selected), guideError: failures ? "Some guide sources could not load. Event details remain available." : null });
+}
+
 async function getDeviceRadioStreams(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
   const rows = await supabaseJson(
@@ -2873,6 +2917,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (install && request.method === "POST") return queueInstall(request, env, install[1]);
   if (path === "/api/v1/devices/config" && request.method === "GET") return deviceConfig(request, env);
   if (path === "/api/v1/devices/playlist.m3u" && request.method === "GET") return getDeviceM3UPlaylist(request, env);
+  if (path === "/api/v1/devices/guide" && request.method === "GET") return getRokuGuide(request, env, ctx);
   if (path === "/api/v1/devices/radio-streams" && request.method === "GET") return getDeviceRadioStreams(request, env);
   if (path === "/api/v1/devices/commands" && request.method === "GET") return pendingCommands(request, env);
   const result = path.match(/^\/api\/v1\/devices\/commands\/([0-9a-f-]+)\/result$/i);

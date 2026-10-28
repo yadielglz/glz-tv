@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="ExtrasTask" extends="Task">
+  <interface>
+    <field id="mode" type="string" />
+    <field id="channel" type="string" />
+    <field id="location" type="string" />
+    <field id="requestId" type="integer" />
+    <field id="result" type="assocarray" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/Catalog.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Features.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Http.brs" />
+  <script type="text/brightscript" uri="pkg:/components/ExtrasTask.brs" />
+</component>

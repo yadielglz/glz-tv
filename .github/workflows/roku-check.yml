@@ -3,9 +3,9 @@ name: Roku test build
 on:
   push:
     branches: [main]
-    paths: ["roku/**", ".github/workflows/roku-check.yml"]
+    paths: ["glzhub/**", "roku/**", ".github/workflows/roku-check.yml"]
   pull_request:
-    paths: ["roku/**", ".github/workflows/roku-check.yml"]
+    paths: ["glzhub/**", "roku/**", ".github/workflows/roku-check.yml"]
   workflow_dispatch:
 
 permissions:
@@ -20,7 +20,15 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: roku/package-lock.json
+          cache-dependency-path: |
+            roku/package-lock.json
+            glzhub/package-lock.json
+      - run: npm ci
+        working-directory: glzhub
+      - run: npm run check
+        working-directory: glzhub
+      - run: npm test
+        working-directory: glzhub
       - run: npm ci
         working-directory: roku
       - run: npm test

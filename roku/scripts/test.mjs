@@ -24,14 +24,15 @@ function run(files, root, marker) {
 }
 
 // Isolate pure parser tests from device-only SceneGraph components.
-run(['source/Catalog.brs', 'tests/catalog.brs'], 'tests', 'ALL CATALOG TESTS PASSED');
+run(['source/Catalog.brs', 'source/Features.brs', 'tests/catalog.brs'], 'tests', 'ALL CATALOG TESTS PASSED');
+run(['source/Catalog.brs', 'source/Features.brs', 'tests/features.brs'], 'tests', 'ALL FEATURE TESTS PASSED');
 
 // Run the production Hub workflow against deterministic network/device fixtures.
 // Only Roku I/O primitives are substituted; enrollment, credentials, catalog and
 // heartbeat behavior execute from the actual Task source.
 const scratch = mkdtempSync(join(tmpdir(), 'glz-roku-tests-'));
 try {
-  let source = readFileSync('components/HubTask.brs', 'utf8');
+  let source = readFileSync('source/Http.brs', 'utf8') + '\n' + readFileSync('components/HubTask.brs', 'utf8');
   source = source.replace(/function Http\([\s\S]*?end function/, `function Http(url as String, method as String, headers as Object, payload = "" as String) as Object\n    return TestHttp(url, method, headers, payload)\nend function`)
     .replaceAll('CreateObject("roAppInfo").GetValue("glz_version")', '"test-version"')
     .replaceAll('CreateObject("roRegistrySection", "GlzTV")', 'm.store')
@@ -40,5 +41,5 @@ try {
     .replaceAll('CreateObject("roDateTime").AsSeconds()', '1000');
   const task = join(scratch, 'HubTask.brs');
   writeFileSync(task, source);
-  run([resolve('source/Catalog.brs'), task, resolve('tests/hub.brs')], scratch, 'ALL HUB TESTS PASSED');
+  run([resolve('source/Catalog.brs'), resolve('source/Features.brs'), task, resolve('tests/hub.brs')], scratch, 'ALL HUB TESTS PASSED');
 } finally { rmSync(scratch, { recursive: true, force: true }); }

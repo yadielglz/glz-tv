@@ -1,0 +1,56 @@
+import { test, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
+import ts from 'typescript';
+const transpile=s=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const uri=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
+const guide=uri(transpile(readFileSync(new URL('../src/roku-guide.ts',import.meta.url),'utf8')));
+const source=transpile(readFileSync(new URL('../src/index.ts',import.meta.url),'utf8')).replace('"./roku-guide"',JSON.stringify(guide));
+const worker=(await import(uri(source))).default;
+const originalFetch=globalThis.fetch,originalCaches=globalThis.caches;
+let sourceCalls,providerStatus,seenHeaders,pending,cache;
+const device={id:'device-one',owner_id:'owner-one',assigned_playlist_id:'playlist-one',request_headers:{'X-Provider':'configured'},channel_policy_mode:'inherit'};
+const tokenHash=createHash('sha256').update('test-device-token').digest('hex');
+const env={SUPABASE_URL:'https://db.example',SUPABASE_SECRET_KEY:'backend-secret'};
+const stamp=ms=>new Date(ms).toISOString().replace(/[-:TZ.]/g,'').slice(0,14)+' +0000';
+function req(channel='',token='test-device-token') {return new Request('https://hub.example/api/v1/devices/guide'+(channel?'?channel='+encodeURIComponent(channel):''),{headers:token?{authorization:'Bearer '+token}:{}});}
+function run(request) {return worker.fetch(request,env,{waitUntil(p){pending.push(p);}});}
+beforeEach(()=>{
+ sourceCalls=0;providerStatus=200;seenHeaders=null;pending=[];cache=new Map();
+ globalThis.caches={default:{async match(key){return cache.get(key.url)?.clone();},async put(key,response){cache.set(key.url,response);}}};
+ globalThis.fetch=async(input,init)=>{
+  const url=new URL(typeof input==='string'?input:input.url);
+  if(url.hostname==='db.example') {
+   let rows=[];
+   if(url.pathname==='/rest/v1/devices') rows=url.searchParams.get('token_hash')==='eq.'+tokenHash?[device]:[];
+   else if(url.pathname==='/rest/v1/playlists') rows=[{id:'playlist-one',title:'Family',epg_url:'https://guide.example/epg.xml.gz',playlist_items:[{id:'a',title:'News',media_url:'https://media.example/a',metadata:{tvg_id:'a'}},{id:'b',title:'Blocked',media_url:'https://media.example/b',metadata:{tvg_id:'b'}}]}];
+   else if(url.pathname==='/rest/v1/channel_policy_rules') rows=[{target_type:'device',playlist_item_id:'b',decision:'block'}];
+   return Response.json(rows);
+  }
+  if(url.hostname==='guide.example') {
+   sourceCalls++;seenHeaders=new Headers(init?.headers);
+   const xml=`<tv><programme channel="a" start="${stamp(Date.now()-60000)}" stop="${stamp(Date.now()+3600000)}"><title>Allowed bulletin</title></programme><programme channel="b" start="${stamp(Date.now()-60000)}" stop="${stamp(Date.now()+3600000)}"><title>Blocked programme</title></programme></tv>`;
+   return new Response(providerStatus===200?gzipSync(xml):'offline',{status:providerStatus});
+  }
+  throw Error('Unexpected upstream '+url.hostname);
+ };
+});
+afterEach(()=>{globalThis.fetch=originalFetch;globalThis.caches=originalCaches;});
+test('device guide requires a valid device token before accessing sources',async()=>{
+ assert.equal((await run(req('',''))).status,401);assert.equal((await run(req('','bad-token'))).status,401);assert.equal(sourceCalls,0);
+});
+test('authenticated route decompresses gzip, enforces lineup policies and caches source data',async()=>{
+ const result=await run(req('a'));assert.equal(result.status,200);const body=await result.json();
+ assert.equal(body.programmes[0].title,'Allowed bulletin');assert.equal(body.summaries.b,undefined);
+ assert.equal(seenHeaders.get('authorization'),null);assert.equal(seenHeaders.get('x-provider'),'configured');
+ await Promise.all(pending);await run(req('a'));assert.equal(sourceCalls,1);
+});
+test('unassigned channel cannot be requested even by an authenticated Roku',async()=>{
+ assert.equal((await run(req('b'))).status,404);assert.equal(sourceCalls,0);
+});
+test('guide source failure returns a safe partial response without breaking device playback routes',async()=>{
+ providerStatus=503;const response=await run(req());assert.equal(response.status,200);
+ const body=await response.json();assert.ok(body.guideError);assert.equal(body.summaries.a.now,null);
+});

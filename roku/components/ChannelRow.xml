@@ -6,9 +6,10 @@
   </interface>
   <script type="text/brightscript" uri="pkg:/components/ChannelRow.brs" />
   <children>
-    <Rectangle id="rowBackground" width="738" height="62" color="0x101C30FF" />
-    <Rectangle id="focusBar" width="5" height="62" color="0x38BDF8FF" visible="false" />
-    <Label id="channelNumber" translation="[18,0]" width="86" height="62" color="0x65D5FFFF" vertAlign="center" font="font:SmallBoldSystemFont" />
-    <Label id="channelTitle" translation="[110,0]" width="608" height="62" color="0xFFFFFFFF" vertAlign="center" font="font:SmallSystemFont" />
+    <Rectangle id="rowBackground" width="586" height="72" color="0x101C30FF" />
+    <Rectangle id="focusBar" width="5" height="72" color="0x38BDF8FF" visible="false" />
+    <Label id="channelNumber" translation="[15,0]" width="74" height="72" color="0x65D5FFFF" vertAlign="center" font="font:SmallBoldSystemFont" />
+    <Label id="channelTitle" translation="[96,7]" width="472" height="30" font="font:SmallBoldSystemFont" />
+    <Label id="programmeTitle" translation="[96,39]" width="472" height="27" color="0xA5B9D2FF" font="font:SmallSystemFont" />
   </children>
 </component>

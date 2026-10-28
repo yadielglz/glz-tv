@@ -17,13 +17,18 @@ The first hardware test target is a TCL 32S301 (8102X) running Roku OS 16.0.
   re-downloads the lineup at least every five minutes for time-based events and
   externally updated M3U files, or sooner when Hub settings change.
 - Remembers its pairing and can resume the last channel when that Hub setting is enabled.
-- Refreshes the list through `*` → **Refresh channels**, and allows re-pairing after
+- Refreshes the list through `*` → **Refresh all**, and allows re-pairing after
   a local confirmation. Pairing codes expire after one hour and are renewed.
+
+- Shows now/next EPG and a 24-hour schedule for each assigned channel.
+- Shows active PPV event titles, leagues and start/end times from GlzHub.
+- Plays the radio stations configured in GlzHub, with audio continuing while browsing.
+- Shows current weather and a five-day forecast for the configured weather location.
 
 This is an installable development build, not a public Streaming Store app. It
 has passed compilation and offline parser/security tests. Physical playback,
 network pairing, and the exact 8102X remote/UI behavior still require on-device
-verification. No GlzHub deployment or database migration is needed for this build.
+verification. Build `26.X27.2300` requires a GlzHub redeploy for the guide endpoint. No database migration is needed.
 
 ## One-time TV setup
 
@@ -50,7 +55,7 @@ replaces any existing development app; normal installed store apps remain.
 6. On your phone/computer, open [GlzHub](https://glzhub.glztech.com), sign in,
    select **Pair a TV**, and enter that code. Give the Roku a recognizable name.
 7. Assign its TV playlist in the device's settings. The TV checks automatically;
-   press `*` → **Refresh channels** to fetch it immediately.
+   press `*` → **Refresh all** to fetch it immediately.
 
 Repeat installation and pairing separately on each family Roku. This development
 ZIP is not installed through a shared public channel code. Store/beta publishing
@@ -58,12 +63,14 @@ is a separate later step; Roku beta apps are time-limited.
 
 ## Remote controls
 
-- **Up / Down:** Browse the channel list.
-- **OK:** Play the selected channel.
-- **Back while watching:** Return to the channel list.
-- **Play/Pause while watching:** Native playback controls, where supported.
-- **`*` while watching:** Roku video options, including captions when available.
-- **`*` on the channel list:** Refresh channels or pair again.
+- **Left / Back:** Return to the section menu; choose Live TV, Guide, PPV, Radio or Weather.
+- **Up / Down:** Browse sections or items; **Right / OK** enters a section.
+- **OK:** Play a channel/station, or open a channel schedule in Guide.
+- **OK on a programme:** Show its details and an option to watch that channel live.
+- **Back while watching:** Return to the list.
+- **Play/Pause:** Control native video or the playing radio station.
+- **`*` while watching video:** Roku options, including available captions.
+- **`*` while browsing:** Refresh all, stop radio or pair again.
 - **Home:** Exit the app.
 
 ## Build or update from the repository
@@ -85,9 +92,17 @@ again after an update, use its newly displayed code.
 
 ## Scope and troubleshooting
 
-- Guide/EPG browsing, movies, app launching, Android APK updates, and GlzHub's
-  phone Cast controls are not part of this first Roku build. Open and control it
-  using the Roku remote.
+- Guide matching uses `tvg-id`, then XMLTV display names. Missing feed data is
+  shown as unavailable. Programme selection tunes live TV; it does not add catch-up.
+- The Hub parses up to four assigned EPG sources, with a 20 MiB aggregate decoded
+  limit and a two-minute source cache. The Roku receives compact summaries and at
+  most 96 entries for one channel's next 24 hours. Assign smaller feeds if needed.
+- PPV entries follow the Hub's active-event injection and channel policies. This
+  build does not add event sources or change provider access.
+- Weather uses Open-Meteo and the Hub's configured city; radio uses its station list.
+  Audio compatibility depends on the stream format and the Roku.
+- Movies, app launching, Android APK updates and phone Cast controls are outside
+  this build. Open and control the app using the Roku remote.
 - Native streams only; no server-side transcoding or DRM integration is added.
   Old TVs may reject HEVC/AV1, raw transport-stream URLs, or incompatible audio.
 - Source request headers and common M3U `EXTVLCOPT` user-agent/referrer directives

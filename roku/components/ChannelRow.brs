@@ -3,6 +3,7 @@ sub showItem()
     if item = invalid then return
     m.top.findNode("channelNumber").text = item.shortDescriptionLine1
     m.top.findNode("channelTitle").text = item.title
+    m.top.findNode("programmeTitle").text = item.description
 end sub
 
 sub showFocus()

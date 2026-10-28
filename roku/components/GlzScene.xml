@@ -1,34 +1,41 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <component name="GlzScene" extends="Scene">
   <script type="text/brightscript" uri="pkg:/source/Catalog.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Features.brs" />
   <script type="text/brightscript" uri="pkg:/components/GlzScene.brs" />
   <children>
     <Group id="browser">
       <Rectangle width="1280" height="720" color="0x080E1CFF" />
-      <Rectangle translation="[60,48]" width="6" height="42" color="0x38BDF8FF" />
-      <Label translation="[82,40]" width="600" height="58" text="Glz TV" font="font:LargeBoldSystemFont" />
-      <Label id="deviceName" translation="[700,54]" width="510" height="38" horizAlign="right" color="0x94A3B8FF" font="font:SmallSystemFont" />
-      <Label id="status" translation="[62,108]" width="1150" height="58" color="0xA5B9D2FF" wrap="true" font="font:SmallSystemFont" text="Connecting to GlzHub…" />
+      <Rectangle translation="[48,40]" width="6" height="44" color="0x38BDF8FF" />
+      <Label translation="[70,32]" width="520" height="60" text="Glz TV" font="font:LargeBoldSystemFont" />
+      <Label id="deviceName" translation="[650,38]" width="560" height="40" horizAlign="right" color="0x94A3B8FF" font="font:SmallSystemFont" />
+      <Label id="status" translation="[50,100]" width="1160" height="62" wrap="true" color="0xA5B9D2FF" text="Connecting to GlzHub…" font="font:SmallSystemFont" />
       <Group id="pairing" visible="false">
         <Label translation="[120,210]" width="1040" height="54" text="Pair this Roku with GlzHub" horizAlign="center" font="font:MediumBoldSystemFont" />
         <Rectangle translation="[340,292]" width="600" height="112" color="0x12314AFF" />
-        <Label id="pairingCode" translation="[340,292]" width="600" height="112" color="0x65D5FFFF" text="…" horizAlign="center" vertAlign="center" font="font:LargeBoldSystemFont" />
-        <Label translation="[120,438]" width="1040" height="92" wrap="true" text="On your phone or computer, open glzhub.glztech.com.&#10;Sign in → Pair a TV → enter this code." horizAlign="center" font="font:SmallSystemFont" />
-        <Label translation="[180,558]" width="920" height="62" text="This screen updates automatically after pairing.&#10;Press * for pairing options." wrap="true" horizAlign="center" color="0x94A3B8FF" font="font:SmallSystemFont" />
+        <Label id="pairingCode" translation="[340,292]" width="600" height="112" color="0x65D5FFFF" horizAlign="center" vertAlign="center" font="font:LargeBoldSystemFont" />
+        <Label translation="[120,438]" width="1040" height="110" wrap="true" text="Open glzhub.glztech.com on your phone or computer.&#10;Sign in → Pair a TV → enter this code.&#10;This screen updates automatically after pairing." horizAlign="center" font="font:SmallSystemFont" />
       </Group>
       <Group id="catalog" visible="false">
-        <MarkupList id="channelList" translation="[62,180]" itemComponentName="ChannelRow" itemSize="[738,62]" itemSpacing="[0,6]" numRows="6" drawFocusFeedback="false" vertFocusAnimationStyle="floatingFocus" />
-        <Rectangle translation="[838,180]" width="378" height="402" color="0x101C30FF" />
-        <Poster id="channelLogo" translation="[946,208]" width="160" height="100" loadDisplayMode="scaleToFit" />
-        <Label id="detailTitle" translation="[862,330]" width="330" height="90" wrap="true" font="font:MediumBoldSystemFont" />
-        <Label id="detailGroup" translation="[862,438]" width="330" height="66" wrap="true" color="0x65D5FFFF" font="font:SmallSystemFont" />
-        <Label translation="[862,526]" width="330" height="40" text="Press OK to watch" color="0x94A3B8FF" font="font:SmallSystemFont" />
-        <Label id="channelCount" translation="[62,604]" width="1150" height="42" color="0x94A3B8FF" font="font:SmallSystemFont" />
+        <LabelList id="sectionNav" translation="[50,185]" itemSize="[184,56]" itemSpacing="[0,8]" numRows="5" vertFocusAnimationStyle="fixedFocus" />
+        <Label id="sectionTitle" translation="[270,173]" width="940" height="42" color="0x65D5FFFF" text="Live TV" font="font:MediumBoldSystemFont" />
+        <MarkupList id="channelList" translation="[270,230]" itemComponentName="ChannelRow" itemSize="[586,72]" itemSpacing="[0,6]" numRows="5" drawFocusFeedback="false" vertFocusAnimationStyle="floatingFocus" />
+        <Group id="detailPanel" translation="[884,230]">
+          <Rectangle width="326" height="382" color="0x101C30FF" />
+          <Poster id="channelLogo" translation="[90,16]" width="146" height="76" loadDisplayMode="scaleToFit" />
+          <Label id="detailTitle" translation="[18,104]" width="290" height="72" wrap="true" font="font:SmallBoldSystemFont" />
+          <Label id="detailGroup" translation="[18,185]" width="290" height="172" wrap="true" color="0xA5B9D2FF" font="font:SmallSystemFont" />
+        </Group>
+        <Label id="weatherText" translation="[270,240]" width="940" height="370" visible="false" wrap="true" color="0xFFFFFFFF" font="font:SmallSystemFont" />
+        <Label id="channelCount" translation="[270,620]" width="940" height="34" color="0x94A3B8FF" font="font:SmallSystemFont" />
       </Group>
-      <Label translation="[62,660]" width="1150" height="32" text="OK  Watch     •     Back  Return / Exit     •     *  Options / Captions while watching" color="0x64748BFF" font="font:SmallSystemFont" />
+      <Label id="footer" translation="[50,670]" width="1160" height="32" text="Left / Back  Sections   •   OK  Select   •   *  Options / Captions while watching" color="0x94A3B8FF" font="font:SmallSystemFont" />
     </Group>
     <Video id="player" width="1280" height="720" visible="false" />
+    <Audio id="radioPlayer" />
     <HubTask id="hubTask" />
+    <ExtrasTask id="extrasTask" />
     <Timer id="syncTimer" duration="5" repeat="false" />
+    <Timer id="extrasTimer" duration="0.2" repeat="false" />
   </children>
 </component>
