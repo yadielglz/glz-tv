@@ -2,6 +2,19 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import assert from 'node:assert/strict';
+
+// The off-device interpreter preserves unquoted AA key casing, unlike Roku.
+// Require quoted keys for every JSON request payload before executing fixtures.
+const hubSource = readFileSync('components/HubTask.brs', 'utf8');
+const payloads = [...hubSource.matchAll(/\bpayload = \{([\s\S]*?)\n    \}/g)];
+assert.equal(payloads.length, 2, 'enrollment and heartbeat request payloads are checked');
+for (const [, body] of payloads) {
+  assert.ok(!/(?:^|[\n{,])\s*[A-Za-z_]\w*\s*:/m.test(body), 'JSON request keys must be quoted to preserve case on Roku');
+}
+assert.match(payloads[1][1], /"installationId"\s*:/);
+assert.match(payloads[1][1], /"appVersion"\s*:/);
+console.log('PASS: Roku API payload keys preserve exact JSON casing');
 
 function run(files, root, marker) {
   const result = spawnSync(process.execPath, ['node_modules/brs/bin/cli.js', '--root', root, ...files], { encoding: 'utf8' });
@@ -22,7 +35,7 @@ try {
   source = source.replace(/function Http\([\s\S]*?end function/, `function Http(url as String, method as String, headers as Object, payload = "" as String) as Object\n    return TestHttp(url, method, headers, payload)\nend function`)
     .replaceAll('CreateObject("roAppInfo").GetValue("glz_version")', '"test-version"')
     .replaceAll('CreateObject("roRegistrySection", "GlzTV")', 'm.store')
-    .replaceAll('CreateObject("roDeviceInfo").GetChannelClientId()', '"fixture-installation"')
+    .replaceAll('CreateObject("roDeviceInfo").GetRandomUUID()', '"fixture-installation"')
     .replaceAll('CreateObject("roDeviceInfo").GetModel()', '"8102X"')
     .replaceAll('CreateObject("roDateTime").AsSeconds()', '1000');
   const task = join(scratch, 'HubTask.brs');

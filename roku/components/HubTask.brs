@@ -73,10 +73,10 @@ sub ReportHeartbeat(config as Object, syncState as String, message as String)
     progress = 100
     if syncState = "failed" then progress = 0
     payload = {
-        appVersion: m.version
-        lastError: m.top.lastError
-        activity: { type: m.top.activityType, label: m.top.activityLabel }
-        sync: { status: syncState, progress: progress, message: message }
+        "appVersion": m.version
+        "lastError": m.top.lastError
+        "activity": { "type": m.top.activityType, "label": m.top.activityLabel }
+        "sync": { "status": syncState, "progress": progress, "message": message }
     }
     Http(m.hub + "/api/v1/devices/heartbeat", "POST", HubHeaders(), FormatJson(payload))
 end sub
@@ -91,9 +91,19 @@ sub runSync()
         m.registry.Delete("code")
         m.registry.Flush()
     end if
-    if not m.registry.Exists("installation")
-        m.registry.Write("installation", "roku-" + CreateObject("roDeviceInfo").GetChannelClientId())
-        m.registry.Flush()
+    m.installationId = Text(m.registry.Read("installation")).Trim()
+    if Len(m.installationId) < 6 or Len(m.installationId) > 128
+        m.installationId = "roku-" + CreateObject("roDeviceInfo").GetRandomUUID()
+        if Len(m.installationId) < 6 or Len(m.installationId) > 128
+            m.top.result = { status: "error", message: "The Roku could not create an installation ID. Restart the TV and try again." }
+            return
+        end if
+        m.registry.Write("installation", m.installationId)
+        saved = m.registry.Flush()
+        if not saved or m.registry.Read("installation") <> m.installationId
+            m.top.result = { status: "error", message: "The Roku could not save its device identity. Restart the TV and try again." }
+            return
+        end if
     end if
     m.token = m.registry.Read("token")
     expiry = m.registry.Read("expiry").ToInt()
@@ -157,10 +167,10 @@ end sub
 
 sub BeginEnrollment()
     payload = {
-        installationId: m.registry.Read("installation")
-        platform: "Roku TV"
-        model: CreateObject("roDeviceInfo").GetModel()
-        appVersion: m.version
+        "installationId": m.installationId
+        "platform": "Roku TV"
+        "model": CreateObject("roDeviceInfo").GetModel()
+        "appVersion": m.version
     }
     response = Http(m.hub + "/api/v1/enrollment", "POST", {}, FormatJson(payload))
     if response.code <> 201 and response.code <> 200

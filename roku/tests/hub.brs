@@ -4,6 +4,9 @@ sub Main()
     m.responses = [{code: 201, body: FormatJson({deviceToken: "glz_test_secret", pairingCode: "GLZ-ABC123"})}]
     runSync()
     Assert(m.top.result.status = "pending", "new device gets a pairing code")
+    request = ParseJson(m.requests[0].payload)
+    Assert(request["installationId"] = "roku-fixture-installation", "generated installation ID is sent in enrollment")
+    Assert(request["appVersion"] = "test-version", "enrollment includes version with exact JSON key")
     Assert(m.store.data.token = "glz_test_secret", "device token stays in registry")
     Assert(Instr(1, FormatJson(m.top.result), "secret") = 0, "pairing result contains no device token")
     m.responses = [{code: 401, body: ""}]
@@ -84,6 +87,17 @@ sub Main()
     m.responses = [{code: 400, body: FormatJson({error: "private glz_secret_token"})}]
     runSync()
     Assert(Instr(1, m.top.result.message, "glz_secret_token") = 0, "unknown error bodies do not expose secrets")
+    ResetTest()
+    m.store.data.installation = ""
+    m.responses = [{code: 201, body: FormatJson({deviceToken: "glz_test_secret", pairingCode: "GLZ-ABC123"})}]
+    runSync()
+    Assert(m.top.result.status = "pending" and m.store.data.installation = "roku-fixture-installation", "empty stored installation ID is repaired")
+    ResetTest()
+    m.store.data.installation = "roku-existing-device"
+    m.responses = [{code: 201, body: FormatJson({deviceToken: "glz_test_secret", pairingCode: "GLZ-ABC123"})}]
+    runSync()
+    request = ParseJson(m.requests[0].payload)
+    Assert(request["installationId"] = "roku-existing-device", "valid device identity stays stable")
     if m.failed > 0 then print "FAILURES: "; m.failed else print "ALL HUB TESTS PASSED"
 end sub
 

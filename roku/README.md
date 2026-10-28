@@ -104,6 +104,9 @@ again after an update, use its newly displayed code.
   `5xx` a Hub/backend error, and negative codes a Roku transport failure. It keeps
   TLS server verification enabled, omits unnecessary Roku client certificates,
   retains safe validation responses, and uses a descriptive app User-Agent.
+- Build `26.X27.2202` quotes API JSON keys so Roku preserves `installationId`,
+  `appVersion`, and `lastError` exactly. It also repairs blank stored installation
+  IDs with a saved app-specific UUID while keeping existing valid IDs stable.
 - For a launch/compile failure, the developer installer shows the error.
   Runtime logs are available on the TV's developer console at TCP port 8085.
   Do not publish logs that contain private provider URLs.
