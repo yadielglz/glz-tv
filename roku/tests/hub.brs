@@ -59,6 +59,31 @@ sub Main()
     m.responses = [{code: 201, body: FormatJson({deviceToken: "glz_repair", pairingCode: "GLZ-REP123"})}]
     runSync()
     Assert(m.top.result.status = "pending" and not m.store.data.DoesExist("paired"), "explicit repair clears previous authentication")
+
+    ResetTest()
+    m.responses = [{code: 403, body: "error code: 1010"}]
+    runSync()
+    Assert(Instr(1, m.top.result.message, "403") > 0 and Instr(1, m.top.result.message, "access denied") > 0, "pairing reports server access denial")
+    ResetTest()
+    m.responses = [{code: -60, body: ""}]
+    runSync()
+    Assert(Instr(1, m.top.result.message, "certificate") > 0, "pairing identifies certificate failures")
+    ResetTest()
+    m.responses = [{code: 400, body: FormatJson({error: "Invalid installationId"})}]
+    runSync()
+    Assert(Instr(1, m.top.result.message, "Invalid installationId") > 0, "server validation errors are retained")
+    ResetTest()
+    m.responses = [{code: 429, body: ""}]
+    runSync()
+    Assert(m.top.result.retryAfter = 60, "rate-limited pairing backs off")
+    ResetTest()
+    m.responses = [{code: 200, body: FormatJson({deviceToken: "glz_test_secret", pairingCode: "GLZ-ABC123"})}]
+    runSync()
+    Assert(m.top.result.status = "pending", "successful 200 enrollment responses are accepted after payload validation")
+    ResetTest()
+    m.responses = [{code: 400, body: FormatJson({error: "private glz_secret_token"})}]
+    runSync()
+    Assert(Instr(1, m.top.result.message, "glz_secret_token") = 0, "unknown error bodies do not expose secrets")
     if m.failed > 0 then print "FAILURES: "; m.failed else print "ALL HUB TESTS PASSED"
 end sub
 

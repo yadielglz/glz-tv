@@ -99,6 +99,11 @@ again after an update, use its newly displayed code.
 - If the TV says **Cannot reach GlzHub**, check Wi-Fi and verify GlzHub opens on
   another device. If a channel fails, try another channel first and report the
   channel name and displayed error (no stream token or account password needed).
+- Build `26.X27.2201` reports pairing HTTP/network codes instead of a generic
+  connection message. `403` indicates server access rules, `429` rate limiting,
+  `5xx` a Hub/backend error, and negative codes a Roku transport failure. It keeps
+  TLS server verification enabled, omits unnecessary Roku client certificates,
+  retains safe validation responses, and uses a descriptive app User-Agent.
 - For a launch/compile failure, the developer installer shows the error.
   Runtime logs are available on the TV's developer console at TCP port 8085.
   Do not publish logs that contain private provider URLs.

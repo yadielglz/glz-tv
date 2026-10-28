@@ -108,7 +108,9 @@ sub onHubResult()
         scheduleSync(60)
     else
         m.status.text = Text(result.message, "Network error. Retrying shortly.")
-        scheduleSync(15)
+        retry = 15
+        if result.retryAfter <> invalid then retry = result.retryAfter
+        scheduleSync(retry)
     end if
 end sub
 
