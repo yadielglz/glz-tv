@@ -50,9 +50,13 @@ export function projectGuide(xml: string, channels: GuideChannel[], now: number,
     if (selected===id) { if (list.length>96) list.length=96; }
     else { const current=list.filter(p=>p.start<=now && p.end>now).at(-1); const next=list.find(p=>p.start>now); list.splice(0,list.length,...(current?[current]:[]),...(next?[next]:[])); }
   };
+  let programmeCount = 0, latestEnd = 0, matchedProgrammes = 0;
   for (const m of xml.matchAll(/<programme\b([^>]*)>([\s\S]*?)<\/programme>/gi)) {
-    const keys=ids.get(normalize(attr(m[1],'channel'))); if (!keys) continue;
     const start=xmltvTime(attr(m[1],'start')), end=xmltvTime(attr(m[1],'stop'));
+    if (!start || end <= start) continue;
+    programmeCount++; latestEnd = Math.max(latestEnd,end);
+    const keys=ids.get(normalize(attr(m[1],'channel'))); if (!keys) continue;
+    matchedProgrammes++;
     if (end<=now || start>now+86400) continue;
     const title=xmlText(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(m[2])?.[1] || 'Programme').slice(0,200);
     const description=xmlText(/<desc\b[^>]*>([\s\S]*?)<\/desc>/i.exec(m[2])?.[1] || '').slice(0,selected?1200:200);
@@ -61,5 +65,11 @@ export function projectGuide(xml: string, channels: GuideChannel[], now: number,
   for (const c of channels) if (c.eventTitle) insert(c.id,{title:c.eventTitle,description:`${c.league || 'Sports'} live event`,start:c.start,end:c.end});
   const summaries: Record<string,{now:Programme|null;next:Programme|null}> = Object.create(null);
   for (const [id,list] of rows) summaries[id]={now:list.filter(p=>p.start<=now && p.end>now).at(-1)||null,next:list.find(p=>p.start>now)||null};
-  return { generatedAt:now, summaries, programmes: selected ? rows.get(selected)||[] : [] };
+  const hasListings = Object.values(summaries).some(s => s.now || s.next);
+  let guideError: string | null = null;
+  if (channels.length && !programmeCount) guideError = "The EPG feed contains no valid programmes. Update the assigned playlist's XMLTV source in GlzHub.";
+  else if (programmeCount && latestEnd <= now) guideError = `The EPG feed has expired (last programme ends ${new Date(latestEnd*1000).toISOString().slice(0,10)} UTC). Refresh or replace the playlist's XMLTV source in GlzHub.`;
+  else if (programmeCount && channels.length && !matchedProgrammes) guideError = "EPG channel IDs and names do not match this lineup. Check channel mappings in GlzHub.";
+  else if (programmeCount && channels.length && !hasListings) guideError = "The EPG has no listings for this lineup in the next 24 hours. Update its XMLTV source in GlzHub.";
+  return { generatedAt:now, summaries, programmes: selected ? rows.get(selected)||[] : [], guideError };
 }

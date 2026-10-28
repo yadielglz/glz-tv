@@ -42,3 +42,17 @@ test('shared SPORTS PPV display names never merge distinct event IDs',()=>{
  const guide=projectGuide(`<tv><channel id="e1"><display-name>SPORTS PPV</display-name></channel><channel id="e2"><display-name>SPORTS PPV</display-name></channel><programme channel="e1" start="20261027190000 +0000" stop="20261027203000 +0000"><title>First event only</title></programme></tv>`,list,now);
  assert.notEqual(guide.summaries.e2.now.title,'First event only');
 });
+
+test('expired default feed is reported even when PPV metadata is available',()=>{
+ const stale=xml.replaceAll('20261027','20260802');
+ const guide=projectGuide(stale,channels,now);
+ assert.match(guide.guideError,/expired.*2026-08-02/);
+ assert.equal(guide.summaries.a.now,null);
+ assert.equal(guide.summaries.e.now.title,'Team A vs Team B');
+});
+test('guide diagnostics distinguish empty, unmatched and future-only feeds',()=>{
+ assert.match(projectGuide('<tv/>',channels,now).guideError,/no valid programmes/);
+ assert.match(projectGuide(xml.replaceAll('provider-a','different-id').replaceAll('Local News','Different channel'),[channels[0]],now).guideError,/do not match/);
+ assert.match(projectGuide(xml.replaceAll('20261027','20261030'),[channels[0]],now).guideError,/next 24 hours/);
+ assert.equal(projectGuide(xml,channels,now).guideError,null);
+});

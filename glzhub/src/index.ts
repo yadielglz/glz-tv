@@ -2860,7 +2860,9 @@ async function getRokuGuide(request: Request, env: Env, ctx: ExecutionContext): 
       xml += part;
     } catch { failures++; }
   }
-  return json({ ...projectGuide(xml,lineup,Math.floor(Date.now()/1000),selected), guideError: failures ? "Some guide sources could not load. Event details remain available." : null });
+  const guide = projectGuide(xml,lineup,Math.floor(Date.now()/1000),selected);
+  const guideError = [guide.guideError, failures ? "Some EPG sources could not load. Check the playlist's guide URL and try Refresh." : null].filter(Boolean).join(" ") || null;
+  return json({ ...guide, guideError });
 }
 
 async function getDeviceRadioStreams(request: Request, env: Env): Promise<Response> {

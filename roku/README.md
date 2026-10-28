@@ -92,6 +92,12 @@ again after an update, use its newly displayed code.
 
 ## Scope and troubleshooting
 
+- Build `26.X27.2301` shows feed errors in Guide and channel details, including
+  expired programme dates, empty feeds and channel-ID mismatches. A successful
+  download of an expired XMLTV file cannot supply current listings. Publish a
+  current guide for the assigned playlist in GlzHub, then refresh the Roku.
+
+
 - Guide matching uses `tvg-id`, then XMLTV display names. Missing feed data is
   shown as unavailable. Programme selection tunes live TV; it does not add catch-up.
 - The Hub parses up to four assigned EPG sources, with a 20 MiB aggregate decoded

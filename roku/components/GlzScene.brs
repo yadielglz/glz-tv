@@ -103,11 +103,11 @@ sub onHubResult()
             m.weatherError = "" : m.weatherLocation = location : m.weatherAge = 0
             queueExtra("weather")
         end if
-        renderRows()
         m.status.text = "GlzHub connected · Select a section on the left"
         if result.omitted <> invalid
             if result.omitted > 0 then m.status.text = "Showing the first 1,500 channels. Assign a smaller lineup in GlzHub."
         end if
+        renderRows()
         if not m.autoStarted
             m.autoStarted = true : m.list.SetFocus(true)
             if config.resumeLastChannel = true and Text(result.lastChannel) <> ""
@@ -156,7 +156,7 @@ sub onExtraResult()
     if Text(result.error) <> ""
         if result.mode = "summary" or result.mode = "guide"
             m.guideError = result.error
-            if m.view = "guide" or m.view = "schedule" then m.status.text = result.error
+            renderRows()
         else if result.mode = "weather"
             if result.location = m.weatherLocation
                 m.weatherError = result.error
@@ -265,6 +265,13 @@ sub renderRows()
         if m.view = "events" then m.status.text = "No active PPV events in the current lineup."
         if m.view = "radio" then m.status.text = "No radio stations loaded. Manage stations in GlzHub or choose Refresh."
     end if
+    if m.view = "guide" or m.view = "schedule"
+        if m.guideError <> ""
+            m.status.text = m.guideError
+        else
+            m.status.text = "Guide loaded · Select a channel or programme for details"
+        end if
+    end if
     showDetails() : updateFooter()
 end sub
 
@@ -289,7 +296,9 @@ sub showDetails()
         m.top.findNode("detailGroup").text = row.group + Chr(10) + "OK to listen. Audio continues while browsing other sections."
     else
         summary = m.summaries[row.id]
-        description = "Now: " + ProgrammeLine(CurrentProgramme(summary, CreateObject("roDateTime").AsSeconds()))
+        current = CurrentProgramme(summary, CreateObject("roDateTime").AsSeconds())
+        description = "Now: " + ProgrammeLine(current)
+        if current = invalid and m.guideError <> "" then description = m.guideError
         if type(summary) = "roAssociativeArray"
             if summary.next <> invalid then description += Chr(10) + "Next: " + ProgrammeLine(summary.next)
         end if
