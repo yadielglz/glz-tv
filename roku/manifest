@@ -1,0 +1,10 @@
+title=Glz TV
+major_version=26
+minor_version=1027
+build_version=2200
+glz_version=26.X27.2200
+ui_resolutions=hd
+splash_color=#080E1C
+
+mm_icon_focus_hd=pkg:/images/icon.png
+mm_icon_side_hd=pkg:/images/icon.png

@@ -13,3 +13,5 @@ captures/
 *.keystore
 key.properties
 .kotlin/
+roku/dist/
+roku/out/

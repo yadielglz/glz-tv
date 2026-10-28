@@ -1,0 +1,14 @@
+{
+  "name": "glz-tv-roku",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "check": "bsc --project bsconfig.json",
+    "test": "node scripts/test.mjs",
+    "build": "bsc --project bsconfig.json --create-package --copy-to-staging --out-file dist/Glz-TV-Roku.zip --staging-dir out"
+  },
+  "devDependencies": {
+    "brighterscript": "^0.70.0",
+    "brs": "^0.45.0"
+  }
+}

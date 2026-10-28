@@ -1,0 +1,34 @@
+name: Roku test build
+
+on:
+  push:
+    branches: [main]
+    paths: ["roku/**", ".github/workflows/roku-check.yml"]
+  pull_request:
+    paths: ["roku/**", ".github/workflows/roku-check.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: roku/package-lock.json
+      - run: npm ci
+        working-directory: roku
+      - run: npm test
+        working-directory: roku
+      - run: npm run build
+        working-directory: roku
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Glz-TV-Roku
+          path: roku/dist/Glz-TV-Roku.zip
+          if-no-files-found: error

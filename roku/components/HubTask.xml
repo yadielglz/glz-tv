@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="HubTask" extends="Task">
+  <interface>
+    <field id="action" type="string" value="sync" />
+    <field id="knownVersion" type="string" />
+    <field id="knownRefresh" type="string" />
+    <field id="force" type="boolean" value="false" />
+    <field id="activityType" type="string" value="idle" />
+    <field id="activityLabel" type="string" />
+    <field id="lastChannel" type="string" />
+    <field id="lastError" type="string" />
+    <field id="result" type="assocarray" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/source/Catalog.brs" />
+  <script type="text/brightscript" uri="pkg:/components/HubTask.brs" />
+</component>

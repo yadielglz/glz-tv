@@ -29,6 +29,13 @@ Android Media3.
   EPG sources, themes, startup screens, and visible entertainment apps
 - Automatic GitHub Release checks with an on-TV download and installation prompt
 
+## Roku family test app
+
+The [`roku/`](roku/README.md) directory contains a native Roku app that pairs
+with GlzHub, receives its assigned managed channel lineup, and uses Roku's native
+video player and caption controls. See the Roku README for Developer Mode setup,
+installation, build commands, and the limits of this first hardware test build.
+
 ## GLZ Hub management
 
 The `glzhub/` directory contains the Cloudflare Worker portal and Supabase
