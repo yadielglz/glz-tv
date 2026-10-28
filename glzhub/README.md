@@ -193,9 +193,17 @@ now/next summaries only for channels in the device's filtered managed M3U lineup
 `?channel=<tvg-id-or-title>` also returns up to 96 programme entries over the next
 24 hours for that assigned channel; an unassigned channel returns 404.
 
-Assigned XMLTV feeds are decompressed and projected on the Worker. Up to four
-sources share a 20 MiB decoded limit, and raw source results are cached for 120
-seconds by source URL and configured headers. Device credentials never go to
+The guide uses the same source resolver as Android's device configuration:
+the assigned device/group playlist's EPG, or the device override / first published
+playlist when no playlist is assigned, followed by Android's built-in default
+`https://play.glztech.com/epg.xml.gz` if unset. Android can retain a URL saved
+locally when Hub config has none; that TV-local preference is not visible to Roku.
+
+XMLTV is decompressed and projected on the Worker with a 20 MiB decoded limit;
+raw source results are cached for 120 seconds by URL and configured headers.
+Channel matching follows Android: exact tvg-id first, then cleaned/normalized names
+and partial-name fallback. Generic PPV names never alias unrelated event IDs.
+The parser accepts Android's abbreviated dates and UTC/colon-offset timestamps. Device credentials never go to
 external feeds. Active event metadata provides PPV details when XMLTV is missing.
 Feed errors return partial data with `guideError`; playback remains independent.
 Deploy this Worker with the Roku 26.X27.2300 update; no SQL migration is needed.

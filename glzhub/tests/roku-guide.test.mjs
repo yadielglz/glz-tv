@@ -56,3 +56,24 @@ test('guide diagnostics distinguish empty, unmatched and future-only feeds',()=>
  assert.match(projectGuide(xml.replaceAll('20261027','20261030'),[channels[0]],now).guideError,/next 24 hours/);
  assert.equal(projectGuide(xml,channels,now).guideError,null);
 });
+
+test('Android-style channel matching handles numbered names, punctuation and suffixes',()=>{
+ const list=[{...channels[0],id:'lineup-cnn',title:'CH 12 · CNN HD'}];
+ const feed=`<tv><channel id="provider.cnn"><display-name>C.N.N.</display-name></channel><programme channel="provider.cnn" start="20261027190000 +0000" stop="20261027210000 +0000"><title>Current news</title></programme></tv>`;
+ const guide=projectGuide(feed,list,now);
+ assert.equal(guide.summaries['lineup-cnn'].now.title,'Current news');assert.equal(guide.guideError,null);
+});
+test('exact tvg-id wins over a fuzzy display-name match and generic events never alias',()=>{
+ const list=[{...channels[0],title:'Other channel'},{...channels[1],id:'unknown-event',eventTitle:''}];
+ const feed=`<tv><channel id="other"><display-name>Other channel</display-name><display-name>SPORTS PPV</display-name></channel><programme channel="a" start="20261027190000 +0000" stop="20261027210000 +0000"><title>Exact ID</title></programme><programme channel="other" start="20261027190000 +0000" stop="20261027210000 +0000"><title>Wrong alias</title></programme></tv>`;
+ const guide=projectGuide(feed,list,now);
+ assert.equal(guide.summaries.a.now.title,'Exact ID');assert.equal(guide.summaries['unknown-event'].now,null);
+});
+test('Android-supported XMLTV timestamp variants keep UTC and offset semantics',()=>{
+ assert.equal(xmltvTime('202610271600 -04:00'),now);
+ assert.equal(xmltvTime('2026102720 UTC'),now);
+ assert.equal(xmltvTime('20261027200000 GMT'),now);
+ assert.equal(xmltvTime('20261027'),xmltvTime('20261027000000 +0000'));
+ assert.equal(xmltvTime('20261027200000 +99:00'),0);
+ assert.equal(xmltvTime('20260231000000 +0000'),0);
+});

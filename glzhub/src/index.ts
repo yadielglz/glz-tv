@@ -548,20 +548,8 @@ async function unpairDevice(request: Request, env: Env, deviceId: string): Promi
   return json({ ok: true });
 }
 
-async function deviceConfig(request: Request, env: Env): Promise<Response> {
-  const device = await deviceForToken(request, env);
-  if (device.sync_status === "queued") {
-    supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}`, {
-      method: "PATCH",
-      headers: { prefer: "return=minimal" },
-      body: JSON.stringify({
-        sync_status: "syncing",
-        sync_progress: 25,
-        sync_message: "TV applying configuration",
-        sync_updated_at: new Date().toISOString()
-      })
-    }).catch(() => null);
-  }
+// Shared by Android configuration and Roku guide projection to keep source selection identical.
+async function deviceSources(request: Request, env: Env, device: Record<string, unknown>) {
   const origin = new URL(request.url).origin;
   const managedPlaylistUrl = `${origin}/api/v1/devices/playlist.m3u`;
   let managedEpgUrl: unknown = null;
@@ -577,11 +565,29 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
   const playlistUrl = hasManagedAssignment ? managedPlaylistUrl : (device.playlist_url || managedPlaylistUrl);
   if (hasManagedAssignment || !device.epg_url) {
     const playlistFilter = effectivePlaylistId
-      ? `id=eq.${encodeURIComponent(String(effectivePlaylistId))}`
+      ? `owner_id=eq.${device.owner_id}&id=eq.${encodeURIComponent(String(effectivePlaylistId))}`
       : `owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&is_published=eq.true&order=created_at.asc&limit=1`;
     const assigned = await supabaseJson(env, `/rest/v1/playlists?${playlistFilter}&select=id,epg_url`) as Record<string, unknown>[];
     if (assigned[0]?.epg_url) managedEpgUrl = assigned[0].epg_url;
   }
+  return { playlistUrl, epgUrl: hasManagedAssignment ? managedEpgUrl : (device.epg_url || managedEpgUrl) };
+}
+
+async function deviceConfig(request: Request, env: Env): Promise<Response> {
+  const device = await deviceForToken(request, env);
+  if (device.sync_status === "queued") {
+    supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}`, {
+      method: "PATCH",
+      headers: { prefer: "return=minimal" },
+      body: JSON.stringify({
+        sync_status: "syncing",
+        sync_progress: 25,
+        sync_message: "TV applying configuration",
+        sync_updated_at: new Date().toISOString()
+      })
+    }).catch(() => null);
+  }
+  const { playlistUrl, epgUrl } = await deviceSources(request, env, device);
   let profiles = device.site_id ? await supabaseJson(env,
     `/rest/v1/guest_experience_profiles?site_id=eq.${device.site_id}&owner_id=eq.${device.owner_id}&select=*`
   ) as Record<string, unknown>[] : [];
@@ -604,7 +610,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     deviceName: device.name,
     guestName: device.guest_name,
     playlistUrl,
-    epgUrl: hasManagedAssignment ? managedEpgUrl : (device.epg_url || managedEpgUrl),
+    epgUrl,
     requestHeaders: device.request_headers ?? {},
     visibleApps: device.visible_apps ?? [],
     themeMode: device.theme_mode,
@@ -2828,16 +2834,10 @@ async function getRokuGuide(request: Request, env: Env, ctx: ExecutionContext): 
   const lineup = lineupChannels(await (await getDeviceM3UPlaylist(request, env)).text());
   const selected = new URL(request.url).searchParams.get("channel") || "";
   if (selected && !lineup.some(c => c.id === selected)) return json({ error: "Channel not assigned to this Roku." }, 404);
-  let assigned = device.assigned_playlist_id;
-  if (!assigned && device.box_group_id) {
-    const groups = await supabaseJson(env, `/rest/v1/box_groups?id=eq.${encodeURIComponent(String(device.box_group_id))}&owner_id=eq.${device.owner_id}&select=playlist_id`) as Record<string, unknown>[];
-    assigned = groups[0]?.playlist_id;
-  }
-  const filter = assigned ? `id=eq.${encodeURIComponent(String(assigned))}` : "is_published=eq.true&order=created_at.asc";
-  const playlists = await supabaseJson(env, `/rest/v1/playlists?owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&${filter}&select=epg_url`) as Record<string, unknown>[];
-  const sources = assigned ? playlists.map(p => p.epg_url) : [device.epg_url || null, ...playlists.map(p => p.epg_url)];
-  const urls = [...new Set(sources.filter((s): s is string => typeof s === "string" && /^https?:\/\//i.test(s)))].slice(0,4);
-  if (!urls.length) urls.push("https://play.glztech.com/epg.xml.gz");
+  const { epgUrl } = await deviceSources(request, env, device);
+  // Android uses this same config value, then its built-in default when unset.
+  const sourceUrl = typeof epgUrl === "string" && epgUrl.trim() ? epgUrl.trim() : "https://play.glztech.com/epg.xml.gz";
+  const urls = [sourceUrl];
   let xml = "", failures = 0;
   // Cache decompressed guides briefly; no device bearer token is sent upstream.
   const sourceHeaders = device.request_headers && typeof device.request_headers === "object" ? device.request_headers as Record<string,string> : {};

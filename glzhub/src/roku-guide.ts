@@ -1,7 +1,10 @@
 /** Small, bounded XMLTV projections for memory-constrained Roku clients. */
 export type GuideChannel = { id: string; title: string; eventTitle: string; league: string; start: number; end: number };
 export type Programme = { title: string; description: string; start: number; end: number };
-const normalize = (s: string) => s.toLocaleLowerCase().replace(/\s+/g, ' ').trim();
+// Match the Android EpgGuide's name cleanup and normalization.
+const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const cleanName = (s: string) => s.replace(/^(?:ch\s*)?\d+\s*[·.\-:|\s]\s*/i, '').trim();
+const genericNames = new Set(['sportsppv', 'ppv', 'liveevent', 'liveevents']);
 export function xmlText(s: string): string {
   return s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, '')
     .replace(/&#(x[\da-f]+|\d+);/gi, (_m, n: string) => { const c = n[0].toLowerCase() === 'x' ? parseInt(n.slice(1),16) : Number(n); return c > 0 && c <= 0x10ffff ? String.fromCodePoint(c) : ''; })
@@ -22,22 +25,50 @@ export function lineupChannels(m3u: string): GuideChannel[] {
   return channels.slice(0,1500);
 }
 export function xmltvTime(value: string): number {
-  const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?(?:\s*(Z|[+-]\d{4}))?$/.exec(value.trim());
+  const m = /^(\d{8}(?:\d{2}){0,3})(?:\s*(Z|UTC|GMT|[+-]\d{2}(?::?\d{2})?))?$/i.exec(value.trim());
   if (!m) return 0;
-  const zone = m[7] || 'Z'; const sign = zone[0] === '-' ? -1 : 1;
-  const offset = zone === 'Z' ? 0 : sign * (Number(zone.slice(1,3))*60 + Number(zone.slice(3,5)))*60;
-  const stamp = Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+(m[6] || 0))/1000-offset;
-  return Number.isFinite(stamp) ? stamp : 0;
+  const digits=m[1].padEnd(14,'0');
+  const year=+digits.slice(0,4), month=+digits.slice(4,6), day=+digits.slice(6,8);
+  const hour=+digits.slice(8,10), minute=+digits.slice(10,12), second=+digits.slice(12,14);
+  if (month<1 || month>12 || day<1 || day>31 || hour>23 || minute>59 || second>59) return 0;
+  const utc=Date.UTC(year,month-1,day,hour,minute,second);
+  if (new Date(utc).getUTCDate()!==day) return 0;
+  const zone=(m[2]||'Z').replace(':','');
+  const hours=/^[+-]/.test(zone)?+zone.slice(1,3):0, minutes=zone.length>3?+zone.slice(3,5):0;
+  if (hours>23 || minutes>59) return 0;
+  const offset=(zone[0]==='-'?-1:1)*(hours*60+minutes)*60;
+  return utc/1000-offset;
 }
 export function projectGuide(xml: string, channels: GuideChannel[], now: number, selected = '') {
   const ids = new Map<string,string[]>();
-  const add = (alias: string, id: string) => { const key=normalize(alias); if (!key) return; const values=ids.get(key)||[]; if (!values.includes(id)) values.push(id); ids.set(key,values); };
-  for (const c of channels) { add(c.id,c.id); add(c.title,c.id); }
-  // Match XML channel display names when provider IDs differ from the playlist.
+  const add = (alias: string, id: string) => { if (!alias) return; const values=ids.get(alias)||[]; if (!values.includes(id)) values.push(id); ids.set(alias,values); };
+  const guideIds = new Set<string>();
+  const names = new Map<string,string>();
+  const addName = (name: string, id: string) => {
+    const key=normalize(name);
+    if (key && !genericNames.has(key) && !names.has(key)) names.set(key,id);
+  };
   for (const m of xml.matchAll(/<channel\b([^>]*)>([\s\S]*?)<\/channel>/gi)) {
-    const id=attr(m[1],'id'); const matched=new Set<string>(ids.get(normalize(id))||[]);
-    if (!matched.size) for (const name of m[2].matchAll(/<display-name\b[^>]*>([\s\S]*?)<\/display-name>/gi)) for (const key of ids.get(normalize(xmlText(name[1])))||[]) matched.add(key);
-    for (const key of matched) add(id,key);
+    const id=attr(m[1],'id'); guideIds.add(id);
+    for (const name of m[2].matchAll(/<display-name\b[^>]*>([\s\S]*?)<\/display-name>/gi)) {
+      const text=xmlText(name[1]); addName(text,id); addName(cleanName(text),id);
+    }
+  }
+  for (const m of xml.matchAll(/<programme\b([^>]*)>/gi)) guideIds.add(attr(m[1],'channel'));
+  for (const c of channels) {
+    // Exact tvg-id always wins; name fallback follows Android's order.
+    if (guideIds.has(c.id)) { add(c.id,c.id); continue; }
+    const clean=normalize(cleanName(c.title)), raw=normalize(c.title);
+    if (genericNames.has(clean) || genericNames.has(raw)) continue;
+    let match=names.get(clean)||names.get(raw);
+    if (!match) for (const key of [clean,raw]) {
+      if (key.length<3) continue;
+      for (const [name,id] of names) {
+        if (name.length>=3 && (key.includes(name)||name.includes(key))) { match=id; break; }
+      }
+      if (match) break;
+    }
+    if (match) add(match,c.id);
   }
   const rows = new Map<string,Programme[]>();
   for (const c of channels) rows.set(c.id,[]);
@@ -55,7 +86,7 @@ export function projectGuide(xml: string, channels: GuideChannel[], now: number,
     const start=xmltvTime(attr(m[1],'start')), end=xmltvTime(attr(m[1],'stop'));
     if (!start || end <= start) continue;
     programmeCount++; latestEnd = Math.max(latestEnd,end);
-    const keys=ids.get(normalize(attr(m[1],'channel'))); if (!keys) continue;
+    const keys=ids.get(attr(m[1],'channel')); if (!keys) continue;
     matchedProgrammes++;
     if (end<=now || start>now+86400) continue;
     const title=xmlText(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(m[2])?.[1] || 'Programme').slice(0,200);

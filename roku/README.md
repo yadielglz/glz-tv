@@ -100,7 +100,7 @@ again after an update, use its newly displayed code.
 
 - Guide matching uses `tvg-id`, then XMLTV display names. Missing feed data is
   shown as unavailable. Programme selection tunes live TV; it does not add catch-up.
-- The Hub parses up to four assigned EPG sources, with a 20 MiB aggregate decoded
+- The Hub uses Android's configured EPG source, with a 20 MiB decoded
   limit and a two-minute source cache. The Roku receives compact summaries and at
   most 96 entries for one channel's next 24 hours. Assign smaller feeds if needed.
 - PPV entries follow the Hub's active-event injection and channel policies. This
