@@ -465,7 +465,7 @@ internal fun TvScreen(
     }
 
     val radioDataSourceFactory = remember {
-        DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}")
+        DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}").setAllowCrossProtocolRedirects(true)
     }
     val radioPlayer = remember {
         ExoPlayer.Builder(context)
@@ -672,7 +672,7 @@ internal fun TvScreen(
                 else "Couldn't load channels — check your connection or Settings"
             }
         }
-        loading = false
+        loading = false; runCatching { withContext(Dispatchers.IO) { RadioCatalogManager.load(prefs, client).stations } }.onSuccess { radioStations = it }
         if (forceRefresh) refreshResult.exceptionOrNull()?.let { throw it }
     }
 
@@ -701,7 +701,7 @@ internal fun TvScreen(
         val syncResult = withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
         report(20, "Configuration received")
         val radioCount = withContext(Dispatchers.IO) {
-            RadioCatalogManager.load(prefs, client).stations.size
+            val loadedStations = RadioCatalogManager.load(prefs, client).stations; radioStations = loadedStations; loadedStations.size
         }
         report(35, "Radio stations updated")
         for (command in syncResult.commands) {
@@ -1237,7 +1237,7 @@ internal fun TvScreen(
                         prefs.edit().putStringSet(FAVORITES, favorites).apply()
                     },
                     onOpenGuide = { section = AppSection.Live },
-                    onOpenRadio = { section = AppSection.Radio },
+                    onOpenRadio = { stopRadio(); section = AppSection.Radio },
                     onOpenWeather = { showWeatherModal = true },
                     onOpenSettings = { showSettings = true },
                     onOpenWelcome = { showYouModal = true },

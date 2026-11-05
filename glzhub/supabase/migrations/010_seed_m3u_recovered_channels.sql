@@ -157,7 +157,7 @@ BEGIN
   END IF;
 
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
-  VALUES (v_owner_id, $str$RADIO_WORO$str$, $str$FM 92.5 | RADIO ORO$str$, $str$FM Radio$str$, $str$https://us2.internet-radio.com/proxy/woro?mp=/stream$str$, $str$https://i.ibb.co/nqbSmS1M/worofm-processed.png$str$, $str$radio.woro$str$)
+  VALUES (v_owner_id, $str$RADIO_WORO$str$, $str$FM 92.5 | RADIO ORO$str$, $str$FM Radio$str$, $str$https://streams.proftsc.com/listen/woro/woro.mp3$str$, $str$https://i.ibb.co/nqbSmS1M/worofm-processed.png$str$, $str$radio.woro$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
   VALUES (v_owner_id, $str$RADIO_WZNT$str$, $str$FM 93.7 | Z 93$str$, $str$FM Radio$str$, $str$https://liveaudio.lamusica.com/PR_WZNT_icy$str$, $str$https://i.ibb.co/23BMsKBY/wznt-png.png$str$, $str$radio.wznt$str$)
@@ -172,34 +172,34 @@ BEGIN
   VALUES (v_owner_id, $str$RADIO_WRXD$str$, $str$FM 96.5 | ESTEREOTEMPO$str$, $str$FM Radio$str$, $str$https://liveaudio.lamusica.com/PR_WRXD_icy$str$, $str$https://i.ibb.co/F4GM0W81/wrxr.png$str$, $str$radio.wrxd$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
-  VALUES (v_owner_id, $str$RADIO_WOYE$str$, $str$FM 97.3 | MAGIC$str$, $str$FM Radio$str$, $str$https://stream.eleden.com:8210/magic.aac$str$, $str$https://i.ibb.co/Z6WqXPzV/woye.png$str$, $str$radio.woye$str$)
+  VALUES (v_owner_id, $str$RADIO_WOYE$str$, $str$FM 97.3 | MAGIC$str$, $str$FM Radio$str$, $str$https://a4.asurahosting.com:6760/radio.mp3$str$, $str$https://i.ibb.co/Z6WqXPzV/woye.png$str$, $str$radio.woye$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
   VALUES (v_owner_id, $str$RADIO_WPRM$str$, $str$FM 99.1 | SALSOUL$str$, $str$FM Radio$str$, $str$https://server20.servistreaming.com:9023/stream?type=.mp3&_=1$str$, $str$https://i.iheart.com/v3/catalog/live/8544?ops=ratio%281%2C1%29%2Cscale%28164%2C0%29&cacheable=true$str$, $str$radio.wprm$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
-  VALUES (v_owner_id, $str$RADIO_WXYX$str$, $str$FM 100.7 | LA X$str$, $str$FM Radio$str$, $str$https://stream.eleden.com:8230/La X.aac$str$, $str$https://i.ibb.co/zWDcRnBw/laxpng.png$str$, $str$radio.wxyx$str$)
+  VALUES (v_owner_id, $str$RADIO_WXYX$str$, $str$FM 100.7 | LA X$str$, $str$FM Radio$str$, $str$https://stream.eleden.com:8230/lax.aac$str$, $str$https://i.ibb.co/zWDcRnBw/laxpng.png$str$, $str$radio.wxyx$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
   VALUES (v_owner_id, $str$RADIO_WTOK$str$, $str$FM 102.5 | HOT102$str$, $str$FM Radio$str$, $str$https://server7.servistreaming.com/proxy/hot?mp=%2Fstream%3Ftype%3D.mp3&_=1$str$, $str$https://cdn-profiles.tunein.com/s29490/images/logod.png?t=638986500070000000$str$, $str$radio.wtok$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
-  VALUES (v_owner_id, $str$RADIO_WKAQFM$str$, $str$FM 104.7 | KQ105$str$, $str$FM Radio$str$, $str$https://televicentro.streamguys1.com/wkaqfm-icy?key=ae6a3b84b2caabf9d96d28dc1d8e3ebc2cc0ecce9ef074936108cb8cccf7964d&source=tunein&source=TuneIn&gdpr=0&us_privacy=1YNY&bundle=tunein.com&lat=28.0699&long=-81.8107$str$, $str$https://i.iheart.com/v3/catalog/live/5177?ops=ratio%281%2C1%29%2Cscale%28164%2C0%29&cacheable=true$str$, $str$radio.wkaqfm$str$)
+  VALUES (v_owner_id, $str$RADIO_WKAQFM$str$, $str$FM 104.7 | KQ105$str$, $str$FM Radio$str$, $str$https://televicentro.streamguys1.com/wkaqfm-icy?key=b28722e05bbaeb47a258c5049395de1773281b36229b1f159d29cb29e12a5433$str$, $str$https://i.iheart.com/v3/catalog/live/5177?ops=ratio%281%2C1%29%2Cscale%28164%2C0%29&cacheable=true$str$, $str$radio.wkaqfm$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
   VALUES (v_owner_id, $str$RADIO_WMEG$str$, $str$FM 106.9 | LA MEGA$str$, $str$FM Radio$str$, $str$https://liveaudio.lamusica.com/PR_WMEG_icy$str$, $str$https://i.ibb.co/Xrp2nhpQ/WMEG-PNG.png$str$, $str$radio.wmeg$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
-  VALUES (v_owner_id, $str$RADIO_WKAQAM$str$, $str$AM 580 | WKAQ AM$str$, $str$AM Radio$str$, $str$https://televicentro.streamguys1.com/wkaqqam-icy?key=ae6a3b84b2caabf9d96d28dc1d8e3ebc2cc0ecce9ef074936108cb8cccf7964d&source=tunein&source=TuneIn&gdpr=0&us_privacy=1YNY&bundle=tunein.com&lat=28.0699&long=-81.8107$str$, $str$https://bloximages.chicago2.vip.townnews.com/wkaq580.com/content/tncms/custom/image/9732c65a-a5bb-11ee-8102-67d137cd6b72.png?resize=400%2C167$str$, $str$radio.wkaqam$str$)
+  VALUES (v_owner_id, $str$RADIO_WKAQAM$str$, $str$AM 580 | WKAQ AM$str$, $str$AM Radio$str$, $str$https://televicentro.streamguys1.com/wkaqam-icy?key=b28722e05bbaeb47a258c5049395de1773281b36229b1f159d29cb29e12a5433$str$, $str$https://bloximages.chicago2.vip.townnews.com/wkaq580.com/content/tncms/custom/image/9732c65a-a5bb-11ee-8102-67d137cd6b72.png?resize=400%2C167$str$, $str$radio.wkaqam$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
   VALUES (v_owner_id, $str$RADIO_WUNO$str$, $str$AM 630 | NOTIUNO$str$, $str$AM Radio$str$, $str$https://server20.servistreaming.com:9022/stream$str$, $str$https://i.iheart.com/v3/catalog/live/8542?ops=ratio%281%2C1%29%2Cscale%28164%2C0%29&cacheable=true$str$, $str$radio.wuno$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
-  VALUES (v_owner_id, $str$RADIO_WMSW$str$, $str$AM 1120 |  RADIO ONCE$str$, $str$AM Radio$str$, $str$http://whsh4u-panel.com:14167/stream$str$, $str$https://cdn-radiotime-logos.tunein.com/s21253d.png$str$, $str$radio.wmsw$str$)
+  VALUES (v_owner_id, $str$RADIO_WMSW$str$, $str$AM 1120 |  RADIO ONCE$str$, $str$AM Radio$str$, $str$https://server10.servistreaming.com/proxy/radioonce?mp=/stream$str$, $str$https://cdn-radiotime-logos.tunein.com/s21253d.png$str$, $str$radio.wmsw$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
-  VALUES (v_owner_id, $str$RADIO_WSKN$str$, $str$AM 1320 | RADIO ISLA$str$, $str$AM Radio$str$, $str$https://server7.servistreaming.com/proxy/RadioIsla?mp=%2Fstream%3Ftype%3D.mp3&_=1$str$, $str$https://cdn-profiles.tunein.com/s22835/images/logod.png?t=637003437830000000$str$, $str$radio.wskn$str$)
+  VALUES (v_owner_id, $str$RADIO_WSKN$str$, $str$AM 1320 | RADIO ISLA$str$, $str$AM Radio$str$, $str$https://server7.servistreaming.com/proxy/radioisla?mp=%2Fstream%3Ftype%3D.mp3&_=1$str$, $str$https://cdn-profiles.tunein.com/s22835/images/logod.png?t=637003437830000000$str$, $str$radio.wskn$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
   VALUES (v_owner_id, $str$RADIO_WNEL$str$, $str$AM 1430 | RADIO TIEMPO$str$, $str$AM Radio$str$, $str$https://server7.servistreaming.com/proxy/tiempo?mp=%2Fstream%3Ftype%3D.mp3&_=1$str$, $str$https://www.nicepng.com/png/detail/264-2646242_radio-tiempo-png-radio-tiempo-logo.png$str$, $str$radio.wnel$str$)
@@ -211,7 +211,7 @@ BEGIN
   VALUES (v_owner_id, $str$RADIO_SALSEO$str$, $str$ONLINE | SALSEO RADIO$str$, $str$Online Radio$str$, $str$https://listen.radioking.com/radio/399811/stream/452110$str$, $str$https://cdn-profiles.tunein.com/s201197/images/logod.png?t=639088402270000000$str$, $str$radio.salseo$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
-  VALUES (v_owner_id, $str$RADIO_LAT99$str$, $str$ONLINE | LATINO 99$str$, $str$Online Radio$str$, $str$https://lmmradiocast.com/Latino99fm?_=68068$str$, $str$https://mm.aiircdn.com/371/5928f28889f51.png$str$, $str$radio.lat99$str$)
+  VALUES (v_owner_id, $str$RADIO_LAT99$str$, $str$ONLINE | LATINO 99$str$, $str$Online Radio$str$, $str$https://lmmradiocast.com/latino99fm$str$, $str$https://mm.aiircdn.com/371/5928f28889f51.png$str$, $str$radio.lat99$str$)
   ON CONFLICT (station_code) DO UPDATE SET stream_url = EXCLUDED.stream_url, logo_url = EXCLUDED.logo_url;
   INSERT INTO public.radio_stations (owner_id, station_code, name, genre, stream_url, logo_url, epg_channel_id)
   VALUES (v_owner_id, $str$RADIO_LAVIEJAZ$str$, $str$ONLINE | LA VIEJA Z$str$, $str$Online Radio$str$, $str$https://s2.free-shoutcast.com/stream/18006$str$, $str$https://i.ibb.co/d4VZVjj2/LVZ8-removebg-preview.png$str$, $str$radio.laviejaz$str$)

@@ -37,7 +37,7 @@ end function
 function RadioFormat(url as String) as String
     path = LCase(url.Split("?")[0])
     if Instr(1, path, ".m3u8") > 0 then return "hls"
-    if Right(path, 4) = ".aac" then return "es.aac-adts"
+    if Right(path, 4) = ".aac" or Right(path, 5) = ".aacp" or Instr(1, path, "_icy") > 0 or Instr(1, path, "-icy") > 0 or Instr(1, path, "lamusica.com/") > 0 or Instr(1, path, "server20.servistreaming.com:9022") > 0 or Instr(1, path, "server20.servistreaming.com:9023") > 0 then return "es.aac-adts"
     if Right(path, 4) = ".m4a" or Right(path, 4) = ".mp4" then return "mp4"
     return "mp3"
 end function

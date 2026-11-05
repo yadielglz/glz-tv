@@ -106,7 +106,7 @@ fun RadioScreen(
     var playing by remember { mutableStateOf(false) }
     var radioRetryAttempt by remember(selected?.code) { mutableStateOf(0) }
     val dataSourceFactory = remember {
-        DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}")
+        DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}").setAllowCrossProtocolRedirects(true)
     }
     val player = remember {
         ExoPlayer.Builder(context)
