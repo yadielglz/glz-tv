@@ -9,6 +9,7 @@ sub Main()
     playlist += "#EXTINF:-1 group-title='Sports',Sports" + Chr(10)
     playlist += "#EXTVLCOPT:http-user-agent=GlzPlayer" + Chr(10)
     playlist += "#EXTVLCOPT:http-referrer=https://provider.example/" + Chr(10)
+    playlist += "#KODIPROP:inputstream.adaptive.stream_headers=Origin=https%3A%2F%2Forigin.example&X-Token=abc%20123" + Chr(10)
     playlist += "https://cdn.example/sports.m3u8" + Chr(10)
     playlist += "#EXTINF:-1,Invalid" + Chr(10) + "javascript:alert(1)" + Chr(10)
     playlist += "#EXTINF:-1,Unsupported pipe" + Chr(10) + "https://cdn.example/x|token=private" + Chr(10)
@@ -19,6 +20,8 @@ sub Main()
     Assert(catalog.channels[0].number = "2", "channel number is parsed")
     Assert(catalog.channels[1].headers["User-Agent"] = "GlzPlayer", "per-channel user agent")
     Assert(catalog.channels[1].headers["Referer"] = "https://provider.example/", "per-channel referrer")
+    Assert(catalog.channels[1].headers["Origin"] = "https://origin.example", "KODIPROP stream headers URL-decoded")
+    Assert(catalog.channels[1].headers["X-Token"] = "abc 123", "KODIPROP multiple headers parsed")
     Assert(catalog.channels[0].headers["User-Agent"] = invalid, "headers do not leak between channels")
     Assert(catalog.channels[1].headers["X-Provider"] = "source", "source headers are retained")
     own = PlaylistHeaders("https://glzhub.glztech.com/api/v1/devices/playlist.m3u", "test-secret", {})
@@ -37,6 +40,14 @@ sub Main()
     end for
     limited = ParseCatalog(large, {})
     Assert(limited.channels.Count() = 1500 and limited.omitted = 2, "large lists are bounded for older TV memory")
+    rawMovies = [
+        { id: "m1", title: "Dune: Part Two", streamUrl: "https://cdn.example/dune2.mp4", posterUrl: "https://cdn.example/dune2.jpg", description: "Sci-fi epic", releaseYear: 2024, runtimeMinutes: 166, genres: ["Sci-Fi", "Adventure"], requestHeaders: { "X-Movie": "1" } }
+        { id: "bad", title: "Invalid Movie", streamUrl: "javascript:alert(1)" }
+    ]
+    movies = ParseMovies(rawMovies, { "User-Agent": "GlzRoku" })
+    Assert(movies.Count() = 1 and movies[0].isMovie = true, "ParseMovies filters invalid URLs and marks VOD items")
+    Assert(movies[0].number = "2024" and Instr(1, movies[0].group, "166 min") > 0 and Instr(1, movies[0].group, "Sci-Fi") > 0, "ParseMovies formats release year, runtime and genres")
+    Assert(movies[0].headers["User-Agent"] = "GlzRoku" and movies[0].headers["X-Movie"] = "1", "ParseMovies merges default and per-movie headers")
     if m.failed > 0
         print "FAILURES: "; m.failed
     else

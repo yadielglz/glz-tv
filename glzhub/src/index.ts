@@ -566,11 +566,16 @@ async function deviceSources(request: Request, env: Env, device: Record<string, 
   if (hasManagedAssignment || !device.epg_url) {
     const playlistFilter = effectivePlaylistId
       ? `owner_id=eq.${device.owner_id}&id=eq.${encodeURIComponent(String(effectivePlaylistId))}`
-      : `owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&is_published=eq.true&order=created_at.asc&limit=1`;
+      : `owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&is_published=eq.true&order=created_at.asc`;
     const assigned = await supabaseJson(env, `/rest/v1/playlists?${playlistFilter}&select=id,epg_url`) as Record<string, unknown>[];
-    if (assigned[0]?.epg_url) managedEpgUrl = assigned[0].epg_url;
+    for (const pl of assigned) {
+      if (typeof pl.epg_url === "string" && pl.epg_url.trim()) {
+        managedEpgUrl = pl.epg_url.trim();
+        break;
+      }
+    }
   }
-  return { playlistUrl, epgUrl: hasManagedAssignment ? managedEpgUrl : (device.epg_url || managedEpgUrl) };
+  return { playlistUrl, epgUrl: hasManagedAssignment ? (managedEpgUrl || device.epg_url || null) : (device.epg_url || managedEpgUrl || null) };
 }
 
 async function deviceConfig(request: Request, env: Env): Promise<Response> {
@@ -1984,12 +1989,15 @@ async function exportManagedGuide(
   ctx: ExecutionContext,
   playlistId: string,
   gzip: boolean,
-  requireAdmin = false
+  requireAdmin = false,
+  ownerId = ""
 ): Promise<Response> {
   let ownerFilter = "";
   if (requireAdmin) {
     const { user } = await ownedPlaylist(request, env, playlistId);
     ownerFilter = `&owner_id=eq.${user.id}`;
+  } else if (ownerId) {
+    ownerFilter = `&owner_id=eq.${encodeURIComponent(ownerId)}`;
   } else {
     const playlists = await supabaseJson(env,
       `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&is_published=eq.true&select=id`
@@ -2831,13 +2839,18 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
 async function getRokuGuide(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const device = await deviceForToken(request, env);
   // Reuse the exact managed lineup so device/group policies apply to guide access.
-  const lineup = lineupChannels(await (await getDeviceM3UPlaylist(request, env)).text());
+  const m3uText = await (await getDeviceM3UPlaylist(request, env)).text();
+  const lineup = lineupChannels(m3uText);
   const selected = new URL(request.url).searchParams.get("channel") || "";
   if (selected && !lineup.some(c => c.id === selected)) return json({ error: "Channel not assigned to this Roku." }, 404);
   const { epgUrl } = await deviceSources(request, env, device);
+  const m3uEpgUrl = /#EXTM3U[^\r\n]*?\bx-tvg-url=["']([^"']+)["']/i.exec(m3uText)?.[1]?.trim() || "";
   // Android uses this same config value, then its built-in default when unset.
-  const sourceUrl = typeof epgUrl === "string" && epgUrl.trim() ? epgUrl.trim() : "https://play.glztech.com/epg.xml.gz";
-  const urls = [sourceUrl];
+  const sourceUrl = typeof epgUrl === "string" && epgUrl.trim()
+    ? epgUrl.trim()
+    : (m3uEpgUrl || "https://play.glztech.com/epg.xml.gz");
+  const urls = [...new Set(sourceUrl.split(",").map(u => u.trim()).filter(u => /^https?:\/\//i.test(u)))].slice(0, 4);
+  if (!urls.length) urls.push("https://play.glztech.com/epg.xml.gz");
   let xml = "", failures = 0;
   // Cache decompressed guides briefly; no device bearer token is sent upstream.
   const sourceHeaders = device.request_headers && typeof device.request_headers === "object" ? device.request_headers as Record<string,string> : {};
@@ -2845,18 +2858,19 @@ async function getRokuGuide(request: Request, env: Env, ctx: ExecutionContext): 
     const cacheId = await sha256(url + JSON.stringify(sourceHeaders));
     const cacheKey = new Request(`${new URL(request.url).origin}/__internal/roku-guide/${cacheId}`);
     try {
-      let cached = await caches.default.match(cacheKey);
-      if (!cached) {
+      const cached = await caches.default.match(cacheKey);
+      let part = "";
+      if (cached) {
+        part = await cached.text();
+      } else {
         const local = new URL(url).origin === new URL(request.url).origin ? new URL(url).pathname.match(/^\/api\/v1\/guides\/([0-9a-f-]+)\.xml(?:\.gz)?$/i) : null;
-        const source = local ? await exportManagedGuide(request, env, ctx, local[1], false) : await fetch(url, { headers: { ...sourceHeaders, "user-agent":"GlzHub-RokuGuide/1.0", accept:"application/xml,text/xml,application/gzip,*/*" }, signal: AbortSignal.timeout(12000) });
+        const source = local ? await exportManagedGuide(request, env, ctx, local[1], false, false, String(device.owner_id || "")) : await fetch(url, { headers: { ...sourceHeaders, "user-agent":"GlzHub-RokuGuide/1.0", accept:"application/xml,text/xml,application/gzip,*/*" }, signal: AbortSignal.timeout(15000) });
         if (!source.ok) throw new Error("Guide unavailable");
-        const text = await xmlTextFromResponse(source);
-        if (text.length + xml.length > 20 * 1024 * 1024 || !/<tv(?:\s|>)/i.test(text)) throw new Error("Invalid guide");
-        cached = new Response(text, {headers:{"content-type":"application/xml", "cache-control":"max-age=120"}});
-        ctx.waitUntil(caches.default.put(cacheKey,cached.clone()).catch(()=>undefined));
+        part = await xmlTextFromResponse(source);
+        if (part.length + xml.length > MAX_XMLTV_BYTES || !/<tv(?:\s|>)/i.test(part)) throw new Error("Invalid guide");
+        ctx.waitUntil(caches.default.put(cacheKey, new Response(part, {headers:{"content-type":"application/xml", "cache-control":"max-age=120"}})).catch(()=>undefined));
       }
-      const part = await cached.text();
-      if (part.length + xml.length > 20 * 1024 * 1024) throw new Error("Guide too large");
+      if (part.length + xml.length > MAX_XMLTV_BYTES) throw new Error("Guide too large");
       xml += part;
     } catch { failures++; }
   }

@@ -77,3 +77,10 @@ test('Android-supported XMLTV timestamp variants keep UTC and offset semantics',
  assert.equal(xmltvTime('20261027200000 +99:00'),0);
  assert.equal(xmltvTime('20260231000000 +0000'),0);
 });
+test('case-insensitive tvg-id and empty channel stub fallback resolve programmes',()=>{
+ const list=[{id:'CNN.US',title:'CNN',eventTitle:'',league:'',start:0,end:0},{id:'stub-id',title:'WAPA TV',eventTitle:'',league:'',start:0,end:0}];
+ const feed=`<tv><channel id="stub-id"><display-name>Unused Stub</display-name></channel><channel id="wapa.pr"><display-name>WAPA TV</display-name></channel><programme channel="cnn.us" start="20261027190000 +0000" stop="20261027210000 +0000"><title>CNN Live</title></programme><programme channel="wapa.pr" start="20261027190000 +0000" stop="20261027210000 +0000"><title>Noticentro</title></programme></tv>`;
+ const guide=projectGuide(feed,list,now);
+ assert.equal(guide.summaries['CNN.US'].now.title,'CNN Live');
+ assert.equal(guide.summaries['stub-id'].now.title,'Noticentro');
+});

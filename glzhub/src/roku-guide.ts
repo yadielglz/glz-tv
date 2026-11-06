@@ -43,25 +43,43 @@ export function projectGuide(xml: string, channels: GuideChannel[], now: number,
   const ids = new Map<string,string[]>();
   const add = (alias: string, id: string) => { if (!alias) return; const values=ids.get(alias)||[]; if (!values.includes(id)) values.push(id); ids.set(alias,values); };
   const guideIds = new Set<string>();
+  const guideIdsLower = new Map<string,string>();
   const names = new Map<string,string>();
   const addName = (name: string, id: string) => {
     const key=normalize(name);
     if (key && !genericNames.has(key) && !names.has(key)) names.set(key,id);
   };
   for (const m of xml.matchAll(/<channel\b([^>]*)>([\s\S]*?)<\/channel>/gi)) {
-    const id=attr(m[1],'id'); guideIds.add(id);
+    const id=attr(m[1],'id');
+    if (!id) continue;
+    guideIds.add(id);
+    if (!guideIdsLower.has(id.toLowerCase())) guideIdsLower.set(id.toLowerCase(),id);
     for (const name of m[2].matchAll(/<display-name\b[^>]*>([\s\S]*?)<\/display-name>/gi)) {
       const text=xmlText(name[1]); addName(text,id); addName(cleanName(text),id);
     }
+    addName(id,id);
   }
-  for (const m of xml.matchAll(/<programme\b([^>]*)>/gi)) guideIds.add(attr(m[1],'channel'));
+  const programmeChannels = new Set<string>();
+  for (const m of xml.matchAll(/<programme\b([^>]*)>/gi)) {
+    const ch=attr(m[1],'channel');
+    if (ch) {
+      programmeChannels.add(ch);
+      guideIds.add(ch);
+      if (!guideIdsLower.has(ch.toLowerCase())) guideIdsLower.set(ch.toLowerCase(),ch);
+    }
+  }
   for (const c of channels) {
-    // Exact tvg-id always wins; name fallback follows Android's order.
-    if (guideIds.has(c.id)) { add(c.id,c.id); continue; }
+    // Exact or case-insensitive tvg-id with programmes wins; name fallback follows Android's order.
+    if (programmeChannels.has(c.id)) { add(c.id,c.id); continue; }
+    const ciId=guideIdsLower.get(c.id.toLowerCase());
+    if (ciId && programmeChannels.has(ciId)) { add(ciId,c.id); continue; }
+    if (guideIds.has(c.id)) add(c.id,c.id);
+    else if (ciId) add(ciId,c.id);
     const clean=normalize(cleanName(c.title)), raw=normalize(c.title);
     if (genericNames.has(clean) || genericNames.has(raw)) continue;
-    let match=names.get(clean)||names.get(raw);
-    if (!match) for (const key of [clean,raw]) {
+    const idClean=normalize(cleanName(c.id)), idRaw=normalize(c.id);
+    let match=names.get(clean)||names.get(raw)||names.get(idClean)||names.get(idRaw);
+    if (!match) for (const key of [clean,raw,idClean,idRaw]) {
       if (key.length<3) continue;
       for (const [name,id] of names) {
         if (name.length>=3 && (key.includes(name)||name.includes(key))) { match=id; break; }

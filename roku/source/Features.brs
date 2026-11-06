@@ -34,6 +34,115 @@ function CurrentProgramme(summary as Dynamic, now as Integer) as Dynamic
     return invalid
 end function
 
+function NextProgramme(summary as Dynamic, now as Integer) as Dynamic
+    if type(summary) <> "roAssociativeArray" then return invalid
+    upcoming = summary["next"]
+    if type(upcoming) = "roAssociativeArray"
+        if upcoming.start > now then return upcoming
+    end if
+    return invalid
+end function
+
+function ChannelSummary(summaries as Dynamic, id as String) as Dynamic
+    if type(summaries) <> "roAssociativeArray" or id = "" then return invalid
+    if summaries.DoesExist(id) then return summaries[id]
+    lower = LCase(id)
+    if summaries.DoesExist(lower) then return summaries[lower]
+    for each key in summaries
+        if LCase(key) = lower then return summaries[key]
+    end for
+    return invalid
+end function
+
+function AdjacentChannelIndex(channels as Object, currentUrl as String, delta as Integer) as Integer
+    if type(channels) <> "roArray" or channels.Count() = 0 then return -1
+    current = 0
+    for i = 0 to channels.Count() - 1
+        if Text(channels[i].url) = currentUrl
+            current = i : exit for
+        end if
+    end for
+    target = (current + delta) mod channels.Count()
+    if target < 0 then target += channels.Count()
+    return target
+end function
+
+function OsdDetails(channel as Dynamic, summaries as Dynamic, guideError as String, now as Integer) as Object
+    if type(channel) <> "roAssociativeArray"
+        return { number: "", title: "Live TV", nowLine: "No programme information", nextLine: "" }
+    end if
+    title = Text(channel.title, "Live channel")
+    if channel.isMovie = true
+        badge = "MOVIE"
+        if Text(channel.number) <> "" and Text(channel.number) <> "VOD" then badge = Text(channel.number)
+        nowLine = Text(channel.group, "Movie · On Demand")
+        nextLine = Text(channel.description, "Streaming on demand from GlzHub")
+        return { number: badge, title: title, nowLine: nowLine, nextLine: nextLine }
+    end if
+    number = Text(channel.number)
+    if number <> "" then number = "CH " + number
+    if Text(channel.eventTitle) <> ""
+        nowLine = "Live Event: " + Text(channel.eventTitle)
+        nextLine = Text(channel.league, "SPORTS")
+        window = ClockLabel(channel.eventStart)
+        if window <> "" then nextLine += " · " + window + " – " + ClockLabel(channel.eventEnd)
+        return { number: number, title: title, nowLine: nowLine, nextLine: nextLine }
+    end if
+    summary = ChannelSummary(summaries, Text(channel.id))
+    current = CurrentProgramme(summary, now)
+    upcoming = NextProgramme(summary, now)
+    nowLine = "Now: " + ProgrammeLine(current)
+    if current = invalid and guideError <> "" then nowLine = guideError
+    nextLine = Text(channel.group)
+    if upcoming <> invalid then nextLine = "Next: " + ProgrammeLine(upcoming)
+    return { number: number, title: title, nowLine: nowLine, nextLine: nextLine }
+end function
+
+function GuestWelcomeSummary(config as Dynamic, weather as Dynamic) as Object
+    headline = "Welcome to Glz TV"
+    body = "Select a destination on the left or choose a quick action to start watching."
+    logo = ""
+    heroImage = ""
+    locationLabel = ""
+    if type(config) = "roAssociativeArray"
+        locationLabel = Text(config.weatherLocation).Trim()
+        guestName = Text(config.guestName).Trim()
+        ge = config.guestExperience
+        if type(ge) = "roAssociativeArray"
+            prop = Text(ge.propertyName).Trim()
+            if prop <> "" then headline = prop
+            if guestName <> "" then headline += " · Welcome, " + guestName
+            welcome = Text(ge.welcomeMessage).Trim()
+            if welcome <> "" then body = welcome
+            details = []
+            if Text(ge.roomNumber).Trim() <> "" then details.Push("Room " + Text(ge.roomNumber).Trim())
+            if Text(ge.wifiName).Trim() <> ""
+                wifi = "Wi-Fi: " + Text(ge.wifiName).Trim()
+                if Text(ge.wifiInstructions).Trim() <> "" then wifi += " (" + Text(ge.wifiInstructions).Trim() + ")"
+                details.Push(wifi)
+            end if
+            if Text(ge.frontDesk).Trim() <> "" then details.Push("Front Desk: " + Text(ge.frontDesk).Trim())
+            if Text(ge.checkoutTime).Trim() <> "" then details.Push("Checkout: " + Text(ge.checkoutTime).Trim())
+            if details.Count() > 0 then body += Chr(10) + Chr(10) + details.Join("  •  ")
+            if Text(ge.noticeTitle).Trim() <> "" or Text(ge.noticeBody).Trim() <> ""
+                body += Chr(10) + Chr(10) + Text(ge.noticeTitle, "Notice") + ": " + Text(ge.noticeBody)
+            end if
+            logo = Text(ge.logoUrl).Trim()
+            heroImage = Text(ge.heroImageUrl).Trim()
+        end if
+    end if
+    if type(weather) = "roAssociativeArray" and Text(weather.place) <> ""
+        city = Text(weather.place).Split(",")[0].Trim()
+        if city <> "" then locationLabel = city
+    end if
+    if locationLabel = "" then locationLabel = "San Juan"
+    weatherPill = ""
+    if type(weather) = "roAssociativeArray" and type(weather.current) = "roAssociativeArray"
+        weatherPill = WeatherNumber(weather.current.temperature_2m, "°F") + " · " + locationLabel
+    end if
+    return { headline: headline, body: body, logo: logo, heroImage: heroImage, weatherPill: weatherPill }
+end function
+
 function RadioFormat(url as String) as String
     path = LCase(url.Split("?")[0])
     if Instr(1, path, ".m3u8") > 0 then return "hls"

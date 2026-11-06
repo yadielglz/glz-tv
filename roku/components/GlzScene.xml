@@ -6,10 +6,12 @@
   <children>
     <Group id="browser">
       <Rectangle width="1280" height="720" color="0x080E1CFF" />
-      <Rectangle translation="[48,40]" width="6" height="44" color="0x38BDF8FF" />
-      <Label translation="[70,32]" width="520" height="60" text="Glz TV" font="font:LargeBoldSystemFont" />
-      <Label id="deviceName" translation="[650,38]" width="560" height="40" horizAlign="right" color="0x94A3B8FF" font="font:SmallSystemFont" />
-      <Label id="status" translation="[50,100]" width="1160" height="62" wrap="true" color="0xA5B9D2FF" text="Connecting to GlzHub…" font="font:SmallSystemFont" />
+      <Rectangle translation="[40,20]" width="1200" height="72" color="0x0E182BFF" />
+      <Rectangle translation="[40,20]" width="5" height="72" color="0x38BDF8FF" />
+      <Label translation="[62,26]" width="260" height="36" text="GLZ TV" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+      <Label id="status" translation="[62,58]" width="680" height="28" color="0x94A3B8FF" text="Connecting to GlzHub…" font="font:SmallestSystemFont" />
+      <Label id="headerMeta" translation="[750,28]" width="470" height="28" horizAlign="right" color="0x65D5FFFF" font="font:SmallestSystemFont" />
+      <Label id="deviceName" translation="[750,56]" width="470" height="28" horizAlign="right" color="0xA5B9D2FF" font="font:SmallestSystemFont" />
       <Group id="pairing" visible="false">
         <Label translation="[120,210]" width="1040" height="54" text="Pair this Roku with GlzHub" horizAlign="center" font="font:MediumBoldSystemFont" />
         <Rectangle translation="[340,292]" width="600" height="112" color="0x12314AFF" />
@@ -17,25 +19,65 @@
         <Label translation="[120,438]" width="1040" height="110" wrap="true" text="Open glzhub.glztech.com on your phone or computer.&#10;Sign in → Pair a TV → enter this code.&#10;This screen updates automatically after pairing." horizAlign="center" font="font:SmallSystemFont" />
       </Group>
       <Group id="catalog" visible="false">
-        <LabelList id="sectionNav" translation="[50,185]" itemSize="[184,56]" itemSpacing="[0,8]" numRows="5" vertFocusAnimationStyle="fixedFocus" />
-        <Label id="sectionTitle" translation="[270,173]" width="940" height="42" color="0x65D5FFFF" text="Live TV" font="font:MediumBoldSystemFont" />
-        <MarkupList id="channelList" translation="[270,230]" itemComponentName="ChannelRow" itemSize="[586,72]" itemSpacing="[0,6]" numRows="5" drawFocusFeedback="false" vertFocusAnimationStyle="floatingFocus" />
-        <Group id="detailPanel" translation="[884,230]">
-          <Rectangle width="326" height="382" color="0x101C30FF" />
-          <Poster id="channelLogo" translation="[90,16]" width="146" height="76" loadDisplayMode="scaleToFit" />
-          <Label id="detailTitle" translation="[18,104]" width="290" height="72" wrap="true" font="font:SmallBoldSystemFont" />
-          <Label id="detailGroup" translation="[18,185]" width="290" height="172" wrap="true" color="0xA5B9D2FF" font="font:SmallSystemFont" />
+        <Rectangle translation="[40,106]" width="204" height="546" color="0x0C1526FF" />
+        <LabelList id="sectionNav" translation="[48,116]" itemSize="[188,52]" itemSpacing="[0,6]" numRows="8" vertFocusAnimationStyle="fixedFocus" />
+        <Group id="homeHero" translation="[264,106]" visible="false">
+          <Rectangle width="976" height="144" color="0x101C30FF" />
+          <Poster id="homeHeroBackdrop" width="976" height="144" loadDisplayMode="scaleToZoom" visible="false" />
+          <Rectangle id="homeHeroScrim" width="976" height="144" color="0x080E1CB8" visible="false" />
+          <Rectangle width="976" height="4" color="0x38BDF8FF" />
+          <Poster id="homeHeroLogo" translation="[20,18]" width="116" height="108" loadDisplayMode="scaleToFit" visible="false" />
+          <Label id="homeHeroTitle" translation="[24,14]" width="640" height="34" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+          <Label id="homeHeroSub" translation="[670,18]" width="286" height="28" horizAlign="right" color="0x65D5FFFF" font="font:SmallestSystemFont" />
+          <Label id="homeHeroBody" translation="[24,52]" width="932" height="80" wrap="true" color="0xE2E8F0FF" font="font:SmallestSystemFont" />
         </Group>
-        <Label id="weatherText" translation="[270,240]" width="940" height="370" visible="false" wrap="true" color="0xFFFFFFFF" font="font:SmallSystemFont" />
-        <Label id="channelCount" translation="[270,620]" width="940" height="34" color="0x94A3B8FF" font="font:SmallSystemFont" />
+        <Label id="sectionTitle" translation="[264,108]" width="586" height="36" color="0x65D5FFFF" text="Home" font="font:MediumBoldSystemFont" />
+        <MarkupList id="channelList" translation="[264,152]" itemComponentName="ChannelRow" itemSize="[586,72]" itemSpacing="[0,6]" numRows="6" drawFocusFeedback="false" vertFocusAnimationStyle="floatingFocus" />
+        <Group id="detailPanel" translation="[870,106]">
+          <Rectangle id="detailBg" width="370" height="546" color="0x101C30FF" />
+          <Rectangle width="370" height="4" color="0x38BDF8FF" />
+          <Poster id="channelLogo" translation="[35,16]" width="300" height="128" loadDisplayMode="scaleToFit" />
+          <Label id="detailTitle" translation="[20,154]" width="330" height="58" wrap="true" font="font:SmallBoldSystemFont" />
+          <Label id="detailMeta" translation="[20,214]" width="330" height="28" color="0x65D5FFFF" font="font:SmallestSystemFont" />
+          <Rectangle translation="[20,246]" width="330" height="2" color="0x1E293BFF" />
+          <Label id="detailGroup" translation="[20,256]" width="330" height="274" wrap="true" color="0xA5B9D2FF" font="font:SmallSystemFont" />
+        </Group>
+        <Label id="weatherText" translation="[264,156]" width="976" height="460" visible="false" wrap="true" color="0xFFFFFFFF" font="font:SmallSystemFont" />
+        <Label id="channelCount" translation="[264,624]" width="586" height="28" color="0x94A3B8FF" font="font:SmallestSystemFont" />
       </Group>
-      <Label id="footer" translation="[50,670]" width="1160" height="32" text="Left / Back  Sections   •   OK  Select   •   *  Options / Captions while watching" color="0x94A3B8FF" font="font:SmallSystemFont" />
+      <Label id="footer" translation="[40,670]" width="1200" height="32" text="Left / Back  Menu   •   OK  Select   •   *  Quick Options" color="0x94A3B8FF" font="font:SmallSystemFont" />
     </Group>
-    <Video id="player" width="1280" height="720" visible="false" />
+    <Video id="player" width="1280" height="720" visible="false" enableUI="false" enableTrickPlay="false" />
+    <Group id="playerFocus" focusable="true" />
+    <Group id="osd" translation="[64,516]" visible="false">
+      <Rectangle width="1152" height="156" color="0x080E1CE6" />
+      <Rectangle width="1152" height="4" color="0x38BDF8FF" />
+      <Poster id="osdLogo" translation="[24,24]" width="112" height="108" loadDisplayMode="scaleToFit" />
+      <Label id="osdNumber" translation="[156,18]" width="130" height="36" color="0x65D5FFFF" font="font:MediumBoldSystemFont" />
+      <Label id="osdTitle" translation="[290,18]" width="480" height="36" font="font:MediumBoldSystemFont" />
+      <Label id="osdHint" translation="[776,22]" width="352" height="30" horizAlign="right" color="0x94A3B8FF" text="OK: Info  •  Right: Mini-Guide  •  Up/Down: Surf" font="font:SmallSystemFont" />
+      <Label id="osdNow" translation="[156,64]" width="972" height="34" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+      <Label id="osdNext" translation="[156,104]" width="972" height="32" color="0xA5B9D2FF" font="font:SmallSystemFont" />
+    </Group>
+    <Group id="miniGuide" translation="[644,0]" visible="false">
+      <Rectangle width="636" height="720" color="0x080E1CEB" />
+      <Rectangle width="4" height="720" color="0x38BDF8FF" />
+      <Label id="miniGuideTitle" translation="[25,24]" width="586" height="36" color="0x65D5FFFF" text="Mini-Guide" font="font:MediumBoldSystemFont" />
+      <Group translation="[25,68]">
+        <Rectangle width="586" height="108" color="0x101C30FF" />
+        <Poster id="miniDetailLogo" translation="[14,14]" width="80" height="80" loadDisplayMode="scaleToFit" visible="false" />
+        <Label id="miniDetailTitle" translation="[16,10]" width="554" height="30" font="font:SmallBoldSystemFont" />
+        <Label id="miniDetailInfo" translation="[16,42]" width="554" height="58" wrap="true" color="0xA5B9D2FF" font="font:SmallSystemFont" />
+      </Group>
+      <MarkupList id="miniList" translation="[25,190]" itemComponentName="ChannelRow" itemSize="[586,72]" itemSpacing="[0,6]" numRows="6" drawFocusFeedback="false" vertFocusAnimationStyle="floatingFocus" />
+      <Label translation="[25,672]" width="586" height="30" color="0x94A3B8FF" text="OK  Tune channel   •   Left / Back  Close Mini-Guide" font="font:SmallSystemFont" />
+    </Group>
     <Audio id="radioPlayer" />
     <HubTask id="hubTask" />
     <ExtrasTask id="extrasTask" />
     <Timer id="syncTimer" duration="5" repeat="false" />
     <Timer id="extrasTimer" duration="0.2" repeat="false" />
+    <Timer id="osdTimer" duration="5" repeat="false" />
+    <Timer id="miniTimer" duration="12" repeat="false" />
   </children>
 </component>

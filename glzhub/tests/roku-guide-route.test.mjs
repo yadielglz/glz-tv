@@ -90,3 +90,8 @@ test('blank assigned playlist EPG uses the same built-in fallback as Android',as
  const config=await androidConfig();await run(req('a'));
  assert.equal(config.epgUrl,null);assert.deepEqual(seenSourceUrls,['https://play.glztech.com/epg.xml.gz']);
 });
+test('assigned playlist without EPG URL falls back to device EPG URL when configured',async()=>{
+ playlistEpgUrl=null;device.epg_url='https://override.example/device-guide.xml';
+ const config=await androidConfig();await run(req('a'));
+ assert.equal(config.epgUrl,device.epg_url);assert.deepEqual(seenSourceUrls,[device.epg_url]);
+});
