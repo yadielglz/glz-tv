@@ -33,8 +33,9 @@ sub init()
     m.config = {} : m.lastChannelUrl = ""
     m.weatherError = "" : m.weather = invalid : m.weatherLocation = "" : m.weatherAge = 15
     m.extraQueue = [] : m.extraId = 0 : m.extraBusy = false : m.guideChannel = invalid : m.focusedIndex = 0
-    m.view = m.startView : m.guideError = "Loading programme guide…"
-    m.version = "" : m.refresh = "" : m.playingUrl = "" : m.playingTitle = "" : m.playingChannel = invalid : m.retriedPlayback = false : m.radioTitle = ""
+    m.view = m.startView : m.renderedView = "" : m.guideError = "Loading programme guide…"
+    m.version = "" : m.refresh = "" : m.playingUrl = "" : m.playingTitle = "" : m.playingChannel = invalid : m.retriedPlayback = false
+    m.radioRow = invalid : m.radioTitle = "" : m.radioFormats = [] : m.radioFormatIndex = 0 : m.radioState = "idle"
     m.lastError = "" : m.autoStarted = false : m.pending = true
     m.syncsSinceCatalog = 0 : m.queuedForce = false : m.queuedAction = "sync"
     m.views = ["home", "live", "guide", "movies", "events", "radio", "weather", "settings"]
@@ -157,7 +158,7 @@ sub onHubResult()
     result = m.task.result
     if result = invalid then return
     if result.status = "pending"
-        closePlayer() : stopRadio()
+        closePlayer() : stopRadio(false)
         m.pending = true : m.channels = [] : m.movies = [] : m.rows = [] : m.stations = [] : m.summaries = {} : m.schedule = [] : m.weather = invalid
         m.extraQueue = [] : m.extraBusy = false : m.extraId++ : m.extra.control = "STOP"
         m.catalog.visible = false : m.pairing.visible = true
@@ -187,8 +188,9 @@ sub onHubResult()
             if not foundPlaying and m.video.visible then closePlayer()
             queueExtra("summary") : queueExtra("radio")
             if m.view = "schedule" and m.guideChannel <> invalid then queueExtra("guide", m.guideChannel.id)
-        else if m.summaries.Count() = 0 or m.guideError <> ""
-            queueExtra("summary")
+        else
+            if m.summaries.Count() = 0 or m.guideError <> "" then queueExtra("summary")
+            if m.stations.Count() = 0 then queueExtra("radio")
         end if
         location = Text(config.weatherLocation)
         if location <> m.weatherLocation or m.weatherAge >= 15
@@ -276,8 +278,11 @@ sub onExtraResult()
             m.stations = []
             if type(data.stations) = "roArray"
                 for each station in data.stations
-                    if IsWebUrl(station.streamUrl)
-                        m.stations.Push({ title: Text(station.name), number: Text(station.code), url: station.streamUrl, logo: Text(station.logoUrl), group: Text(station.genre), headers: CopyHeaders(station.requestHeaders), id: Text(station.code) })
+                    if type(station) = "roAssociativeArray"
+                        streamUrl = Text(station.streamUrl).Trim()
+                        if IsWebUrl(streamUrl) and Instr(1, streamUrl, "|") = 0
+                            m.stations.Push({ title: Text(station.name), number: Text(station.code), url: streamUrl, logo: Text(station.logoUrl), group: Text(station.genre), headers: CopyHeaders(station.requestHeaders), id: Text(station.code) })
+                        end if
                     end if
                 end for
             end if
@@ -313,7 +318,7 @@ sub openSection(index as Integer)
     m.view = m.views[index] : m.guideChannel = invalid : m.focusedIndex = 0
     m.nav.jumpToItem = index
     renderRows()
-    if m.view = "radio" then queueExtra("radio")
+    if m.view = "radio" or (m.view = "home" and m.stations.Count() = 0) then queueExtra("radio")
     if m.view = "guide" or m.view = "home" then queueExtra("summary")
     if m.view = "weather" and m.weather = invalid then queueExtra("weather")
     if m.view <> "weather" and m.rows.Count() > 0 then m.list.SetFocus(true)
@@ -433,8 +438,10 @@ sub applyViewLayout()
 end sub
 
 sub renderRows()
+    sameView = (m.renderedView = m.view)
+    m.renderedView = m.view
     index = m.focusedIndex
-    if m.browser.visible and m.list.itemFocused >= 0 then index = m.list.itemFocused
+    if sameView and m.browser.visible and m.list.itemFocused >= 0 then index = m.list.itemFocused
     if index < 0 then index = 0
     m.rows = []
     applyViewLayout()
@@ -517,13 +524,26 @@ sub renderRows()
             m.status.text = "Guide loaded · Select a channel or programme for details"
         end if
     end if
-    showDetails() : updateFooter()
+    showDetailsForIndex(index) : updateFooter()
 end sub
+
+function radioStatusBadge(row as Dynamic) as String
+    if m.radioRow = invalid or row = invalid then return ""
+    if Text(row.url) <> Text(m.radioRow.url) then return ""
+    if m.radioState = "playing" then return "LIVE"
+    if m.radioState = "buffering" then return "BUFFERING"
+    if m.radioState = "paused" then return "PAUSED"
+    return ""
+end function
 
 sub showDetails()
     index = m.list.itemFocused
     if index < 0 then index = m.focusedIndex
     if m.browser.visible and m.list.itemFocused >= 0 then m.focusedIndex = m.list.itemFocused
+    showDetailsForIndex(index)
+end sub
+
+sub showDetailsForIndex(index as Integer)
     m.top.findNode("detailMeta").text = ""
     if index < 0 or index >= m.rows.Count()
         if m.view = "movies"
@@ -552,8 +572,15 @@ sub showDetails()
             if not IsWebUrl(logo) then logo = ""
             m.top.findNode("channelLogo").uri = logo
             m.top.findNode("detailTitle").text = st.title
-            m.top.findNode("detailMeta").text = "Radio · " + Text(st.group)
-            m.top.findNode("detailGroup").text = "Press OK to listen. Audio continues while browsing."
+            badge = radioStatusBadge(st)
+            meta = "Radio · " + Text(st.group)
+            if badge <> "" then meta = badge + " · " + meta
+            m.top.findNode("detailMeta").text = meta
+            if badge <> ""
+                m.top.findNode("detailGroup").text = "Status: " + badge + Chr(10) + "Press Play/Pause to pause or reconnect, or * to stop radio."
+            else
+                m.top.findNode("detailGroup").text = "Press OK to listen. Audio continues while browsing."
+            end if
             return
         else if row.target <> invalid
             row = row.target
@@ -593,8 +620,17 @@ sub showDetails()
         m.top.findNode("detailMeta").text = row.league + " · " + ClockLabel(row.eventStart) + " – " + ClockLabel(row.eventEnd)
         m.top.findNode("detailGroup").text = "Press OK to watch live · SPORTS PPV"
     else if m.view = "radio"
-        m.top.findNode("detailMeta").text = row.group
-        m.top.findNode("detailGroup").text = "Press OK to listen. Audio continues while browsing other sections."
+        badge = radioStatusBadge(row)
+        meta = Text(row.group)
+        if badge <> ""
+            if meta <> "" then meta = badge + " · " + meta else meta = badge
+        end if
+        m.top.findNode("detailMeta").text = meta
+        if badge <> ""
+            m.top.findNode("detailGroup").text = "Status: " + badge + Chr(10) + "Press Play/Pause to pause or reconnect, or * to stop radio."
+        else
+            m.top.findNode("detailGroup").text = "Press OK to listen. Audio continues while browsing other sections."
+        end if
     else
         now = CreateObject("roDateTime").AsSeconds()
         summary = ChannelSummary(m.summaries, row.id)
@@ -686,7 +722,7 @@ function PlayerContent(row as Object, format as String) as Object
 end function
 
 sub playItem(row as Object)
-    stopRadio()
+    stopRadio(false)
     hideMiniGuide()
     for i = 0 to m.rows.Count() - 1
         if Text(m.rows[i].url) = Text(row.url)
@@ -831,21 +867,77 @@ sub onMiniSelected()
     playItem(m.channels[index])
 end sub
 
-sub playRadio(row as Object)
-    closePlayer()
+sub startRadioAttempt()
+    if m.radioRow = invalid or m.radioFormatIndex < 0 or m.radioFormatIndex >= m.radioFormats.Count() then return
+    fmt = m.radioFormats[m.radioFormatIndex]
+    content = PlayerContent(m.radioRow, fmt)
+    content.live = true
     m.audio.control = "stop"
-    m.radioTitle = row.title
-    m.audio.content = PlayerContent(row, RadioFormat(row.url))
-    m.audio.control = "play" : updateFooter() : startSync(false)
+    m.audio.content = content
+    m.audio.control = "play"
 end sub
 
-sub stopRadio()
-    m.audio.control = "stop" : m.radioTitle = "" : updateFooter()
+sub playRadio(row as Object)
+    url = Text(row.url).Trim()
+    if not IsWebUrl(url) or Instr(1, url, "|") > 0
+        m.radioState = "error"
+        m.lastError = "Invalid radio stream URL"
+        m.status.text = "Radio stream URL is invalid. Check the station in GlzHub."
+        updateFooter() : showDetails() : return
+    end if
+    closePlayer()
+    headers = CopyHeaders(row.headers)
+    hasUa = false
+    for each key in headers
+        if LCase(key) = "user-agent" then hasUa = true
+    end for
+    if not hasUa
+        ver = Text(m.appVersion)
+        if ver = "" then ver = "1.48.100"
+        headers["User-Agent"] = "GlzTV-Roku/" + ver
+    end if
+    radioRow = {
+        title: Text(row.title, "Live Radio")
+        url: url
+        headers: headers
+        id: Text(row.id)
+        group: Text(row.group)
+        logo: Text(row.logo)
+        number: Text(row.number)
+    }
+    m.radioRow = radioRow
+    m.radioTitle = radioRow.title
+    m.radioFormats = RadioFormatFallbacks(url)
+    m.radioFormatIndex = 0
+    m.radioState = "buffering"
+    m.lastError = ""
+    startRadioAttempt()
+    m.status.text = "Connecting to " + m.radioTitle + "…"
+    updateHeaderBar() : updateFooter() : showDetails() : startSync(false)
+end sub
+
+sub stopRadio(sync = true as Boolean)
+    wasActive = m.radioTitle <> "" or m.radioRow <> invalid
+    m.audio.control = "stop"
+    m.audio.content = invalid
+    m.radioRow = invalid
+    m.radioTitle = ""
+    m.radioFormats = []
+    m.radioFormatIndex = 0
+    m.radioState = "idle"
+    updateFooter() : showDetails()
+    if sync and wasActive then startSync(false)
 end sub
 
 sub updateFooter()
     footerText = "Left / Back  Menu   •   OK  Select   •   *  Quick Options / Settings"
-    if m.radioTitle <> "" then footerText = "Radio: " + m.radioTitle + "   •   Play/Pause controls audio   •   * → Stop radio"
+    if m.radioTitle <> ""
+        stateTag = "Radio"
+        if m.radioState = "playing" then stateTag = "LIVE Radio"
+        if m.radioState = "buffering" then stateTag = "Buffering"
+        if m.radioState = "paused" then stateTag = "Paused"
+        footerText = stateTag + ": " + m.radioTitle + "   •   Play/Pause controls audio   •   * → Stop radio"
+    end if
     m.top.findNode("footer").text = footerText
 end sub
 
@@ -877,9 +969,49 @@ sub videoStateChanged()
 end sub
 
 sub audioStateChanged()
-    if m.audio.state = "error"
-        stopRadio() : m.status.text = "Radio stream could not play. Try another station or Refresh."
-    else if m.audio.state = "finished"
+    if m.radioRow = invalid then return
+    state = m.audio.state
+    if state = "buffering"
+        m.radioState = "buffering"
+        m.status.text = "Buffering " + m.radioTitle + "…"
+        updateFooter() : showDetails()
+    else if state = "playing"
+        m.radioState = "playing"
+        m.lastError = ""
+        m.status.text = "Live Radio: " + m.radioTitle
+        updateFooter() : showDetails()
+    else if state = "paused"
+        m.radioState = "paused"
+        m.status.text = "Radio paused: " + m.radioTitle
+        updateFooter() : showDetails()
+    else if state = "stopped"
+        if m.radioState <> "buffering" and m.radioState <> "idle" and m.radioState <> "error"
+            m.radioState = "idle"
+            updateFooter() : showDetails()
+        end if
+    else if state = "error"
+        if m.radioFormatIndex + 1 < m.radioFormats.Count()
+            m.radioFormatIndex++
+            m.radioState = "buffering"
+            m.status.text = "Retrying " + m.radioTitle + "…"
+            startRadioAttempt()
+            updateFooter() : showDetails()
+            return
+        end if
+        errCode = m.audio.errorCode.ToStr()
+        errMsg = Text(m.audio.errorMsg).Trim()
+        if errMsg <> ""
+            m.lastError = "Roku radio error " + errCode + ": " + errMsg
+        else
+            m.lastError = "Roku radio error " + errCode
+        end if
+        failedTitle = m.radioTitle
+        m.audio.control = "stop"
+        m.audio.content = invalid
+        m.radioRow = invalid : m.radioTitle = "" : m.radioFormats = [] : m.radioFormatIndex = 0 : m.radioState = "error"
+        m.status.text = "Radio stream failed (" + errCode + "): " + failedTitle + ". Try another station or Refresh."
+        updateFooter() : showDetails() : startSync(false)
+    else if state = "finished"
         stopRadio() : m.status.text = "Radio stream ended. Select the station to reconnect."
     end if
 end sub
@@ -920,7 +1052,7 @@ end sub
 sub onRepair()
     selected = m.top.dialog.buttonSelected : m.top.dialog.close = true
     if selected = 0
-        closePlayer() : stopRadio() : m.version = "" : m.autoStarted = false
+        closePlayer() : stopRadio(false) : m.version = "" : m.autoStarted = false
         startSync(true, "repair")
     end if
     restoreFocus()
@@ -965,7 +1097,15 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             stepChannel(-1) : return true
         else if key = "channeldown" or key = "down"
             stepChannel(1) : return true
-        else if key = "left" or key = "rewind" or key = "fastforward" or key = "play"
+        else if key = "play"
+            if m.video.state = "paused"
+                m.video.control = "resume"
+            else
+                m.video.control = "pause"
+            end if
+            showOsd()
+            return true
+        else if key = "left" or key = "rewind" or key = "fastforward"
             return true
         end if
         return false
@@ -973,8 +1113,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if key = "options"
         showOptions() : return true
     end if
-    if key = "play" and m.radioTitle <> ""
-        if m.audio.state = "paused" then m.audio.control = "resume" else m.audio.control = "pause"
+    if key = "play" and m.radioRow <> invalid
+        if m.audio.state = "paused" or m.radioState = "paused" or m.audio.state = "stopped" or m.audio.state = "none" or m.radioState = "error"
+            m.radioState = "buffering"
+            m.status.text = "Reconnecting to " + m.radioTitle + "…"
+            startRadioAttempt()
+            updateFooter() : showDetails()
+        else
+            m.audio.control = "pause"
+            m.radioState = "paused"
+            m.status.text = "Radio paused: " + m.radioTitle
+            updateFooter() : showDetails()
+        end if
         return true
     end if
     if m.pending then return false

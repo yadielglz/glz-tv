@@ -51,9 +51,15 @@ import androidx.compose.ui.unit.sp
 import com.glztv.app.model.ForecastDay
 import com.glztv.app.model.HourlyForecast
 import com.glztv.app.model.WeatherInfo
-import com.glztv.app.ui.components.tvFocusableWithPhysics
-import com.glztv.app.ui.components.GlzPanel
 import com.glztv.app.ui.components.GlzCardDefaults
+import com.glztv.app.ui.components.GlzFocusCard
+import com.glztv.app.ui.components.GlzPanel
+import com.glztv.app.ui.components.GlzSectionActionButton
+import com.glztv.app.ui.components.GlzSectionHeader
+import com.glztv.app.ui.components.GlzSectionShell
+import com.glztv.app.ui.components.tvFocusableWithPhysics
+import com.glztv.app.ui.i18n.LocalGlzStrings
+import com.glztv.app.ui.theme.LocalTvViewport
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -66,127 +72,91 @@ fun WeatherScreen(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-  GlzPanel(
-      modifier = modifier,
-      shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
-      fill = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-  ) {
-    BoxWithConstraints(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
-        val compactHeight = maxHeight < 560.dp
+    val strings = LocalGlzStrings.current
+    val viewport = LocalTvViewport.current
+    val compactHeight = viewport.isCompactHeight
 
-        Column(
-            Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(if (compactHeight) 10.dp else 14.dp)
-        ) {
-            // 1. Top Header Row
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        "Weather",
-                        fontSize = if (compactHeight) 24.sp else 30.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        weather?.location ?: location,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Button(
+    GlzSectionShell(modifier = modifier) {
+        GlzSectionHeader(
+            title = strings.weatherTitle,
+            subtitle = weather?.location ?: location.ifBlank { strings.weatherSubtitle },
+            icon = Icons.Default.WbSunny,
+            accent = MaterialTheme.colorScheme.primary,
+            trailing = {
+                GlzSectionActionButton(
+                    label = if (loading) strings.buffering else strings.refresh,
+                    icon = Icons.Default.Refresh,
                     onClick = onRefresh,
                     enabled = !loading,
-                    modifier = Modifier.tvFocusableWithPhysics(
-                        shape = RoundedCornerShape(20.dp),
-                        focusedScale = 1.08f,
-                        glowColor = MaterialTheme.colorScheme.primary
+                    primary = true
+                )
+            }
+        )
+
+        if (loading && weather == null) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                LinearProgressIndicator(
+                    Modifier.width(240.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        } else if (weather == null) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Weather unavailable",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (loading) "Updating…" else "Refresh", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        error ?: "Check the configured weather location in Settings.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp
+                    )
                 }
             }
-
-            if (loading && weather == null) {
-                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    LinearProgressIndicator(
-                        Modifier.width(240.dp),
-                        color = MaterialTheme.colorScheme.primary
+        } else {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(if (compactHeight) 10.dp else 14.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    WeatherHeroCard(
+                        weather = weather,
+                        modifier = Modifier
+                            .weight(1.25f)
+                            .height(if (compactHeight) 176.dp else 204.dp)
+                    )
+                    WeatherMetricsPanel(
+                        weather = weather,
+                        modifier = Modifier
+                            .weight(1.75f)
+                            .height(if (compactHeight) 176.dp else 204.dp)
                     )
                 }
-            } else if (weather == null) {
-                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "Weather unavailable",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            error ?: "Check the configured weather location in Settings.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+
+                if (weather.hourly.isNotEmpty()) {
+                    WeatherSectionHeader(strings.weatherHourly.uppercase(Locale.getDefault()), "Next 18 hours progression")
+                    HourlyForecastRow(weather.hourly)
                 }
-            } else {
-                // Contained + D-pad scrollable, like the Guide panel.
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .focusable(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        WeatherHeroCard(
-                            weather = weather,
-                            modifier = Modifier
-                                .weight(1.25f)
-                                .height(if (compactHeight) 190.dp else 225.dp)
-                        )
-                        WeatherMetricsPanel(
-                            weather = weather,
-                            modifier = Modifier
-                                .weight(1.75f)
-                                .height(if (compactHeight) 190.dp else 225.dp)
-                        )
-                    }
 
-                    if (weather.hourly.isNotEmpty()) {
-                        WeatherSectionHeader("HOURLY FORECAST", "Next 18 hours forecast progression")
-                        Spacer(Modifier.height(6.dp))
-                        HourlyForecastRow(weather.hourly)
-                    }
-
-                    if (weather.forecast.isNotEmpty()) {
-                        WeatherSectionHeader("5-DAY EXTENDED FORECAST", "Daily outlook & precipitation probability")
-                        Spacer(Modifier.height(6.dp))
-                        DailyForecastGrid(weather.forecast)
-                    }
-
-                    Spacer(Modifier.height(6.dp))
+                if (weather.forecast.isNotEmpty()) {
+                    WeatherSectionHeader(strings.weatherDaily.uppercase(Locale.getDefault()), "5-day outlook & precipitation")
+                    DailyForecastGrid(weather.forecast)
                 }
+
+                Spacer(Modifier.height(6.dp))
             }
         }
     }
-  }
 }
 
 @Composable
@@ -445,44 +415,49 @@ private fun HourlyForecastRow(hourly: List<HourlyForecast>) {
         contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
     ) {
         items(hourly) { item ->
-            GlzPanel(
+            GlzFocusCard(
+                onClick = {},
+                selected = item.timeLabel == "NOW",
                 shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
+                focusedScale = 1.05f,
                 modifier = Modifier
-                    .width(88.dp)
-                    .height(130.dp)
-            ) {
+                    .width(92.dp)
+                    .height(134.dp),
+                contentModifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp)
+            ) { focused ->
+                val ink = if (focused) GlzCardDefaults.onAccent(MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.onSurface
                 Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(8.dp),
+                    Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
                         item.timeLabel,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (item.timeLabel == "NOW") MaterialTheme.colorScheme.primary else Color.White
+                        color = if (!focused && item.timeLabel == "NOW") MaterialTheme.colorScheme.primary else ink
                     )
                     Text(
                         weatherSymbol(item.weatherCode),
-                        fontSize = 28.sp
+                        fontSize = 26.sp
                     )
                     Text(
                         "${item.temperature}°",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
-                        color = Color.White
+                        color = ink
                     )
                     if (item.precipitationChance > 0) {
                         Text(
                             "☂ ${item.precipitationChance}%",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF40C4FF)
+                            color = if (focused) ink else Color(0xFF40C4FF)
                         )
                     } else {
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(11.dp))
                     }
                 }
             }
@@ -497,16 +472,22 @@ private fun DailyForecastGrid(forecast: List<ForecastDay>) {
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         forecast.forEachIndexed { index, day ->
-            GlzPanel(
+            GlzFocusCard(
+                onClick = {},
+                selected = index == 0,
                 modifier = Modifier
                     .weight(1f)
-                    .height(160.dp),
-                shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium)
-            ) {
+                    .height(164.dp),
+                shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
+                focusedScale = 1.04f,
+                contentModifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp)
+            ) { focused ->
+                val ink = if (focused) GlzCardDefaults.onAccent(MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.onSurface
+                val subInk = if (focused) ink.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
                 Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(12.dp),
+                    Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -514,43 +495,38 @@ private fun DailyForecastGrid(forecast: List<ForecastDay>) {
                         if (index == 0) "TODAY" else dayLabel(day.date),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
-                        color = if (index == 0) MaterialTheme.colorScheme.primary else Color.White
+                        color = if (!focused && index == 0) MaterialTheme.colorScheme.primary else ink
                     )
                     Text(
                         weatherSymbol(day.weatherCode),
-                        fontSize = 34.sp
+                        fontSize = 32.sp
                     )
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             "${day.high}° / ${day.low}°",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Black,
-                            color = Color.White
+                            color = ink
                         )
                         Text(
                             weatherDescription(day.weatherCode),
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = subInk,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    if (day.precipitationChance > 0) {
-                        Text(
-                            "☂ ${day.precipitationChance}%",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF00E5FF)
-                        )
-                    } else {
-                        Text(
-                            "☂ 0%",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                    }
+                    Text(
+                        "☂ ${day.precipitationChance}%",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = when {
+                            focused -> ink
+                            day.precipitationChance > 0 -> Color(0xFF00E5FF)
+                            else -> subInk.copy(alpha = 0.6f)
+                        }
+                    )
                 }
             }
         }

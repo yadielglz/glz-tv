@@ -53,5 +53,12 @@ fun Modifier.tvFocusableWithPhysics(
             this.shape = shape
             this.clip = true
         }
+        .then(
+            if (isFocused) {
+                Modifier.border(width = 2.dp, color = activeBorderColor, shape = shape)
+            } else {
+                Modifier
+            }
+        )
 }
 

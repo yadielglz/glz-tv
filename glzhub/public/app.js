@@ -1,9 +1,9 @@
-import { createLiveTV } from "/live-tv.js?v=3.0.4";
+import { createLiveTV } from "/live-tv.js?v=1.48.100";
 
 const liveTV = createLiveTV({ api, stopPreview: stopStreamPreview });
 const state = {
   config: null, session: null, devices: [], apps: [], sites: [],
-  experience: null, selectedSiteId: null, enrollments: [], stations: [], playlists: [], movies: [], movieMetadataResults: [], groups: []
+  experience: null, selectedSiteId: null, enrollments: [], stations: [], playlists: [], movies: [], movieMetadataResults: [], groups: [], events: []
 };
 const epgState = { doc: null, playlistId: "", dirty: false, sourceUrl: "" };
 const inviteParams = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -314,11 +314,15 @@ function renderDevices() {
       }
 
       const ring = String(device.update_channel || "production").toLowerCase();
-      const ringBadge = ring === "beta"
-        ? ` <span class="meta-pill" style="font-size:10px;padding:1px 5px;color:#f59e0b;border-color:rgba(245,158,11,0.35);">BETA</span>`
+      const ringBadge = (ring === "testing" || ring === "beta")
+        ? ` <span class="meta-pill" style="font-size:10px;padding:1px 5px;color:#f59e0b;border-color:rgba(245,158,11,0.35);">TESTING</span>`
         : ring === "weekly"
           ? ` <span class="meta-pill" style="font-size:10px;padding:1px 5px;color:#38bdf8;border-color:rgba(56,189,248,0.35);">WEEKLY</span>`
-          : "";
+          : ring === "biweekly"
+            ? ` <span class="meta-pill" style="font-size:10px;padding:1px 5px;color:#818cf8;border-color:rgba(129,140,248,0.35);">BI-WEEKLY</span>`
+            : ring === "monthly"
+              ? ` <span class="meta-pill" style="font-size:10px;padding:1px 5px;color:#34d399;border-color:rgba(52,211,153,0.35);">MONTHLY</span>`
+              : "";
       return `
     <button class="device-row" data-device-id="${device.id}">
       <span class="device-identity">
@@ -491,7 +495,7 @@ function renderSites() {
     const site = state.sites.find((s) => s.id === btn.dataset.siteId);
     if (site) {
       deviceSearchQuery = site.name;
-      const devSearchInput = $("#deviceSearch");
+      const devSearchInput = $("#deviceSearchInput");
       if (devSearchInput) devSearchInput.value = site.name;
       renderDevices();
       showView("devices");
@@ -591,8 +595,8 @@ function renderExperience() {
   if (screensCountEl) screensCountEl.textContent = `${assignedDevices.length} Screen${assignedDevices.length === 1 ? "" : "s"} Assigned`;
   const onlineCountEl = $("#experienceOnlineCount");
   if (onlineCountEl) {
-    onlineCountEl.textContent = `${onlineAssigned} ONLINE`;
-    onlineCountEl.className = `status ${onlineAssigned > 0 ? "" : "offline"}`;
+    onlineCountEl.innerHTML = `<span class="status-dot"></span>${onlineAssigned} ONLINE`;
+    onlineCountEl.className = `status-pill ${onlineAssigned > 0 ? "online" : "offline"}`;
   }
 
   $("#propertyName").value = profile.property_name || (currentSite ? currentSite.name : "GLZ Hotel");
@@ -709,7 +713,15 @@ async function openDevice(id) {
   const ringEl = $("#editorDeviceUpdateRing");
   if (ringEl) {
     const ch = String(device.update_channel || "production").toLowerCase();
-    ringEl.textContent = ch === "beta" ? "Ring: Beta" : ch === "weekly" ? "Ring: Weekly" : "Ring: Production";
+    const ringLabels = {
+      testing: "Ring: Testing",
+      beta: "Ring: Testing",
+      weekly: "Ring: Weekly",
+      biweekly: "Ring: Bi-Weekly",
+      monthly: "Ring: Monthly",
+      production: "Ring: Production"
+    };
+    ringEl.textContent = ringLabels[ch] || "Ring: Production";
   }
 
   $("#deviceName").value = device.name || "";
@@ -964,7 +976,7 @@ const DEFAULT_SETTINGS = {
   sportsBarKiosk: false,
   autoUpdate: true,
   wifiOnly: false,
-  providerFeedUrl: "https://starlite.best/api/list/mygbb8",
+  providerFeedUrl: "https://starlite.best/api/list/mygbb8/167848",
   providerPreBuffer: 0.5,
   providerPostBuffer: 0.5,
   masterEpgUrl: "https://play.glztech.com/epg.xml.gz",
@@ -1066,10 +1078,17 @@ function updateNavBadges() {
   const appBadge = $("#navCountApps");
   if (appBadge) appBadge.textContent = String(state.apps.length);
 
+  const liveBadge = $("#navLiveBadge");
+  if (liveBadge) {
+    const activeEvents = (state.events || []).filter(isEventActive).length;
+    liveBadge.textContent = activeEvents > 0 ? `● ${activeEvents} LIVE` : "● LIVE";
+    liveBadge.classList.toggle("hidden", activeEvents === 0);
+  }
+
   const fleetText = $("#fleetHealthText");
   if (fleetText) {
     fleetText.textContent = total > 0
-      ? `${onlineCount} of ${total} Online · Edge v3.0.1`
+      ? `${onlineCount} of ${total} Online · Edge v1.48.100`
       : "Fleet Ready · Cloudflare Edge";
   }
 }
@@ -1151,6 +1170,7 @@ function renderCommandResults(query = "") {
     { id: "settings", title: "Hub Settings", sub: "Fleet defaults, streaming engine, appearance, health", icon: "settings", category: "Navigation" },
     { id: "studio", title: "TV Playlists", sub: "Manage M3U channels and channel lineups", icon: "studio", category: "Navigation" },
     { id: "events", title: "Live Event Channels", sub: "Auto-synced temporary live sports channels", icon: "events", category: "Navigation" },
+    { id: "movies", title: "Movies", sub: "Manage on-demand movie library and metadata", icon: "movies", category: "Navigation" },
     { id: "experience", title: "Guest Experience", sub: "Resort branding, Wi-Fi info, service tiles", icon: "experience", category: "Navigation" },
     { id: "epg", title: "EPG Studio", sub: "XMLTV schedules, programmes, and guides", icon: "epg", category: "Navigation" },
     { id: "groups", title: "Box Groups", sub: "Group box assignments and channel policies", icon: "groups", category: "Navigation" },
@@ -1388,7 +1408,7 @@ async function syncAllDevices() {
   if (btn) btn.disabled = true;
   try {
     const res = await api("/api/v1/admin/devices/sync-all", { method: "POST" });
-    showToast(`Broadcast sync queued for ${res.queued ?? state.devices.length} screens`, "success");
+    showToast(`Broadcast sync queued for ${res.syncedCount ?? res.queued ?? state.devices.length} screens`, "success");
     await loadDevices();
   } catch (error) {
     showToast(error.message, "error");
@@ -1398,7 +1418,10 @@ async function syncAllDevices() {
 }
 
 applyTheme(localStorage.getItem("glzhub-theme") || "dark", localStorage.getItem("glzhub-accent") || "sapphire");
-$$("#themeToggle, #themeToggleMobile").forEach((btn) => btn.addEventListener("click", toggleTheme));
+$$("#themeToggle, #themeToggleMobile").forEach((btn) => btn.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleTheme();
+}));
 
 $("#deviceSearchInput")?.addEventListener("input", (event) => {
   deviceSearchQuery = event.target.value;
@@ -1414,9 +1437,13 @@ $$("#deviceFilterPills .filter-pill").forEach((pill) => {
   });
 });
 
-$("#refreshDashboardButton")?.addEventListener("click", () => {
-  refreshDeviceActivity();
-  showToast("Dashboard refreshed", "info");
+$("#refreshDashboardButton")?.addEventListener("click", async () => {
+  try {
+    await loadDevices();
+    showToast("Dashboard refreshed", "info");
+  } catch (error) {
+    showToast(error.message, "error");
+  }
 });
 
 $("#syncAllScreensButton")?.addEventListener("click", async () => {
@@ -1447,6 +1474,9 @@ $("#authForm").addEventListener("submit", async (event) => {
     await signIn($("#email").value, $("#password").value);
     showApp();
     await loadDevices();
+    loadPlaylists().catch(() => { });
+    loadMovies().catch(() => { });
+    loadEventChannels().catch(() => { });
   } catch (error) {
     $("#authError").textContent = error.message;
   }
@@ -1903,18 +1933,11 @@ $("#signOut").addEventListener("click", () => {
   state.session = null;
   showApp();
 });
-$("#refreshDashboardButton").addEventListener("click", async () => {
-  try {
-    await loadDevices();
-    toast("Dashboard refreshed");
-  } catch (error) {
-    toast(error.message);
-  }
-});
 $("#pairButton").addEventListener("click", () => showView("pair"));
 $$("[data-open-pair]").forEach((button) => button.addEventListener("click", () => showView("pair")));
 $$("[data-view-button]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.viewButton)));
 $$("[data-view-jump]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.viewJump)));
+$$("[data-trigger-click]").forEach((button) => button.addEventListener("click", () => $(button.dataset.triggerClick)?.click()));
 $$(".nav").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
 
 // User Profile & Settings navigation
@@ -2105,6 +2128,7 @@ if (state.session) {
   });
   loadPlaylists().catch(() => { });
   loadMovies().catch(() => { });
+  loadEventChannels().catch(() => { });
 }
 
 async function loadRadioStations() {
@@ -2411,6 +2435,10 @@ function renderPlaylists() {
     const wrap = card.querySelector(".studio-table-wrap");
     return [card.dataset.playlistId, { top: wrap?.scrollTop || 0, left: wrap?.scrollLeft || 0 }];
   }));
+  const filterValues = new Map($$(".studio-playlist-card[data-playlist-id]").map((card) => {
+    const filterInput = card.querySelector(".playlist-filter");
+    return [card.dataset.playlistId, filterInput?.value || ""];
+  }));
   container.innerHTML = "";
   empty.classList.toggle("hidden", state.playlists.length > 0);
 
@@ -2422,7 +2450,7 @@ function renderPlaylists() {
     card.innerHTML = `
       <div class="studio-card-head">
         <div style="display: flex; align-items: center; gap: 14px;">
-          <div class="card-glyph-badge"><svg class="icon"><use href="#icon-playlists"/></svg></div>
+          <div class="card-glyph-badge"><svg class="icon"><use href="#icon-studio"/></svg></div>
           <div>
             <div style="display: flex; align-items: center; gap: 10px;">
               <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-main);">${escapeHtml(pl.title)}</h4>
@@ -2487,6 +2515,18 @@ function renderPlaylists() {
   tableScroll.forEach((position, playlistId) => {
     const wrap = container.querySelector(`.studio-playlist-card[data-playlist-id="${playlistId}"] .studio-table-wrap`);
     if (wrap) { wrap.scrollTop = position.top; wrap.scrollLeft = position.left; }
+  });
+  filterValues.forEach((value, playlistId) => {
+    if (!value) return;
+    const card = container.querySelector(`.studio-playlist-card[data-playlist-id="${playlistId}"]`);
+    const filterInput = card?.querySelector(".playlist-filter");
+    if (filterInput) {
+      filterInput.value = value;
+      const needle = value.trim().toLowerCase();
+      card.querySelectorAll(".studio-channel-row").forEach((row) => {
+        row.classList.toggle("hidden", Boolean(needle) && !(row.dataset.search || "").includes(needle));
+      });
+    }
   });
   requestAnimationFrame(() => window.scrollTo(pageScroll.x, pageScroll.y));
 
@@ -2678,6 +2718,18 @@ $("#guideForm")?.addEventListener("submit", async (event) => {
 $("#downloadGuideXml")?.addEventListener("click", () => downloadGuide($("#guidePlaylistId").value, false).catch((error) => toast(error.message)));
 $("#downloadGuideGz")?.addEventListener("click", () => downloadGuide($("#guidePlaylistId").value, true).catch((error) => toast(error.message)));
 
+function findExtInfComma(line) {
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"' && !inSingle) inDouble = !inDouble;
+    else if (ch === "'" && !inDouble) inSingle = !inSingle;
+    else if (ch === "," && !inSingle && !inDouble) return i;
+  }
+  return -1;
+}
+
 function parseM3u(text) {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
   const items = [];
@@ -2685,7 +2737,7 @@ function parseM3u(text) {
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (line.startsWith("#EXTINF:")) {
-      const comma = line.indexOf(",");
+      const comma = findExtInfComma(line);
       const attributes = comma >= 0 ? line.slice(0, comma) : line;
       const metadata = {};
       for (const match of attributes.matchAll(/([\w-]+)="([^"]*)"/g)) {
@@ -2703,11 +2755,11 @@ function parseM3u(text) {
         metadata
       };
     } else if (pending && line && !line.startsWith("#")) {
-      if (/^https:\/\//i.test(line)) items.push({ ...pending, mediaUrl: line });
+      if (/^https?:\/\//i.test(line)) items.push({ ...pending, mediaUrl: line });
       pending = null;
     }
   }
-  if (!items.length) throw new Error("This file contains no valid HTTPS M3U channels.");
+  if (!items.length) throw new Error("This file contains no valid HTTP/HTTPS M3U channels.");
   return items;
 }
 
@@ -3153,7 +3205,7 @@ async function saveBoxGroupData(syncToBoxes = true) {
         method: "PATCH",
         body: JSON.stringify({
           box_group_id: selected.has(device.id) ? groupId : null,
-          queue_sync: syncToBoxes && isOnline(device)
+          queue_sync: syncToBoxes
         })
       })));
     }
@@ -3161,7 +3213,7 @@ async function saveBoxGroupData(syncToBoxes = true) {
     $("#boxGroupDialog").close();
     await loadDevices();
     await loadBoxGroups();
-    showToast(syncToBoxes ? "Box group saved and pushed to online screens." : "Box group saved as draft (No sync).", "success");
+    showToast(syncToBoxes ? "Box group saved and sync queued for assigned screens." : "Box group saved as draft (No sync).", "success");
   } catch (error) {
     $("#boxGroupError").textContent = error.message;
     showToast(error.message, "error");
@@ -3375,6 +3427,10 @@ async function loadManagedEpg(playlistId) {
   } catch (error) { epgNotice(error.message, true); }
 }
 
+function normalizeEpgKey(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function renderEpgTimeline() {
   if (!epgState.doc) return;
   const dateText = $("#epgScheduleDate").value || new Date().toISOString().slice(0, 10);
@@ -3383,11 +3439,41 @@ function renderEpgTimeline() {
   const query = $("#epgChannelFilter").value.trim().toLowerCase();
   const allProgrammes = [...epgState.doc.querySelectorAll("programme")];
   const guideChannels = [...epgState.doc.querySelectorAll("channel")];
-  const guideById = new Map(guideChannels.map((channel) => [channel.getAttribute("id"), channel]));
+  const guideById = new Map();
+  const guideByIdLower = new Map();
+  const guideByNormName = new Map();
+  for (const channel of guideChannels) {
+    const chId = channel.getAttribute("id") || "";
+    if (!chId) continue;
+    guideById.set(chId, channel);
+    if (!guideByIdLower.has(chId.toLowerCase())) guideByIdLower.set(chId.toLowerCase(), channel);
+    const idNorm = normalizeEpgKey(chId);
+    if (idNorm && !guideByNormName.has(idNorm)) guideByNormName.set(idNorm, channel);
+    for (const dn of channel.querySelectorAll("display-name")) {
+      const nameNorm = normalizeEpgKey(dn.textContent);
+      if (nameNorm && !guideByNormName.has(nameNorm)) guideByNormName.set(nameNorm, channel);
+    }
+  }
+  const matchGuideChannel = (item) => {
+    const tvgId = String(item.metadata?.tvg_id || "").trim();
+    if (tvgId) {
+      const exact = guideById.get(tvgId) || guideByIdLower.get(tvgId.toLowerCase());
+      if (exact) return exact;
+      const normId = normalizeEpgKey(tvgId);
+      if (normId && guideByNormName.has(normId)) return guideByNormName.get(normId);
+    }
+    const normTitle = normalizeEpgKey(item.title);
+    if (normTitle && guideByNormName.has(normTitle)) return guideByNormName.get(normTitle);
+    return undefined;
+  };
   const playlist = state.playlists.find((item) => item.id === epgState.playlistId);
   const channelRows = playlist ? [...(playlist.playlist_items || [])]
     .sort((a, b) => String(a.metadata?.tvg_chno || a.position || "").localeCompare(String(b.metadata?.tvg_chno || b.position || ""), undefined, { numeric: true }))
-    .map((item) => ({ channel: guideById.get(item.metadata?.tvg_id), item, id: item.metadata?.tvg_id || "" }))
+    .map((item) => {
+      const channel = matchGuideChannel(item);
+      const matchedId = channel?.getAttribute("id") || item.metadata?.tvg_id || "";
+      return { channel, item, id: matchedId };
+    })
     : guideChannels.map((channel) => ({ channel, item: null, id: channel.getAttribute("id") }));
   const channels = channelRows.filter(({ channel, item, id }) => {
     const label = `${id} ${item?.title || channel?.querySelector("display-name")?.textContent || ""} ${item?.metadata?.tvg_chno || ""}`.toLowerCase();
@@ -3398,9 +3484,11 @@ function renderEpgTimeline() {
     const name = item?.title || channel?.querySelector("display-name")?.textContent || id || "Unmapped channel";
     const number = item?.metadata?.tvg_chno || item?.position || "—";
     const icon = item?.metadata?.tvg_logo || channel?.querySelector("icon")?.getAttribute("src");
+    const idLower = String(id || "").toLowerCase();
     const programmes = allProgrammes.map((node, index) => ({ node, index })).filter(({ node }) => {
       const start = xmlTvDate(node.getAttribute("start")); const stop = xmlTvDate(node.getAttribute("stop"));
-      return node.getAttribute("channel") === id && start && stop && start < dayEnd && stop > dayStart;
+      const progChannel = String(node.getAttribute("channel") || "");
+      return (progChannel === id || (idLower && progChannel.toLowerCase() === idLower)) && start && stop && start < dayEnd && stop > dayStart;
     });
     return `<div class="epg-channel-line">
       <button class="epg-channel-label" data-channel-id="${escapeHtml(channel ? id : "")}" ${channel ? "" : "disabled"}>${icon ? `<img src="${escapeHtml(icon)}" alt="">` : "<span>▣</span>"}<span><strong>CH ${escapeHtml(number)} · ${escapeHtml(name)}</strong><small>${channel ? escapeHtml(id) : `No guide match · set tvg-id`}</small></span></button>
@@ -3539,14 +3627,8 @@ $("#eventSearchInput")?.addEventListener("input", (e) => {
 
 $$("[data-sport-filter]").forEach((pill) => {
   pill.addEventListener("click", () => {
-    $$("[data-sport-filter]").forEach((p) => {
-      p.classList.remove("active-sport-pill");
-      p.style.opacity = "0.7";
-      p.style.border = "none";
-    });
-    pill.classList.add("active-sport-pill");
-    pill.style.opacity = "1";
-    pill.style.border = "1px solid var(--accent)";
+    $$("[data-sport-filter]").forEach((p) => p.classList.remove("active"));
+    pill.classList.add("active");
     activeSportFilter = pill.dataset.sportFilter;
     renderEventChannels();
   });
@@ -3557,19 +3639,30 @@ async function loadEventChannels() {
     const data = await api("/api/v1/admin/event-channels");
     state.events = data.events || [];
     renderEventChannels();
+    updateNavBadges();
   } catch (error) {
     showToast(`Failed to load event channels: ${error.message}`, "error");
   }
 }
 
+setInterval(() => {
+  if (state.session && $("#eventsView") && !$("#eventsView").classList.contains("hidden")) {
+    loadEventChannels().catch(() => { });
+  }
+}, 60_000);
+
 function isEventActive(event) {
+  if (event.is_online === false || String(event.is_online) === "false") return false;
   if (event.status === "disabled" || event.status === "expired") return false;
   const start = new Date(event.start_time).getTime();
-  const end = new Date(event.end_time).getTime();
-  const preBuffer = (Number.isFinite(Number(event.pre_buffer_hours)) ? Number(event.pre_buffer_hours) : 0.5) * 3600_000;
-  const postBuffer = (Number.isFinite(Number(event.post_buffer_hours)) ? Number(event.post_buffer_hours) : 0.5) * 3600_000;
+  const rawEnd = new Date(event.end_time).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(rawEnd)) return true;
+  const rawDuration = rawEnd - start;
+  const end = (rawDuration > 0 && rawDuration <= 12 * 3600_000) ? rawEnd : start + 3 * 3600_000;
+  const preHours = Number.isFinite(Number(event.pre_buffer_hours)) ? Math.min(Math.max(Number(event.pre_buffer_hours), 0), 6) : 0.5;
+  const postHours = Number.isFinite(Number(event.post_buffer_hours)) ? Math.min(Math.max(Number(event.post_buffer_hours), 0), 6) : 0.5;
   const now = Date.now();
-  return now >= (start - preBuffer) && now <= (end + postBuffer);
+  return now >= (start - preHours * 3600_000) && now <= (end + postHours * 3600_000);
 }
 
 function renderEventChannels() {
@@ -3598,10 +3691,18 @@ function renderEventChannels() {
   const activeCount = (state.events || []).filter(isEventActive).length;
   if ($("#eventCount")) $("#eventCount").textContent = state.events.length;
   if ($("#activeEventCount")) $("#activeEventCount").textContent = activeCount;
+  const providerSourceEl = $("#eventsProviderSource");
+  if (providerSourceEl) {
+    providerSourceEl.textContent = (getSettings().providerFeedUrl || DEFAULT_SETTINGS.providerFeedUrl).replace(/^https?:\/\//i, "");
+  }
+  updateNavBadges();
 
   if ($("#eventsEmpty")) $("#eventsEmpty").classList.toggle("hidden", state.events.length > 0);
   if (!filtered.length && state.events.length > 0) {
-    container.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:30px;">No live events match "${escapeHtml(eventSearchQuery)}".</div>`;
+    const emptyMsg = eventSearchQuery
+      ? `No live events match "${escapeHtml(eventSearchQuery)}".`
+      : `No live events match the "${escapeHtml(activeSportFilter)}" filter.`;
+    container.innerHTML = `<div class="events-filter-empty">${emptyMsg}</div>`;
     return;
   }
 
@@ -3713,16 +3814,16 @@ function renderProviderStreams() {
       : `<button type="button" class="primary small-btn inject-single-btn" data-idx="${idx}">Inject Stream</button>`;
 
     return `
-      <div class="channel-item-row" style="padding:10px 14px; background:var(--panel-card); border:1px solid var(--line); border-radius:var(--radius-sm);">
-        <div class="channel-info-meta" style="flex:1;">
-          <strong style="font-size:13.5px;">${chnoBadge} ${escapeHtml(stream.title)} ${leagueBadge}</strong>
-          <small style="margin-top:4px;">
+      <div class="channel-item-row">
+        <div class="channel-info-meta">
+          <strong>${chnoBadge} ${escapeHtml(stream.title)} ${leagueBadge}</strong>
+          <small>
             <span>${escapeHtml(stream.groupTitle)}</span> · 
             <span>tvg-id: <code>${escapeHtml(stream.tvgId)}</code></span> · 
-            <span>Game: ${startDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ET</span>
+            <span>Game: ${startDate.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit" })} ET</span>
           </small>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div class="channel-item-actions">
           <button type="button" class="secondary small-btn preview-prov-stream" data-url="${escapeHtml(stream.streamUrl)}" data-title="${escapeHtml(stream.title)}">Test</button>
           ${injectBtn}
         </div>
@@ -3763,8 +3864,8 @@ $("#providerStreamSearch")?.addEventListener("input", (e) => {
 
 $$("[data-prov-sport]").forEach((pill) => {
   pill.addEventListener("click", () => {
-    $$("[data-prov-sport]").forEach((p) => p.classList.remove("active-prov-pill"));
-    pill.classList.add("active-prov-pill");
+    $$("[data-prov-sport]").forEach((p) => p.classList.remove("active"));
+    pill.classList.add("active");
     activeProvSport = pill.dataset.provSport;
     renderProviderStreams();
   });
@@ -3807,9 +3908,13 @@ $("#injectAllVisibleBtn")?.addEventListener("click", async () => {
 async function ingestConMeFeed() {
   const btn = $("#syncConMeFeedBtn");
   if (btn) btn.disabled = true;
-  showToast("Syncing provider feed from starlite.best…", "info");
+  const feedUrl = getSettings().providerFeedUrl || DEFAULT_SETTINGS.providerFeedUrl;
+  showToast("Syncing provider feed…", "info");
   try {
-    const res = await api("/api/v1/admin/event-channels/ingest", { method: "POST", body: JSON.stringify({}) });
+    const res = await api("/api/v1/admin/event-channels/ingest", {
+      method: "POST",
+      body: JSON.stringify({ url: feedUrl })
+    });
     showToast(`Successfully ingested ${res.ingestedCount} live event channels from provider!`, "success");
     await loadEventChannels();
   } catch (err) {

@@ -9,6 +9,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -160,31 +161,36 @@ fun AmbientBackground(
     backgroundColor: Color = MaterialTheme.colorScheme.background,
     content: @Composable () -> Unit
 ) {
+    val secondaryColor = MaterialTheme.colorScheme.secondary
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(backgroundColor)
-            .background(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        accentColor.copy(alpha = 0.22f),
-                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.10f),
-                        Color.Transparent
-                    ),
-                    center = Offset(0.85f, 0.15f),
-                    radius = 1800f
+            .drawBehind {
+                val primaryRadius = (size.maxDimension * 0.85f).coerceAtLeast(1f)
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            accentColor.copy(alpha = 0.20f),
+                            secondaryColor.copy(alpha = 0.09f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.85f, size.height * 0.15f),
+                        radius = primaryRadius
+                    )
                 )
-            )
-            .background(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF7000FF).copy(alpha = 0.12f),
-                        Color.Transparent
-                    ),
-                    center = Offset(0.1f, 0.9f),
-                    radius = 1400f
+                val secondaryRadius = (size.maxDimension * 0.70f).coerceAtLeast(1f)
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF7000FF).copy(alpha = 0.11f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.12f, size.height * 0.88f),
+                        radius = secondaryRadius
+                    )
                 )
-            )
+            }
     ) {
         content()
     }

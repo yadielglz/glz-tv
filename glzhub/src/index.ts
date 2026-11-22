@@ -897,6 +897,21 @@ async function updateSite(request: Request, env: Env, siteId: string): Promise<R
   return json({ site: sites[0] });
 }
 
+async function deleteSite(request: Request, env: Env, siteId: string): Promise<Response> {
+  const user = await adminUser(request, env);
+  const existing = await supabaseJson(
+    env,
+    `/rest/v1/sites?id=eq.${encodeURIComponent(siteId)}&owner_id=eq.${user.id}&select=id`
+  ) as Record<string, unknown>[];
+  if (!existing[0]) return json({ error: "Property not found." }, 404);
+  await supabaseJson(
+    env,
+    `/rest/v1/sites?id=eq.${encodeURIComponent(siteId)}&owner_id=eq.${user.id}`,
+    { method: "DELETE" }
+  );
+  return json({ ok: true });
+}
+
 async function listApps(request: Request, env: Env): Promise<Response> {
   const user = await adminUser(request, env);
   const apps = await supabaseJson(env,
@@ -1852,51 +1867,73 @@ function escapeXml(value: unknown): string {
     .trim();
 }
 
-function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now()): boolean {
+const DEFAULT_EVENT_DURATION_MS = 3 * 3600_000;
+const MAX_EVENT_DURATION_MS = 12 * 3600_000;
+const MAX_EVENT_BUFFER_HOURS = 6;
+
+function clampEventBufferHours(value: unknown, fallback = 0.5): number {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.min(parsed, MAX_EVENT_BUFFER_HOURS);
+}
+
+function resolveEventWindow(event: Record<string, unknown>, now = Date.now()): {
+  startMs: number;
+  endMs: number;
+  winStartMs: number;
+  winEndMs: number;
+  hasValidWindow: boolean;
+} {
+  const startTime = new Date(String(event.start_time || "")).getTime();
+  const rawEndTime = new Date(String(event.end_time || "")).getTime();
+  const hasValidWindow = Number.isFinite(startTime) && Number.isFinite(rawEndTime);
+  const startMs = Number.isFinite(startTime) ? startTime : now;
+  const rawDuration = rawEndTime - startMs;
+  const endMs = (Number.isFinite(rawEndTime) && rawDuration > 0 && rawDuration <= MAX_EVENT_DURATION_MS)
+    ? rawEndTime
+    : startMs + DEFAULT_EVENT_DURATION_MS;
+  const preBufferMs = clampEventBufferHours(event.pre_buffer_hours, 0.5) * 3600_000;
+  const postBufferMs = clampEventBufferHours(event.post_buffer_hours, 0.5) * 3600_000;
+  return {
+    startMs,
+    endMs,
+    winStartMs: startMs - preBufferMs,
+    winEndMs: endMs + postBufferMs,
+    hasValidWindow
+  };
+}
+
+export function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now()): boolean {
   if (event.is_online === false || String(event.is_online) === "false") return false;
   const status = String(event.status || "active");
   if (status === "disabled" || status === "expired") return false;
 
-  const startTime = new Date(String(event.start_time)).getTime();
-  const rawEndTime = new Date(String(event.end_time)).getTime();
-  if (!isNaN(startTime) && !isNaN(rawEndTime)) {
-    const rawDuration = rawEndTime - startTime;
-    const endTime = (rawDuration > 0 && rawDuration <= 3.5 * 3600_000)
-      ? rawEndTime
-      : startTime + 3 * 3600_000;
-    const preBuffer = Math.min(Number(event.pre_buffer_hours ?? 0.5) || 0.5, 1) * 3600_000;
-    const postBuffer = Math.min(Number(event.post_buffer_hours ?? 0.5) || 0.5, 1) * 3600_000;
-    const winStart = startTime - preBuffer;
-    const winEnd = endTime + postBuffer;
-    if (now < winStart || now > winEnd) {
-      return false; // Event has ended or is outside active window
-    }
+  const { winStartMs, winEndMs, hasValidWindow } = resolveEventWindow(event, now);
+  if (hasValidWindow && (now < winStartMs || now > winEndMs)) {
+    return false; // Event has ended or is outside active window
   }
 
-  const title = String(event.title || "").toUpperCase();
-  const group = String(event.group_title || "").toUpperCase();
-  const tvgId = String(event.tvg_id || "").toUpperCase();
-  const sportLeague = String(event.sport_league || "").toUpperCase();
-  const fullText = `${sportLeague} ${title} ${group} ${tvgId}`;
+  const title = String(event.title || "");
+  const group = String(event.group_title || "");
+  const tvgId = String(event.tvg_id || "");
+  const tvgName = String(event.tvg_name || "");
+  const sportLeague = String(event.sport_league || "");
 
-  // For auto-ingested channels, strictly target MLB & NFL ONLY!
+  // For auto-ingested channels, align with isLiveEventChannel (MLB, NBA, NFL, NHL, NCAA, UFC, Boxing).
   // Manually created channels (auto_ingested === false) bypass league filtering.
   if (event.auto_ingested !== false) {
-    const isMlbOrNfl = /\b(MLB|NFL)\b/i.test(fullText) ||
-                       /^(MLB|NFL):/i.test(title) ||
-                       /\b(BASEBALL|FOOTBALL)\b/i.test(fullText);
-    if (!isMlbOrNfl) return false;
+    if (!isLiveEventChannel(group, title, tvgId, tvgName, sportLeague)) return false;
+  } else {
+    const fullText = `${sportLeague} ${title} ${group} ${tvgId}`.toUpperCase();
+    const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(group) ||
+                     /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(tvgId) ||
+                     /^(DE|GER):/i.test(title) ||
+                     /\[DE\]|\(DE\)|\|DE\|/i.test(fullText);
+    if (isGerman) return false;
+
+    const isPlaceholder = /\b(WILL START SOON|OFFLINE|OFF-LINE|NO EVENT|STREAM UNAVAILABLE|TEST|EMPTY|FEED OFFLINE|STANDBY|CHANNEL UNAVAILABLE|TEMPORARILY OFFLINE|NOT AVAILABLE|NO BROADCAST|NO SIGNAL|STREAM DOWN|OFF AIR|SIGN OFF|CHANNEL OFFLINE|STREAMING SOON|EVENT ENDED|FEED DOWN|TBD)\b/i.test(fullText);
+    if (isPlaceholder) return false;
   }
-
-  // Check offline / placeholder / German feed keywords
-  const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(group) ||
-                   /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(tvgId) ||
-                   /^(DE|GER):/i.test(title) ||
-                   /\[DE\]|\(DE\)|\|DE\|/i.test(fullText);
-  if (isGerman) return false;
-
-  const isPlaceholder = /\b(WILL START SOON|OFFLINE|OFF-LINE|NO EVENT|STREAM UNAVAILABLE|TEST|EMPTY|FEED OFFLINE|STANDBY|CHANNEL UNAVAILABLE|TEMPORARILY OFFLINE|NOT AVAILABLE|NO BROADCAST|NO SIGNAL|STREAM DOWN|OFF AIR|SIGN OFF|CHANNEL OFFLINE|STREAMING SOON|EVENT ENDED|FEED DOWN|TBD)\b/i.test(fullText);
-  if (isPlaceholder) return false;
 
   return true;
 }
@@ -1925,17 +1962,11 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
     const sportLeague = escapeXml(cleanText(String(event.sport_league || "SPORTS")));
     const logoUrl = event.logo_url ? escapeXml(String(event.logo_url)) : "";
 
-    const startTime = new Date(String(event.start_time));
-    const rawEndTime = new Date(String(event.end_time));
-    const rawDuration = rawEndTime.getTime() - startTime.getTime();
-    const endTime = (rawDuration > 0 && rawDuration <= 3.5 * 3600_000)
-      ? rawEndTime
-      : new Date(startTime.getTime() + 3 * 3600_000);
-    const preBuffer = Math.min(Number(event.pre_buffer_hours ?? 0.5) || 0.5, 1) * 3600_000;
-    const postBuffer = Math.min(Number(event.post_buffer_hours ?? 0.5) || 0.5, 1) * 3600_000;
-
-    const winStart = new Date(startTime.getTime() - preBuffer);
-    const winEnd = new Date(endTime.getTime() + postBuffer);
+    const { startMs, endMs, winStartMs, winEndMs } = resolveEventWindow(event, now);
+    const startTime = new Date(startMs);
+    const endTime = new Date(endMs);
+    const winStart = new Date(winStartMs);
+    const winEnd = new Date(winEndMs);
 
     channelNodes += `  <channel id="${tvgId}">\n`;
     channelNodes += `    <display-name>${tvgId}</display-name>\n`;
@@ -2031,8 +2062,19 @@ async function exportManagedGuide(
 async function pushPlaylist(request: Request, env: Env, playlistId: string): Promise<Response> {
   const { user } = await ownedPlaylist(request, env, playlistId);
   const token = crypto.randomUUID();
+  const groups = await supabaseJson(env,
+    `/rest/v1/box_groups?owner_id=eq.${user.id}&playlist_id=eq.${encodeURIComponent(playlistId)}&select=id`
+  ).catch(() => []) as Record<string, unknown>[];
+  const groupIds = (groups || []).map((g) => String(g.id)).filter(Boolean);
+  const orFilters = [
+    `assigned_playlist_id.eq.${encodeURIComponent(playlistId)}`,
+    `assigned_playlist_id.is.null`
+  ];
+  if (groupIds.length > 0) {
+    orFilters.push(`box_group_id.in.(${groupIds.map((id) => encodeURIComponent(id)).join(",")})`);
+  }
   const devices = await supabaseJson(env,
-    `/rest/v1/devices?owner_id=eq.${user.id}&or=(assigned_playlist_id.eq.${encodeURIComponent(playlistId)},assigned_playlist_id.is.null)&select=id,config_version,last_seen_at`
+    `/rest/v1/devices?owner_id=eq.${user.id}&or=(${orFilters.join(",")})&select=id,config_version,last_seen_at`
   ) as Record<string, unknown>[];
   const pushedAt = new Date().toISOString();
   const tenMinutesAgo = Date.now() - 10 * 60_000;
@@ -2066,6 +2108,7 @@ interface ParsedEventChannel {
   channelNumber: string;
   startTime: string;
   endTime: string;
+  hasInlineTime?: boolean;
 }
 
 function parseSubChannelNumber(chno: unknown): number {
@@ -2104,17 +2147,39 @@ function getEasternOffsetHours(date: Date): number {
   return -4;
 }
 
-function parseInlineEventTime(title: string): { startTime: Date; endTime: Date } {
+function getEasternDateParts(date: Date): { year: number; month: number; day: number; hour: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    hour12: false
+  }).formatToParts(date);
+  const year = parseInt(parts.find(p => p.type === 'year')?.value || String(date.getUTCFullYear()), 10);
+  const month = parseInt(parts.find(p => p.type === 'month')?.value || String(date.getUTCMonth() + 1), 10) - 1;
+  const day = parseInt(parts.find(p => p.type === 'day')?.value || String(date.getUTCDate()), 10);
+  const rawHour = parseInt(parts.find(p => p.type === 'hour')?.value || String(date.getUTCHours()), 10);
+  const hour = rawHour === 24 ? 0 : rawHour;
+  return { year, month, day, hour };
+}
+
+function easternWallTimeToUtc(year: number, month: number, day: number, hours: number, minutes: number): Date {
+  // Estimate UTC using standard EST (-5) then refine with the exact America/New_York offset for that date.
+  const approxUtc = new Date(Date.UTC(year, month, day, hours + 5, minutes));
+  const targetOffset = getEasternOffsetHours(approxUtc);
+  return new Date(Date.UTC(year, month, day, hours - targetOffset, minutes));
+}
+
+export function parseInlineEventTime(title: string, now = new Date()): { startTime: Date; endTime: Date; hasInlineTime: boolean } {
   const months: Record<string, number> = {
     jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
     jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
   };
-  const now = new Date();
-  const etOffset = getEasternOffsetHours(now);
-  const DEFAULT_GAME_DURATION_MS = 3 * 3600_000; // 3 hours
+  const etNow = getEasternDateParts(now);
 
-  // 1. Matches `@ Sep 16 7:10 PM`, `Oct 18 7:10PM`, `10/18 7:10 PM`
-  const matchWithMonth = title.match(/(?:@|\||-|\(|\[|\b)\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}[\/-]\d{1,2})(?:\s+(\d{1,2}))?\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  // 1. Matches `@ Sep 16 7:10 PM`, `Nov 22, 7:10 PM`, `Oct 18 7:10PM`, `10/18, 7:10 PM`
+  const matchWithMonth = title.match(/(?:@|\||-|\(|\[|\b)\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}[\/-]\d{1,2})\.?(?:\s+(\d{1,2}))?,?\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   if (matchWithMonth) {
     const monthPart = matchWithMonth[1].toLowerCase();
     const dayPart = matchWithMonth[2];
@@ -2126,8 +2191,8 @@ function parseInlineEventTime(title: string): { startTime: Date; endTime: Date }
     else if (ampm === "AM" && hours === 12) hours = 0;
     else if (!ampm && hours >= 1 && hours <= 11) hours += 12;
 
-    let month = now.getMonth();
-    let day = now.getDate();
+    let month = etNow.month;
+    let day = etNow.day;
 
     if (monthPart in months) {
       month = months[monthPart];
@@ -2138,10 +2203,13 @@ function parseInlineEventTime(title: string): { startTime: Date; endTime: Date }
       if (d > 0 && d <= 31) day = d;
     }
 
-    const year = now.getFullYear();
-    const start = new Date(Date.UTC(year, month, day, hours - etOffset, minutes));
-    const end = new Date(start.getTime() + DEFAULT_GAME_DURATION_MS);
-    return { startTime: start, endTime: end };
+    let year = etNow.year;
+    if (etNow.month === 11 && month === 0) year += 1;
+    else if (etNow.month === 0 && month === 11) year -= 1;
+
+    const start = easternWallTimeToUtc(year, month, day, hours, minutes);
+    const end = new Date(start.getTime() + DEFAULT_EVENT_DURATION_MS);
+    return { startTime: start, endTime: end, hasInlineTime: true };
   }
 
   // 2. Matches `7:10 PM ET`, `(7:10 PM)`, `@ 7:10 PM`, `7:10PM`
@@ -2155,32 +2223,15 @@ function parseInlineEventTime(title: string): { startTime: Date; endTime: Date }
     else if (ampm === "AM" && hours === 12) hours = 0;
     else if (!ampm && hours >= 1 && hours <= 11) hours += 12;
 
-    const etNowParts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      year: 'numeric', month: 'numeric', day: 'numeric'
-    }).formatToParts(now);
-    const year = parseInt(etNowParts.find(p => p.type === 'year')?.value || String(now.getFullYear()), 10);
-    const month = parseInt(etNowParts.find(p => p.type === 'month')?.value || String(now.getMonth() + 1), 10) - 1;
-    const day = parseInt(etNowParts.find(p => p.type === 'day')?.value || String(now.getDate()), 10);
-
-    const start = new Date(Date.UTC(year, month, day, hours - etOffset, minutes));
-    const end = new Date(start.getTime() + DEFAULT_GAME_DURATION_MS);
-    return { startTime: start, endTime: end };
+    const start = easternWallTimeToUtc(etNow.year, etNow.month, etNow.day, hours, minutes);
+    const end = new Date(start.getTime() + DEFAULT_EVENT_DURATION_MS);
+    return { startTime: start, endTime: end, hasInlineTime: true };
   }
 
   // 3. Fallback when title does not state an explicit time: align start to Eastern Time for today
-  const etNowParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', hour12: false
-  }).formatToParts(now);
-  const year = parseInt(etNowParts.find(p => p.type === 'year')?.value || String(now.getFullYear()), 10);
-  const month = parseInt(etNowParts.find(p => p.type === 'month')?.value || String(now.getMonth() + 1), 10) - 1;
-  const day = parseInt(etNowParts.find(p => p.type === 'day')?.value || String(now.getDate()), 10);
-  const curHour = parseInt(etNowParts.find(p => p.type === 'hour')?.value || String(now.getHours()), 10);
-
-  const start = new Date(Date.UTC(year, month, day, curHour - etOffset, 0));
-  const end = new Date(start.getTime() + DEFAULT_GAME_DURATION_MS);
-  return { startTime: start, endTime: end };
+  const start = easternWallTimeToUtc(etNow.year, etNow.month, etNow.day, etNow.hour, 0);
+  const end = new Date(start.getTime() + DEFAULT_EVENT_DURATION_MS);
+  return { startTime: start, endTime: end, hasInlineTime: false };
 }
 
 function detectSportLeague(tvgId: string, groupTitle: string, title: string): string {
@@ -2223,11 +2274,12 @@ function isDuplicateMainSportsNetwork(groupTitle: string, title: string, tvgId: 
          /\bNFL\s*NETWORK\b/.test(fullText);
 }
 
-function isLiveEventChannel(groupTitle: string, title: string, tvgId: string, tvgName = ""): boolean {
+export function isLiveEventChannel(groupTitle: string, title: string, tvgId: string, tvgName = "", sportLeague = ""): boolean {
   const groupUpper = groupTitle.toUpperCase();
   const titleUpper = title.toUpperCase();
   const tvgIdUpper = tvgId.toUpperCase();
-  const fullText = `${groupUpper} ${titleUpper} ${tvgIdUpper} ${tvgName.toUpperCase()}`;
+  const leagueUpper = sportLeague.toUpperCase();
+  const fullText = `${leagueUpper} ${groupUpper} ${titleUpper} ${tvgIdUpper} ${tvgName.toUpperCase()}`;
 
   // 1. Strictly exclude DE (German) channels & non-US / foreign German feeds
   const isGerman = /\b(DE|DEUTSCHLAND|GERMANY)\b/i.test(groupUpper) ||
@@ -2257,7 +2309,21 @@ function isLiveEventChannel(groupTitle: string, title: string, tvgId: string, tv
   return containsMatchup || isEventGroup;
 }
 
-function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
+function extractExtInfTitle(extInfLine: string): string {
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < extInfLine.length; i++) {
+    const ch = extInfLine[i];
+    if (ch === '"' && !inSingle) inDouble = !inDouble;
+    else if (ch === "'" && !inDouble) inSingle = !inSingle;
+    else if (ch === "," && !inSingle && !inDouble) {
+      return extInfLine.substring(i + 1).trim() || "Live Event";
+    }
+  }
+  return "Live Event";
+}
+
+export function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
   const lines = m3uText.split(/\r?\n/);
   const events: ParsedEventChannel[] = [];
   let pendingExtInf: string | null = null;
@@ -2276,8 +2342,7 @@ function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
     const tvgNameMatch = pendingExtInf.match(/tvg-name="([^"]+)"/i);
     const groupTitleMatch = pendingExtInf.match(/group-title="([^"]+)"/i);
     const tvgLogoMatch = pendingExtInf.match(/tvg-logo="([^"]+)"/i);
-    const commaIndex = pendingExtInf.indexOf(",");
-    const title = commaIndex >= 0 ? pendingExtInf.substring(commaIndex + 1).trim() : "Live Event";
+    const title = extractExtInfTitle(pendingExtInf);
 
     const tvgId = tvgIdMatch ? tvgIdMatch[1] : `event.${events.length + 1}`;
     const tvgName = tvgNameMatch ? tvgNameMatch[1] : tvgId;
@@ -2304,7 +2369,8 @@ function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
       streamUrl,
       channelNumber: "",
       startTime: parsedTimes.startTime.toISOString(),
-      endTime: parsedTimes.endTime.toISOString()
+      endTime: parsedTimes.endTime.toISOString(),
+      hasInlineTime: parsedTimes.hasInlineTime
     });
 
     pendingExtInf = null;
@@ -2376,20 +2442,21 @@ async function listEventChannels(request: Request, env: Env): Promise<Response> 
     String(event.group_title || ""),
     String(event.title || ""),
     String(event.tvg_id || ""),
-    String(event.tvg_name || "")
+    String(event.tvg_name || ""),
+    String(event.sport_league || "")
   ));
   return json({ events: sortEventChannels(visibleRows) });
 }
 
 async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChannel[]): Promise<unknown> {
   const existingRows = await supabaseJson(env,
-    "/rest/v1/event_channels?select=id,tvg_id"
+    "/rest/v1/event_channels?select=id,tvg_id,status,pre_buffer_hours,post_buffer_hours,start_time,end_time,channel_number,auto_ingested"
   ).catch(() => []) as Record<string, unknown>[];
 
-  const existingMap = new Map<string, string>();
+  const existingMap = new Map<string, Record<string, unknown>>();
   if (Array.isArray(existingRows)) {
     for (const row of existingRows) {
-      if (row.tvg_id && row.id) existingMap.set(String(row.tvg_id), String(row.id));
+      if (row.tvg_id && row.id) existingMap.set(String(row.tvg_id), row);
     }
   }
 
@@ -2398,7 +2465,51 @@ async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChanne
   const toInsert: Record<string, unknown>[] = [];
 
   for (const item of renumbered) {
-    const existingId = existingMap.get(item.tvgId);
+    const existing = existingMap.get(item.tvgId);
+    let startTime = item.startTime;
+    let endTime = item.endTime;
+    let preBufferHours = 0.5;
+    let postBufferHours = 0.5;
+    let status = "active";
+    let channelNumber = item.channelNumber;
+    let autoIngested = true;
+
+    if (existing) {
+      if (typeof existing.status === "string" && existing.status) {
+        status = existing.status;
+      }
+      if (Number.isFinite(Number(existing.pre_buffer_hours))) {
+        preBufferHours = Number(existing.pre_buffer_hours);
+      }
+      if (Number.isFinite(Number(existing.post_buffer_hours))) {
+        postBufferHours = Number(existing.post_buffer_hours);
+      }
+      if (typeof existing.channel_number === "string" && existing.channel_number.trim()) {
+        channelNumber = existing.channel_number;
+      }
+      if (existing.auto_ingested === false) {
+        autoIngested = false;
+      }
+
+      const existingStartStr = typeof existing.start_time === "string" ? existing.start_time : "";
+      const existingEndStr = typeof existing.end_time === "string" ? existing.end_time : "";
+      const existingStartMs = existingStartStr ? new Date(existingStartStr).getTime() : NaN;
+      const existingEndMs = existingEndStr ? new Date(existingEndStr).getTime() : NaN;
+      const parsedEndMs = new Date(item.endTime).getTime();
+
+      if (item.hasInlineTime === false) {
+        // Branch 3 (no inline time): preserve existing start/end so cron does not roll window forward indefinitely.
+        if (Number.isFinite(existingStartMs)) startTime = existingStartStr;
+        if (Number.isFinite(existingEndMs)) endTime = existingEndStr;
+      } else if (Number.isFinite(existingEndMs)) {
+        const hasCustomDuration = Number.isFinite(existingStartMs) &&
+          Math.abs((existingEndMs - existingStartMs) - DEFAULT_EVENT_DURATION_MS) > 60_000;
+        if (hasCustomDuration || (Number.isFinite(parsedEndMs) && existingEndMs > parsedEndMs)) {
+          endTime = existingEndStr;
+        }
+      }
+    }
+
     const payload = {
       tvg_id: item.tvgId,
       tvg_name: item.tvgName,
@@ -2407,18 +2518,18 @@ async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChanne
       group_title: item.groupTitle,
       logo_url: item.logoUrl,
       stream_url: item.streamUrl,
-      channel_number: item.channelNumber,
-      start_time: item.startTime,
-      end_time: item.endTime,
-      pre_buffer_hours: 0.5,
-      post_buffer_hours: 0.5,
-      status: "active",
-      auto_ingested: true,
+      channel_number: channelNumber,
+      start_time: startTime,
+      end_time: endTime,
+      pre_buffer_hours: preBufferHours,
+      post_buffer_hours: postBufferHours,
+      status,
+      auto_ingested: autoIngested,
       updated_at: nowIso
     };
 
-    if (existingId) {
-      toUpdate.push({ id: existingId, body: payload });
+    if (existing?.id) {
+      toUpdate.push({ id: String(existing.id), body: payload });
     } else {
       toInsert.push(payload);
     }
@@ -2491,7 +2602,11 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
     const text = await response.text();
     const parsed = parseConMeM3u(text);
 
-    if (parsed.length === 0) return json({ ok: true, ingestedCount: 0, events: [] });
+    if (parsed.length === 0) {
+      await pruneAutoIngestedEventChannels(env, new Set());
+      await pushConfigUpdateToAllDevices(env);
+      return json({ ok: true, ingestedCount: 0, events: [] });
+    }
 
     // Deduplicate by tvgId in memory to prevent Postgres payload conflict errors
     const uniqueMap = new Map<string, typeof parsed[0]>();
@@ -2512,7 +2627,7 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
   }
 }
 
-function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
+export function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
   const lines = m3uText.split(/\r?\n/);
   const events: ParsedEventChannel[] = [];
   let pendingExtInf: string | null = null;
@@ -2531,8 +2646,7 @@ function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
     const tvgNameMatch = pendingExtInf.match(/tvg-name="([^"]+)"/i);
     const groupTitleMatch = pendingExtInf.match(/group-title="([^"]+)"/i);
     const tvgLogoMatch = pendingExtInf.match(/tvg-logo="([^"]+)"/i);
-    const commaIndex = pendingExtInf.indexOf(",");
-    const title = commaIndex >= 0 ? pendingExtInf.substring(commaIndex + 1).trim() : "Live Event";
+    const title = extractExtInfTitle(pendingExtInf);
 
     const tvgId = tvgIdMatch ? tvgIdMatch[1] : `event.${events.length + 1}`;
     const tvgName = tvgNameMatch ? tvgNameMatch[1] : tvgId;
@@ -2560,7 +2674,8 @@ function parseAllProviderStreams(m3uText: string): ParsedEventChannel[] {
       streamUrl,
       channelNumber: "",
       startTime: parsedTimes.startTime.toISOString(),
-      endTime: parsedTimes.endTime.toISOString()
+      endTime: parsedTimes.endTime.toISOString(),
+      hasInlineTime: parsedTimes.hasInlineTime
     });
 
     pendingExtInf = null;
@@ -2675,6 +2790,7 @@ async function createEventChannel(request: Request, env: Env): Promise<Response>
     })
   }) as Record<string, unknown>[];
 
+  await pushConfigUpdateToAllDevices(env);
   return json({ event: rows[0] }, 201);
 }
 
@@ -2684,6 +2800,10 @@ async function updateEventChannel(request: Request, env: Env, eventId: string): 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (typeof input.title === "string") updates.title = input.title.trim();
   if (typeof input.channelNumber === "string") updates.channel_number = input.channelNumber.trim();
+  if (typeof input.sportLeague === "string") updates.sport_league = input.sportLeague.trim() || "SPORTS";
+  if (typeof input.groupTitle === "string") updates.group_title = input.groupTitle.trim() || "Major League Sports (Events)";
+  if (typeof input.streamUrl === "string") updates.stream_url = requiredString(input.streamUrl, "streamUrl", 2048);
+  if (input.logoUrl !== undefined) updates.logo_url = optionalString(input.logoUrl, "logoUrl", 2048);
   if (typeof input.startTime === "string") updates.start_time = input.startTime;
   if (typeof input.endTime === "string") updates.end_time = input.endTime;
   if (typeof input.preBufferHours === "number") updates.pre_buffer_hours = input.preBufferHours;
@@ -2701,6 +2821,7 @@ async function updateEventChannel(request: Request, env: Env, eventId: string): 
     }
   ) as Record<string, unknown>[];
 
+  await pushConfigUpdateToAllDevices(env);
   return json({ event: rows[0] });
 }
 
@@ -2709,6 +2830,7 @@ async function deleteEventChannel(request: Request, env: Env, eventId: string): 
   await supabaseJson(env, `/rest/v1/event_channels?id=eq.${encodeURIComponent(eventId)}`, {
     method: "DELETE"
   });
+  await pushConfigUpdateToAllDevices(env);
   return json({ ok: true });
 }
 
@@ -2736,15 +2858,16 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
   const groupRules = new Map(rules.filter((rule) => rule.target_type === 'group').map((rule) => [String(rule.playlist_item_id), String(rule.decision)]));
   const deviceRules = new Map(rules.filter((rule) => rule.target_type === 'device').map((rule) => [String(rule.playlist_item_id), String(rule.decision)]));
 
-  let m3uContent = '#EXTM3U x-tvg-url="https://play.glztech.com/epg.xml.gz"\n\n';
-
   const cleanText = (value: unknown): string => String(value ?? "").replace(/[\r\n]+/g, " ").trim();
   const cleanAttribute = (value: unknown): string => cleanText(value).replace(/"/g, "'");
 
+  const firstPlaylistEpg = playlists.find((pl) => typeof pl.epg_url === "string" && pl.epg_url.trim())?.epg_url;
+  const headerEpgUrl = typeof firstPlaylistEpg === "string" && firstPlaylistEpg.trim()
+    ? cleanAttribute(firstPlaylistEpg)
+    : "https://play.glztech.com/epg.xml.gz";
+  let m3uContent = `#EXTM3U x-tvg-url="${headerEpgUrl}"\n\n`;
+
   for (const pl of playlists) {
-    if (typeof pl.epg_url === "string" && pl.epg_url) {
-      m3uContent = `#EXTM3U x-tvg-url="${cleanAttribute(pl.epg_url)}"\n\n`;
-    }
     const groupTitle = cleanAttribute(pl.title || "TV");
     const items = (pl.playlist_items as Record<string, unknown>[]) || [];
     items.sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
@@ -2787,7 +2910,8 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
         String(event.group_title || ""),
         String(event.title || ""),
         String(event.tvg_id || ""),
-        String(event.tvg_name || "")
+        String(event.tvg_name || ""),
+        String(event.sport_league || "")
       )) continue;
       const channelDisplayName = "SPORTS PPV";
       const mediaUrl = String(event.stream_url || "");
@@ -2800,12 +2924,7 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
       const channelGroup = cleanAttribute(event.group_title || "Major League Sports (Events)");
       const eventTitleAttr = ` x-event-title="${cleanAttribute(event.title || "Live Sports Event")}"`;
       const eventLeagueAttr = ` x-event-league="${cleanAttribute(event.sport_league || "SPORTS")}"`;
-      const startMs = new Date(String(event.start_time || "")).getTime();
-      const rawEndMs = new Date(String(event.end_time || "")).getTime();
-      const gameStartMs = Number.isFinite(startMs) ? startMs : now;
-      const gameEndMs = (!Number.isFinite(rawEndMs) || rawEndMs <= gameStartMs || (rawEndMs - gameStartMs) > 3.5 * 3600_000)
-        ? gameStartMs + 3 * 3600_000
-        : rawEndMs;
+      const { startMs: gameStartMs, endMs: gameEndMs } = resolveEventWindow(event, now);
       const eventStartAttr = ` x-event-start="${Math.round(gameStartMs)}"`;
       const eventEndAttr = ` x-event-end="${Math.round(gameEndMs)}"`;
       m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo}${eventTitleAttr}${eventLeagueAttr}${eventStartAttr}${eventEndAttr} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
@@ -2929,6 +3048,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (policy && (request.method === "GET" || request.method === "PUT")) return channelPolicy(request, env, policy[1].toLowerCase(), policy[2]);
   const adminSite = path.match(/^\/api\/v1\/admin\/sites\/([0-9a-f-]+)$/i);
   if (adminSite && request.method === "PATCH") return updateSite(request, env, adminSite[1]);
+  if (adminSite && request.method === "DELETE") return deleteSite(request, env, adminSite[1]);
   const install = path.match(/^\/api\/v1\/admin\/devices\/([0-9a-f-]+)\/commands$/i);
   if (install && request.method === "POST") return queueInstall(request, env, install[1]);
   if (path === "/api/v1/devices/config" && request.method === "GET") return deviceConfig(request, env);
@@ -3046,6 +3166,8 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
         await saveIngestedEventChannels(env, renumbered).catch((err) => console.error("Auto-ingest save error:", err));
         await pruneAutoIngestedEventChannels(env, new Set(renumbered.map((item) => item.tvgId)));
         ingested = deduplicated.length;
+      } else {
+        await pruneAutoIngestedEventChannels(env, new Set());
       }
     }
   } catch (err) {

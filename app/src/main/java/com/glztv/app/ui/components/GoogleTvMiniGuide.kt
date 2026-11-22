@@ -61,21 +61,24 @@ fun GoogleTvMiniGuide(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val viewport = com.glztv.app.ui.theme.LocalTvViewport.current
     val currentIndex = channels.indexOfFirst { it.id == currentChannel.id }.coerceAtLeast(0)
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = (currentIndex - 1).coerceAtLeast(0)
     )
-    val focusRequester = remember { FocusRequester() }
+    val activeFocusRequester = remember { FocusRequester() }
+
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
 
     LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+        runCatching { activeFocusRequester.requestFocus() }
     }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .background(GoogleTvTokens.BottomOsdScrim)
-            .padding(horizontal = 24.dp, vertical = 20.dp)
+            .padding(horizontal = viewport.safeHorizontal, vertical = viewport.safeVertical)
     ) {
         Column(
             Modifier.fillMaxWidth(),
@@ -89,22 +92,20 @@ fun GoogleTvMiniGuide(
                 Text(
                     "QUICK GUIDE · CHANNELS",
                     color = GoogleTvTokens.TextSecondary,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 0.5.sp
                 )
                 Text(
                     "Press OK to watch",
                     color = GoogleTvTokens.TextTertiary,
-                    fontSize = 11.sp
+                    fontSize = 12.sp
                 )
             }
 
             LazyRow(
                 state = listState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
             ) {
@@ -123,6 +124,7 @@ fun GoogleTvMiniGuide(
                         currentProgrammeTitle = activeProg?.title ?: "Live Broadcast",
                         progress = progress,
                         guide = guide,
+                        focusRequester = if (index == currentIndex) activeFocusRequester else null,
                         onClick = { onTune(channel) }
                     )
                 }
@@ -139,6 +141,7 @@ private fun MiniGuideChannelCard(
     currentProgrammeTitle: String,
     progress: Float,
     guide: EpgGuide,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -148,6 +151,7 @@ private fun MiniGuideChannelCard(
         modifier = Modifier
             .width(220.dp)
             .height(104.dp)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .googleTvFocusable(
                 shape = RoundedCornerShape(14.dp),
                 focusedScale = 1.05f,
@@ -155,9 +159,14 @@ private fun MiniGuideChannelCard(
             ),
         shape = RoundedCornerShape(14.dp),
         color = when {
-            isFocused -> GoogleTvTokens.SurfaceCard
-            isPlaying -> GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
+            isFocused -> GoogleTvTokens.BlueAccent.copy(alpha = 0.28f)
+            isPlaying -> GoogleTvTokens.BlueAccent.copy(alpha = 0.16f)
             else -> GoogleTvTokens.SurfaceCardTranslucent
+        },
+        border = when {
+            isFocused -> androidx.compose.foundation.BorderStroke(2.dp, Color.White)
+            isPlaying -> androidx.compose.foundation.BorderStroke(1.dp, GoogleTvTokens.BlueAccent.copy(alpha = 0.55f))
+            else -> androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f))
         },
         shadowElevation = 0.dp
     ) {

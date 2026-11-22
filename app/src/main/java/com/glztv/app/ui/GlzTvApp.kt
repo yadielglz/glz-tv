@@ -15,6 +15,7 @@ import com.glztv.app.ui.i18n.GlzStrings
 import com.glztv.app.ui.i18n.LocalGlzStrings
 import com.glztv.app.ui.theme.AmbientBackground
 import com.glztv.app.ui.theme.GlzTheme
+import com.glztv.app.ui.theme.ProvideTvViewport
 
 @Composable
 fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int) {
@@ -32,20 +33,22 @@ fun GlzTvApp(deepLinkChannelId: String?, networkPermissionRevision: Int) {
 
     CompositionLocalProvider(LocalGlzStrings provides strings) {
         GlzTheme(themeMode) {
-            AmbientBackground {
-                TvScreen(
-                    themeMode = themeMode,
-                    deepLinkChannelId = deepLinkChannelId,
-                    networkPermissionRevision = networkPermissionRevision,
-                    onThemeMode = {
-                        themeMode = it
-                        prefs.edit().putString(THEME_MODE, it).apply()
-                    },
-                    onLanguageChanged = {
-                        appLanguage = it
-                        prefs.edit().putString(GlzHubManager.APP_LANGUAGE, it).apply()
-                    }
-                )
+            ProvideTvViewport {
+                AmbientBackground {
+                    TvScreen(
+                        themeMode = themeMode,
+                        deepLinkChannelId = deepLinkChannelId,
+                        networkPermissionRevision = networkPermissionRevision,
+                        onThemeMode = {
+                            themeMode = it
+                            prefs.edit().putString(THEME_MODE, it).apply()
+                        },
+                        onLanguageChanged = {
+                            appLanguage = it
+                            prefs.edit().putString(GlzHubManager.APP_LANGUAGE, it).apply()
+                        }
+                    )
+                }
             }
         }
     }

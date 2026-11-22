@@ -84,3 +84,18 @@ test('case-insensitive tvg-id and empty channel stub fallback resolve programmes
  assert.equal(guide.summaries['CNN.US'].now.title,'CNN Live');
  assert.equal(guide.summaries['stub-id'].now.title,'Noticentro');
 });
+test('short prefixes like ESPN do not false-match ESPN2 or ESPNU while quality suffixes still match',()=>{
+ const list=[
+  {id:'lineup-espn',title:'ESPN HD',eventTitle:'',league:'',start:0,end:0},
+  {id:'lineup-espn2',title:'ESPN 2',eventTitle:'',league:'',start:0,end:0}
+ ];
+ const feed=`<tv>
+  <channel id="espn2.us"><display-name>ESPN2</display-name></channel>
+  <channel id="espnu.us"><display-name>ESPNU</display-name></channel>
+  <programme channel="espn2.us" start="20261027190000 +0000" stop="20261027210000 +0000"><title>ESPN2 Show</title></programme>
+  <programme channel="espnu.us" start="20261027190000 +0000" stop="20261027210000 +0000"><title>ESPNU Show</title></programme>
+ </tv>`;
+ const guide=projectGuide(feed,list,now);
+ assert.equal(guide.summaries['lineup-espn'].now,null);
+ assert.equal(guide.summaries['lineup-espn2'].now.title,'ESPN2 Show');
+});

@@ -207,11 +207,13 @@ import com.glztv.app.ui.components.UpdateModalDialog
 import com.glztv.app.model.NetworkInfo
 import com.glztv.app.model.WeatherInfo
 import com.glztv.app.model.EntertainmentApp
+import com.glztv.app.player.RadioPlayerController
 import com.glztv.app.ui.GlzTvApp
 import com.glztv.app.ui.i18n.GlzStrings
 import com.glztv.app.ui.i18n.LocalGlzStrings
 import com.glztv.app.ui.screens.RadioScreen
 import com.glztv.app.ui.screens.WeatherScreen
+import com.glztv.app.ui.theme.LocalTvViewport
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.async
@@ -356,7 +358,8 @@ internal fun TvScreen(
     onLanguageChanged: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val safeHorizontalPadding = if (LocalConfiguration.current.screenWidthDp >= 600) 40.dp else 12.dp
+    val viewport = LocalTvViewport.current
+    val safeHorizontalPadding = viewport.safeHorizontal
     val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
     var appLanguage by remember {
         mutableStateOf(prefs.getString(GlzHubManager.APP_LANGUAGE, "en") ?: "en")
@@ -425,17 +428,34 @@ internal fun TvScreen(
     var sportsBarKioskEnabled by remember {
         mutableStateOf(prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false))
     }
-    var radioPlaying by remember { mutableStateOf(false) }
-    var currentRadioStation by remember { mutableStateOf<RadioStation?>(null) }
+    val radioController = remember { RadioPlayerController(context, prefs, scope) }
+    DisposableEffect(radioController) {
+        onDispose { radioController.release() }
+    }
+    val radioState = radioController.state
+    val radioPlaying = radioState.isPlaying
+    val currentRadioStation = radioState.station
     var radioStations by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
+    var radioLoading by remember { mutableStateOf(true) }
+    var radioFromCache by remember { mutableStateOf(false) }
     var showWeatherModal by remember { mutableStateOf(false) }
     var showYouModal by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            val list = runCatching { RadioCatalogManager.load(prefs, client).stations }.getOrElse { emptyList() }
-            radioStations = list
+    fun refreshRadioStations() {
+        scope.launch {
+            radioLoading = true
+            runCatching {
+                withContext(Dispatchers.IO) { RadioCatalogManager.load(prefs, client) }
+            }.onSuccess { result ->
+                radioStations = result.stations
+                radioFromCache = result.fromCache
+            }
+            radioLoading = false
         }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshRadioStations()
     }
 
     var currentUpdateChannel by remember {
@@ -465,94 +485,9 @@ internal fun TvScreen(
         }
     }
 
-    val radioDataSourceFactory = remember {
-        DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}").setAllowCrossProtocolRedirects(true)
-    }
-    val radioPlayer = remember {
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(radioDataSourceFactory))
-            .build().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                        .setUsage(C.USAGE_MEDIA)
-                        .build(),
-                    true
-                )
-                setHandleAudioBecomingNoisy(true)
-                setWakeMode(C.WAKE_MODE_LOCAL)
-            }
-    }
-
-    DisposableEffect(radioPlayer) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                radioPlaying = isPlaying
-            }
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) {
-                    radioPlaying = false
-                }
-            }
-            override fun onPlayerError(error: PlaybackException) {
-                radioPlaying = false
-            }
-        }
-        radioPlayer.addListener(listener)
-        onDispose {
-            radioPlayer.removeListener(listener)
-            radioPlayer.stop()
-            radioPlayer.release()
-        }
-    }
-
-    fun playRadioStation(station: RadioStation) {
-        if (currentRadioStation?.code == station.code) {
-            if (radioPlaying) {
-                radioPlayer.pause()
-                radioPlaying = false
-            } else {
-                radioPlayer.play()
-                radioPlaying = true
-            }
-            return
-        }
-        currentRadioStation = station
-        radioDataSourceFactory.setDefaultRequestProperties(station.requestHeaders)
-        val metadata = MediaMetadata.Builder()
-            .setTitle(station.name)
-            .setArtist(station.genre)
-            .apply { station.logoUrl?.let { setArtworkUri(Uri.parse(it)) } }
-            .build()
-        radioPlayer.setMediaItem(
-            MediaItem.Builder().setUri(station.streamUrl).setMediaMetadata(metadata).build()
-        )
-        radioPlayer.prepare()
-        radioPlayer.play()
-        radioPlaying = true
-        GlzHubManager.reportActivity(prefs, "radio", station.name)
-    }
-
-    fun toggleRadioPlayPause() {
-        if (radioPlaying) {
-            radioPlayer.pause()
-            radioPlaying = false
-        } else if (currentRadioStation != null) {
-            if (radioPlayer.playbackState == Player.STATE_IDLE) {
-                radioPlayer.prepare()
-            }
-            radioPlayer.play()
-            radioPlaying = true
-        }
-    }
-
-    fun stopRadio() {
-        radioPlayer.stop()
-        radioPlayer.clearMediaItems()
-        radioPlaying = false
-        currentRadioStation = null
-        GlzHubManager.reportActivity(prefs, "idle")
-    }
+    fun playRadioStation(station: RadioStation) = radioController.playStation(station)
+    fun toggleRadioPlayPause() = radioController.togglePlayPause()
+    fun stopRadio() = radioController.stop()
     var osdTimeoutSeconds by remember {
         mutableStateOf(prefs.getInt(OSD_TIMEOUT_SECONDS, 8))
     }
@@ -1077,9 +1012,12 @@ internal fun TvScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(if (immersive || section == AppSection.Live || section == AppSection.Home) PaddingValues(0.dp) else padding)) {
             if (immersive) {
-                if (selectedMovie != null) {
+                val activeMovie = selectedMovie
+                val activeChannel = selected
+                val activeMultiSecondary = multiViewSecondary
+                if (activeMovie != null) {
                     MoviePlaybackScreen(
-                        movie = selectedMovie!!,
+                        movie = activeMovie,
                         captionsEnabled = captionsEnabled,
                         captionLanguage = captionLanguage,
                         prefs = prefs,
@@ -1105,9 +1043,9 @@ internal fun TvScreen(
                         captionLanguage = captionLanguage,
                         onExit = { section = AppSection.Home }
                     )
-                } else if (multiViewSecondary != null) MultiViewScreen(
-                    primary = selected!!,
-                    secondary = multiViewSecondary!!,
+                } else if (activeMultiSecondary != null && activeChannel != null) MultiViewScreen(
+                    primary = activeChannel,
+                    secondary = activeMultiSecondary,
                     guide = guide,
                     captionsEnabled = captionsEnabled,
                     captionLanguage = captionLanguage,
@@ -1116,8 +1054,8 @@ internal fun TvScreen(
                         tuneChannel(it)
                     },
                     onExit = { multiViewSecondary = null }
-                ) else ImmersivePlayerScreen(
-                    channel = selected!!,
+                ) else if (activeChannel != null) ImmersivePlayerScreen(
+                    channel = activeChannel,
                     channels = ordered,
                     guide = guide,
                     captionsEnabled = captionsEnabled,
@@ -1137,7 +1075,7 @@ internal fun TvScreen(
                     },
                     osdTimeoutSeconds = osdTimeoutSeconds,
                     entertainmentApps = managedEntertainmentApps,
-                    recentChannels = remember(recentRevision, channels.toList()) {
+                    recentChannels = remember(recentRevision, channels.size) {
                         recentChannelManager.recentIds().mapNotNull { id ->
                             channels.firstOrNull { it.id == id }
                         }
@@ -1148,7 +1086,8 @@ internal fun TvScreen(
                         prefs.edit().putStringSet(FAVORITES, favorites).apply()
                     },
                     onPreviousChannel = {
-                        recentChannelManager.previousId(selected!!.id)
+                        val currentId = selected?.id ?: activeChannel.id
+                        recentChannelManager.previousId(currentId)
                             ?.let { id -> channels.firstOrNull { it.id == id } }
                             ?.let(tuneChannel)
                     },
@@ -1237,13 +1176,13 @@ internal fun TvScreen(
                         favorites = if (favId in favorites) favorites - favId else favorites + favId
                         prefs.edit().putStringSet(FAVORITES, favorites).apply()
                     },
-                    onOpenGuide = { section = AppSection.Live },
-                    onOpenRadio = { stopRadio(); section = AppSection.Radio },
+                    onOpenGuide = { stopRadio(); section = AppSection.Live },
+                    onOpenRadio = { section = AppSection.Radio },
                     onOpenWeather = { showWeatherModal = true },
                     onOpenSettings = { showSettings = true },
                     onOpenWelcome = { showYouModal = true },
                     onLaunchApp = { app ->
-                        if (radioPlaying) radioPlayer.pause()
+                        if (radioPlaying) toggleRadioPlayPause()
                         val launched = LauncherAppsManager.launchApp(context, app.packageName)
                         if (!launched) {
                             launchEntertainmentApp(context, app.packageName, null)
@@ -1269,6 +1208,7 @@ internal fun TvScreen(
                     hasUpdate = availableUpdate != null,
                     onOpenUpdate = { showUpdateModal = true },
                     radioPlaying = radioPlaying,
+                    radioPlaybackState = radioState,
                     onToggleRadioPlayPause = { toggleRadioPlayPause() },
                     onStopRadio = { stopRadio() },
                     onOpenSpeedTest = {
@@ -1280,13 +1220,14 @@ internal fun TvScreen(
             } else {
                 Row(
                     Modifier.fillMaxSize()
-                        .padding(horizontal = safeHorizontalPadding, vertical = 12.dp),
+                        .padding(horizontal = safeHorizontalPadding, vertical = viewport.safeVertical / 2),
                     horizontalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
                     ExpressiveNavigationRail(
                         section = section,
                         onSection = {
                             if (it == AppSection.Live) {
+                                stopRadio()
                                 playerActive = false
                                 GlzHubManager.reportActivity(prefs, "idle")
                             }
@@ -1324,15 +1265,17 @@ internal fun TvScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                             AppSection.Radio -> RadioScreen(
-                                prefs = prefs,
-                                client = client,
-                                onPlayingChanged = { isPlaying, station ->
-                                    radioPlaying = isPlaying
-                                    currentRadioStation = station
-                                },
-                                onScreensaverTriggered = {
-                                    showScreensaver = true
-                                },
+                                stations = radioStations,
+                                playbackState = radioState,
+                                loading = radioLoading,
+                                fromCache = radioFromCache,
+                                onPlayStation = ::playRadioStation,
+                                onTogglePlayPause = ::toggleRadioPlayPause,
+                                onStop = ::stopRadio,
+                                onRetry = { radioController.retry() },
+                                onNextStation = { radioController.playNext(radioStations) },
+                                onPreviousStation = { radioController.playPrevious(radioStations) },
+                                onRefreshStations = ::refreshRadioStations,
                                 modifier = Modifier.fillMaxSize()
                             )
                             AppSection.Weather -> WeatherScreen(
@@ -1373,11 +1316,15 @@ internal fun TvScreen(
     }
 
     if (showWeatherModal) {
+        val weatherModalFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { weatherModalFocus.requestFocus() } }
         BackHandler(onBack = { showWeatherModal = false })
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color(0xFF070B14))
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = viewport.safeHorizontal, vertical = viewport.safeVertical)
+                .focusRequester(weatherModalFocus)
         ) {
             WeatherScreen(
                 weather = weather,
@@ -1406,11 +1353,15 @@ internal fun TvScreen(
     }
 
     if (showYouModal) {
+        val youModalFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { youModalFocus.requestFocus() } }
         BackHandler(onBack = { showYouModal = false })
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color(0xFF070B14))
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = viewport.safeHorizontal, vertical = viewport.safeVertical)
+                .focusRequester(youModalFocus)
         ) {
             GuestYouSection(
                 guestName = guestName,
@@ -1441,8 +1392,7 @@ internal fun TvScreen(
             resumeLast = prefs.getBoolean(RESUME_LAST_CHANNEL, true),
             startDestination = prefs.getString(START_DESTINATION, AppSection.Home.name)
                 ?: AppSection.Home.name,
-            updateChannel = prefs.getString(UPDATE_CHANNEL, null)
-                ?: GithubUpdateManager.UpdateChannel.PRODUCTION.id,
+            updateChannel = currentUpdateChannel,
             sourceStatus = status,
             hubStatus = hubStatus,
             screensaverTimeoutMinutes = screensaverTimeoutMinutes,
@@ -6575,51 +6525,48 @@ private fun SettingsDialog(
         runCatching { initialFocus.requestFocus() }
     }
 
+    val viewport = LocalTvViewport.current
     BackHandler(onBack = onDismiss)
     BackHandler(enabled = showAdvanced) { showAdvanced = false }
     Box(
         Modifier
             .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(Color(0xFF10192A), Color(0xFF070B14), Color.Black)
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(Modifier.fillMaxSize()) {
-            // Header Bar
+            // Unified Header Bar matching Weather, Radio & Quick Settings
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = Color.Black.copy(alpha = 0.40f),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
             ) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 36.dp, vertical = 18.dp),
+                        .padding(horizontal = viewport.safeHorizontal, vertical = if (viewport.isCompactHeight) 12.dp else 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                        modifier = Modifier.size(48.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                        modifier = Modifier.size(if (viewport.isCompactHeight) 40.dp else 44.dp)
                     ) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Settings,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
-                    Spacer(Modifier.width(16.dp))
+                    Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (showAdvanced) "ADVANCED · TEXT & URLS" else "SETTINGS",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp,
-                            color = Color.White
+                            if (showAdvanced) strings.advancedOptions.uppercase(Locale.getDefault()) else strings.settingsTitle,
+                            fontSize = if (viewport.isCompactHeight) 20.sp else 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             if (showAdvanced) "Playlist, EPG, headers, names & network labels"
@@ -6930,39 +6877,54 @@ private fun TvSettingsButton(
     label: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    primary: Boolean? = null,
     modifier: Modifier = Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
-    val isPrimary = label.contains("Save") || label.contains("Sync") || label.contains("Generate")
+    val isPrimary = primary ?: (
+        label.contains("Save", ignoreCase = true) ||
+            label.contains("Guardar", ignoreCase = true) ||
+            label.contains("Sync", ignoreCase = true) ||
+            label.contains("Sincronizar", ignoreCase = true) ||
+            label.contains("Generate", ignoreCase = true) ||
+            label.contains("Generar", ignoreCase = true)
+        )
+    val accent = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(999.dp)
 
     Surface(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
             .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(16.dp),
+                shape = shape,
                 focusedScale = 1.05f,
-                glowColor = if (isPrimary) MaterialTheme.colorScheme.primary else Color.White,
+                glowColor = if (isPrimary) accent else Color.White,
                 onFocusChange = { focused = it }
             ),
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
         color = when {
-            focused && isPrimary -> MaterialTheme.colorScheme.primary
+            focused && isPrimary -> accent
             focused -> Color.White
-            isPrimary -> MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-            else -> Color.White.copy(alpha = 0.08f)
+            isPrimary -> accent.copy(alpha = 0.22f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
         },
         contentColor = when {
             focused -> Color.Black
-            isPrimary -> MaterialTheme.colorScheme.primary
-            else -> Color.White
+            isPrimary -> accent
+            else -> MaterialTheme.colorScheme.onSurface
         },
+        border = when {
+            focused -> BorderStroke(2.dp, Color.White.copy(alpha = 0.9f))
+            isPrimary -> BorderStroke(1.dp, accent.copy(alpha = 0.45f))
+            else -> BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f))
+        }
     ) {
         Text(
             label,
-            Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
-            fontWeight = FontWeight.Black,
-            fontSize = 14.sp
+            Modifier.padding(horizontal = 20.dp, vertical = 11.dp),
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp
         )
     }
 }

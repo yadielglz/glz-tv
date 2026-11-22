@@ -46,7 +46,7 @@ fun ExpressiveNavigationRail(
         tonalElevation = 8.dp
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val compactHeight = maxHeight < 600.dp
+            val compactHeight = maxHeight < 500.dp
             val strings = com.glztv.app.ui.i18n.LocalGlzStrings.current
             Column(
                 Modifier

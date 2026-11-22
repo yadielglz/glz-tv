@@ -32,7 +32,7 @@ object RadioCatalogManager {
         return runCatching {
             client.newCall(request).execute().use { response ->
                 if (response.code == 304) {
-                    return@use Result(parseCatalog(prefs.getString(CATALOG_CACHE, null).orEmpty()), true)
+                    return@use Result(parseCatalog(prefs.getString(CATALOG_CACHE, null).orEmpty()), false)
                 }
                 check(response.isSuccessful) { "GLZ Hub returned ${response.code}" }
                 val text = response.body?.string().orEmpty()

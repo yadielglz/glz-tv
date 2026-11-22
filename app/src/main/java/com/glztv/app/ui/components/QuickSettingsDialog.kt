@@ -59,8 +59,13 @@ import com.glztv.app.model.NetworkInfo
 import com.glztv.app.ui.theme.GoogleTvTokens
 import com.glztv.app.ui.theme.googleTvFocusable
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.input.pointer.pointerInput
+import com.glztv.app.ui.i18n.LocalGlzStrings
+import com.glztv.app.ui.theme.LocalTvViewport
 
 @Composable
 fun QuickSettingsDialog(
@@ -71,6 +76,9 @@ fun QuickSettingsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = LocalGlzStrings.current
+    val viewport = LocalTvViewport.current
+    val accent = MaterialTheme.colorScheme.primary
     val initialFocus = remember { FocusRequester() }
     val scrollState = rememberScrollState()
 
@@ -79,7 +87,7 @@ fun QuickSettingsDialog(
     }
 
     LaunchedEffect(Unit) {
-        initialFocus.requestFocus()
+        runCatching { initialFocus.requestFocus() }
     }
 
     BackHandler(onBack = onDismiss)
@@ -87,40 +95,51 @@ fun QuickSettingsDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.65f))
-            .clickable(onClick = onDismiss),
+            .background(Color.Black.copy(alpha = 0.68f))
+            .pointerInput(onDismiss) {
+                detectTapGestures(onTap = { onDismiss() })
+            },
         contentAlignment = Alignment.CenterEnd
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(430.dp)
-                .clickable(enabled = false) {},
-            shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 0.dp, bottomEnd = 0.dp),
-            color = Color(0xFF101520),
+                .widthIn(min = 320.dp, max = viewport.drawerMaxWidth)
+                .fillMaxWidth(if (viewport.isTvLayout) 0.44f else 0.92f)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {})
+                },
+            shape = RoundedCornerShape(
+                topStart = GlzCardDefaults.RadiusMedium,
+                bottomStart = GlzCardDefaults.RadiusMedium,
+                topEnd = 0.dp,
+                bottomEnd = 0.dp
+            ),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
             tonalElevation = 16.dp,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 22.dp, vertical = 20.dp)
             ) {
-                // Header
+                // Unified Header matching Weather, Radio & Settings
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = CircleShape,
-                        color = GoogleTvTokens.BlueAccent.copy(alpha = 0.18f),
+                        shape = RoundedCornerShape(14.dp),
+                        color = accent.copy(alpha = 0.16f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.35f)),
                         modifier = Modifier.size(42.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = null,
-                                tint = GoogleTvTokens.BlueAccent,
+                                tint = accent,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -130,15 +149,15 @@ fun QuickSettingsDialog(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Quick Settings",
-                            color = Color.White,
-                            fontSize = 18.sp,
+                            text = strings.quickSettingsTitle,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 19.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "System shortcuts & diagnostics",
-                            color = GoogleTvTokens.TextSecondary,
-                            fontSize = 11.sp
+                            text = strings.quickSettingsSubtitle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp
                         )
                     }
 
@@ -147,19 +166,20 @@ fun QuickSettingsDialog(
                         onClick = onDismiss,
                         modifier = Modifier
                             .size(36.dp)
-                            .googleTvFocusable(
+                            .tvFocusableWithPhysics(
                                 shape = CircleShape,
                                 focusedScale = 1.1f,
+                                glowColor = accent,
                                 onFocusChange = { isCloseHeaderFocused = it }
                             ),
                         shape = CircleShape,
-                        color = if (isCloseHeaderFocused) Color.White else Color.White.copy(alpha = 0.08f),
-                        contentColor = if (isCloseHeaderFocused) Color.Black else Color.White
+                        color = if (isCloseHeaderFocused) accent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        contentColor = if (isCloseHeaderFocused) GlzCardDefaults.onAccent(accent) else MaterialTheme.colorScheme.onSurface
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Close",
+                                contentDescription = strings.close,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -328,50 +348,24 @@ fun QuickSettingsDialog(
                 // Bottom Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)
                 ) {
-                    var isFullFocused by remember { mutableStateOf(false) }
-                    Surface(
+                    GlzSectionActionButton(
+                        label = strings.quickSettingsAllSettings,
+                        icon = Icons.Default.Settings,
+                        primary = true,
                         onClick = {
                             onDismiss()
                             onOpenFullSettings()
                         },
-                        modifier = Modifier
-                            .weight(1.15f)
-                            .height(44.dp)
-                            .googleTvFocusable(
-                                shape = RoundedCornerShape(10.dp),
-                                focusedScale = 1.02f,
-                                onFocusChange = { isFullFocused = it }
-                            ),
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isFullFocused) Color.White else Color(0xFF1E2838),
-                        contentColor = if (isFullFocused) Color.Black else Color.White
-                    ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Full GLZ Settings", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
+                        modifier = Modifier.weight(1.25f)
+                    )
 
-                    var isCloseFocused by remember { mutableStateOf(false) }
-                    Surface(
+                    GlzSectionActionButton(
+                        label = strings.close,
                         onClick = onDismiss,
-                        modifier = Modifier
-                            .weight(0.85f)
-                            .height(44.dp)
-                            .googleTvFocusable(
-                                shape = RoundedCornerShape(10.dp),
-                                focusedScale = 1.02f,
-                                onFocusChange = { isCloseFocused = it }
-                            ),
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isCloseFocused) Color.White else Color.White.copy(alpha = 0.08f),
-                        contentColor = if (isCloseFocused) Color.Black else Color.White
-                    ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Close", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
+                        modifier = Modifier.weight(0.75f)
+                    )
                 }
             }
         }
@@ -382,8 +376,8 @@ fun QuickSettingsDialog(
 private fun QuickSettingsHeader(title: String) {
     Text(
         text = title,
-        color = GoogleTvTokens.TextSecondary,
-        fontSize = 11.sp,
+        color = MaterialTheme.colorScheme.primary,
+        fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 0.6.sp,
         modifier = Modifier.padding(vertical = 4.dp)
@@ -393,44 +387,42 @@ private fun QuickSettingsHeader(title: String) {
 @Composable
 private fun QuickSettingsActionCard(
     icon: ImageVector,
-    iconTint: Color = Color.White,
+    iconTint: Color = Color.Unspecified,
     title: String,
     subtitle: String,
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    val accent = MaterialTheme.colorScheme.primary
+    val resolvedTint = if (iconTint == Color.Unspecified) accent else iconTint
 
-    Surface(
+    GlzFocusCard(
         onClick = onClick,
+        shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
+        focusedScale = 1.02f,
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .googleTvFocusable(
-                shape = RoundedCornerShape(10.dp),
-                focusedScale = 1.02f,
-                onFocusChange = { isFocused = it }
-            ),
-        shape = RoundedCornerShape(10.dp),
-        color = if (isFocused) Color.White else Color(0xFF1A2230),
-        contentColor = if (isFocused) Color.Black else Color.White
-    ) {
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
+        contentModifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) { isFocused ->
+        val ink = if (isFocused) GlzCardDefaults.onAccent(accent) else MaterialTheme.colorScheme.onSurface
+        val subInk = if (isFocused) ink.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 shape = CircleShape,
-                color = if (isFocused) Color.Black.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.08f),
-                modifier = Modifier.size(32.dp)
+                color = if (isFocused) ink.copy(alpha = 0.14f) else accent.copy(alpha = 0.14f),
+                modifier = Modifier.size(34.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = if (isFocused) (if (iconTint != Color.White) iconTint else Color.Black) else iconTint,
+                        tint = if (isFocused) ink else resolvedTint,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -441,14 +433,14 @@ private fun QuickSettingsActionCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    color = if (isFocused) Color.Black else Color.White,
-                    fontSize = 13.sp,
+                    color = ink,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = subtitle,
-                    color = if (isFocused) Color.Black.copy(alpha = 0.7f) else GoogleTvTokens.TextSecondary,
-                    fontSize = 11.sp,
+                    color = subInk,
+                    fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -177,6 +178,7 @@ fun GoogleTvHomeScreen(
     hasUpdate: Boolean = false,
     onOpenUpdate: () -> Unit = {},
     radioPlaying: Boolean = false,
+    radioPlaybackState: com.glztv.app.player.RadioPlaybackState? = null,
     onToggleRadioPlayPause: () -> Unit = {},
     onStopRadio: () -> Unit = {},
     onOpenSpeedTest: () -> Unit = {},
@@ -184,6 +186,7 @@ fun GoogleTvHomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val viewport = com.glztv.app.ui.theme.LocalTvViewport.current
     val prefs = remember { context.getSharedPreferences("glz_tv", Context.MODE_PRIVATE) }
 
     var installedApps by remember { mutableStateOf<List<LauncherAppItem>>(emptyList()) }
@@ -197,12 +200,6 @@ fun GoogleTvHomeScreen(
             scope.launch {
                 installedApps = LauncherAppsManager.loadInstalledApps(context, prefs)
             }
-        }
-    }
-
-    LaunchedEffect(isFamilyMode) {
-        if (isFamilyMode) {
-            refreshInstalledApps()
         }
     }
 
@@ -270,15 +267,16 @@ fun GoogleTvHomeScreen(
 
     val isRadioPlaying = radioPlaying && currentRadioStation != null
 
-    LaunchedEffect(isRadioPlaying) {
+    // Only request initial Hero focus once on entry — never yank focus when user toggles radio from a lower rail
+    LaunchedEffect(Unit) {
         delay(120L)
-        try {
+        runCatching {
             if (isRadioPlaying) {
                 liveGuideFocusRequester.requestFocus()
             } else {
                 watchLiveFocusRequester.requestFocus()
             }
-        } catch (_: Exception) {}
+        }
     }
 
     Box(
@@ -303,10 +301,15 @@ fun GoogleTvHomeScreen(
                 onOpenUpdate = onOpenUpdate,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 4.dp)
+                    .padding(
+                        start = viewport.safeHorizontal,
+                        end = viewport.safeHorizontal,
+                        top = (viewport.safeVertical * 0.5f).coerceAtLeast(8.dp),
+                        bottom = 4.dp
+                    )
             )
 
-            // 2. PINNED / STATIC HERO SPOTLIGHT BILLBOARD (FULL WIDTH edge-to-edge as requested)
+            // 2. PINNED / STATIC HERO SPOTLIGHT BILLBOARD (FULL WIDTH edge-to-edge backdrop, safe-inset text)
             GoogleTvSpotlightBillboard(
                 channel = heroChannel,
                 guide = guide,
@@ -342,19 +345,20 @@ fun GoogleTvHomeScreen(
             HomeRadioPlayerBar(
                 station = currentRadioStation,
                 isPlaying = radioPlaying,
+                playbackState = radioPlaybackState,
                 onTogglePlayPause = onToggleRadioPlayPause,
                 onStop = onStopRadio,
                 focusRequester = radioPlayerFocusRequester,
                 onFocusUp = {
-                    try {
+                    runCatching {
                         if (isRadioPlaying) liveGuideFocusRequester.requestFocus()
                         else watchLiveFocusRequester.requestFocus()
-                    } catch (_: Exception) {}
+                    }
                 },
                 onFocusDown = null,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
+                    .padding(start = viewport.safeHorizontal, end = viewport.safeHorizontal, bottom = 8.dp)
             )
         }
 
@@ -363,8 +367,12 @@ fun GoogleTvHomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 20.dp)
+            verticalArrangement = Arrangement.spacedBy(viewport.sectionGap),
+            contentPadding = PaddingValues(
+                start = viewport.safeHorizontal,
+                end = viewport.safeHorizontal,
+                bottom = viewport.safeVertical
+            )
         ) {
             // RAIL 1: JUMP BACK IN / FEATURED LINEUP
             item(key = "rail-recent") {
@@ -659,8 +667,7 @@ fun GoogleTvHomeScreen(
         }
 
         // App Context Menu Dialog
-        if (contextMenuApp != null) {
-            val app = contextMenuApp!!
+        contextMenuApp?.let { app ->
             AppContextMenuDialog(
                 app = app,
                 onOpenApp = {
@@ -747,10 +754,15 @@ private fun InstalledAppCard(
     var lastLongClickTimestamp by remember { mutableStateOf(0L) }
 
     val hasBanner = app.banner != null
-    val appImage = remember(app.packageName) {
+    val appImage = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+        initialValue = null,
+        key1 = app.packageName
+    ) {
         val drawable = app.banner ?: app.icon
-        drawable?.toSafeImageBitmap(320, 180)
-    }
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            drawable?.toSafeImageBitmap(320, 180)
+        }
+    }.value
 
     val cardWidth = 148.dp
     val cardHeight = 84.dp
@@ -1092,25 +1104,37 @@ private fun GoogleTvHomeTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Ambient Weather (clean icon + text, identical ambient style as Time)
+            // Ambient Weather (focusable pill opening Weather screen)
             weather?.let { w ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(horizontal = 4.dp)
+                var weatherFocused by remember { mutableStateOf(false) }
+                Surface(
+                    onClick = onOpenWeather,
+                    shape = CircleShape,
+                    color = if (weatherFocused) Color.White else Color.Transparent,
+                    modifier = Modifier.googleTvFocusable(
+                        shape = CircleShape,
+                        focusedScale = 1.06f,
+                        onFocusChange = { weatherFocused = it }
+                    )
                 ) {
-                    Icon(
-                        Icons.Default.WbSunny,
-                        contentDescription = null,
-                        Modifier.size(13.dp),
-                        tint = Color(0xFFFFB300)
-                    )
-                    Text(
-                        "${w.temperature}°F · ${w.location}",
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = GoogleTvTokens.TextSecondary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.WbSunny,
+                            contentDescription = "Weather",
+                            Modifier.size(14.dp),
+                            tint = if (weatherFocused) Color(0xFFE65100) else Color(0xFFFFB300)
+                        )
+                        Text(
+                            "${w.temperature}°F · ${w.location}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (weatherFocused) Color.Black else GoogleTvTokens.TextSecondary
+                        )
+                    }
                 }
             }
 
@@ -1286,10 +1310,11 @@ private fun GoogleTvSpotlightBillboard(
         } else null
     }
 
+    val viewport = com.glztv.app.ui.theme.LocalTvViewport.current
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(215.dp),
+            .height(viewport.homeHeroHeight),
         shape = RectangleShape,
         color = Color(0xFF0B0D0F)
     ) {
@@ -2700,9 +2725,11 @@ private fun QuickTuneDrawer(
         } catch (_: Exception) {}
     }
 
+    val viewport = com.glztv.app.ui.theme.LocalTvViewport.current
     Surface(
         modifier = modifier
-            .width(420.dp)
+            .widthIn(min = 320.dp, max = viewport.drawerMaxWidth)
+            .fillMaxWidth(if (viewport.isTvLayout) 0.44f else 0.92f)
             .fillMaxHeight()
             .onKeyEvent { event ->
                 if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {

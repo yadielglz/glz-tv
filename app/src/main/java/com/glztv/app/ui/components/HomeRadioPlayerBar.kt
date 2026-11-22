@@ -1,8 +1,8 @@
 package com.glztv.app.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
+import android.view.KeyEvent
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -10,17 +10,14 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,11 +26,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -46,24 +44,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import android.view.KeyEvent
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.glztv.app.RadioStation
-import com.glztv.app.ui.theme.GoogleTvTokens
+import com.glztv.app.player.RadioPlaybackState
+import com.glztv.app.player.RadioPlaybackStatus
+import com.glztv.app.ui.i18n.LocalGlzStrings
+import com.glztv.app.ui.screens.AudioSpectrumVisualizer
 import com.glztv.app.ui.theme.googleTvFocusable
-
-private val RadioOrange = Color(0xFFFF6B2C)
 
 @Composable
 fun HomeRadioPlayerBar(
@@ -71,6 +68,7 @@ fun HomeRadioPlayerBar(
     isPlaying: Boolean,
     onTogglePlayPause: () -> Unit,
     onStop: () -> Unit,
+    playbackState: RadioPlaybackState? = null,
     focusRequester: FocusRequester? = null,
     onFocusUp: (() -> Unit)? = null,
     onFocusDown: (() -> Unit)? = null,
@@ -78,21 +76,50 @@ fun HomeRadioPlayerBar(
 ) {
     if (station == null) return
 
+    val strings = LocalGlzStrings.current
+    val accent = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val effectiveStatus = playbackState?.status ?: if (isPlaying) RadioPlaybackStatus.Playing else RadioPlaybackStatus.Paused
+    val isLive = effectiveStatus == RadioPlaybackStatus.Playing
+    val isBuffering = effectiveStatus == RadioPlaybackStatus.Buffering || effectiveStatus == RadioPlaybackStatus.Reconnecting
+    val isError = effectiveStatus == RadioPlaybackStatus.Error
+
     var isBarFocused by remember { mutableStateOf(false) }
     var isStopFocused by remember { mutableStateOf(false) }
     val stopRequester = remember { FocusRequester() }
     val barRequester = focusRequester ?: remember { FocusRequester() }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "radio-pulse")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(850, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dot-alpha"
-    )
+    // Gate infinite transition strictly on live/buffering so paused state runs zero animation ticks
+    val dotAlpha = if (isLive || isBuffering) {
+        val transition = rememberInfiniteTransition(label = "radio-mini-pulse")
+        val a by transition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(850, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "dot-alpha"
+        )
+        a
+    } else {
+        0.55f
+    }
+
+    val statusColor = when (effectiveStatus) {
+        RadioPlaybackStatus.Playing -> Color(0xFF00E676)
+        RadioPlaybackStatus.Buffering, RadioPlaybackStatus.Reconnecting -> Color(0xFFFFB74D)
+        RadioPlaybackStatus.Error -> Color(0xFFFF5252)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val statusLabel = when (effectiveStatus) {
+        RadioPlaybackStatus.Playing -> strings.radioLive
+        RadioPlaybackStatus.Buffering -> strings.radioConnecting
+        RadioPlaybackStatus.Reconnecting -> strings.radioReconnecting
+        RadioPlaybackStatus.Error -> strings.radioOfflineError
+        else -> strings.radioPaused
+    }
 
     Surface(
         onClick = onTogglePlayPause,
@@ -100,52 +127,40 @@ fun HomeRadioPlayerBar(
             .fillMaxWidth()
             .then(if (focusRequester != null) Modifier.focusRequester(barRequester) else Modifier)
             .googleTvFocusable(
-                shape = RoundedCornerShape(16.dp),
-                focusedScale = 1.02f,
+                shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
+                focusedScale = 1.015f,
                 onFocusChange = { isBarFocused = it }
             )
             .onKeyEvent { event ->
                 val native = event.nativeKeyEvent
                 if (native.action == KeyEvent.ACTION_DOWN) {
                     when (native.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
                         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                            onTogglePlayPause()
-                            true
+                            onTogglePlayPause(); true
                         }
                         KeyEvent.KEYCODE_MEDIA_STOP -> {
-                            onStop()
-                            true
+                            onStop(); true
                         }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            try {
-                                stopRequester.requestFocus()
-                            } catch (_: Exception) {}
+                            runCatching { stopRequester.requestFocus() }
                             true
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> {
-                            if (onFocusUp != null) {
-                                onFocusUp()
-                                true
-                            } else false
+                            if (onFocusUp != null) { onFocusUp(); true } else false
                         }
                         KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            if (onFocusDown != null) {
-                                onFocusDown()
-                                true
-                            } else false
+                            if (onFocusDown != null) { onFocusDown(); true } else false
                         }
                         else -> false
                     }
                 } else false
             },
-        shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF111722),
+        shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
         border = when {
             isBarFocused -> BorderStroke(2.dp, Color.White)
-            isPlaying -> BorderStroke(1.dp, RadioOrange.copy(alpha = 0.5f))
-            else -> BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+            isLive -> BorderStroke(1.dp, accent.copy(alpha = 0.55f))
+            else -> BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f))
         },
         tonalElevation = 8.dp
     ) {
@@ -155,9 +170,9 @@ fun HomeRadioPlayerBar(
                 .background(
                     Brush.horizontalGradient(
                         colors = listOf(
-                            RadioOrange.copy(alpha = 0.16f),
-                            Color(0xFF141C2B),
-                            Color(0xFF0F1420)
+                            accent.copy(alpha = if (isLive) 0.16f else 0.08f),
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                         )
                     )
                 )
@@ -167,110 +182,130 @@ fun HomeRadioPlayerBar(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Station Logo / Icon
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.Black.copy(alpha = 0.4f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (!station.logoUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = station.logoUrl,
-                            contentDescription = station.name,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Radio,
-                            contentDescription = null,
-                            tint = RadioOrange,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.width(14.dp))
-
-                // Station Info + Live Badge
-                Column(modifier = Modifier.weight(1f)) {
+                // Station Artwork + Info with Crossfade on station switch
+                AnimatedContent(
+                    targetState = station,
+                    transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(150)) },
+                    label = "mini-bar-station",
+                    modifier = Modifier.weight(1f)
+                ) { st ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Live indicator badge
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = if (isPlaying) RadioOrange.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f)
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isPlaying) RadioOrange.copy(alpha = dotAlpha)
-                                            else Color.Gray
-                                        )
+                            if (!st.logoUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = st.logoUrl,
+                                    contentDescription = st.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(42.dp)
                                 )
-                                Spacer(Modifier.width(5.dp))
-                                Text(
-                                    text = if (isPlaying) "LIVE RADIO" else "PAUSED",
-                                    color = if (isPlaying) RadioOrange else Color.LightGray,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Radio,
+                                    contentDescription = null,
+                                    tint = accent,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
 
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(12.dp))
 
-                        Text(
-                            text = station.name,
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = statusColor.copy(alpha = 0.18f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(statusColor.copy(alpha = dotAlpha))
+                                        )
+                                        Text(
+                                            text = statusLabel,
+                                            color = statusColor,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.6.sp
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = st.name.substringAfter("|").trim(),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            val subtitle = listOfNotNull(playbackState?.icyArtist, playbackState?.icyTitle)
+                                .joinToString(" · ")
+                                .ifBlank { st.genre }
+                            Text(
+                                text = subtitle,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
+                }
 
-                    Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.width(12.dp))
 
-                    Text(
-                        text = if (!station.genre.isNullOrBlank()) station.genre else "GLZ Radio Broadcast Network",
-                        color = GoogleTvTokens.TextSecondary,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                // Draw-phase Equalizer or Buffering Spinner
+                if (isBuffering) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = accent,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    AudioSpectrumVisualizer(
+                        isPlaying = isLive,
+                        barCount = 5,
+                        barColor = accent,
+                        secondaryColor = secondary,
+                        modifier = Modifier
+                            .width(30.dp)
+                            .height(18.dp)
                     )
                 }
 
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(12.dp))
 
-                // Animated Equalizer Bars
-                RadioEqualizerBars(
-                    isPlaying = isPlaying,
-                    modifier = Modifier.padding(end = 16.dp)
-                )
-
-                // Play / Pause Button Indicator
+                // Non-focusable Play/Pause visual indicator (whole bar handles toggle)
                 Surface(
-                    onClick = onTogglePlayPause,
-                    modifier = Modifier.size(38.dp),
                     shape = CircleShape,
-                    color = if (isBarFocused) Color.White else RadioOrange,
-                    contentColor = if (isBarFocused) Color.Black else Color.White
+                    color = if (isBarFocused) accent else accent.copy(alpha = 0.2f),
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            imageVector = when {
+                                isError -> Icons.Default.Refresh
+                                isLive -> Icons.Default.Pause
+                                else -> Icons.Default.PlayArrow
+                            },
+                            contentDescription = if (isLive) strings.radioPause else strings.radioPlay,
+                            tint = if (isBarFocused) GlzCardDefaults.onAccent(accent) else accent,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -278,15 +313,15 @@ fun HomeRadioPlayerBar(
 
                 Spacer(Modifier.width(10.dp))
 
-                // Stop / Close Button
+                // Dedicated Stop button reachable via DPAD_RIGHT
                 Surface(
                     onClick = onStop,
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(36.dp)
                         .focusRequester(stopRequester)
                         .googleTvFocusable(
                             shape = CircleShape,
-                            focusedScale = 1.15f,
+                            focusedScale = 1.1f,
                             onFocusChange = { isStopFocused = it }
                         )
                         .onKeyEvent { event ->
@@ -294,133 +329,33 @@ fun HomeRadioPlayerBar(
                             if (native.action == KeyEvent.ACTION_DOWN) {
                                 when (native.keyCode) {
                                     KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                        try {
-                                            barRequester.requestFocus()
-                                        } catch (_: Exception) {}
+                                        runCatching { barRequester.requestFocus() }
                                         true
                                     }
                                     KeyEvent.KEYCODE_DPAD_UP -> {
-                                        if (onFocusUp != null) {
-                                            onFocusUp()
-                                            true
-                                        } else false
+                                        if (onFocusUp != null) { onFocusUp(); true } else false
                                     }
                                     KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                        if (onFocusDown != null) {
-                                            onFocusDown()
-                                            true
-                                        } else false
-                                    }
-                                    KeyEvent.KEYCODE_DPAD_CENTER,
-                                    KeyEvent.KEYCODE_ENTER,
-                                    KeyEvent.KEYCODE_MEDIA_STOP -> {
-                                        onStop()
-                                        true
+                                        if (onFocusDown != null) { onFocusDown(); true } else false
                                     }
                                     else -> false
                                 }
                             } else false
                         },
                     shape = CircleShape,
-                    color = if (isStopFocused) Color.White else Color.White.copy(alpha = 0.12f),
-                    contentColor = if (isStopFocused) Color.Black else Color.White,
+                    color = if (isStopFocused) Color(0xFFFF5252) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                     border = if (isStopFocused) BorderStroke(2.dp, Color.White) else null
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Stop Radio",
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = strings.radioStop,
+                            tint = if (isStopFocused) Color.White else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun RadioEqualizerBars(
-    isPlaying: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "eq-transition")
-
-    val h1 by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.95f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(420, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "h1"
-    )
-
-    val h2 by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 0.30f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(310, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "h2"
-    )
-
-    val h3 by infiniteTransition.animateFloat(
-        initialValue = 0.30f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(520, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "h3"
-    )
-
-    val h4 by infiniteTransition.animateFloat(
-        initialValue = 0.70f,
-        targetValue = 0.20f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(380, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "h4"
-    )
-
-    Row(
-        modifier = modifier.height(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        val barColor = RadioOrange
-        val barInactive = RadioOrange.copy(alpha = 0.3f)
-
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .height(if (isPlaying) (20.dp * h1).coerceAtLeast(4.dp) else 4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (isPlaying) barColor else barInactive)
-        )
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .height(if (isPlaying) (20.dp * h2).coerceAtLeast(4.dp) else 4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (isPlaying) barColor else barInactive)
-        )
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .height(if (isPlaying) (20.dp * h3).coerceAtLeast(4.dp) else 4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (isPlaying) barColor else barInactive)
-        )
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .height(if (isPlaying) (20.dp * h4).coerceAtLeast(4.dp) else 4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (isPlaying) barColor else barInactive)
-        )
     }
 }

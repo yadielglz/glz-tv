@@ -5,6 +5,12 @@ export type Programme = { title: string; description: string; start: number; end
 const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 const cleanName = (s: string) => s.replace(/^(?:ch\s*)?\d+\s*[·.\-:|\s]\s*/i, '').trim();
 const genericNames = new Set(['sportsppv', 'ppv', 'liveevent', 'liveevents']);
+const genericSuffixes = new Set(['hd', 'sd', 'fhd', 'uhd', '4k', 'hevc', 'raw', 'tv', 'channel', 'ch', 'us', 'usa', 'east', 'west', 'network', 'net', 'live']);
+const coreName = (s: string) => {
+  const tokens = cleanName(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const stripped = tokens.filter((t) => !genericSuffixes.has(t));
+  return (stripped.length ? stripped : tokens).join('');
+};
 export function xmlText(s: string): string {
   return s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, '')
     .replace(/&#(x[\da-f]+|\d+);/gi, (_m, n: string) => { const c = n[0].toLowerCase() === 'x' ? parseInt(n.slice(1),16) : Number(n); return c > 0 && c <= 0x10ffff ? String.fromCodePoint(c) : ''; })
@@ -45,9 +51,12 @@ export function projectGuide(xml: string, channels: GuideChannel[], now: number,
   const guideIds = new Set<string>();
   const guideIdsLower = new Map<string,string>();
   const names = new Map<string,string>();
+  const coreNames = new Map<string,string>();
   const addName = (name: string, id: string) => {
     const key=normalize(name);
     if (key && !genericNames.has(key) && !names.has(key)) names.set(key,id);
+    const core=coreName(name);
+    if (core && core.length>=2 && !genericNames.has(core) && !coreNames.has(core)) coreNames.set(core,id);
   };
   for (const m of xml.matchAll(/<channel\b([^>]*)>([\s\S]*?)<\/channel>/gi)) {
     const id=attr(m[1],'id');
@@ -79,12 +88,9 @@ export function projectGuide(xml: string, channels: GuideChannel[], now: number,
     if (genericNames.has(clean) || genericNames.has(raw)) continue;
     const idClean=normalize(cleanName(c.id)), idRaw=normalize(c.id);
     let match=names.get(clean)||names.get(raw)||names.get(idClean)||names.get(idRaw);
-    if (!match) for (const key of [clean,raw,idClean,idRaw]) {
-      if (key.length<3) continue;
-      for (const [name,id] of names) {
-        if (name.length>=3 && (key.includes(name)||name.includes(key))) { match=id; break; }
-      }
-      if (match) break;
+    if (!match) {
+      const titleCore=coreName(c.title), idCore=coreName(c.id);
+      match=(titleCore.length>=2 && coreNames.get(titleCore)) || (idCore.length>=2 && coreNames.get(idCore)) || undefined;
     }
     if (match) add(match,c.id);
   }

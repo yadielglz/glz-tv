@@ -92,15 +92,16 @@ fun GoogleTvPlayerOsd(
         } ?: "Live broadcast"
     }
 
+    val viewport = com.glztv.app.ui.theme.LocalTvViewport.current
     Box(
         modifier = modifier
             .fillMaxWidth()
             .background(GoogleTvTokens.BottomOsdScrim)
-            .padding(horizontal = 36.dp, vertical = 24.dp)
+            .padding(horizontal = viewport.safeHorizontal, vertical = viewport.safeVertical)
     ) {
         Column(
             Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // 1. Quick Actions Bar (D-Pad Action Buttons placed on top for clean organization)
             val favFocus = firstButtonFocusRequester ?: remember { FocusRequester() }
@@ -125,7 +126,7 @@ fun GoogleTvPlayerOsd(
                         .onKeyEvent { keyEvent ->
                             if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
                                 if (keyEvent.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
-                                    ccFocus.requestFocus()
+                                    runCatching { ccFocus.requestFocus() }
                                     return@onKeyEvent true
                                 }
                             }
@@ -147,11 +148,11 @@ fun GoogleTvPlayerOsd(
                             if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
                                 when (keyEvent.nativeKeyEvent.keyCode) {
                                     android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                        favFocus.requestFocus()
+                                        runCatching { favFocus.requestFocus() }
                                         return@onKeyEvent true
                                     }
                                     android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                        audioFocus.requestFocus()
+                                        runCatching { audioFocus.requestFocus() }
                                         return@onKeyEvent true
                                     }
                                 }
@@ -174,11 +175,11 @@ fun GoogleTvPlayerOsd(
                             if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
                                 when (keyEvent.nativeKeyEvent.keyCode) {
                                     android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                        ccFocus.requestFocus()
+                                        runCatching { ccFocus.requestFocus() }
                                         return@onKeyEvent true
                                     }
                                     android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                        guideFocus.requestFocus()
+                                        runCatching { guideFocus.requestFocus() }
                                         return@onKeyEvent true
                                     }
                                 }
@@ -199,7 +200,7 @@ fun GoogleTvPlayerOsd(
                         .onKeyEvent { keyEvent ->
                             if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
                                 if (keyEvent.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) {
-                                    audioFocus.requestFocus()
+                                    runCatching { audioFocus.requestFocus() }
                                     return@onKeyEvent true
                                 }
                             }

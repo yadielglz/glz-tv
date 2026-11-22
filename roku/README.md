@@ -25,10 +25,11 @@ The first hardware test target is a TCL 32S301 (8102X) running Roku OS 16.0.
 - Plays the radio stations configured in GlzHub, with audio continuing while browsing.
 - Shows current weather and a five-day forecast for the configured weather location.
 
-This is an installable development build, not a public Streaming Store app. It
+This is an installable development build (`1.48.100`), not a public Streaming Store app. It
 has passed compilation and offline parser/security tests. Physical playback,
 network pairing, and the exact 8102X remote/UI behavior still require on-device
-verification. Build `26.X27.2300` requires a GlzHub redeploy for the guide endpoint. No database migration is needed.
+verification. Current Roku builds follow the unified GLZ TV release version and
+are published alongside the Android APK on GitHub Releases.
 
 ## One-time TV setup
 
@@ -46,7 +47,7 @@ replaces any existing development app; normal installed store apps remain.
 
 ## Install the ZIP
 
-1. Download **Glz-TV-Roku.zip**. Do **not** unzip it for the TV installer.
+1. Download **Glz-TV-Roku-<version>.zip** from GitHub Releases (or build **Glz-TV-Roku.zip** locally). Do **not** unzip it for the TV installer.
 2. On the computer, open `http://YOUR_ROKU_IP` in a browser.
 3. Sign in as **rokudev**, using the developer password from the TV.
 4. Under **Development Application Installer**, choose the ZIP with **Upload**,

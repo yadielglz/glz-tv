@@ -147,8 +147,9 @@ export function createLiveTV({ api, stopPreview }) {
       if (request !== catalogGeneration) return;
       playlists = result.playlists || [];
       const previous = $("livePlaylist").value;
-      $("livePlaylist").replaceChildren(option("", "All published playlists"), ...playlists.filter(p => p.is_published !== false).map(p => option(p.id, p.title)));
-      if (playlists.some(p => p.id === previous)) $("livePlaylist").value = previous;
+      const published = playlists.filter(p => p.is_published !== false);
+      $("livePlaylist").replaceChildren(option("", "All published playlists"), ...published.map(p => option(p.id, p.title)));
+      if (published.some(p => p.id === previous)) $("livePlaylist").value = previous;
       filterPlaylist();
       if (!selected) status(channels.length ? "Choose a channel to watch or cast." : "Publish a TV playlist in Playlist Studio to start watching.");
       else updateCast();

@@ -144,11 +144,37 @@ function GuestWelcomeSummary(config as Dynamic, weather as Dynamic) as Object
 end function
 
 function RadioFormat(url as String) as String
-    path = LCase(url.Split("?")[0])
+    lower = LCase(url.Trim())
+    parts = lower.Split("?")
+    path = parts[0]
+    query = ""
+    if parts.Count() > 1 then query = parts[1]
     if Instr(1, path, ".m3u8") > 0 then return "hls"
     if Right(path, 4) = ".aac" or Right(path, 5) = ".aacp" or Instr(1, path, "_icy") > 0 or Instr(1, path, "-icy") > 0 or Instr(1, path, "lamusica.com/") > 0 or Instr(1, path, "server20.servistreaming.com:9022") > 0 or Instr(1, path, "server20.servistreaming.com:9023") > 0 then return "es.aac-adts"
     if Right(path, 4) = ".m4a" or Right(path, 4) = ".mp4" then return "mp4"
+    if Right(path, 4) = ".mp3" then return "mp3"
+    if query <> ""
+        if Instr(1, query, ".m3u8") > 0 or Instr(1, query, "format=hls") > 0 or Instr(1, query, "type=hls") > 0 then return "hls"
+        if Instr(1, query, "format=aac") > 0 or Instr(1, query, "type=aac") > 0 or Instr(1, query, "type=.aac") > 0 or Instr(1, query, "codec=aac") > 0 or Instr(1, query, ".aac") > 0 then return "es.aac-adts"
+        if Instr(1, query, "format=mp4") > 0 or Instr(1, query, "format=m4a") > 0 or Instr(1, query, ".m4a") > 0 then return "mp4"
+        if Instr(1, query, "type=.mp3") > 0 or Instr(1, query, "type=mp3") > 0 or Instr(1, query, "format=mp3") > 0 or Instr(1, query, ".mp3") > 0 then return "mp3"
+        if Instr(1, query, "mp=/stream") > 0 then return "mp3"
+    end if
     return "mp3"
+end function
+
+function RadioFormatFallbacks(url as String) as Object
+    primary = RadioFormat(url)
+    candidates = [primary, "es.aac-adts", "aac", "mp3", "hls"]
+    unique = []
+    seen = {}
+    for each fmt in candidates
+        if fmt <> "" and not seen.DoesExist(fmt)
+            seen[fmt] = true
+            unique.Push(fmt)
+        end if
+    end for
+    return unique
 end function
 
 function WeatherCondition(code as Dynamic) as String

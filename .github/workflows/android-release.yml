@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version without the v prefix (for example, 1.7.0)
+        description: Release version without the v prefix (for example, 1.48.100)
         required: true
         type: string
+      publish_release:
+        description: Publish or update the GitHub Release for this version
+        required: false
+        default: true
+        type: boolean
   push:
     branches:
       - "release/v*"
@@ -39,6 +44,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: roku/package-lock.json
+
       - name: Resolve version
         id: version
         shell: bash
@@ -55,6 +67,9 @@ jobs:
             p4="${BASH_REMATCH[4]}"
             suffix="${BASH_REMATCH[5]:-}"
             version_code=$((10#$p1 * 100000 + 10#$p2 * 1000 + 10#$p3 * 100 + 10#$p4))
+            roku_major=$((10#$p1))
+            roku_minor=$((10#$p2))
+            roku_build=$((10#$p3 * 100 + 10#$p4))
           elif [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
             major="${BASH_REMATCH[1]}"
             minor="${BASH_REMATCH[2]}"
@@ -65,12 +80,18 @@ jobs:
               subpatch="${BASH_REMATCH[1]}"
             fi
             version_code=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch + 10#$subpatch))
+            roku_major=$((10#$major))
+            roku_minor=$((10#$minor))
+            roku_build=$((10#$patch))
           else
             echo "Version must use major.minor.patch[-suffix] format." >&2
             exit 1
           fi
           echo "name=$version" >> "$GITHUB_OUTPUT"
           echo "code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "major=$roku_major" >> "$GITHUB_OUTPUT"
+          echo "minor=$roku_minor" >> "$GITHUB_OUTPUT"
+          echo "build=$roku_build" >> "$GITHUB_OUTPUT"
 
       - name: Restore signing keystore
         shell: bash
@@ -103,6 +124,40 @@ jobs:
           cp "$apk" "GLZ-TV-${{ steps.version.outputs.name }}.apk"
           sha256sum "GLZ-TV-${{ steps.version.outputs.name }}.apk" > "GLZ-TV-${{ steps.version.outputs.name }}.apk.sha256"
 
+      - name: Inject version into Roku manifest
+        shell: bash
+        env:
+          ROKU_MAJOR: ${{ steps.version.outputs.major }}
+          ROKU_MINOR: ${{ steps.version.outputs.minor }}
+          ROKU_BUILD: ${{ steps.version.outputs.build }}
+          GLZ_VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          set -euo pipefail
+          sed -i \
+            -e "s/^major_version=.*/major_version=${ROKU_MAJOR}/" \
+            -e "s/^minor_version=.*/minor_version=${ROKU_MINOR}/" \
+            -e "s/^build_version=.*/build_version=${ROKU_BUILD}/" \
+            -e "s/^glz_version=.*/glz_version=${GLZ_VERSION}/" \
+            roku/manifest
+          grep -E '^(major_version|minor_version|build_version|glz_version)=' roku/manifest
+
+      - name: Build and test Roku package
+        shell: bash
+        working-directory: roku
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          npm run build
+
+      - name: Package Roku release artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f roku/dist/Glz-TV-Roku.zip
+          cp roku/dist/Glz-TV-Roku.zip "Glz-TV-Roku-${{ steps.version.outputs.name }}.zip"
+          sha256sum "Glz-TV-Roku-${{ steps.version.outputs.name }}.zip" > "Glz-TV-Roku-${{ steps.version.outputs.name }}.zip.sha256"
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -110,10 +165,12 @@ jobs:
           path: |
             GLZ-TV-${{ steps.version.outputs.name }}.apk
             GLZ-TV-${{ steps.version.outputs.name }}.apk.sha256
+            Glz-TV-Roku-${{ steps.version.outputs.name }}.zip
+            Glz-TV-Roku-${{ steps.version.outputs.name }}.zip.sha256
           if-no-files-found: error
 
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/v')
+        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -122,16 +179,18 @@ jobs:
           tag="v${{ steps.version.outputs.name }}"
           apk="GLZ-TV-${{ steps.version.outputs.name }}.apk"
           checksum="$apk.sha256"
+          roku_zip="Glz-TV-Roku-${{ steps.version.outputs.name }}.zip"
+          roku_checksum="$roku_zip.sha256"
           release_args=(--title "GLZ TV ${{ steps.version.outputs.name }}")
           if [[ "${{ steps.version.outputs.name }}" == *-testing* || "${{ steps.version.outputs.name }}" == *-weekly* || "${{ steps.version.outputs.name }}" == *-biweekly* || "${{ steps.version.outputs.name }}" == *-monthly* || "${{ steps.version.outputs.name }}" == *-beta* || "${{ steps.version.outputs.name }}" == *-family* || "${{ steps.version.outputs.name }}" == *-rc* ]]; then
             release_args+=(--prerelease --latest=false)
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$apk" "$checksum" --clobber
+            gh release upload "$tag" "$apk" "$checksum" "$roku_zip" "$roku_checksum" --clobber
             gh release edit "$tag" "${release_args[@]}"
           else
-            create_args=("$tag" "$apk" "$checksum" --generate-notes "${release_args[@]}")
+            create_args=("$tag" "$apk" "$checksum" "$roku_zip" "$roku_checksum" --generate-notes "${release_args[@]}")
             if [[ "$GITHUB_REF" == refs/tags/* ]]; then
               gh release create "${create_args[@]}" --verify-tag
             else

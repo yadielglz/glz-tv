@@ -151,13 +151,14 @@ fun GoogleTvGuideScreen(
 
     val displayChannel = focusedChannel ?: activeTunedChannel ?: filteredChannels.firstOrNull()
 
+    val viewport = com.glztv.app.ui.theme.LocalTvViewport.current
     // 30 minute timeline calculation
     val halfHour = 30 * 60 * 1000L
     val slots = 12 // 6 hours continuous scroll window
     val timelineStart = now - (now % halfHour)
     val timelineEnd = timelineStart + slots * halfHour
-    val slotWidth = 150.dp
-    val channelColumnWidth = 190.dp
+    val slotWidth = viewport.guideSlotWidth
+    val channelColumnWidth = viewport.guideChannelColWidth
     val totalTimelineWidth = slotWidth * slots
     val timelineScrollState = rememberScrollState()
 
@@ -173,7 +174,7 @@ fun GoogleTvGuideScreen(
             onSelectCategory = { selectedCategory = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 10.dp)
+                .padding(horizontal = viewport.safeHorizontal, vertical = 10.dp)
         )
 
         // 2. TOP HERO SYNOPSIS PANEL WITH LIVE PREVIEW
@@ -189,7 +190,7 @@ fun GoogleTvGuideScreen(
                 previewContent = previewContent,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 6.dp)
+                    .padding(horizontal = viewport.safeHorizontal, vertical = 6.dp)
             )
         }
 
@@ -200,7 +201,7 @@ fun GoogleTvGuideScreen(
             Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = viewport.safeHorizontal)
         ) {
             val listState = rememberLazyListState()
 
@@ -223,7 +224,7 @@ fun GoogleTvGuideScreen(
                             "CHANNELS",
                             Modifier.padding(start = 14.dp),
                             color = GoogleTvTokens.TextSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 0.5.sp
                         )
@@ -410,9 +411,10 @@ private fun GoogleTvHeroSynopsisPanel(
     }
 
     val heroBaseColor = Color(0xFF0B0D0F)
+    val viewport = com.glztv.app.ui.theme.LocalTvViewport.current
 
     Surface(
-        modifier = modifier.height(148.dp),
+        modifier = modifier.height(viewport.guideHeroHeight),
         shape = RoundedCornerShape(16.dp),
         color = heroBaseColor
     ) {
@@ -559,42 +561,61 @@ private fun GoogleTvHeroSynopsisPanel(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    var watchFocused by remember { mutableStateOf(false) }
                     Surface(
                         onClick = onWatch,
                         shape = CircleShape,
-                        color = GoogleTvTokens.BlueAccent,
+                        color = if (watchFocused) Color.White else GoogleTvTokens.BlueAccent,
                         contentColor = Color(0xFF001F2A),
-                        modifier = Modifier.googleTvFocusable(shape = CircleShape, focusedScale = 1.06f)
+                        border = if (watchFocused) androidx.compose.foundation.BorderStroke(2.dp, GoogleTvTokens.BlueAccent) else null,
+                        modifier = Modifier.googleTvFocusable(
+                            shape = CircleShape,
+                            focusedScale = 1.06f,
+                            onFocusChange = { watchFocused = it }
+                        )
                     ) {
                         Row(
-                            Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                            Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, Modifier.size(14.dp))
-                            Text("WATCH", fontSize = 10.sp, fontWeight = FontWeight.Black)
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, Modifier.size(15.dp))
+                            Text("WATCH", fontSize = 12.sp, fontWeight = FontWeight.Black)
                         }
                     }
 
+                    var favFocused by remember { mutableStateOf(false) }
                     Surface(
                         onClick = onToggleFavorite,
                         shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.10f),
-                        contentColor = if (isFavorite) GoogleTvTokens.StarGold else Color.White,
-                        modifier = Modifier.googleTvFocusable(shape = CircleShape, focusedScale = 1.06f)
+                        color = if (favFocused) Color.White else Color.White.copy(alpha = 0.12f),
+                        contentColor = when {
+                            favFocused -> Color.Black
+                            isFavorite -> GoogleTvTokens.StarGold
+                            else -> Color.White
+                        },
+                        modifier = Modifier.googleTvFocusable(
+                            shape = CircleShape,
+                            focusedScale = 1.06f,
+                            onFocusChange = { favFocused = it }
+                        )
                     ) {
                         Row(
-                            Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Icon(
                                 if (isFavorite) Icons.Default.Star else Icons.Outlined.StarOutline,
                                 contentDescription = null,
-                                Modifier.size(13.dp),
-                                tint = if (isFavorite) GoogleTvTokens.StarGold else Color.White
+                                Modifier.size(14.dp),
+                                tint = when {
+                                    favFocused -> Color.Black
+                                    isFavorite -> GoogleTvTokens.StarGold
+                                    else -> Color.White
+                                }
                             )
-                            Text(if (isFavorite) "FAVORITED" else "FAVORITE", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(if (isFavorite) "FAVORITED" else "FAVORITE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

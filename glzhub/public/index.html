@@ -27,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=3.0.4">
+  <link rel="stylesheet" href="/styles.css?v=1.48.100">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 </head>
 
@@ -754,7 +754,7 @@
         </section>
 
         <section id="epgView" class="hidden">
-          <div class="editor-header" style="margin-bottom:16px;">
+          <div class="editor-header view-header-spaced">
             <div>
               <div class="eyebrow">XMLTV PROGRAMME GUIDE</div>
               <h3>EPG Studio</h3>
@@ -775,20 +775,20 @@
               </button>
             </div>
           </div>
-          <div style="display:grid; grid-template-columns: 1fr 1.5fr auto auto; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+          <div class="epg-source-bar">
             <select id="epgPlaylistSelect" aria-label="TV playlist"><option value="">Select a TV playlist…</option></select>
             <input id="epgFetchUrl" type="url" placeholder="https://epg.best/.../guide.xml.gz" aria-label="Guide URL">
             <button id="epgFetchButton" class="secondary">Fetch URL</button>
             <button id="epgOpenButton" class="secondary">Open XMLTV</button>
             <input id="epgOpenInput" class="hidden" type="file" accept=".xml,.gz,.xml.gz,application/xml,text/xml,application/gzip">
           </div>
-          <div id="epgNotice" style="padding:10px 14px; background:var(--panel-card); border:1px solid var(--line); border-radius:var(--radius-sm); font-size:12.5px; color:var(--text-muted); margin-bottom:16px;">
+          <div id="epgNotice" class="epg-notice">
             Select a playlist, then load its managed guide or open an XMLTV source.
           </div>
           <div class="editor-card">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
-              <input id="epgChannelFilter" placeholder="Filter channels by name or ID…" style="flex:1; min-width:220px;">
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--text-muted);">Schedule date
+            <div class="epg-toolbar">
+              <input id="epgChannelFilter" class="epg-filter-input" placeholder="Filter channels by name or ID…">
+              <label class="epg-date-label">Schedule date
                 <input id="epgScheduleDate" type="date">
               </label>
               <button id="epgAddChannel" class="secondary" disabled>+ Add channel</button>
@@ -828,7 +828,7 @@
             </div>
             <h3>No box groups yet</h3>
             <p>Create a group such as Puerto Rico Rooms, Lobby TVs, or Sports Bar.</p>
-            <button type="button" class="primary" onclick="$('#addBoxGroup').click()">Add Box Group</button>
+            <button type="button" class="primary" data-trigger-click="#addBoxGroup">Add Box Group</button>
           </div>
         </section>
 
@@ -953,7 +953,7 @@
             </div>
             <h3>No properties yet</h3>
             <p>Create a property before assigning televisions.</p>
-            <button type="button" class="primary" onclick="$('#addSiteButton').click()">Add Property</button>
+            <button type="button" class="primary" data-trigger-click="#addSiteButton">Add Property</button>
           </div>
         </section>
 
@@ -1167,7 +1167,7 @@
 
         <!-- Live Event Channels View -->
         <section id="eventsView" class="hidden">
-          <div class="editor-header" style="margin-bottom:16px;">
+          <div class="editor-header view-header-spaced">
             <div>
               <div class="eyebrow">LIVE EVENT CHANNELS &amp; TEMPORARY SCHEDULE</div>
               <h2>Temporary Live Event Channels</h2>
@@ -1187,7 +1187,7 @@
             </div>
           </div>
 
-          <div class="stats" style="margin-bottom:16px;">
+          <div class="stats stats-spaced">
             <article class="stat-card">
               <div class="stat-meta">
                 <span>Total Live Events</span>
@@ -1203,18 +1203,18 @@
             <article class="stat-card">
               <div class="stat-meta">
                 <span>Provider Source</span>
-                <strong style="font-size: 13px; font-family:var(--font-mono);">starlite.best/api/list/mygbb8</strong>
+                <strong id="eventsProviderSource" class="events-provider-source">starlite.best/api/list/mygbb8/167848</strong>
               </div>
             </article>
           </div>
 
-          <div class="device-toolbar" style="flex-direction:column; align-items:stretch; gap:10px;">
-            <div class="search-wrap" style="width:100%;">
+          <div class="device-toolbar events-toolbar">
+            <div class="search-wrap events-search-wrap">
               <svg class="icon search-icon"><use href="#icon-search"/></svg>
               <input id="eventSearchInput" type="search" placeholder="Search live events by title, team, or league…" autocomplete="off">
             </div>
-            <div id="eventSportFilterBar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-              <button type="button" class="filter-pill active-sport-pill active" data-sport-filter="ALL">All Sports</button>
+            <div id="eventSportFilterBar" class="events-filter-bar">
+              <button type="button" class="filter-pill active" data-sport-filter="ALL">All Sports</button>
               <button type="button" class="filter-pill" data-sport-filter="MLB">MLB</button>
               <button type="button" class="filter-pill" data-sport-filter="NFL">NFL</button>
               <button type="button" class="filter-pill" data-sport-filter="NBA">NBA</button>
@@ -1233,7 +1233,7 @@
             </div>
             <h3>No Live Events Scheduled</h3>
             <p>Sync approved MLB, NBA, NFL, NCAA football, NHL, UFC, and boxing event channels, or browse the provider feed for a manual injection.</p>
-            <div style="display:flex; gap:10px; justify-content:center; margin-top:12px;">
+            <div class="empty-actions">
               <button type="button" class="primary" id="browseEventsEmptyBtn">Browse &amp; Inject</button>
               <button type="button" class="secondary" id="syncEventsEmptyBtn">Sync Feed</button>
             </div>
@@ -1399,14 +1399,15 @@
                     <select id="defaultAppLanguage">
                       <option value="en" selected>English (en)</option>
                       <option value="es">Español (es)</option>
-                      <option value="fr">Français (fr)</option>
                     </select>
                   </label>
                   <label>Default Update Ring
                     <select id="defaultUpdateChannel">
                       <option value="production" selected>Production (Stable Releases)</option>
-                      <option value="weekly">Weekly (Early Feature Builds)</option>
-                      <option value="beta">Beta / Pre-release (All Builds)</option>
+                      <option value="weekly">Weekly (Family &amp; Feature Ring)</option>
+                      <option value="biweekly">Bi-Weekly (Release Candidate)</option>
+                      <option value="monthly">Monthly (Scheduled Milestone)</option>
+                      <option value="testing">Testing (Beta / Nightly Preview)</option>
                     </select>
                   </label>
                 </div>
@@ -1502,7 +1503,7 @@
                 <p class="field-help" style="margin-bottom:14px;">Master provider feed endpoint for automatic live sports matchup discovery and stream injection.</p>
                 <div class="form-grid">
                   <label class="wide">Provider Sports Feed URL
-                    <input id="providerFeedUrl" type="url" value="https://starlite.best/api/list/mygbb8" placeholder="https://starlite.best/api/list/…">
+                    <input id="providerFeedUrl" type="url" value="https://starlite.best/api/list/mygbb8/167848" placeholder="https://starlite.best/api/list/…">
                   </label>
                   <label>Pre-Game Active Buffer (Hours)
                     <input id="providerPreBuffer" type="number" min="0" max="24" step="0.5" value="0.5">
@@ -1672,7 +1673,7 @@
                   <article class="stat-card">
                     <div class="stat-meta">
                       <span>Hub Version</span>
-                      <strong style="font-size:16px;">v3.0.1 (Production)</strong>
+                      <strong style="font-size:16px;">v1.48.100 (Production)</strong>
                     </div>
                     <div class="stat-badge">LATEST</div>
                   </article>
@@ -1810,7 +1811,7 @@
     <div style="padding: 16px 20px;">
       <p class="field-help" style="margin-bottom:12px;">Browse all live game streams directly from your provider feed (<code>starlite.best</code>). Select a sport category and click <strong>Inject Stream</strong> on any game to add it to GLZ TV.</p>
       <div id="providerSportFilterBar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
-        <button type="button" class="filter-pill active-prov-pill active" data-prov-sport="ALL">All Sports</button>
+        <button type="button" class="filter-pill active" data-prov-sport="ALL">All Sports</button>
         <button type="button" class="filter-pill" data-prov-sport="MLB">MLB</button>
         <button type="button" class="filter-pill" data-prov-sport="NFL">NFL</button>
         <button type="button" class="filter-pill" data-prov-sport="NBA">NBA</button>
@@ -1874,13 +1875,13 @@
   </dialog>
 
   <!-- Channel Policy Dialog -->
-  <dialog id="channelPolicyDialog" style="max-width: 860px; width: 94vw;">
+  <dialog id="channelPolicyDialog" class="dialog-wide">
     <form id="channelPolicyForm">
       <div class="dialog-head">
         <div>
           <div class="eyebrow">CHANNEL ACCESS CONTROL</div>
           <h3 id="channelPolicyTitle">Channel Policy</h3>
-          <p id="channelPolicySubtitle" style="font-size:12px; color:var(--text-muted); margin:0;"></p>
+          <p id="channelPolicySubtitle" class="policy-subtitle"></p>
         </div>
         <button class="icon-button" type="button" data-close-channel-policy>
           <svg class="icon"><use href="#icon-close"/></svg>
@@ -1889,21 +1890,21 @@
       <input id="channelPolicyTargetType" type="hidden">
       <input id="channelPolicyTargetId" type="hidden">
       <input id="channelPolicyPlaylistId" type="hidden">
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
-        <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:600; color:var(--text-muted);">Default behavior<select id="channelPolicyDefault"></select></label>
-        <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:600; color:var(--text-muted);">Channel group<select id="channelPolicyGroupFilter"><option value="">All channel groups</option></select></label>
-        <div style="grid-column: 1 / -1; display:flex; gap:10px; align-items:center;">
-          <input id="channelPolicySearch" placeholder="Filter by channel number, name, or group…" style="flex:1;">
-          <div style="display:flex; gap:6px;">
+      <div class="policy-controls-grid">
+        <label class="policy-field">Default behavior<select id="channelPolicyDefault"></select></label>
+        <label class="policy-field">Channel group<select id="channelPolicyGroupFilter"><option value="">All channel groups</option></select></label>
+        <div class="policy-search-row">
+          <input id="channelPolicySearch" placeholder="Filter by channel number, name, or group…">
+          <div class="policy-bulk-actions">
             <button id="policyAllowVisible" type="button" class="secondary small-btn">Allow Filtered</button>
             <button id="policyBlockVisible" type="button" class="secondary small-btn">Block Filtered</button>
             <button id="policyInheritVisible" type="button" class="secondary small-btn">Reset</button>
           </div>
         </div>
       </div>
-      <div id="channelPolicySummary" style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"></div>
-      <div id="channelPolicyList" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm);">
-        <div style="display:grid; grid-template-columns: 50px 1.5fr 1fr 90px 100px; gap:8px; padding:8px 12px; background:var(--panel-header); font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--line);">
+      <div id="channelPolicySummary" class="policy-summary"></div>
+      <div id="channelPolicyList" class="policy-list">
+        <div class="policy-channel-head">
           <span>CH</span><span>Channel</span><span>Group</span><span>Effective</span><span>Rule</span>
         </div>
       </div>
@@ -2285,7 +2286,7 @@
     <span id="toastMessage" class="toast-msg">Notification</span>
   </div>
 
-  <script type="module" src="/app.js?v=3.0.4"></script>
+  <script type="module" src="/app.js?v=1.48.100"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"8a9d9fbda9c14c53b3dec2f41df6f690","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 

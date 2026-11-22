@@ -1,27 +1,26 @@
-@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-
 package com.glztv.app.ui.screens
 
-import android.content.SharedPreferences
-import android.net.Uri
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.animation.core.LinearEasing
+import android.view.KeyEvent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import com.glztv.app.ui.components.tvFocusableWithPhysics
-import com.glztv.app.ui.components.GlzPanel
-import com.glztv.app.ui.components.GlzFocusCard
-import com.glztv.app.ui.components.GlzCardDefaults
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,22 +29,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,425 +58,653 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import coil3.compose.AsyncImage
-import com.glztv.app.BuildConfig
-import com.glztv.app.GlzHubManager
 import com.glztv.app.R
 import com.glztv.app.RadioStation
-import com.glztv.app.data.PreferencesRepository
-import com.glztv.app.data.RadioRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
+import com.glztv.app.player.RadioPlaybackState
+import com.glztv.app.player.RadioPlaybackStatus
+import com.glztv.app.ui.components.GlzCardDefaults
+import com.glztv.app.ui.components.GlzFocusCard
+import com.glztv.app.ui.components.GlzPanel
+import com.glztv.app.ui.components.GlzSectionActionButton
+import com.glztv.app.ui.components.GlzSectionHeader
+import com.glztv.app.ui.components.GlzSectionPill
+import com.glztv.app.ui.components.GlzSectionShell
+import com.glztv.app.ui.i18n.LocalGlzStrings
+import com.glztv.app.ui.theme.LocalTvViewport
 import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.sin
 
 @Composable
 fun RadioScreen(
-    prefs: SharedPreferences,
-    client: OkHttpClient,
-    onPlayingChanged: (isPlaying: Boolean, station: RadioStation?) -> Unit = { _, _ -> },
-    onScreensaverTriggered: () -> Unit = {},
+    stations: List<RadioStation>,
+    playbackState: RadioPlaybackState,
+    loading: Boolean,
+    fromCache: Boolean,
+    onPlayStation: (RadioStation) -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onStop: () -> Unit,
+    onRetry: () -> Unit,
+    onNextStation: () -> Unit,
+    onPreviousStation: () -> Unit,
+    onRefreshStations: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val repository = remember {
-        RadioRepository(PreferencesRepository(context), client)
+    val strings = LocalGlzStrings.current
+    val viewport = LocalTvViewport.current
+    val accent = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+
+    var selectedGenre by remember { mutableStateOf<String?>(null) }
+    val genres = remember(stations) {
+        stations.mapNotNull { it.genre.trim().takeIf { g -> g.isNotBlank() } }
+            .distinctBy { it.lowercase(Locale.ROOT) }
     }
-    var stations by remember { mutableStateOf<List<RadioStation>>(emptyList()) }
-    var selected by remember { mutableStateOf<RadioStation?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var status by remember { mutableStateOf("Loading stations from GLZ Hub…") }
-    var playing by remember { mutableStateOf(false) }
-    var radioRetryAttempt by remember(selected?.code) { mutableStateOf(0) }
-    val dataSourceFactory = remember {
-        DefaultHttpDataSource.Factory().setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}").setAllowCrossProtocolRedirects(true)
+    val filteredStations = remember(stations, selectedGenre) {
+        val g = selectedGenre
+        if (g.isNullOrBlank()) stations
+        else stations.filter { it.genre.equals(g, ignoreCase = true) }
     }
-    val player = remember {
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-            .build().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                        .setUsage(C.USAGE_MEDIA)
-                        .build(),
-                    true
-                )
-                setHandleAudioBecomingNoisy(true)
-                setWakeMode(C.WAKE_MODE_LOCAL)
+
+    val activeStation = playbackState.station
+    val firstStationFocus = remember { FocusRequester() }
+    val activeStationFocus = remember { FocusRequester() }
+
+    LaunchedEffect(stations.isNotEmpty(), activeStation?.code) {
+        if (stations.isNotEmpty()) {
+            val target = if (activeStation != null && filteredStations.any { it.streamUrl == activeStation.streamUrl }) {
+                activeStationFocus
+            } else {
+                firstStationFocus
             }
+            runCatching { target.requestFocus() }
+        }
     }
 
-    fun stopRadio() {
-        radioRetryAttempt = 0
-        player.stop()
-        player.clearMediaItems()
-        playing = false
-        onPlayingChanged(false, selected)
-        status = "Stopped"
-        GlzHubManager.reportActivity(prefs, "idle")
+    val subtitleText = when {
+        loading && stations.isEmpty() -> strings.radioLoading
+        fromCache -> strings.radioSavedCache
+        else -> strings.radioSubtitle
     }
 
-    fun playStation(station: RadioStation) {
-        selected = station
-        radioRetryAttempt = 0
-        dataSourceFactory.setDefaultRequestProperties(station.requestHeaders)
-        val metadata = MediaMetadata.Builder()
-            .setTitle(station.name)
-            .setArtist(station.genre)
-            .apply { station.logoUrl?.let { setArtworkUri(Uri.parse(it)) } }
-            .build()
-        player.setMediaItem(
-            MediaItem.Builder().setUri(station.streamUrl).setMediaMetadata(metadata).build()
-        )
-        player.prepare()
-        player.play()
-        onPlayingChanged(true, station)
-        status = "Connecting…"
-        GlzHubManager.reportActivity(prefs, "radio", station.name)
-    }
-
-    DisposableEffect(player) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                playing = isPlaying
-                onPlayingChanged(isPlaying, selected)
-                if (isPlaying) {
-                    radioRetryAttempt = 0
-                    status = "Live"
-                } else if (player.playbackState == Player.STATE_READY && selected != null) {
-                    radioRetryAttempt = 0
-                    status = "Paused"
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { keyEvent ->
+                val native = keyEvent.nativeKeyEvent
+                if (native.action == KeyEvent.ACTION_DOWN) {
+                    when (native.keyCode) {
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                            onTogglePlayPause(); true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_STOP -> {
+                            onStop(); true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_NEXT,
+                        KeyEvent.KEYCODE_CHANNEL_UP -> {
+                            onNextStation(); true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                        KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                            onPreviousStation(); true
+                        }
+                        else -> false
+                    }
+                } else false
+            }
+    ) {
+        GlzSectionShell {
+            GlzSectionHeader(
+                title = strings.radioTitle,
+                subtitle = subtitleText,
+                icon = Icons.Default.Radio,
+                accent = accent,
+                trailing = {
+                    GlzSectionPill(
+                        text = "${filteredStations.size} ${strings.radioStationsCount}",
+                        accent = accent,
+                        dotColor = if (playbackState.isPlaying) Color(0xFF00E676) else null
+                    )
+                    GlzSectionActionButton(
+                        label = strings.refresh,
+                        icon = Icons.Default.Refresh,
+                        onClick = onRefreshStations,
+                        accent = accent
+                    )
                 }
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                playing = false
-                onPlayingChanged(false, selected)
-                radioRetryAttempt += 1
-                val nextDelaySec = minOf(15, 1 shl minOf(radioRetryAttempt - 1, 4))
-                status = "Station offline · retrying in ${nextDelaySec}s (#$radioRetryAttempt)"
-            }
-        }
-        player.addListener(listener)
-        onDispose {
-            onPlayingChanged(false, null)
-            player.removeListener(listener)
-            player.stop()
-            player.release()
-            GlzHubManager.reportActivity(prefs, "idle")
-        }
-    }
-
-    LaunchedEffect(selected?.code, radioRetryAttempt) {
-        val currentStation = selected ?: return@LaunchedEffect
-        if (radioRetryAttempt > 0) {
-            val backoffSec = minOf(15L, 1L shl minOf(radioRetryAttempt - 1, 4))
-            delay(backoffSec * 1_000L)
-            status = "Reconnecting to station (#$radioRetryAttempt)…"
-            dataSourceFactory.setDefaultRequestProperties(currentStation.requestHeaders)
-            val metadata = MediaMetadata.Builder()
-                .setTitle(currentStation.name)
-                .setArtist(currentStation.genre)
-                .apply { currentStation.logoUrl?.let { setArtworkUri(Uri.parse(it)) } }
-                .build()
-            player.setMediaItem(
-                MediaItem.Builder().setUri(currentStation.streamUrl).setMediaMetadata(metadata).build()
             )
-            player.prepare()
-            player.play()
-        }
-    }
 
-    LaunchedEffect(Unit) {
-        runCatching { withContext(Dispatchers.IO) { repository.load() } }
-            .onSuccess { result ->
-                stations = result.stations
-                loading = false
-                status = if (result.fromCache) {
-                    "Saved station list · Hub temporarily unavailable"
-                } else "Choose a station"
-            }
-            .onFailure {
-                loading = false
-                status = "Radio stations unavailable"
-            }
-    }
-
-    LaunchedEffect(playing, selected?.code) {
-        if (playing && selected != null) {
-            delay(25_000L)
-            onScreensaverTriggered()
-        }
-    }
-
-    Box(modifier) {
-    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    "GLZ Radio",
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    "Live audio streams managed by GLZ Hub",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-            ) {
-                Text(
-                    "${stations.size} STATIONS",
-                    Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    fontWeight = FontWeight.Black,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            GlzPanel(
-                modifier = Modifier.weight(1.15f).fillMaxHeight(),
-                shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge)
-            ) {
-                if (loading) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        LinearProgressIndicator(Modifier.width(220.dp), color = MaterialTheme.colorScheme.primary)
-                    }
-                } else if (stations.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(status, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                } else {
-                    LazyColumn(
-                        Modifier.fillMaxSize().padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(stations, key = { it.code }) { station ->
-                            RadioStationRow(
-                                station = station,
-                                selected = selected?.code == station.code,
-                                isPlaying = playing && selected?.code == station.code
-                            ) {
-                                playStation(station)
-                            }
-                        }
-                    }
-                }
-            }
-            GlzPanel(
-                modifier = Modifier.weight(.85f).fillMaxHeight(),
-                shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge)
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                                )
-                            )
-                        )
+            // Optional genre filter row when multiple genres exist
+            if (genres.size > 1) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 2.dp)
                 ) {
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        val parts = (selected?.name ?: "").split("|").map(String::trim).filter(String::isNotBlank)
-                        val displayTitle = if (parts.size > 1) parts.last() else (selected?.name ?: "Choose a station")
-                        val displayTag = if (parts.size > 1) parts.first() else ""
-
-                        Surface(
-                            shape = RoundedCornerShape(28.dp),
-                            color = Color.White.copy(alpha = 0.08f),
-                            shadowElevation = 16.dp
-                        ) {
-                            AsyncImage(
-                                model = selected?.logoUrl ?: R.drawable.ic_launcher,
-                                contentDescription = selected?.name,
-                                modifier = Modifier
-                                    .size(150.dp)
-                                    .padding(12.dp)
-                                    .clip(RoundedCornerShape(20.dp)),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-
-                        if (displayTag.isNotBlank()) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                                modifier = Modifier.padding(top = 16.dp)
-                            ) {
-                                Text(
-                                    displayTag,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        Text(
-                            displayTitle,
-                            Modifier.padding(top = if (displayTag.isNotBlank()) 8.dp else 16.dp),
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                        Text(
-                            selected?.genre ?: "Browse the live station list",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-
-                        if (playing && selected != null) {
-                            AudioSpectrumVisualizer(
-                                isPlaying = true,
-                                modifier = Modifier
-                                    .padding(top = 14.dp)
-                                    .width(68.dp)
-                                    .height(24.dp),
-                                barColor = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = if (playing) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(top = 14.dp)
+                    item(key = "genre_all") {
+                        GlzFocusCard(
+                            onClick = { selectedGenre = null },
+                            selected = selectedGenre == null,
+                            shape = RoundedCornerShape(999.dp),
+                            focusedScale = 1.04f,
+                            contentModifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                status.uppercase(Locale.ROOT),
-                                Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                color = if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Black,
-                                fontSize = 11.sp,
-                                letterSpacing = 0.5.sp
+                                text = strings.radioAllGenres,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-
-                        Row(
-                            Modifier.padding(top = 22.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    }
+                    items(genres, key = { "genre_$it" }) { genre ->
+                        GlzFocusCard(
+                            onClick = { selectedGenre = genre },
+                            selected = selectedGenre.equals(genre, ignoreCase = true),
+                            shape = RoundedCornerShape(999.dp),
+                            focusedScale = 1.04f,
+                            contentModifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         ) {
-                            Button(
-                                enabled = selected != null,
-                                onClick = {
-                                    if (playing) player.pause()
-                                    else if (player.mediaItemCount > 0) player.play()
-                                    else selected?.let(::playStation)
-                                },
-                                modifier = Modifier.tvFocusableWithPhysics(
-                                    shape = RoundedCornerShape(18.dp),
-                                    focusedScale = 1.08f,
-                                    glowColor = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                Icon(
-                                    if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    null
-                                )
-                                Text(if (playing) "Pause" else "Play", Modifier.padding(start = 8.dp), fontWeight = FontWeight.Bold)
+                            Text(
+                                text = genre,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(if (viewport.isCompactHeight) 12.dp else 16.dp)
+            ) {
+                // Left Pane: Station List
+                GlzPanel(
+                    modifier = Modifier
+                        .weight(1.12f)
+                        .fillMaxHeight(),
+                    shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                ) {
+                    when {
+                        loading && filteredStations.isEmpty() -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier.width(220.dp),
+                                        color = accent
+                                    )
+                                    Text(
+                                        text = strings.radioLoading,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 13.sp
+                                    )
+                                }
                             }
-                            Button(
-                                enabled = selected != null || player.mediaItemCount > 0,
-                                onClick = ::stopRadio,
-                                modifier = Modifier.tvFocusableWithPhysics(
-                                    shape = RoundedCornerShape(18.dp),
-                                    focusedScale = 1.08f,
-                                    glowColor = MaterialTheme.colorScheme.secondary
+                        }
+                        filteredStations.isEmpty() -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = strings.radioUnavailable,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 14.sp
                                 )
+                            }
+                        }
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(Icons.Default.Stop, null)
-                                Text("Stop", Modifier.padding(start = 8.dp), fontWeight = FontWeight.Bold)
+                                itemsIndexed(
+                                    items = filteredStations,
+                                    key = { idx, st -> st.code.ifBlank { "${st.streamUrl}#$idx" } }
+                                ) { index, station ->
+                                    val isSelected = activeStation?.streamUrl == station.streamUrl &&
+                                        activeStation.code == station.code
+                                    val rowModifier = when {
+                                        isSelected -> Modifier.focusRequester(activeStationFocus)
+                                        index == 0 -> Modifier.focusRequester(firstStationFocus)
+                                        else -> Modifier
+                                    }
+                                    RadioStationRow(
+                                        station = station,
+                                        selected = isSelected,
+                                        isPlaying = isSelected && playbackState.isPlaying,
+                                        isBuffering = isSelected && playbackState.isBuffering,
+                                        onClick = { onPlayStation(station) },
+                                        modifier = rowModifier
+                                    )
+                                }
                             }
                         }
                     }
+                }
+
+                // Right Pane: Now-Playing Hero with Ambient Aura & Smooth Canvas Visualizer
+                GlzPanel(
+                    modifier = Modifier
+                        .weight(0.88f)
+                        .fillMaxHeight(),
+                    shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
+                    border = BorderStroke(
+                        1.dp,
+                        if (playbackState.isPlaying) accent.copy(alpha = 0.35f)
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                    )
+                ) {
+                    RadioNowPlayingHero(
+                        playbackState = playbackState,
+                        hasStations = filteredStations.isNotEmpty(),
+                        accent = accent,
+                        secondary = secondary,
+                        onTogglePlayPause = {
+                            if (playbackState.station != null) onTogglePlayPause()
+                            else filteredStations.firstOrNull()?.let(onPlayStation)
+                        },
+                        onStop = onStop,
+                        onRetry = onRetry,
+                        onPrevious = onPreviousStation,
+                        onNext = onNextStation
+                    )
                 }
             }
         }
     }
 }
+
+@Composable
+private fun RadioNowPlayingHero(
+    playbackState: RadioPlaybackState,
+    hasStations: Boolean,
+    accent: Color,
+    secondary: Color,
+    onTogglePlayPause: () -> Unit,
+    onStop: () -> Unit,
+    onRetry: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    val strings = LocalGlzStrings.current
+    val viewport = LocalTvViewport.current
+    val station = playbackState.station
+    val isPlaying = playbackState.isPlaying
+    val isBuffering = playbackState.isBuffering
+    val isError = playbackState.status == RadioPlaybackStatus.Error
+
+    // Breathing aura only animates while live/buffering to avoid idle ticks
+    val auraPulse = if (isPlaying || isBuffering) {
+        val transition = rememberInfiniteTransition(label = "radio-hero-aura")
+        val value by transition.animateFloat(
+            initialValue = 0.78f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = if (isBuffering) 900 else 2200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "aura-pulse"
+        )
+        value
+    } else {
+        0.55f
+    }
+
+    val statusText = when (playbackState.status) {
+        RadioPlaybackStatus.Playing -> strings.radioLive
+        RadioPlaybackStatus.Paused -> strings.radioPaused
+        RadioPlaybackStatus.Buffering -> strings.radioConnecting
+        RadioPlaybackStatus.Reconnecting -> "${strings.radioReconnecting} (#${playbackState.retryAttempt})"
+        RadioPlaybackStatus.Error -> strings.radioOfflineError
+        RadioPlaybackStatus.Idle -> strings.radioStopped
+    }
+
+    val statusColor = when (playbackState.status) {
+        RadioPlaybackStatus.Playing -> Color(0xFF00E676)
+        RadioPlaybackStatus.Buffering, RadioPlaybackStatus.Reconnecting -> Color(0xFFFFB74D)
+        RadioPlaybackStatus.Error -> Color(0xFFFF5252)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val artworkSize = if (viewport.isCompactHeight) 108.dp else 136.dp
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        accent.copy(alpha = if (isPlaying) 0.20f * auraPulse else 0.10f),
+                        secondary.copy(alpha = 0.05f),
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                    )
+                )
+            )
+            .padding(if (viewport.isCompactHeight) 14.dp else 20.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Top Status + Bitrate Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                GlzSectionPill(
+                    text = statusText,
+                    accent = statusColor,
+                    dotColor = statusColor
+                )
+                if (station != null && station.bitrateKbps > 0) {
+                    GlzSectionPill(
+                        text = "${station.bitrateKbps} KBPS",
+                        accent = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Center Artwork + Station Metadata with Smooth Crossfade
+            AnimatedContent(
+                targetState = station,
+                transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(180)) },
+                label = "radio-station-hero",
+                modifier = Modifier.fillMaxWidth()
+            ) { targetStation ->
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(if (viewport.isCompactHeight) 6.dp else 10.dp)
+                ) {
+                    // Artwork with breathing radial aura + buffering ring
+                    Box(
+                        modifier = Modifier.size(artworkSize + 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isPlaying || isBuffering) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val r = (size.minDimension / 2f) * auraPulse
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            accent.copy(alpha = 0.35f),
+                                            secondary.copy(alpha = 0.12f),
+                                            Color.Transparent
+                                        ),
+                                        center = center,
+                                        radius = r.coerceAtLeast(1f)
+                                    ),
+                                    radius = r
+                                )
+                            }
+                        }
+
+                        if (isBuffering) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(artworkSize + 12.dp),
+                                color = accent,
+                                trackColor = accent.copy(alpha = 0.15f),
+                                strokeWidth = 3.dp
+                            )
+                        }
+
+                        Surface(
+                            modifier = Modifier.size(artworkSize),
+                            shape = RoundedCornerShape(24.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                            border = BorderStroke(
+                                width = if (isPlaying) 2.dp else 1.dp,
+                                color = if (isPlaying) accent.copy(alpha = 0.65f)
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                            )
+                        ) {
+                            if (targetStation != null) {
+                                AsyncImage(
+                                    model = targetStation.logoUrl ?: R.drawable.ic_launcher,
+                                    contentDescription = targetStation.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Radio,
+                                        contentDescription = null,
+                                        tint = accent.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (targetStation != null) {
+                        val parts = targetStation.name.split("|", limit = 2)
+                        val tag = if (parts.size == 2) parts[0].trim() else null
+                        val cleanTitle = if (parts.size == 2) parts[1].trim() else targetStation.name
+
+                        if (!tag.isNullOrBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = accent.copy(alpha = 0.16f)
+                            ) {
+                                Text(
+                                    text = tag.uppercase(Locale.US),
+                                    color = accent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.8.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = cleanTitle,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = if (viewport.isCompactHeight) 18.sp else 21.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+
+                        // ICY Live Track Info or Genre Subtitle
+                        val trackLine = listOfNotNull(playbackState.icyArtist, playbackState.icyTitle)
+                            .joinToString(" · ")
+                            .ifBlank { targetStation.genre }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (playbackState.icyTitle != null || playbackState.icyArtist != null) {
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = null,
+                                    tint = accent,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                            Text(
+                                text = trackLine,
+                                color = if (playbackState.icyTitle != null) accent
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = strings.radioChooseStation,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            // Always-mounted Draw-Phase Canvas Visualizer (smooth decay, zero layout jump)
+            AudioSpectrumVisualizer(
+                isPlaying = isPlaying,
+                isBuffering = isBuffering,
+                barCount = 14,
+                barColor = accent,
+                secondaryColor = secondary,
+                modifier = Modifier
+                    .fillMaxWidth(0.72f)
+                    .height(if (viewport.isCompactHeight) 28.dp else 36.dp)
+            )
+
+            // Transport Controls (Prev · Play/Pause or Retry · Next · Stop)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                GlzSectionActionButton(
+                    label = strings.radioPrevious,
+                    icon = Icons.Default.SkipPrevious,
+                    onClick = onPrevious,
+                    enabled = hasStations,
+                    accent = accent
+                )
+                if (isError) {
+                    GlzSectionActionButton(
+                        label = strings.radioRetry,
+                        icon = Icons.Default.Refresh,
+                        onClick = onRetry,
+                        primary = true,
+                        accent = accent
+                    )
+                } else {
+                    GlzSectionActionButton(
+                        label = if (isPlaying) strings.radioPause else strings.radioPlay,
+                        icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        onClick = onTogglePlayPause,
+                        primary = true,
+                        enabled = hasStations,
+                        accent = accent
+                    )
+                }
+                GlzSectionActionButton(
+                    label = strings.radioNext,
+                    icon = Icons.Default.SkipNext,
+                    onClick = onNext,
+                    enabled = hasStations,
+                    accent = accent
+                )
+                if (station != null) {
+                    GlzSectionActionButton(
+                        label = strings.radioStop,
+                        icon = Icons.Default.Stop,
+                        onClick = onStop,
+                        accent = Color(0xFFFF6E6E)
+                    )
+                }
+            }
+        }
+    }
 }
 
+/**
+ * Draw-phase Canvas audio spectrum visualizer.
+ * Runs zero frame ticks when idle/paused and smoothly decays to resting baseline.
+ */
 @Composable
 fun AudioSpectrumVisualizer(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
+    isBuffering: Boolean = false,
     barCount: Int = 12,
-    barColor: Color = MaterialTheme.colorScheme.secondary
+    barColor: Color = MaterialTheme.colorScheme.primary,
+    secondaryColor: Color = MaterialTheme.colorScheme.secondary,
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "audio-spectrum")
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        repeat(barCount) { index ->
-            val duration = remember(index) { 320 + (index * 65) % 400 }
-            val heightPercent by if (isPlaying) {
-                infiniteTransition.animateFloat(
-                    initialValue = 0.18f,
-                    targetValue = 0.95f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = duration, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "bar-$index"
-                )
+    val active = isPlaying || isBuffering
+    val phase = if (active) {
+        val transition = rememberInfiniteTransition(label = "AudioSpectrumPhase")
+        val p by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = (2.0 * PI).toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = if (isBuffering) 1600 else 1100,
+                    easing = FastOutSlowInEasing
+                ),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "phase"
+        )
+        p
+    } else {
+        0f
+    }
+
+    val energy by animateFloatAsState(
+        targetValue = when {
+            isPlaying -> 1f
+            isBuffering -> 0.42f
+            else -> 0.14f
+        },
+        animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing),
+        label = "spectrum-energy"
+    )
+
+    Canvas(modifier = modifier) {
+        val count = barCount.coerceAtLeast(3)
+        val gap = (size.width / (count * 3.2f)).coerceIn(2.dp.toPx(), 5.dp.toPx())
+        val barWidth = ((size.width - gap * (count - 1)) / count).coerceAtLeast(2.dp.toPx())
+        val radius = CornerRadius(barWidth / 2f, barWidth / 2f)
+
+        for (i in 0 until count) {
+            val freq = 1.0f + (i % 3) * 0.45f
+            val offset = i * 0.65f
+            val wave = if (active) {
+                0.5f + 0.5f * sin(phase * freq + offset)
             } else {
-                remember { mutableStateOf(0.18f) }
+                0.2f + 0.15f * sin(i * 0.9f)
             }
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight(heightPercent)
-                    .background(barColor, RoundedCornerShape(2.dp))
+            val heightFrac = (0.14f + wave * 0.86f * energy).coerceIn(0.12f, 1.0f)
+            val barH = size.height * heightFrac
+            val x = i * (barWidth + gap)
+            val y = size.height - barH
+            val blend = i.toFloat() / (count - 1).coerceAtLeast(1)
+            val color = Color(
+                red = barColor.red + (secondaryColor.red - barColor.red) * blend * 0.45f,
+                green = barColor.green + (secondaryColor.green - barColor.green) * blend * 0.45f,
+                blue = barColor.blue + (secondaryColor.blue - barColor.blue) * blend * 0.45f,
+                alpha = if (isPlaying) 0.92f else 0.50f
+            )
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(x, y),
+                size = Size(barWidth, barH),
+                cornerRadius = radius
             )
         }
     }
@@ -483,90 +715,101 @@ private fun RadioStationRow(
     station: RadioStation,
     selected: Boolean,
     isPlaying: Boolean,
-    onPlay: () -> Unit
+    isBuffering: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val rawName = station.name.trim()
-    val parts = rawName.split("|").map(String::trim).filter(String::isNotBlank)
-    val title = if (parts.size > 1) parts.last() else rawName
-    val tag = if (parts.size > 1) parts.first() else ""
-    val activeColor = MaterialTheme.colorScheme.primary
+    val accent = MaterialTheme.colorScheme.primary
+    val parts = station.name.split("|", limit = 2)
+    val tag = if (parts.size == 2) parts[0].trim() else null
+    val title = if (parts.size == 2) parts[1].trim() else station.name
 
     GlzFocusCard(
-        onClick = onPlay,
-        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
         selected = selected,
-        accent = activeColor,
-        shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
-        focusedScale = 1.04f
+        shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
+        focusedScale = 1.03f,
+        modifier = modifier.fillMaxWidth(),
+        contentModifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 11.dp),
     ) { focused ->
+        val ink = when {
+            focused -> GlzCardDefaults.onAccent(accent)
+            selected -> accent
+            else -> MaterialTheme.colorScheme.onSurface
+        }
+        val secondaryInk = when {
+            focused -> GlzCardDefaults.onAccent(accent).copy(alpha = 0.78f)
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
         Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White.copy(alpha = 0.10f),
-                modifier = Modifier.size(56.dp)
-            ) {
-                AsyncImage(
-                    model = station.logoUrl ?: R.drawable.ic_launcher,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Fit
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                if (tag.isNotBlank()) {
+            AsyncImage(
+                model = station.logoUrl ?: R.drawable.ic_launcher,
+                contentDescription = station.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (!tag.isNullOrBlank()) {
                     Text(
-                        tag.uppercase(Locale.ROOT),
-                        color = if (focused) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
-                        else if (selected) activeColor
-                        else MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 10.sp,
-                        letterSpacing = 0.5.sp,
+                        text = tag.uppercase(Locale.US),
+                        color = if (focused) ink.copy(alpha = 0.85f) else accent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.7.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
                 Text(
-                    title,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 17.sp,
+                    text = title,
+                    color = ink,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    softWrap = false,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    station.genre.ifBlank { "Radio Stream" },
-                    color = if (focused) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.80f)
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = buildString {
+                        append(station.genre)
+                        if (station.bitrateKbps > 0) append(" · ${station.bitrateKbps}k")
+                    },
+                    color = secondaryInk,
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
             if (selected) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (isPlaying) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isPlaying || isBuffering) {
                         AudioSpectrumVisualizer(
-                            isPlaying = true,
+                            isPlaying = isPlaying,
+                            isBuffering = isBuffering,
+                            barCount = 4,
+                            barColor = ink,
+                            secondaryColor = ink,
                             modifier = Modifier
-                                .width(22.dp)
-                                .height(16.dp),
-                            barColor = if (focused) MaterialTheme.colorScheme.onPrimary else activeColor
+                                .width(26.dp)
+                                .height(18.dp)
                         )
                     }
                     Icon(
-                        Icons.Default.Radio,
-                        "Playing station",
-                        tint = if (focused) MaterialTheme.colorScheme.onPrimary else activeColor,
+                        imageVector = Icons.Default.Radio,
+                        contentDescription = null,
+                        tint = ink,
                         modifier = Modifier.size(20.dp)
                     )
                 }

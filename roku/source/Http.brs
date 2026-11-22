@@ -10,7 +10,7 @@ function Http(url as String, method as String, headers as Object, payload = "" a
     transfer.EnableEncodings(true)
     transfer.SetUrl(url)
     if not headers.DoesExist("User-Agent")
-        transfer.AddHeader("User-Agent", "GlzTV-Roku/" + Text(m.version, "26.X27.2201"))
+        transfer.AddHeader("User-Agent", "GlzTV-Roku/" + Text(m.version, "1.48.100"))
     end if
     for each key in headers
         transfer.AddHeader(key, headers[key])
