@@ -221,3 +221,85 @@ test('HLS CC selector loads a subtitle rendition and disables it on Off', async 
   $('liveCaptions').value = 'off'; $('liveCaptions').dispatchEvent(new window.Event('change'));
   assert.equal(instance.subtitleTrack, -1); assert.equal(instance.subtitleDisplay, false); assert.equal(subtitle.mode, 'disabled');
 });
+
+test('active online event channels merge into Live TV under Live Events with badge, filtering, search, and backup failover', async () => {
+  const now = Date.now();
+  const mockEvents = [
+    {
+      id: 'ev-1',
+      title: 'UFC 310: Main Event',
+      sport_league: 'UFC',
+      channel_number: '24-01',
+      stream_url: 'https://media.example/ufc310.m3u8',
+      status: 'active',
+      is_online: true,
+      start_time: new Date(now - 30 * 60_000).toISOString(),
+      end_time: new Date(now + 2 * 3600_000).toISOString(),
+      pre_buffer_hours: 0.5,
+      post_buffer_hours: 0.5
+    },
+    {
+      id: 'ev-backup',
+      title: 'NBA: Lakers vs Celtics',
+      sport_league: 'NBA',
+      channel_number: '21-01',
+      stream_url: 'https://media.example/dead.m3u8',
+      backup_stream_url: 'https://backup.example/nba.m3u8',
+      status: 'active',
+      is_online: false,
+      health_status: 'Failover (Backup Online (200))',
+      start_time: new Date(now - 10 * 60_000).toISOString(),
+      end_time: new Date(now + 2 * 3600_000).toISOString(),
+      pre_buffer_hours: 0.5,
+      post_buffer_hours: 0.5
+    },
+    {
+      id: 'ev-offline',
+      title: 'NHL: Offline Game',
+      sport_league: 'NHL',
+      stream_url: 'https://media.example/offline.m3u8',
+      status: 'active',
+      is_online: false,
+      start_time: new Date(now - 10 * 60_000).toISOString(),
+      end_time: new Date(now + 2 * 3600_000).toISOString()
+    },
+    {
+      id: 'ev-disabled',
+      title: 'MLB: Disabled Game',
+      sport_league: 'MLB',
+      stream_url: 'https://media.example/disabled.m3u8',
+      status: 'disabled',
+      is_online: true,
+      start_time: new Date(now - 10 * 60_000).toISOString(),
+      end_time: new Date(now + 2 * 3600_000).toISOString()
+    }
+  ];
+
+  makePlayer(async path => {
+    if (path === '/api/v1/admin/event-channels') return { events: mockEvents };
+    return { playlists };
+  }).open();
+  await tick();
+
+  // 2 active events (ev-1 online + ev-backup failover) + 3 published playlist items = 5
+  assert.equal(document.querySelectorAll('.live-channel').length, 5);
+  assert.equal(document.querySelectorAll('.live-event-badge').length, 2);
+
+  // Filter by Live Events group
+  $('liveGroup').value = 'Live Events';
+  $('liveGroup').dispatchEvent(new window.Event('change'));
+  assert.equal(document.querySelectorAll('.live-channel').length, 2);
+
+  // Search within Live Events by sport/title
+  $('liveSearch').value = 'ufc 310';
+  $('liveSearch').dispatchEvent(new window.Event('input'));
+  assert.equal(document.querySelectorAll('.live-channel').length, 1);
+
+  // Selecting failover event casts the backup URL
+  $('liveSearch').value = 'lakers';
+  $('liveSearch').dispatchEvent(new window.Event('input'));
+  document.querySelector('.live-channel').click(); await tick();
+  $('liveCast').click(); await tick();
+  assert.equal(loads[0].media.contentId, 'https://backup.example/nba.m3u8');
+});
+

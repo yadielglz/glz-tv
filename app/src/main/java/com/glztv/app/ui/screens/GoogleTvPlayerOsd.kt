@@ -69,6 +69,7 @@ fun GoogleTvPlayerOsd(
     isFavorite: Boolean = false,
     captionsEnabled: Boolean = false,
     captionLanguage: String = "en",
+    diagnostics: com.glztv.app.player.PlaybackDiagnostics? = null,
     firstButtonFocusRequester: FocusRequester? = null,
     onToggleFavorite: () -> Unit = {},
     onToggleCaptions: () -> Unit = {},
@@ -341,18 +342,23 @@ fun GoogleTvPlayerOsd(
 
                     Spacer(Modifier.height(6.dp))
 
-                    // Media Badges (HD, CC, Stereo)
+                    // Real Media3 Stream Badges (Resolution, FPS, CC, Audio Channels)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        OsdSpecBadge("HD")
+                        val videoBadge = diagnostics?.videoQualityBadge() ?: "LIVE"
+                        OsdSpecBadge(videoBadge, active = videoBadge == "4K UHD" || videoBadge == "1080p")
+                        diagnostics?.fpsBadge()?.let { fps ->
+                            OsdSpecBadge(fps)
+                        }
                         if (captionsEnabled) {
                             OsdSpecBadge("CC ${captionLanguage.uppercase()}", active = true)
                         } else {
                             OsdSpecBadge("CC")
                         }
-                        OsdSpecBadge("STEREO")
+                        val audioBadge = diagnostics?.audioChannelBadge() ?: "STEREO"
+                        OsdSpecBadge(audioBadge, active = audioBadge == "5.1" || audioBadge == "7.1")
                     }
                 }
 

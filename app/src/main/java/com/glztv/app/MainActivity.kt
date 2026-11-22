@@ -1145,12 +1145,16 @@ internal fun TvScreen(
                     resumeChannel = resumeChannel,
                     previewChannel = glzHubPreviewChannel,
                     favorites = favorites,
-                    recentChannels = remember(recentRevision, channels.toList()) {
+                    recentChannels = remember(recentRevision, channels.size) {
                         recentChannelManager.recentIds().mapNotNull { id ->
                             channels.firstOrNull { it.id == id }
                         }
                     },
-                    radioStations = radioStations,
+                    radioStations = remember(radioStations, radioController.favoriteStationKeys) {
+                        radioStations.sortedByDescending {
+                            RadioPlayerController.stationKey(it) in radioController.favoriteStationKeys
+                        }
+                    },
                     movies = managedMovies,
                     currentRadioStation = currentRadioStation,
                     onPlayRadioStation = { station ->
@@ -1269,12 +1273,15 @@ internal fun TvScreen(
                                 playbackState = radioState,
                                 loading = radioLoading,
                                 fromCache = radioFromCache,
+                                favoriteStationKeys = radioController.favoriteStationKeys,
                                 onPlayStation = ::playRadioStation,
                                 onTogglePlayPause = ::toggleRadioPlayPause,
                                 onStop = ::stopRadio,
                                 onRetry = { radioController.retry() },
                                 onNextStation = { radioController.playNext(radioStations) },
                                 onPreviousStation = { radioController.playPrevious(radioStations) },
+                                onToggleFavorite = { radioController.toggleFavorite(it) },
+                                onCycleSleepTimer = { radioController.cycleSleepTimer() },
                                 onRefreshStations = ::refreshRadioStations,
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -4484,6 +4491,7 @@ private fun ImmersivePlayerScreen(
                 isFavorite = channel.id in favorites,
                 captionsEnabled = captionsEnabled,
                 captionLanguage = captionLanguage,
+                diagnostics = playbackControls.diagnostics,
                 firstButtonFocusRequester = osdActionFocus,
                 onToggleFavorite = { onToggleFavorite?.invoke(channel.id) },
                 onToggleCaptions = {
@@ -6126,7 +6134,9 @@ private fun VideoPlayer(
                 droppedFrames = player.videoDecoderCounters?.droppedBufferCount?.toLong() ?: 0,
                 networkTransport = currentNetworkTransport(context),
                 playbackState = playbackStateLabel(player.playbackState),
-                lastError = lastPlaybackError
+                lastError = lastPlaybackError,
+                frameRate = video?.frameRate?.takeIf { it > 0f },
+                audioChannels = audio?.channelCount?.takeIf { it > 0 }
             )
             delay(1_000)
         }

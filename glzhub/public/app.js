@@ -1,4 +1,4 @@
-import { createLiveTV } from "/live-tv.js?v=1.48.100";
+import { createLiveTV } from "/live-tv.js?v=1.48.200";
 
 const liveTV = createLiveTV({ api, stopPreview: stopStreamPreview });
 const state = {
@@ -359,7 +359,34 @@ async function refreshDeviceActivity() {
   }
 }
 
-setInterval(() => refreshDeviceActivity().catch(() => { }), 5_000);
+let devicePollTimer = null;
+let eventsPollTimer = null;
+
+function getEffectiveRefreshIntervalMs() {
+  const raw = Number(getSettings().refreshInterval);
+  if (raw === 0) return 0;
+  const clampedSec = Number.isFinite(raw) && raw > 0 ? Math.max(3, raw) : 5;
+  return clampedSec * 1000;
+}
+
+function restartPollingIntervals() {
+  if (devicePollTimer) {
+    clearInterval(devicePollTimer);
+    devicePollTimer = null;
+  }
+  if (eventsPollTimer) {
+    clearInterval(eventsPollTimer);
+    eventsPollTimer = null;
+  }
+  const intervalMs = getEffectiveRefreshIntervalMs();
+  if (intervalMs <= 0) return;
+  devicePollTimer = setInterval(() => refreshDeviceActivity().catch(() => { }), intervalMs);
+  eventsPollTimer = setInterval(() => {
+    if (state.session && $("#eventsView") && !$("#eventsView").classList.contains("hidden")) {
+      loadEventChannels().catch(() => { });
+    }
+  }, intervalMs);
+}
 
 async function loadDevices() {
   const [deviceResult, appResult, siteResult, groupResult] = await Promise.all([
@@ -961,7 +988,7 @@ const DEFAULT_SETTINGS = {
   adminContact: "admin@glztech.com",
   timezone: "America/Puerto_Rico",
   weatherUnit: "fahrenheit",
-  refreshInterval: 30,
+  refreshInterval: 5,
   soundsEnabled: true,
   alertOverdue: true,
   startDestination: "Home",
@@ -1088,7 +1115,7 @@ function updateNavBadges() {
   const fleetText = $("#fleetHealthText");
   if (fleetText) {
     fleetText.textContent = total > 0
-      ? `${onlineCount} of ${total} Online · Edge v1.48.100`
+      ? `${onlineCount} of ${total} Online · Edge v1.48.200`
       : "Fleet Ready · Cloudflare Edge";
   }
 }
@@ -2047,13 +2074,27 @@ $("#detectTimezoneBtn")?.addEventListener("click", () => {
   }
 });
 
+$("#hubDensityMode")?.addEventListener("change", (e) => {
+  const density = e.target.value || "comfortable";
+  applyTheme(undefined, undefined, density);
+});
+
+$("#hubRefreshInterval")?.addEventListener("change", (e) => {
+  const raw = Number(e.target.value);
+  const refreshInterval = raw === 0 ? 0 : Math.max(3, Number.isFinite(raw) ? raw : 5);
+  saveSettings({ refreshInterval });
+  restartPollingIntervals();
+});
+
 $("#saveAllSettingsBtn")?.addEventListener("click", () => {
+  const rawRefresh = Number($("#hubRefreshInterval")?.value ?? DEFAULT_SETTINGS.refreshInterval);
+  const normalizedRefresh = rawRefresh === 0 ? 0 : Math.max(3, Number.isFinite(rawRefresh) ? rawRefresh : 5);
   const updated = {
     orgName: $("#hubOrgName")?.value || DEFAULT_SETTINGS.orgName,
     adminContact: $("#hubAdminContact")?.value || DEFAULT_SETTINGS.adminContact,
     timezone: $("#hubTimezone")?.value || DEFAULT_SETTINGS.timezone,
     weatherUnit: $("#hubWeatherUnit")?.value || DEFAULT_SETTINGS.weatherUnit,
-    refreshInterval: Number($("#hubRefreshInterval")?.value || 30),
+    refreshInterval: normalizedRefresh,
     soundsEnabled: Boolean($("#hubSoundsEnabled")?.checked),
     alertOverdue: Boolean($("#hubAlertOverdue")?.checked),
 
@@ -2083,6 +2124,8 @@ $("#saveAllSettingsBtn")?.addEventListener("click", () => {
     animationsEnabled: Boolean($("#enableAnimations")?.checked)
   };
   saveSettings(updated);
+  applyTheme(undefined, undefined, updated.hubDensity);
+  restartPollingIntervals();
   showToast("All Hub settings saved successfully!", "success");
 });
 
@@ -2116,6 +2159,7 @@ $("#visibleApps").innerHTML = APP_CATALOG.map(([name, packageName]) => `
   </label>
 `).join("");
 
+restartPollingIntervals();
 await loadPublicConfig();
 restoreSession();
 showApp();
@@ -3645,14 +3689,13 @@ async function loadEventChannels() {
   }
 }
 
-setInterval(() => {
-  if (state.session && $("#eventsView") && !$("#eventsView").classList.contains("hidden")) {
-    loadEventChannels().catch(() => { });
-  }
-}, 60_000);
-
 function isEventActive(event) {
-  if (event.is_online === false || String(event.is_online) === "false") return false;
+  const primaryOffline = event.is_online === false || String(event.is_online) === "false";
+  if (primaryOffline) {
+    const hasBackup = typeof event.backup_stream_url === "string" && /^https?:\/\//i.test(event.backup_stream_url.trim());
+    const bothOffline = String(event.health_status || "").toLowerCase().includes("primary + backup");
+    if (!hasBackup || bothOffline) return false;
+  }
   if (event.status === "disabled" || event.status === "expired") return false;
   const start = new Date(event.start_time).getTime();
   const rawEnd = new Date(event.end_time).getTime();
@@ -3720,9 +3763,32 @@ function renderEventChannels() {
       statusBadge = `<span class="status-pill queued">Scheduled</span>`;
     }
 
-    const healthText = event.health_status || (event.is_online === false ? "Offline" : "Live");
-    const healthClass = event.is_online !== false ? "status-pill online" : "status-pill offline";
-    const healthBadge = `<span class="${healthClass}">${escapeHtml(healthText)}</span>`;
+    const hasBackup = typeof event.backup_stream_url === "string" && /^https?:\/\//i.test(event.backup_stream_url.trim());
+    const checkedAt = event.last_checked_at ? formatRelativeTime(event.last_checked_at) : "";
+    const checkedSuffix = checkedAt && checkedAt !== "Never" ? ` · ${checkedAt}` : "";
+    const rawHealth = String(event.health_status || "").trim();
+    const isFailoverActive = event.is_online === false && hasBackup && !rawHealth.toLowerCase().includes("primary + backup");
+
+    let healthLabel = "Unchecked";
+    let healthClass = "status-pill queued";
+    if (!event.last_checked_at && !rawHealth) {
+      healthLabel = "Unchecked";
+      healthClass = "status-pill queued";
+    } else if (isFailoverActive) {
+      healthLabel = `Failover Online${checkedSuffix}`;
+      healthClass = "status-pill attention";
+    } else if (event.is_online === false || String(event.is_online) === "false") {
+      healthLabel = `Offline${checkedSuffix}`;
+      healthClass = "status-pill offline";
+    } else {
+      healthLabel = `Online${checkedSuffix}`;
+      healthClass = "status-pill online";
+    }
+    const healthTitle = rawHealth ? ` title="${escapeHtml(rawHealth)}"` : "";
+    const healthBadge = `<span class="${healthClass}"${healthTitle}>${escapeHtml(healthLabel)}</span>`;
+    const backupBadge = hasBackup
+      ? `<span class="meta-pill">${isFailoverActive ? "Failover Active" : "Backup Ready"}</span>`
+      : "";
 
     const leagueBadge = `<span class="meta-pill font-mono">${escapeHtml(event.sport_league || "SPORTS")}</span>`;
     const chnoBadge = `<span class="meta-pill font-mono">CH ${escapeHtml(event.channel_number || "30-01")}</span>`;
@@ -3737,12 +3803,14 @@ function renderEventChannels() {
             <div class="card-meta-pills" style="margin-top:6px;">
               ${statusBadge}
               ${healthBadge}
+              ${backupBadge}
               <span class="meta-pill">Game: ${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - ${endDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
               <span class="meta-pill">Window: -${event.pre_buffer_hours}h / +${event.post_buffer_hours}h</span>
             </div>
           </div>
         </div>
         <div class="card-action-bar">
+          <button type="button" class="secondary check-event-health-btn" data-id="${event.id}">Check Health</button>
           <button type="button" class="secondary extend-event-btn" data-id="${event.id}">+1h Window</button>
           <button type="button" class="secondary edit-event-btn" data-id="${event.id}">Edit</button>
           <button type="button" class="danger-button delete-event-btn" data-id="${event.id}">Delete</button>
@@ -3751,6 +3819,7 @@ function renderEventChannels() {
     `;
   }).join("");
 
+  $$(".check-event-health-btn").forEach((btn) => btn.addEventListener("click", () => checkSingleEventHealth(btn.dataset.id, btn)));
   $$(".edit-event-btn").forEach((btn) => btn.addEventListener("click", () => openEventDialog(btn.dataset.id)));
   $$(".delete-event-btn").forEach((btn) => btn.addEventListener("click", () => deleteEventChannel(btn.dataset.id)));
   $$(".extend-event-btn").forEach((btn) => btn.addEventListener("click", () => extendEventWindow(btn.dataset.id)));
@@ -3840,9 +3909,14 @@ function renderProviderStreams() {
       btn.disabled = true;
       btn.textContent = "Injecting…";
       try {
+        const s = getSettings();
         await api("/api/v1/admin/event-channels/inject-single", {
           method: "POST",
-          body: JSON.stringify({ stream })
+          body: JSON.stringify({
+            stream,
+            preBufferHours: Number(s.providerPreBuffer ?? DEFAULT_SETTINGS.providerPreBuffer),
+            postBufferHours: Number(s.providerPostBuffer ?? DEFAULT_SETTINGS.providerPostBuffer)
+          })
         });
         showToast(`Successfully injected "${stream.title}" into live channels!`, "success");
         stream.alreadyInjected = true;
@@ -3885,12 +3959,15 @@ $("#injectAllVisibleBtn")?.addEventListener("click", async () => {
   if (btn) btn.disabled = true;
   showToast(`Injecting ${toInject.length} streams...`, "info");
 
+  const s = getSettings();
+  const preBufferHours = Number(s.providerPreBuffer ?? DEFAULT_SETTINGS.providerPreBuffer);
+  const postBufferHours = Number(s.providerPostBuffer ?? DEFAULT_SETTINGS.providerPostBuffer);
   let successCount = 0;
   for (const stream of toInject) {
     try {
       await api("/api/v1/admin/event-channels/inject-single", {
         method: "POST",
-        body: JSON.stringify({ stream })
+        body: JSON.stringify({ stream, preBufferHours, postBufferHours })
       });
       stream.alreadyInjected = true;
       successCount++;
@@ -3905,15 +3982,24 @@ $("#injectAllVisibleBtn")?.addEventListener("click", async () => {
   await loadEventChannels();
 });
 
+function getConfiguredHealthTimeoutMs() {
+  const timeoutSec = Number(getSettings().streamHealthTimeout ?? DEFAULT_SETTINGS.streamHealthTimeout);
+  const safeSec = Number.isFinite(timeoutSec) && timeoutSec > 0 ? timeoutSec : DEFAULT_SETTINGS.streamHealthTimeout;
+  return Math.min(15_000, Math.max(2_000, Math.round(safeSec * 1000)));
+}
+
 async function ingestConMeFeed() {
   const btn = $("#syncConMeFeedBtn");
   if (btn) btn.disabled = true;
-  const feedUrl = getSettings().providerFeedUrl || DEFAULT_SETTINGS.providerFeedUrl;
+  const s = getSettings();
+  const feedUrl = s.providerFeedUrl || DEFAULT_SETTINGS.providerFeedUrl;
+  const preBufferHours = Number(s.providerPreBuffer ?? DEFAULT_SETTINGS.providerPreBuffer);
+  const postBufferHours = Number(s.providerPostBuffer ?? DEFAULT_SETTINGS.providerPostBuffer);
   showToast("Syncing provider feed…", "info");
   try {
     const res = await api("/api/v1/admin/event-channels/ingest", {
       method: "POST",
-      body: JSON.stringify({ url: feedUrl })
+      body: JSON.stringify({ url: feedUrl, preBufferHours, postBufferHours })
     });
     showToast(`Successfully ingested ${res.ingestedCount} live event channels from provider!`, "success");
     await loadEventChannels();
@@ -3927,15 +4013,51 @@ async function ingestConMeFeed() {
 async function checkAllStreamHealth() {
   const btn = $("#checkStreamHealthBtn");
   if (btn) btn.disabled = true;
-  showToast("Checking live stream health across channels…", "info");
+  const timeoutMs = getConfiguredHealthTimeoutMs();
+  showToast(`Checking live stream health (${Math.round(timeoutMs / 1000)}s timeout)…`, "info");
   try {
-    const res = await api("/api/v1/admin/event-channels/check-health", { method: "POST", body: JSON.stringify({}) });
-    showToast(`Stream Health Check Complete: ${res.onlineCount} Online, ${res.offlineCount} Offline`, res.offlineCount > 0 ? "warning" : "success");
+    const res = await api(`/api/v1/admin/event-channels/check-health?timeoutMs=${timeoutMs}`, {
+      method: "POST",
+      body: JSON.stringify({ timeoutMs })
+    });
+    const failoverPart = res.failoverCount > 0 ? `, ${res.failoverCount} Failover` : "";
+    showToast(`Stream Health Check Complete: ${res.onlineCount} Online${failoverPart}, ${res.offlineCount} Offline`, res.offlineCount > 0 ? "warning" : "success");
     await loadEventChannels();
   } catch (err) {
     showToast(`Health check failed: ${err.message}`, "error");
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+async function checkSingleEventHealth(eventId, btn = null) {
+  if (!eventId) return;
+  const originalLabel = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+  }
+  const timeoutMs = getConfiguredHealthTimeoutMs();
+  try {
+    const res = await api(`/api/v1/admin/event-channels/check-health?timeoutMs=${timeoutMs}`, {
+      method: "POST",
+      body: JSON.stringify({ eventId, timeoutMs })
+    });
+    if (res.failoverCount > 0) {
+      showToast("Primary stream offline — backup failover stream is Online!", "warning");
+    } else if (res.onlineCount > 0) {
+      showToast("Stream health check passed: Online.", "success");
+    } else {
+      showToast("Stream health check failed: Offline.", "warning");
+    }
+    await loadEventChannels();
+  } catch (err) {
+    showToast(`Health check failed: ${err.message}`, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalLabel || "Check Health";
+    }
   }
 }
 
@@ -3958,12 +4080,14 @@ async function extendEventWindow(eventId) {
 
 function openEventDialog(id = "") {
   const event = state.events.find((e) => e.id === id);
+  const s = getSettings();
   $("#eventId").value = event?.id || "";
   $("#eventTitle").value = event?.title || "";
   $("#eventSportLeague").value = event?.sport_league || "MLB";
   $("#eventGroupTitle").value = event?.group_title || "Major League Sports (Events)";
   if ($("#eventChannelNumber")) $("#eventChannelNumber").value = event?.channel_number || `30-${String((state.events || []).length + 1).padStart(2, "0")}`;
   $("#eventStreamUrl").value = event?.stream_url || "";
+  if ($("#eventBackupStreamUrl")) $("#eventBackupStreamUrl").value = event?.backup_stream_url || "";
   $("#eventLogoUrl").value = event?.logo_url || "";
 
   const now = new Date();
@@ -3972,8 +4096,8 @@ function openEventDialog(id = "") {
 
   $("#eventStartTime").value = localInputValue(defaultStart);
   $("#eventEndTime").value = localInputValue(defaultEnd);
-  $("#eventPreBuffer").value = event?.pre_buffer_hours ?? 0.5;
-  $("#eventPostBuffer").value = event?.post_buffer_hours ?? 0.5;
+  $("#eventPreBuffer").value = event?.pre_buffer_hours ?? (s.providerPreBuffer ?? DEFAULT_SETTINGS.providerPreBuffer);
+  $("#eventPostBuffer").value = event?.post_buffer_hours ?? (s.providerPostBuffer ?? DEFAULT_SETTINGS.providerPostBuffer);
   $("#eventStatus").value = event?.status || "active";
 
   $("#eventDialogTitle").textContent = event ? "Edit Event Channel" : "Add Custom Event Channel";
@@ -3991,6 +4115,7 @@ async function saveEventChannel(e) {
     groupTitle: $("#eventGroupTitle").value.trim(),
     channelNumber: $("#eventChannelNumber") ? $("#eventChannelNumber").value.trim() : "30-01",
     streamUrl: $("#eventStreamUrl").value.trim(),
+    backupStreamUrl: $("#eventBackupStreamUrl") ? $("#eventBackupStreamUrl").value.trim() : "",
     logoUrl: $("#eventLogoUrl").value.trim(),
     startTime: new Date($("#eventStartTime").value).toISOString(),
     endTime: new Date($("#eventEndTime").value).toISOString(),

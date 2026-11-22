@@ -42,7 +42,10 @@ import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -77,6 +80,7 @@ import com.glztv.app.R
 import com.glztv.app.RadioStation
 import com.glztv.app.player.RadioPlaybackState
 import com.glztv.app.player.RadioPlaybackStatus
+import com.glztv.app.player.RadioPlayerController
 import com.glztv.app.ui.components.GlzCardDefaults
 import com.glztv.app.ui.components.GlzFocusCard
 import com.glztv.app.ui.components.GlzPanel
@@ -90,18 +94,23 @@ import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.sin
 
+private const val GENRE_FAVORITES = "__FAVORITES__"
+
 @Composable
 fun RadioScreen(
     stations: List<RadioStation>,
     playbackState: RadioPlaybackState,
     loading: Boolean,
     fromCache: Boolean,
+    favoriteStationKeys: Set<String> = emptySet(),
     onPlayStation: (RadioStation) -> Unit,
     onTogglePlayPause: () -> Unit,
     onStop: () -> Unit,
     onRetry: () -> Unit,
     onNextStation: () -> Unit,
     onPreviousStation: () -> Unit,
+    onToggleFavorite: (RadioStation) -> Unit = {},
+    onCycleSleepTimer: () -> Unit = {},
     onRefreshStations: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -115,10 +124,17 @@ fun RadioScreen(
         stations.mapNotNull { it.genre.trim().takeIf { g -> g.isNotBlank() } }
             .distinctBy { it.lowercase(Locale.ROOT) }
     }
-    val filteredStations = remember(stations, selectedGenre) {
+    val hasFavorites = remember(stations, favoriteStationKeys) {
+        stations.any { RadioPlayerController.stationKey(it) in favoriteStationKeys }
+    }
+    val filteredStations = remember(stations, selectedGenre, favoriteStationKeys) {
         val g = selectedGenre
-        if (g.isNullOrBlank()) stations
-        else stations.filter { it.genre.equals(g, ignoreCase = true) }
+        val base = when {
+            g == GENRE_FAVORITES -> stations.filter { RadioPlayerController.stationKey(it) in favoriteStationKeys }
+            g.isNullOrBlank() -> stations
+            else -> stations.filter { it.genre.equals(g, ignoreCase = true) }
+        }
+        base.sortedByDescending { RadioPlayerController.stationKey(it) in favoriteStationKeys }
     }
 
     val activeStation = playbackState.station
@@ -189,8 +205,8 @@ fun RadioScreen(
                 }
             )
 
-            // Optional genre filter row when multiple genres exist
-            if (genres.size > 1) {
+            // Genre & Favorites filter row
+            if (genres.size > 1 || hasFavorites) {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 2.dp)
@@ -208,6 +224,23 @@ fun RadioScreen(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                        }
+                    }
+                    if (hasFavorites) {
+                        item(key = "genre_favorites") {
+                            GlzFocusCard(
+                                onClick = { selectedGenre = GENRE_FAVORITES },
+                                selected = selectedGenre == GENRE_FAVORITES,
+                                shape = RoundedCornerShape(999.dp),
+                                focusedScale = 1.04f,
+                                contentModifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "★ ${strings.favorites}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                     items(genres, key = { "genre_$it" }) { genre ->
@@ -283,6 +316,7 @@ fun RadioScreen(
                                 ) { index, station ->
                                     val isSelected = activeStation?.streamUrl == station.streamUrl &&
                                         activeStation.code == station.code
+                                    val isFav = RadioPlayerController.stationKey(station) in favoriteStationKeys
                                     val rowModifier = when {
                                         isSelected -> Modifier.focusRequester(activeStationFocus)
                                         index == 0 -> Modifier.focusRequester(firstStationFocus)
@@ -291,6 +325,7 @@ fun RadioScreen(
                                     RadioStationRow(
                                         station = station,
                                         selected = isSelected,
+                                        isFavorite = isFav,
                                         isPlaying = isSelected && playbackState.isPlaying,
                                         isBuffering = isSelected && playbackState.isBuffering,
                                         onClick = { onPlayStation(station) },
@@ -317,6 +352,7 @@ fun RadioScreen(
                     RadioNowPlayingHero(
                         playbackState = playbackState,
                         hasStations = filteredStations.isNotEmpty(),
+                        isActiveFavorite = activeStation != null && RadioPlayerController.stationKey(activeStation) in favoriteStationKeys,
                         accent = accent,
                         secondary = secondary,
                         onTogglePlayPause = {
@@ -326,7 +362,9 @@ fun RadioScreen(
                         onStop = onStop,
                         onRetry = onRetry,
                         onPrevious = onPreviousStation,
-                        onNext = onNextStation
+                        onNext = onNextStation,
+                        onToggleFavorite = { activeStation?.let(onToggleFavorite) },
+                        onCycleSleepTimer = onCycleSleepTimer
                     )
                 }
             }
@@ -338,6 +376,7 @@ fun RadioScreen(
 private fun RadioNowPlayingHero(
     playbackState: RadioPlaybackState,
     hasStations: Boolean,
+    isActiveFavorite: Boolean,
     accent: Color,
     secondary: Color,
     onTogglePlayPause: () -> Unit,
@@ -345,6 +384,8 @@ private fun RadioNowPlayingHero(
     onRetry: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onCycleSleepTimer: () -> Unit,
 ) {
     val strings = LocalGlzStrings.current
     val viewport = LocalTvViewport.current
@@ -386,7 +427,11 @@ private fun RadioNowPlayingHero(
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    val artworkSize = if (viewport.isCompactHeight) 108.dp else 136.dp
+    val sleepLabel = playbackState.sleepTimerRemainingSec?.let { sec ->
+        "%d:%02d".format(sec / 60, sec % 60)
+    } ?: strings.off
+
+    val artworkSize = if (viewport.isCompactHeight) 104.dp else 128.dp
 
     Box(
         modifier = Modifier
@@ -400,14 +445,14 @@ private fun RadioNowPlayingHero(
                     )
                 )
             )
-            .padding(if (viewport.isCompactHeight) 14.dp else 20.dp)
+            .padding(if (viewport.isCompactHeight) 14.dp else 18.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Status + Bitrate Row
+            // Top Status + Bitrate + Favorite/Sleep Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -418,10 +463,22 @@ private fun RadioNowPlayingHero(
                     accent = statusColor,
                     dotColor = statusColor
                 )
-                if (station != null && station.bitrateKbps > 0) {
-                    GlzSectionPill(
-                        text = "${station.bitrateKbps} KBPS",
-                        accent = MaterialTheme.colorScheme.onSurfaceVariant
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (station != null && station.bitrateKbps > 0) {
+                        GlzSectionPill(
+                            text = "${station.bitrateKbps}K",
+                            accent = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    GlzSectionActionButton(
+                        label = sleepLabel,
+                        icon = Icons.Default.Timer,
+                        primary = playbackState.sleepTimerRemainingSec != null,
+                        onClick = onCycleSleepTimer,
+                        accent = accent
                     )
                 }
             }
@@ -436,7 +493,7 @@ private fun RadioNowPlayingHero(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(if (viewport.isCompactHeight) 6.dp else 10.dp)
+                    verticalArrangement = Arrangement.spacedBy(if (viewport.isCompactHeight) 6.dp else 9.dp)
                 ) {
                     // Artwork with breathing radial aura + buffering ring
                     Box(
@@ -578,10 +635,10 @@ private fun RadioNowPlayingHero(
                 secondaryColor = secondary,
                 modifier = Modifier
                     .fillMaxWidth(0.72f)
-                    .height(if (viewport.isCompactHeight) 28.dp else 36.dp)
+                    .height(if (viewport.isCompactHeight) 26.dp else 34.dp)
             )
 
-            // Transport Controls (Prev · Play/Pause or Retry · Next · Stop)
+            // Transport Controls (Prev · Play/Pause or Retry · Next · Fav · Stop)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
@@ -620,6 +677,13 @@ private fun RadioNowPlayingHero(
                     accent = accent
                 )
                 if (station != null) {
+                    GlzSectionActionButton(
+                        label = if (isActiveFavorite) "★" else "☆",
+                        icon = if (isActiveFavorite) Icons.Default.Star else Icons.Outlined.StarOutline,
+                        primary = isActiveFavorite,
+                        onClick = onToggleFavorite,
+                        accent = Color(0xFFFFD54F)
+                    )
                     GlzSectionActionButton(
                         label = strings.radioStop,
                         icon = Icons.Default.Stop,
@@ -714,6 +778,7 @@ fun AudioSpectrumVisualizer(
 private fun RadioStationRow(
     station: RadioStation,
     selected: Boolean,
+    isFavorite: Boolean = false,
     isPlaying: Boolean,
     isBuffering: Boolean,
     onClick: () -> Unit,
@@ -789,11 +854,19 @@ private fun RadioStationRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (selected) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (isFavorite) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = if (focused) ink else Color(0xFFFFD54F),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                if (selected) {
                     if (isPlaying || isBuffering) {
                         AudioSpectrumVisualizer(
                             isPlaying = isPlaying,

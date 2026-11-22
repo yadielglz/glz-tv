@@ -270,6 +270,26 @@ fun HomeRadioPlayerBar(
 
                 Spacer(Modifier.width(12.dp))
 
+                // Active Sleep Timer Countdown Pill
+                playbackState?.sleepTimerRemainingSec?.let { remSec ->
+                    val mins = remSec / 60
+                    val secs = remSec % 60
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = accent.copy(alpha = 0.16f),
+                        border = BorderStroke(1.dp, accent.copy(alpha = 0.35f))
+                    ) {
+                        Text(
+                            text = "⏱ %d:%02d".format(mins, secs),
+                            color = accent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                }
+
                 // Draw-phase Equalizer or Buffering Spinner
                 if (isBuffering) {
                     CircularProgressIndicator(

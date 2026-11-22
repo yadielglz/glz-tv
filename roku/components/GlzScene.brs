@@ -17,11 +17,27 @@ sub init()
     m.miniGuide = m.top.findNode("miniGuide")
     m.miniList = m.top.findNode("miniList")
     m.miniTimer = m.top.findNode("miniTimer")
+    m.footer = m.top.findNode("footer")
+    m.radioMiniBar = m.top.findNode("radioMiniBar")
+    m.radioEqTimer = m.top.findNode("radioEqTimer")
+    m.radioEqBars = [
+        m.top.findNode("eqBar0")
+        m.top.findNode("eqBar1")
+        m.top.findNode("eqBar2")
+        m.top.findNode("eqBar3")
+    ]
+    m.radioPillBg = m.top.findNode("radioPillBg")
+    m.radioPillText = m.top.findNode("radioPillText")
+    m.radioMiniTitle = m.top.findNode("radioMiniTitle")
+    m.radioMiniGenre = m.top.findNode("radioMiniGenre")
     m.status = m.top.findNode("status")
     m.pairing = m.top.findNode("pairing")
     m.catalog = m.top.findNode("catalog")
     m.appVersion = CreateObject("roAppInfo").GetValue("glz_version")
     m.registry = CreateObject("roRegistrySection", "GlzTV")
+    m.stateRegistry = CreateObject("roRegistrySection", "GlzTvState")
+    m.favoriteIds = ParseIdList(m.stateRegistry.Read("favorites"))
+    m.recentIds = ParseIdList(m.stateRegistry.Read("recents"))
     m.osdTimeout = 5
     savedOsd = m.registry.Read("osdTimeout").ToInt()
     if savedOsd >= 3 and savedOsd <= 15 then m.osdTimeout = savedOsd
@@ -36,11 +52,13 @@ sub init()
     m.view = m.startView : m.renderedView = "" : m.guideError = "Loading programme guide…"
     m.version = "" : m.refresh = "" : m.playingUrl = "" : m.playingTitle = "" : m.playingChannel = invalid : m.retriedPlayback = false
     m.radioRow = invalid : m.radioTitle = "" : m.radioFormats = [] : m.radioFormatIndex = 0 : m.radioState = "idle"
+    m.radioEqFrame = 0 : m.radioEqRunning = false
+    m.optionActions = [] : m.optionFavoriteChannel = invalid
     m.lastError = "" : m.autoStarted = false : m.pending = true
     m.syncsSinceCatalog = 0 : m.queuedForce = false : m.queuedAction = "sync"
-    m.views = ["home", "live", "guide", "movies", "events", "radio", "weather", "settings"]
+    m.views = ["home", "favorites", "live", "guide", "movies", "events", "radio", "weather", "settings"]
     root = CreateObject("roSGNode", "ContentNode")
-    for each title in ["Home", "Live TV", "Guide", "Movies", "PPV Events", "Radio", "Weather", "Settings"]
+    for each title in ["Home", "Favorites", "Live TV", "Guide", "Movies", "PPV Events", "Radio", "Weather", "Settings"]
         item = root.CreateChild("ContentNode") : item.title = title
     end for
     m.nav.content = root
@@ -55,6 +73,7 @@ sub init()
     m.miniList.ObserveField("itemFocused", "onMiniFocused")
     m.osdTimer.ObserveField("fire", "hideOsd")
     m.miniTimer.ObserveField("fire", "hideMiniGuide")
+    m.radioEqTimer.ObserveField("fire", "tickRadioEq")
     m.video.ObserveField("state", "videoStateChanged")
     m.audio.ObserveField("state", "audioStateChanged")
     m.top.SetFocus(true)
@@ -204,11 +223,12 @@ sub onHubResult()
             if result.omitted > 0 then m.status.text = "Showing the first 1,500 channels. Assign a smaller lineup in GlzHub."
         end if
         updateHeaderBar()
+        updateRadioMiniBar()
         renderRows()
         if not m.autoStarted
             m.autoStarted = true
             if m.registry.Read("startView") = "" and LCase(Text(config.startDestination)) = "live_tv"
-                openSection(1)
+                openSectionByName("live")
             else
                 m.list.SetFocus(true)
             end if
@@ -319,9 +339,80 @@ sub openSection(index as Integer)
     m.nav.jumpToItem = index
     renderRows()
     if m.view = "radio" or (m.view = "home" and m.stations.Count() = 0) then queueExtra("radio")
-    if m.view = "guide" or m.view = "home" then queueExtra("summary")
+    if m.view = "guide" or m.view = "home" or m.view = "favorites" then queueExtra("summary")
     if m.view = "weather" and m.weather = invalid then queueExtra("weather")
     if m.view <> "weather" and m.rows.Count() > 0 then m.list.SetFocus(true)
+end sub
+
+sub openSectionByName(name as String)
+    for i = 0 to m.views.Count() - 1
+        if m.views[i] = name
+            openSection(i) : return
+        end if
+    end for
+end sub
+
+sub saveFavorites()
+    m.stateRegistry.Write("favorites", SerializeIdList(m.favoriteIds))
+    m.stateRegistry.Flush()
+end sub
+
+sub saveRecents()
+    m.stateRegistry.Write("recents", SerializeIdList(m.recentIds))
+    m.stateRegistry.Flush()
+end sub
+
+sub trackRecentChannel(channel as Dynamic)
+    if type(channel) <> "roAssociativeArray" or channel.isMovie = true then return
+    key = ChannelKey(channel)
+    if key = "" then return
+    m.recentIds = RecordRecentChannel(m.recentIds, key, 10)
+    saveRecents()
+end sub
+
+function channelTitleWithStar(channel as Dynamic, baseTitle = "" as String) as String
+    label = baseTitle
+    if label = "" and type(channel) = "roAssociativeArray" then label = Text(channel.title)
+    if type(channel) = "roAssociativeArray" and channel.isMovie <> true
+        if IsFavoriteChannel(m.favoriteIds, ChannelKey(channel)) then return "★ " + label
+    end if
+    return label
+end function
+
+function focusedLiveChannel() as Dynamic
+    if m.pending or m.video.visible then return invalid
+    if m.view = "schedule" then return m.guideChannel
+    if m.view = "movies" or m.view = "radio" or m.view = "weather" or m.view = "settings" then return invalid
+    index = m.list.itemFocused
+    if index < 0 then index = m.focusedIndex
+    if index < 0 or index >= m.rows.Count() then return invalid
+    row = m.rows[index]
+    if type(row) <> "roAssociativeArray" then return invalid
+    if m.view = "home"
+        if row.kind = "play" and type(row.target) = "roAssociativeArray" and row.target.isMovie <> true
+            return row.target
+        end if
+        return invalid
+    end if
+    if row.isMovie = true then return invalid
+    return row
+end function
+
+sub toggleFavoriteForChannel(channel as Dynamic)
+    if type(channel) <> "roAssociativeArray" or channel.isMovie = true then return
+    key = ChannelKey(channel)
+    if key = "" then return
+    wasFav = IsFavoriteChannel(m.favoriteIds, key)
+    m.favoriteIds = ToggleFavoriteChannel(m.favoriteIds, key)
+    saveFavorites()
+    if wasFav
+        m.status.text = "Removed " + Text(channel.title, "channel") + " from Favorites"
+    else
+        m.status.text = "Added ★ " + Text(channel.title, "channel") + " to Favorites"
+    end if
+    renderRows()
+    if m.miniGuide.visible then renderMiniGuide()
+    restoreFocus()
 end sub
 
 function buildHomeRows(now as Integer) as Object
@@ -332,53 +423,73 @@ function buildHomeRows(now as Integer) as Object
         for each channel in m.channels
             if channel.url = m.lastChannelUrl
                 prog = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, channel.id), now))
-                rows.Push({ kind: "play", target: channel, number: "LAST", title: "Continue · " + channel.title, description: prog, logo: Text(channel.logo) })
+                rows.Push({ kind: "play", target: channel, number: "LAST", title: "Continue · " + channelTitleWithStar(channel), description: prog, logo: Text(channel.logo) })
                 seenUrls[channel.url] = true
                 exit for
             end if
         end for
     end if
-    ' 2. Active Live Sports & PPV Events (up to 4)
+    ' 2. Favorites (when populated, up to 6)
+    favChannels = ResolveChannelsByKeys(m.channels, m.favoriteIds, 6)
+    for each channel in favChannels
+        if not seenUrls.DoesExist(channel.url)
+            prog = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, channel.id), now))
+            rows.Push({ kind: "play", target: channel, number: "★ FAV", title: "★ " + channel.title, description: "Favorites · " + prog, logo: Text(channel.logo) })
+            seenUrls[channel.url] = true
+        end if
+    end for
+    ' 3. Recent Channels (when populated, up to 5)
+    recentChannels = ResolveChannelsByKeys(m.channels, m.recentIds, 6)
+    recentsAdded = 0
+    for each channel in recentChannels
+        if not seenUrls.DoesExist(channel.url) and recentsAdded < 5
+            prog = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, channel.id), now))
+            rows.Push({ kind: "play", target: channel, number: "RECENT", title: channelTitleWithStar(channel), description: "Recent Channels · " + prog, logo: Text(channel.logo) })
+            seenUrls[channel.url] = true
+            recentsAdded++
+        end if
+    end for
+    ' 4. Active Live Sports & PPV Events (up to 4)
     eventsAdded = 0
     for each channel in m.channels
         if Text(channel.eventTitle) <> "" and eventsAdded < 4
             window = channel.league + " · " + ClockLabel(channel.eventStart) + " – " + ClockLabel(channel.eventEnd)
-            rows.Push({ kind: "play", target: channel, number: "LIVE", title: channel.eventTitle, description: window, logo: Text(channel.logo) })
+            rows.Push({ kind: "play", target: channel, number: "LIVE", title: channelTitleWithStar(channel, channel.eventTitle), description: window, logo: Text(channel.logo) })
             seenUrls[channel.url] = true
             eventsAdded++
         end if
     end for
-    ' 3. On Now: Channels currently airing a live EPG programme (up to 6)
+    ' 5. On Now: Channels currently airing a live EPG programme (up to 6)
     onNowAdded = 0
     for each channel in m.channels
         if not seenUrls.DoesExist(channel.url) and Text(channel.eventTitle) = "" and onNowAdded < 6
             current = CurrentProgramme(ChannelSummary(m.summaries, channel.id), now)
             if current <> invalid
                 badge = Text(channel.number, "ON")
-                rows.Push({ kind: "play", target: channel, number: badge, title: channel.title, description: ProgrammeLine(current), logo: Text(channel.logo) })
+                rows.Push({ kind: "play", target: channel, number: badge, title: channelTitleWithStar(channel), description: ProgrammeLine(current), logo: Text(channel.logo) })
                 seenUrls[channel.url] = true
                 onNowAdded++
             end if
         end if
     end for
-    ' 4. Featured Movies On Demand (up to 6)
+    ' 6. Featured Movies On Demand (up to 6)
     maxMovies = m.movies.Count() - 1
     if maxMovies > 5 then maxMovies = 5
     for i = 0 to maxMovies
         mv = m.movies[i]
         rows.Push({ kind: "movie", target: mv, number: "FILM", title: mv.title, description: mv.group, logo: Text(mv.logo) })
     end for
-    ' 5. Top Live Channels fallback (if EPG hasn't populated 6 channels yet)
+    ' 7. Top Live Channels fallback (if EPG hasn't populated 6 channels yet)
     for each channel in m.channels
         if not seenUrls.DoesExist(channel.url) and Text(channel.eventTitle) = "" and onNowAdded < 6
             badge = Text(channel.number, "TV")
             prog = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, channel.id), now))
-            rows.Push({ kind: "play", target: channel, number: badge, title: channel.title, description: prog, logo: Text(channel.logo) })
+            rows.Push({ kind: "play", target: channel, number: badge, title: channelTitleWithStar(channel), description: prog, logo: Text(channel.logo) })
             seenUrls[channel.url] = true
             onNowAdded++
         end if
     end for
-    ' 6. Featured Radio Picks (up to 3)
+    ' 8. Featured Radio Picks (up to 3)
     maxRadio = m.stations.Count() - 1
     if maxRadio > 2 then maxRadio = 2
     for i = 0 to maxRadio
@@ -448,7 +559,8 @@ sub renderRows()
     isWeather = m.view = "weather"
     titles = {
         home: "On Now & Featured · OK Plays Immediately"
-        live: "Live TV · Up/Down surfs channels while playing"
+        favorites: "Favorites · Press * to add or remove channels"
+        live: "Live TV · Up/Down or FF/RW zaps while playing"
         guide: "Programme Guide · OK opens 24-hour channel schedule"
         movies: "Movies On Demand · Instant Cinema"
         events: "PPV / Live Sports Events"
@@ -467,6 +579,8 @@ sub renderRows()
     now = CreateObject("roDateTime").AsSeconds()
     if m.view = "home"
         m.rows = buildHomeRows(now)
+    else if m.view = "favorites"
+        m.rows = ResolveChannelsByKeys(m.channels, m.favoriteIds)
     else if m.view = "movies"
         m.rows = m.movies
     else if m.view = "settings"
@@ -497,11 +611,12 @@ sub renderRows()
             item.title = row.title : item.shortDescriptionLine1 = Text(row.number)
             if item.shortDescriptionLine1 = "" then item.shortDescriptionLine1 = (i + 1).ToStr()
             if m.view = "events"
-                item.title = row.eventTitle
+                item.title = channelTitleWithStar(row, row.eventTitle)
                 item.description = row.league + " · " + ClockLabel(row.eventStart) + " – " + ClockLabel(row.eventEnd)
             else if m.view = "radio"
                 item.description = row.group
             else
+                item.title = channelTitleWithStar(row)
                 item.description = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, row.id), now))
             end if
         end if
@@ -513,6 +628,7 @@ sub renderRows()
     m.top.findNode("channelCount").text = m.rows.Count().ToStr() + " items · * Options"
     if m.rows.Count() = 0
         if m.view = "schedule" or m.view = "guide" then m.status.text = "No programme data yet. " + m.guideError
+        if m.view = "favorites" then m.status.text = "No favorites yet. Press * on any channel to add ★."
         if m.view = "movies" then m.status.text = "No movies published in GlzHub yet."
         if m.view = "events" then m.status.text = "No active PPV events in the current lineup."
         if m.view = "radio" then m.status.text = "No radio stations loaded. Manage stations in GlzHub or choose Refresh."
@@ -549,6 +665,9 @@ sub showDetailsForIndex(index as Integer)
         if m.view = "movies"
             m.top.findNode("detailTitle").text = "No Movies Available"
             m.top.findNode("detailGroup").text = "Add and publish movies in GlzHub Movie Studio to stream them on demand here."
+        else if m.view = "favorites"
+            m.top.findNode("detailTitle").text = "No Favorites Yet"
+            m.top.findNode("detailGroup").text = "Highlight any live channel in Home, Live TV, or Guide and press * to add it to Favorites."
         else
             m.top.findNode("detailTitle").text = "Nothing to show yet"
             m.top.findNode("detailGroup").text = "Choose a section on the left or press * to Refresh."
@@ -592,6 +711,7 @@ sub showDetailsForIndex(index as Integer)
         epgState = "Active (" + m.summaries.Count().ToStr() + " channels mapped)"
         if m.guideError <> "" then epgState = m.guideError
         diag = "Live Channels: " + m.channels.Count().ToStr() + Chr(10)
+        diag += "Favorites: " + m.favoriteIds.Count().ToStr() + " · Recents: " + m.recentIds.Count().ToStr() + Chr(10)
         diag += "Movies On Demand: " + m.movies.Count().ToStr() + Chr(10)
         diag += "Radio Stations: " + m.stations.Count().ToStr() + Chr(10)
         diag += "Weather City: " + Text(m.weatherLocation, "San Juan") + Chr(10)
@@ -616,9 +736,9 @@ sub showDetailsForIndex(index as Integer)
         m.top.findNode("detailMeta").text = ClockLabel(row.start) + " – " + ClockLabel(row.end)
         m.top.findNode("detailGroup").text = Text(row.description, "Press OK to watch this channel live.")
     else if m.view = "events"
-        m.top.findNode("detailTitle").text = row.eventTitle
+        m.top.findNode("detailTitle").text = channelTitleWithStar(row, row.eventTitle)
         m.top.findNode("detailMeta").text = row.league + " · " + ClockLabel(row.eventStart) + " – " + ClockLabel(row.eventEnd)
-        m.top.findNode("detailGroup").text = "Press OK to watch live · SPORTS PPV"
+        m.top.findNode("detailGroup").text = "Press OK to watch live · SPORTS PPV" + Chr(10) + "Press * to toggle Favorite."
     else if m.view = "radio"
         badge = radioStatusBadge(row)
         meta = Text(row.group)
@@ -632,11 +752,16 @@ sub showDetailsForIndex(index as Integer)
             m.top.findNode("detailGroup").text = "Press OK to listen. Audio continues while browsing other sections."
         end if
     else
+        m.top.findNode("detailTitle").text = channelTitleWithStar(row)
         now = CreateObject("roDateTime").AsSeconds()
         summary = ChannelSummary(m.summaries, row.id)
         current = CurrentProgramme(summary, now)
         upcoming = NextProgramme(summary, now)
-        m.top.findNode("detailMeta").text = Text(row.group)
+        meta = Text(row.group)
+        if IsFavoriteChannel(m.favoriteIds, ChannelKey(row))
+            if meta <> "" then meta = "★ Favorite · " + meta else meta = "★ Favorite"
+        end if
+        m.top.findNode("detailMeta").text = meta
         description = "Now: " + ProgrammeLine(current)
         if current = invalid and m.guideError <> "" then description = m.guideError
         if upcoming <> invalid then description += Chr(10) + "Next: " + ProgrammeLine(upcoming)
@@ -667,7 +792,7 @@ sub handleSettingSelection(row as Object)
         m.registry.Write("autoResume", m.autoResumePref) : m.registry.Flush()
         renderRows()
     else if key = "radio"
-        if m.radioTitle <> "" then stopRadio() : renderRows() else openSection(5)
+        if m.radioTitle <> "" then stopRadio() : renderRows() else openSectionByName("radio")
     else if key = "repair"
         promptRepair()
     end if
@@ -733,15 +858,22 @@ sub playItem(row as Object)
     content.live = not (row.isMovie = true)
     m.playingChannel = row : m.retriedPlayback = false
     m.playingUrl = row.url : m.playingTitle = row.title : m.lastError = ""
-    if row.isMovie <> true then m.lastChannelUrl = row.url
+    if row.isMovie <> true
+        m.lastChannelUrl = row.url
+        trackRecentChannel(row)
+    end if
     m.browser.visible = false : m.video.visible = true
+    updateRadioMiniBar()
     m.video.content = content : m.playerFocus.SetFocus(true) : m.video.control = "play"
     showOsd()
     startSync(false)
 end sub
 
 sub stepChannel(delta as Integer)
-    if m.playingChannel <> invalid and m.playingChannel.isMovie = true then return
+    if not m.video.visible or m.playingChannel = invalid or m.playingChannel.isMovie = true then return
+    if m.channels.Count() <= 1
+        showOsd() : return
+    end if
     nextIndex = AdjacentChannelIndex(m.channels, m.playingUrl, delta)
     if nextIndex < 0 then return
     playItem(m.channels[nextIndex])
@@ -755,10 +887,10 @@ sub refreshOsdContent()
     if not IsWebUrl(logo) then logo = ""
     m.top.findNode("osdLogo").uri = logo
     m.top.findNode("osdNumber").text = info.number
-    m.top.findNode("osdTitle").text = info.title
+    m.top.findNode("osdTitle").text = channelTitleWithStar(m.playingChannel, info.title)
     m.top.findNode("osdNow").text = info.nowLine
     m.top.findNode("osdNext").text = info.nextLine
-    hint = "OK: Info  •  Right: Mini-Guide  •  Up/Down: Surf"
+    hint = "OK: Info  •  Right: Guide  •  Up/Down: Zap"
     if m.playingChannel.isMovie = true then hint = "OK: Movie Info  •  Back: Exit to Movies"
     m.top.findNode("osdHint").text = hint
 end sub
@@ -791,7 +923,7 @@ sub renderMiniGuide()
     root = CreateObject("roSGNode", "ContentNode")
     for i = 0 to m.channels.Count() - 1
         channel = m.channels[i] : item = root.CreateChild("ContentNode")
-        item.title = channel.title
+        item.title = channelTitleWithStar(channel)
         logo = Text(channel.logo)
         if IsWebUrl(logo) then item.hdPosterUrl = logo
         item.shortDescriptionLine1 = Text(channel.number)
@@ -833,8 +965,8 @@ sub onMiniFocused()
     channel = m.channels[index]
     now = CreateObject("roDateTime").AsSeconds()
     info = OsdDetails(channel, m.summaries, m.guideError, now)
-    header = info.title
-    if info.number <> "" then header = info.number + " · " + info.title
+    header = channelTitleWithStar(channel, info.title)
+    if info.number <> "" then header = info.number + " · " + header
     logo = Text(channel.logo)
     miniLogo = m.top.findNode("miniDetailLogo")
     miniTitle = m.top.findNode("miniDetailTitle")
@@ -877,13 +1009,85 @@ sub startRadioAttempt()
     m.audio.control = "play"
 end sub
 
+sub setRadioEqBars(heights as Object, active as Boolean)
+    barColor = "0x38BDF8FF"
+    if not active then barColor = "0x64748BFF"
+    for i = 0 to m.radioEqBars.Count() - 1
+        bar = m.radioEqBars[i]
+        if bar <> invalid and i < heights.Count()
+            h = heights[i]
+            bar.height = h
+            bar.translation = [i * 8, 24 - h]
+            bar.color = barColor
+        end if
+    end for
+end sub
+
+sub tickRadioEq()
+    if m.radioRow = invalid or m.radioState <> "playing" or m.video.visible or m.pending
+        m.radioEqTimer.control = "stop"
+        m.radioEqRunning = false
+        return
+    end if
+    frames = [
+        [8, 22, 12, 18]
+        [20, 10, 24, 12]
+        [14, 24, 8, 22]
+        [22, 14, 20, 8]
+    ]
+    m.radioEqFrame = (m.radioEqFrame + 1) mod frames.Count()
+    setRadioEqBars(frames[m.radioEqFrame], true)
+end sub
+
+sub updateRadioMiniBar()
+    show = (m.radioRow <> invalid and m.radioState <> "idle" and m.radioState <> "error" and not m.video.visible and not m.pending)
+    m.radioMiniBar.visible = show
+    m.footer.visible = not show
+    if not show
+        if m.radioEqRunning
+            m.radioEqTimer.control = "stop"
+            m.radioEqRunning = false
+        end if
+        return
+    end if
+    m.radioMiniTitle.text = Text(m.radioRow.title, "Live Radio")
+    genre = Text(m.radioRow.group).Trim()
+    if genre = "" then genre = "Live Radio"
+    m.radioMiniGenre.text = genre
+    if m.radioState = "playing"
+        m.radioPillText.text = "LIVE"
+        m.radioPillBg.color = "0x059669FF"
+        if not m.radioEqRunning
+            setRadioEqBars([14, 22, 10, 18], true)
+            m.radioEqTimer.control = "start"
+            m.radioEqRunning = true
+        end if
+    else if m.radioState = "buffering"
+        m.radioPillText.text = "BUFFERING"
+        m.radioPillBg.color = "0xD97706FF"
+        if m.radioEqRunning
+            m.radioEqTimer.control = "stop"
+            m.radioEqRunning = false
+        end if
+        setRadioEqBars([8, 12, 8, 10], false)
+    else
+        m.radioPillText.text = "PAUSED"
+        m.radioPillBg.color = "0x475569FF"
+        if m.radioEqRunning
+            m.radioEqTimer.control = "stop"
+            m.radioEqRunning = false
+        end if
+        setRadioEqBars([6, 8, 6, 6], false)
+    end if
+end sub
+
 sub playRadio(row as Object)
     url = Text(row.url).Trim()
     if not IsWebUrl(url) or Instr(1, url, "|") > 0
         m.radioState = "error"
         m.lastError = "Invalid radio stream URL"
         m.status.text = "Radio stream URL is invalid. Check the station in GlzHub."
-        updateFooter() : showDetails() : return
+        updateRadioMiniBar() : updateFooter() : showDetails() : return
     end if
     closePlayer()
     headers = CopyHeaders(row.headers)
@@ -893,7 +1097,7 @@ sub playRadio(row as Object)
     end for
     if not hasUa
         ver = Text(m.appVersion)
-        if ver = "" then ver = "1.48.100"
+        if ver = "" then ver = "1.48.200"
         headers["User-Agent"] = "GlzTV-Roku/" + ver
     end if
     radioRow = {
@@ -913,7 +1117,7 @@ sub playRadio(row as Object)
     m.lastError = ""
     startRadioAttempt()
     m.status.text = "Connecting to " + m.radioTitle + "…"
-    updateHeaderBar() : updateFooter() : showDetails() : startSync(false)
+    updateHeaderBar() : updateRadioMiniBar() : updateFooter() : showDetails() : startSync(false)
 end sub
 
 sub stopRadio(sync = true as Boolean)
@@ -925,12 +1129,12 @@ sub stopRadio(sync = true as Boolean)
     m.radioFormats = []
     m.radioFormatIndex = 0
     m.radioState = "idle"
-    updateFooter() : showDetails()
+    updateRadioMiniBar() : updateFooter() : showDetails()
     if sync and wasActive then startSync(false)
 end sub
 
 sub updateFooter()
-    footerText = "Left / Back  Menu   •   OK  Select   •   *  Quick Options / Settings"
+    footerText = "Left / Back  Menu   •   OK  Select   •   *  Quick Options / Favorites"
     if m.radioTitle <> ""
         stateTag = "Radio"
         if m.radioState = "playing" then stateTag = "LIVE Radio"
@@ -938,14 +1142,17 @@ sub updateFooter()
         if m.radioState = "paused" then stateTag = "Paused"
         footerText = stateTag + ": " + m.radioTitle + "   •   Play/Pause controls audio   •   * → Stop radio"
     end if
-    m.top.findNode("footer").text = footerText
+    m.footer.text = footerText
 end sub
 
 sub closePlayer()
     if not m.video.visible then return
     hideOsd() : hideMiniGuide()
     m.video.visible = false : m.video.control = "stop" : m.browser.visible = true
-    m.playingUrl = "" : m.playingTitle = "" : m.playingChannel = invalid : m.retriedPlayback = false : restoreFocus()
+    m.playingUrl = "" : m.playingTitle = "" : m.playingChannel = invalid : m.retriedPlayback = false
+    updateRadioMiniBar()
+    if m.view = "home" or m.view = "favorites" then renderRows()
+    restoreFocus()
 end sub
 
 sub videoStateChanged()
@@ -974,20 +1181,20 @@ sub audioStateChanged()
     if state = "buffering"
         m.radioState = "buffering"
         m.status.text = "Buffering " + m.radioTitle + "…"
-        updateFooter() : showDetails()
+        updateRadioMiniBar() : updateFooter() : showDetails()
     else if state = "playing"
         m.radioState = "playing"
         m.lastError = ""
         m.status.text = "Live Radio: " + m.radioTitle
-        updateFooter() : showDetails()
+        updateRadioMiniBar() : updateFooter() : showDetails()
     else if state = "paused"
         m.radioState = "paused"
         m.status.text = "Radio paused: " + m.radioTitle
-        updateFooter() : showDetails()
+        updateRadioMiniBar() : updateFooter() : showDetails()
     else if state = "stopped"
         if m.radioState <> "buffering" and m.radioState <> "idle" and m.radioState <> "error"
             m.radioState = "idle"
-            updateFooter() : showDetails()
+            updateRadioMiniBar() : updateFooter() : showDetails()
         end if
     else if state = "error"
         if m.radioFormatIndex + 1 < m.radioFormats.Count()
@@ -995,7 +1202,7 @@ sub audioStateChanged()
             m.radioState = "buffering"
             m.status.text = "Retrying " + m.radioTitle + "…"
             startRadioAttempt()
-            updateFooter() : showDetails()
+            updateRadioMiniBar() : updateFooter() : showDetails()
             return
         end if
         errCode = m.audio.errorCode.ToStr()
@@ -1010,7 +1217,7 @@ sub audioStateChanged()
         m.audio.content = invalid
         m.radioRow = invalid : m.radioTitle = "" : m.radioFormats = [] : m.radioFormatIndex = 0 : m.radioState = "error"
         m.status.text = "Radio stream failed (" + errCode + "): " + failedTitle + ". Try another station or Refresh."
-        updateFooter() : showDetails() : startSync(false)
+        updateRadioMiniBar() : updateFooter() : showDetails() : startSync(false)
     else if state = "finished"
         stopRadio() : m.status.text = "Radio stream ended. Select the station to reconnect."
     end if
@@ -1019,8 +1226,26 @@ end sub
 sub showOptions()
     dialog = CreateObject("roSGNode", "Dialog")
     dialog.title = "Glz TV Quick Options"
-    dialog.message = "Refresh content, open Settings, or control background radio."
-    dialog.buttons = ["Refresh all sections", "Open Settings", "Stop radio", "Pair again", "Cancel"]
+    dialog.message = "Manage Favorites, refresh content, open Settings, or control background radio."
+    buttons = []
+    actions = []
+    m.optionFavoriteChannel = focusedLiveChannel()
+    if m.optionFavoriteChannel <> invalid
+        chName = Text(m.optionFavoriteChannel.title, "Channel")
+        if IsFavoriteChannel(m.favoriteIds, ChannelKey(m.optionFavoriteChannel))
+            buttons.Push("★ Remove " + chName + " from Favorites")
+        else
+            buttons.Push("★ Add " + chName + " to Favorites")
+        end if
+        actions.Push("toggle_favorite")
+    end if
+    buttons.Push("Refresh all sections") : actions.Push("refresh")
+    buttons.Push("Open Settings") : actions.Push("settings")
+    buttons.Push("Stop radio") : actions.Push("stop_radio")
+    buttons.Push("Pair again") : actions.Push("repair")
+    buttons.Push("Cancel") : actions.Push("cancel")
+    m.optionActions = actions
+    dialog.buttons = buttons
     dialog.ObserveField("buttonSelected", "onOption") : m.top.dialog = dialog
 end sub
 
@@ -1034,15 +1259,19 @@ end sub
 
 sub onOption()
     index = m.top.dialog.buttonSelected : m.top.dialog.close = true
-    if index = 0
+    action = "cancel"
+    if index >= 0 and index < m.optionActions.Count() then action = m.optionActions[index]
+    if action = "toggle_favorite"
+        toggleFavoriteForChannel(m.optionFavoriteChannel)
+    else if action = "refresh"
         m.status.text = "Refreshing from GlzHub…"
         startSync(true) : queueExtra("summary") : queueExtra("radio") : queueExtra("weather")
         if m.view = "schedule" and m.guideChannel <> invalid then queueExtra("guide", m.guideChannel.id)
-    else if index = 1
-        closePlayer() : openSection(7)
-    else if index = 2
+    else if action = "settings"
+        closePlayer() : openSectionByName("settings")
+    else if action = "stop_radio"
         stopRadio() : restoreFocus()
-    else if index = 3
+    else if action = "repair"
         promptRepair()
     else
         restoreFocus()
@@ -1093,9 +1322,9 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         else if LCase(key) = "ok"
             if m.osd.visible then hideOsd() else showOsd()
             return true
-        else if key = "channelup" or key = "up"
+        else if key = "channelup" or key = "up" or key = "rewind"
             stepChannel(-1) : return true
-        else if key = "channeldown" or key = "down"
+        else if key = "channeldown" or key = "down" or key = "fastforward"
             stepChannel(1) : return true
         else if key = "play"
             if m.video.state = "paused"
@@ -1105,7 +1334,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             end if
             showOsd()
             return true
-        else if key = "left" or key = "rewind" or key = "fastforward"
+        else if key = "left"
             return true
         end if
         return false
@@ -1118,12 +1347,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.radioState = "buffering"
             m.status.text = "Reconnecting to " + m.radioTitle + "…"
             startRadioAttempt()
-            updateFooter() : showDetails()
+            updateRadioMiniBar() : updateFooter() : showDetails()
         else
             m.audio.control = "pause"
             m.radioState = "paused"
             m.status.text = "Radio paused: " + m.radioTitle
-            updateFooter() : showDetails()
+            updateRadioMiniBar() : updateFooter() : showDetails()
         end if
         return true
     end if

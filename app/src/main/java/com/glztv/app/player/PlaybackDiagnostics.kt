@@ -21,8 +21,43 @@ data class PlaybackDiagnostics(
     val droppedFrames: Long,
     val networkTransport: String?,
     val playbackState: String,
-    val lastError: PlaybackErrorCategory?
-)
+    val lastError: PlaybackErrorCategory?,
+    val frameRate: Float? = null,
+    val audioChannels: Int? = null
+) {
+    fun videoQualityBadge(): String {
+        val height = resolution
+            ?.substringAfter("×", "")
+            ?.trim()
+            ?.toIntOrNull()
+            ?: return "LIVE"
+        return when {
+            height >= 2000 -> "4K UHD"
+            height >= 1000 -> "1080p"
+            height >= 700 -> "720p"
+            height > 0 -> "SD"
+            else -> "LIVE"
+        }
+    }
+
+    fun fpsBadge(): String? {
+        val fps = frameRate ?: return null
+        return when {
+            fps >= 55f -> "60 FPS"
+            fps >= 45f -> "50 FPS"
+            else -> null
+        }
+    }
+
+    fun audioChannelBadge(): String = when (audioChannels) {
+        null -> "STEREO"
+        1 -> "MONO"
+        2 -> "STEREO"
+        6 -> "5.1"
+        8 -> "7.1"
+        else -> if (audioChannels > 2) "${audioChannels}CH" else "STEREO"
+    }
+}
 
 object PlaybackErrorCategorizer {
     fun mediaMimeType(streamUrl: String, forceHls: Boolean = false): String? {

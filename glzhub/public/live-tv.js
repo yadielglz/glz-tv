@@ -1,9 +1,70 @@
 // Authenticated Hub UI; receivers receive only the selected media URL, never Hub credentials.
-export function liveChannels(playlists, playlistId = "") {
-  return playlists.filter(p => p.is_published !== false && (!playlistId || p.id === playlistId))
+export const LIVE_EVENTS_GROUP = "Live Events";
+
+function resolveLiveEventStreamUrl(event) {
+  const primary = typeof event?.stream_url === "string" ? event.stream_url.trim() : "";
+  const backup = typeof event?.backup_stream_url === "string" && /^https?:\/\//i.test(event.backup_stream_url.trim())
+    ? event.backup_stream_url.trim()
+    : (typeof event?.metadata?.backup_stream_url === "string" && /^https?:\/\//i.test(event.metadata.backup_stream_url.trim())
+      ? event.metadata.backup_stream_url.trim()
+      : "");
+  const primaryOffline = event?.is_online === false || String(event?.is_online) === "false";
+  if (primaryOffline) {
+    const bothOffline = String(event?.health_status || "").toLowerCase().includes("primary + backup");
+    if (!backup || bothOffline) return "";
+    return backup;
+  }
+  return primary || backup;
+}
+
+export function liveEventChannels(events = [], now = Date.now()) {
+  if (!Array.isArray(events)) return [];
+  return events
+    .filter(event => {
+      if (!event || event.status === "disabled" || event.status === "expired") return false;
+      const streamUrl = resolveLiveEventStreamUrl(event);
+      if (!streamUrl) return false;
+      const start = new Date(event.start_time).getTime();
+      const rawEnd = new Date(event.end_time).getTime();
+      if (Number.isFinite(start) && Number.isFinite(rawEnd)) {
+        const rawDuration = rawEnd - start;
+        const end = (rawDuration > 0 && rawDuration <= 12 * 3600_000) ? rawEnd : start + 3 * 3600_000;
+        const preHours = Number.isFinite(Number(event.pre_buffer_hours)) ? Math.min(Math.max(Number(event.pre_buffer_hours), 0), 6) : 0.5;
+        const postHours = Number.isFinite(Number(event.post_buffer_hours)) ? Math.min(Math.max(Number(event.post_buffer_hours), 0), 6) : 0.5;
+        if (now < (start - preHours * 3600_000) || now > (end + postHours * 3600_000)) return false;
+      }
+      return true;
+    })
+    .map(event => {
+      const id = String(event.id || event.tvg_id || event.title || "event");
+      return {
+        id,
+        key: `event:${id}`,
+        title: event.title || "Live Event",
+        media_url: resolveLiveEventStreamUrl(event),
+        group: LIVE_EVENTS_GROUP,
+        logo: event.logo_url || "",
+        isLiveEvent: true,
+        sportLeague: event.sport_league || "",
+        metadata: {
+          tvg_chno: event.channel_number || "",
+          tvg_id: event.tvg_id || "",
+          group: LIVE_EVENTS_GROUP,
+          sport_league: event.sport_league || "",
+          original_group: event.group_title || ""
+        }
+      };
+    });
+}
+
+export function liveChannels(playlists, playlistId = "", events = [], now = Date.now()) {
+  const activeEvents = !playlistId || playlistId === "__live_events__" ? liveEventChannels(events, now) : [];
+  if (playlistId === "__live_events__") return activeEvents;
+  const playlistItems = (playlists || []).filter(p => p.is_published !== false && (!playlistId || p.id === playlistId))
     .flatMap(p => [...(p.playlist_items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
       .filter(item => item.metadata?.hidden !== true && item.metadata?.hidden !== "true" && item.metadata?.radio !== true && item.metadata?.radio !== "true")
       .map(item => ({ ...item, key: `${p.id}:${item.id}`, group: item.metadata?.group || p.title || "TV", logo: item.metadata?.tvg_logo || item.metadata?.tvgLogo || p.artwork_url || "" })));
+  return [...activeEvents, ...playlistItems];
 }
 
 export function mediaType(url) {
@@ -17,7 +78,7 @@ export function mediaType(url) {
 export function createLiveTV({ api, stopPreview }) {
   const $ = id => document.getElementById(id);
   const video = $("liveVideo");
-  let playlists = [], channels = [], selected = null, hls = null, generation = 0, catalogGeneration = 0;
+  let playlists = [], events = [], channels = [], selected = null, hls = null, generation = 0, catalogGeneration = 0;
   let context = null, remote = null, controller = null, castLoading = null, visible = false;
   let castBusy = false;
   let captionBusy = false, captionRenderKey = "", captionMedia = null;
@@ -109,13 +170,13 @@ export function createLiveTV({ api, stopPreview }) {
     const query = $("liveSearch").value.trim().toLowerCase();
     const group = $("liveGroup").value;
     const shown = channels.filter(c => (!group || c.group === group) &&
-      `${c.title} ${c.metadata?.tvg_chno || ""} ${c.group}`.toLowerCase().includes(query));
+      `${c.title} ${c.metadata?.tvg_chno || ""} ${c.group} ${c.sportLeague || ""} ${c.metadata?.original_group || ""}`.toLowerCase().includes(query));
     const list = $("liveChannels"); list.replaceChildren();
     $("liveCount").textContent = `${shown.length} channels`;
     $("liveEmpty").hidden = shown.length > 0;
     for (const channel of shown) {
       const button = document.createElement("button");
-      button.type = "button"; button.className = "live-channel";
+      button.type = "button"; button.className = channel.isLiveEvent ? "live-channel live-event-channel" : "live-channel";
       button.setAttribute("aria-pressed", String(selected?.key === channel.key));
       const artwork = document.createElement("span"); artwork.className = "live-artwork";
       artwork.textContent = String(channel.title || "TV").slice(0, 2).toUpperCase();
@@ -127,15 +188,28 @@ export function createLiveTV({ api, stopPreview }) {
       } catch { /* Keep initials for invalid artwork URLs. */ }
       const text = document.createElement("span"); text.className = "live-channel-label";
       const title = document.createElement("strong"); title.textContent = `${channel.metadata?.tvg_chno ? `${channel.metadata.tvg_chno} · ` : ""}${channel.title || "Untitled channel"}`;
-      const detail = document.createElement("small"); detail.textContent = channel.group;
+      const detail = document.createElement("small");
+      if (channel.isLiveEvent) {
+        const badge = document.createElement("span");
+        badge.className = "live-event-badge";
+        badge.textContent = "LIVE EVENT";
+        detail.append(badge, document.createTextNode(channel.sportLeague ? ` ${channel.sportLeague} · ${channel.group}` : ` ${channel.group}`));
+      } else {
+        detail.textContent = channel.group;
+      }
       text.append(title, detail); button.append(artwork, text);
       button.addEventListener("click", () => selectChannel(channel)); list.append(button);
     }
   }
 
   function filterPlaylist() {
-    channels = liveChannels(playlists, $("livePlaylist").value);
-    $("liveGroup").replaceChildren(option("", "All groups"), ...[...new Set(channels.map(c => c.group))].sort().map(g => option(g, g)));
+    channels = liveChannels(playlists, $("livePlaylist").value, events);
+    const groups = [...new Set(channels.map(c => c.group))].sort((a, b) => {
+      if (a === LIVE_EVENTS_GROUP) return -1;
+      if (b === LIVE_EVENTS_GROUP) return 1;
+      return a.localeCompare(b);
+    });
+    $("liveGroup").replaceChildren(option("", "All groups"), ...groups.map(g => option(g, g)));
     render();
   }
 
@@ -143,13 +217,25 @@ export function createLiveTV({ api, stopPreview }) {
     const request = ++catalogGeneration;
     $("liveReload").disabled = true; status("Loading your published TV playlists…");
     try {
-      const result = await api("/api/v1/admin/playlists");
+      const [result, eventResult] = await Promise.all([
+        api("/api/v1/admin/playlists"),
+        api("/api/v1/admin/event-channels").catch(() => ({ events: [] }))
+      ]);
       if (request !== catalogGeneration) return;
       playlists = result.playlists || [];
+      events = Array.isArray(eventResult?.events) ? eventResult.events : [];
       const previous = $("livePlaylist").value;
       const published = playlists.filter(p => p.is_published !== false);
-      $("livePlaylist").replaceChildren(option("", "All published playlists"), ...published.map(p => option(p.id, p.title)));
-      if (published.some(p => p.id === previous)) $("livePlaylist").value = previous;
+      const activeEventCount = liveEventChannels(events).length;
+      const playlistOptions = [option("", "All published playlists")];
+      if (activeEventCount > 0) {
+        playlistOptions.push(option("__live_events__", `Live Events (${activeEventCount})`));
+      }
+      playlistOptions.push(...published.map(p => option(p.id, p.title)));
+      $("livePlaylist").replaceChildren(...playlistOptions);
+      if (published.some(p => p.id === previous) || (previous === "__live_events__" && activeEventCount > 0)) {
+        $("livePlaylist").value = previous;
+      }
       filterPlaylist();
       if (!selected) status(channels.length ? "Choose a channel to watch or cast." : "Publish a TV playlist in Playlist Studio to start watching.");
       else updateCast();
@@ -282,7 +368,7 @@ export function createLiveTV({ api, stopPreview }) {
     reset() {
       visible = false; catalogGeneration++; stopLocal();
       if (connected()) context.endCurrentSession(true);
-      selected = null; playlists = []; channels = [];
+      selected = null; playlists = []; events = []; channels = [];
       $("livePlaylist").replaceChildren(option("", "All published playlists"));
       $("liveGroup").replaceChildren(option("", "All groups"));
       $("liveSearch").value = ""; $("liveNow").textContent = "Choose a channel";

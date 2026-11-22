@@ -22,10 +22,16 @@ The first hardware test target is a TCL 32S301 (8102X) running Roku OS 16.0.
 
 - Shows now/next EPG and a 24-hour schedule for each assigned channel.
 - Shows active PPV event titles, leagues and start/end times from GlzHub.
-- Plays the radio stations configured in GlzHub, with audio continuing while browsing.
+- Plays the radio stations configured in GlzHub, with audio continuing while browsing
+  and a persistent bottom Mini Radio Bar (status pill, animated equalizer while playing,
+  station title/genre, and playback hint).
+- Persists Favorites (`★`) and Recent Channels (up to 10) in Roku's app registry,
+  surfacing them on Home and in the dedicated Favorites section.
+- Supports fullscreen live TV channel zapping via Up/Down, Channel Up/Down, or
+  Fast-Forward/Rewind with instant OSD programme updates.
 - Shows current weather and a five-day forecast for the configured weather location.
 
-This is an installable development build (`1.48.100`), not a public Streaming Store app. It
+This is an installable development build (`1.48.200`), not a public Streaming Store app. It
 has passed compilation and offline parser/security tests. Physical playback,
 network pairing, and the exact 8102X remote/UI behavior still require on-device
 verification. Current Roku builds follow the unified GLZ TV release version and
@@ -64,14 +70,16 @@ is a separate later step; Roku beta apps are time-limited.
 
 ## Remote controls
 
-- **Left / Back:** Return to the section menu; choose Live TV, Guide, PPV, Radio or Weather.
+- **Left / Back:** Return to the section menu; choose Home, Favorites, Live TV, Guide, Movies, PPV Events, Radio, Weather or Settings.
 - **Up / Down:** Browse sections or items; **Right / OK** enters a section.
-- **OK:** Play a channel/station, or open a channel schedule in Guide.
+- **OK:** Play a channel/movie/station, or open a channel schedule in Guide.
 - **OK on a programme:** Show its details and an option to watch that channel live.
-- **Back while watching:** Return to the list.
+- **Up / Down, Channel Up / Down, or Fast-Forward / Rewind while watching live TV:** Zap to the previous or next channel with live OSD update.
+- **Right while watching live TV:** Open the Mini-Guide overlay.
+- **Back while watching:** Dismiss OSD/Mini-Guide, or return to the list.
 - **Play/Pause:** Control native video or the playing radio station.
 - **`*` while watching video:** Roku options, including available captions.
-- **`*` while browsing:** Refresh all, stop radio or pair again.
+- **`*` while browsing:** Toggle Favorite (`★`) on the focused channel, refresh all, open Settings, stop radio or pair again.
 - **Home:** Exit the app.
 
 ## Build or update from the repository

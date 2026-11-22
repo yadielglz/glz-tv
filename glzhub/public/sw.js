@@ -1,11 +1,11 @@
 // GLZ Hub Service Worker
-const CACHE_NAME = "glzhub-v1.48.100";
+const CACHE_NAME = "glzhub-v1.48.200";
 const PRECACHE_ASSETS = [
   "/",
   "/index.html",
-  "/styles.css?v=1.48.100",
-  "/app.js?v=1.48.100",
-  "/live-tv.js?v=1.48.100",
+  "/styles.css?v=1.48.200",
+  "/app.js?v=1.48.200",
+  "/live-tv.js?v=1.48.200",
   "/manifest.json"
 ];
 

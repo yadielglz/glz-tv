@@ -27,7 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=1.48.100">
+  <link rel="stylesheet" href="/styles.css?v=1.48.200">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 </head>
 
@@ -1323,8 +1323,10 @@
                   </label>
                   <label>Fleet Telemetry Auto-Refresh Rate
                     <select id="hubRefreshInterval">
+                      <option value="3">Ultra Fast (Every 3s)</option>
+                      <option value="5" selected>Fast (Every 5s)</option>
                       <option value="15">High Frequency (Every 15s)</option>
-                      <option value="30" selected>Balanced (Every 30s)</option>
+                      <option value="30">Balanced (Every 30s)</option>
                       <option value="60">Low Bandwidth (Every 60s)</option>
                       <option value="0">Manual Refresh Only</option>
                     </select>
@@ -1673,7 +1675,7 @@
                   <article class="stat-card">
                     <div class="stat-meta">
                       <span>Hub Version</span>
-                      <strong style="font-size:16px;">v1.48.100 (Production)</strong>
+                      <strong style="font-size:16px;">v1.48.200 (Production)</strong>
                     </div>
                     <div class="stat-badge">LATEST</div>
                   </article>
@@ -1774,6 +1776,7 @@
         <label>Group Title<input id="eventGroupTitle" required maxlength="120" value="Major League Sports (Events)"></label>
         <label>Channel Number<input id="eventChannelNumber" required maxlength="20" value="30-01" placeholder="e.g. 30-01"></label>
         <label class="wide">Stream URL (HLS / m3u8)<input id="eventStreamUrl" type="url" required placeholder="https://starlite.best/api/stream/..."></label>
+        <label class="wide">Backup Stream URL (Failover, optional)<input id="eventBackupStreamUrl" type="url" placeholder="https://backup.example/stream.m3u8"></label>
         <label class="wide">Logo URL (optional)<input id="eventLogoUrl" type="url" placeholder="https://media.starlite.best/...png"></label>
         <label>Game Start Time (UTC / Local)<input id="eventStartTime" type="datetime-local" required></label>
         <label>Game End Time (UTC / Local)<input id="eventEndTime" type="datetime-local" required></label>
@@ -2286,7 +2289,7 @@
     <span id="toastMessage" class="toast-msg">Notification</span>
   </div>
 
-  <script type="module" src="/app.js?v=1.48.100"></script>
+  <script type="module" src="/app.js?v=1.48.200"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"8a9d9fbda9c14c53b3dec2f41df6f690","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 

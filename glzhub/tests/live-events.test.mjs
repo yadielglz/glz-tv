@@ -238,3 +238,104 @@ test('DELETE /api/v1/admin/sites/:id deletes an owned property and returns 404 w
   );
   assert.equal(delMissing.status, 404);
 });
+
+test('clampHealthTimeoutMs clamps values safely between 2000ms and 15000ms', () => {
+  const { clampHealthTimeoutMs } = mod;
+  assert.equal(clampHealthTimeoutMs(undefined), 3500);
+  assert.equal(clampHealthTimeoutMs(500), 2000);
+  assert.equal(clampHealthTimeoutMs(6000), 6000);
+  assert.equal(clampHealthTimeoutMs(99999), 15000);
+  assert.equal(clampHealthTimeoutMs('not-a-number', 4000), 4000);
+});
+
+test('resolveEventDeliveryStreamUrl and isEventActiveAndValid support automatic backup stream failover', () => {
+  const { resolveEventDeliveryStreamUrl } = mod;
+  const now = Date.UTC(2026, 10, 22, 20, 0, 0);
+  const base = {
+    status: 'active',
+    auto_ingested: false,
+    title: 'UFC 310 PPV',
+    sport_league: 'UFC',
+    group_title: 'PPV Events',
+    tvg_id: 'ufc.310',
+    stream_url: 'https://primary.example/live.m3u8',
+    backup_stream_url: 'https://backup.example/live.m3u8',
+    start_time: new Date(now - 30 * 60_000).toISOString(),
+    end_time: new Date(now + 2 * 3600_000).toISOString(),
+    pre_buffer_hours: 0.5,
+    post_buffer_hours: 0.5
+  };
+
+  // Primary online -> uses primary
+  assert.deepEqual(resolveEventDeliveryStreamUrl({ ...base, is_online: true }), {
+    url: 'https://primary.example/live.m3u8',
+    usingBackup: false
+  });
+
+  // Primary offline + backup configured -> remains active and fails over to backup
+  const failoverEvent = { ...base, is_online: false, health_status: 'Failover (Backup Online (200))' };
+  assert.equal(isEventActiveAndValid(failoverEvent, now), true);
+  assert.deepEqual(resolveEventDeliveryStreamUrl(failoverEvent), {
+    url: 'https://backup.example/live.m3u8',
+    usingBackup: true
+  });
+
+  // Both primary and backup offline -> inactive
+  const bothDead = { ...base, is_online: false, health_status: 'Offline (Primary + Backup)' };
+  assert.equal(isEventActiveAndValid(bothDead, now), false);
+
+  // Offline without backup -> inactive
+  const noBackup = { ...base, backup_stream_url: null, is_online: false };
+  assert.equal(isEventActiveAndValid(noBackup, now), false);
+});
+
+test('POST /api/v1/admin/event-channels/check-health clamps timeoutMs and fails over to backup stream', async () => {
+  const patched = [];
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input.url);
+    if (url.pathname === '/auth/v1/user') {
+      return Response.json({ id: 'owner-1', email: 'admin@example.com' });
+    }
+    if (url.pathname === '/rest/v1/event_channels' && (!init?.method || init.method === 'GET')) {
+      return Response.json([{
+        id: 'ev-failover-1',
+        title: 'NBA: Heat vs Knicks',
+        stream_url: 'https://primary-dead.example/stream.m3u8',
+        backup_stream_url: 'https://backup-live.example/stream.m3u8',
+        status: 'active'
+      }]);
+    }
+    if (url.hostname === 'primary-dead.example') {
+      return new Response('Not Found', { status: 404 });
+    }
+    if (url.hostname === 'backup-live.example') {
+      return new Response('#EXTM3U', { status: 200 });
+    }
+    if (url.pathname === '/rest/v1/event_channels' && init?.method === 'PATCH') {
+      patched.push(JSON.parse(String(init.body || '{}')));
+      return Response.json([]);
+    }
+    return Response.json([]);
+  };
+
+  const res = await worker.fetch(
+    new Request('https://hub.example/api/v1/admin/event-channels/check-health?timeoutMs=99999', {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-jwt', 'content-type': 'application/json' },
+      body: JSON.stringify({ eventId: 'ev-failover-1', timeoutMs: 99999 })
+    }),
+    env,
+    { waitUntil() {} }
+  );
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.ok, true);
+  assert.equal(data.timeoutMs, 15000);
+  assert.equal(data.onlineCount, 1);
+  assert.equal(data.failoverCount, 1);
+  assert.equal(data.offlineCount, 0);
+  assert.equal(patched.length, 1);
+  assert.equal(patched[0].is_online, false);
+  assert.match(patched[0].health_status, /Failover \(Backup Online/);
+});
+

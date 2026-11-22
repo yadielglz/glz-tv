@@ -1780,10 +1780,51 @@ function formatXmlTvDate(date: Date): string {
   return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())} +0000`;
 }
 
-async function checkSingleStreamHealth(streamUrl: string): Promise<{ ok: boolean; statusText: string }> {
+export function clampHealthTimeoutMs(value: unknown, fallback = 3500): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(15_000, Math.max(2_000, Math.round(parsed)));
+}
+
+export function getEventBackupStreamUrl(event: Record<string, unknown>): string {
+  const metadata = event.metadata && typeof event.metadata === "object"
+    ? event.metadata as Record<string, unknown>
+    : null;
+  const candidates = [
+    event.backup_stream_url,
+    event.backupStreamUrl,
+    metadata?.backup_stream_url,
+    metadata?.backupStreamUrl
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    const trimmed = candidate.trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  }
+  return "";
+}
+
+export function resolveEventDeliveryStreamUrl(event: Record<string, unknown>): { url: string; usingBackup: boolean } {
+  const primary = typeof event.stream_url === "string" ? event.stream_url.trim() : "";
+  const backup = getEventBackupStreamUrl(event);
+  const primaryOffline = event.is_online === false || String(event.is_online) === "false";
+  if (primaryOffline && backup) {
+    return { url: backup, usingBackup: true };
+  }
+  if (!primary && backup) {
+    return { url: backup, usingBackup: true };
+  }
+  return { url: primary, usingBackup: false };
+}
+
+async function checkSingleStreamHealth(streamUrl: string, timeoutMs = 3500): Promise<{ ok: boolean; statusText: string }> {
+  const effectiveTimeout = clampHealthTimeoutMs(timeoutMs, 3500);
+  if (!streamUrl || !/^https?:\/\//i.test(streamUrl.trim())) {
+    return { ok: false, statusText: "Offline (Invalid URL)" };
+  }
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
+    const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
 
     let res = await fetch(streamUrl, {
       method: "HEAD",
@@ -1795,7 +1836,7 @@ async function checkSingleStreamHealth(streamUrl: string): Promise<{ ok: boolean
 
     if (!res || !res.ok) {
       const controller2 = new AbortController();
-      const timeout2 = setTimeout(() => controller2.abort(), 3500);
+      const timeout2 = setTimeout(() => controller2.abort(), effectiveTimeout);
       res = await fetch(streamUrl, {
         method: "GET",
         signal: controller2.signal,
@@ -1818,32 +1859,75 @@ async function checkSingleStreamHealth(streamUrl: string): Promise<{ ok: boolean
   }
 }
 
+async function checkEventRowHealth(row: Record<string, unknown>, timeoutMs: number): Promise<{
+  isOnline: boolean;
+  effectiveOnline: boolean;
+  usingBackup: boolean;
+  statusText: string;
+}> {
+  const primaryUrl = String(row.stream_url || "").trim();
+  const backupUrl = getEventBackupStreamUrl(row);
+  const primaryHealth = await checkSingleStreamHealth(primaryUrl, timeoutMs);
+  if (primaryHealth.ok) {
+    return { isOnline: true, effectiveOnline: true, usingBackup: false, statusText: primaryHealth.statusText };
+  }
+  if (backupUrl) {
+    const backupHealth = await checkSingleStreamHealth(backupUrl, timeoutMs);
+    if (backupHealth.ok) {
+      return {
+        isOnline: false,
+        effectiveOnline: true,
+        usingBackup: true,
+        statusText: `Failover (Backup ${backupHealth.statusText})`
+      };
+    }
+    return {
+      isOnline: false,
+      effectiveOnline: false,
+      usingBackup: false,
+      statusText: "Offline (Primary + Backup)"
+    };
+  }
+  return { isOnline: false, effectiveOnline: false, usingBackup: false, statusText: primaryHealth.statusText };
+}
+
 async function checkEventChannelsHealth(request: Request, env: Env): Promise<Response> {
   await adminUser(request, env);
-  const rows = await supabaseJson(env,
-    `/rest/v1/event_channels?status=neq.disabled&select=id,title,stream_url,is_online,health_status`
-  ).catch(() => null) as Record<string, unknown>[] | null;
+  const reqUrl = new URL(request.url);
+  const bodyData = await request.json().catch(() => ({})) as Record<string, unknown>;
+  const rawTimeout = reqUrl.searchParams.get("timeoutMs") ?? bodyData.timeoutMs;
+  const timeoutMs = clampHealthTimeoutMs(rawTimeout, 3500);
+  const eventId = typeof bodyData.eventId === "string" && bodyData.eventId.trim()
+    ? bodyData.eventId.trim()
+    : (reqUrl.searchParams.get("eventId") || "").trim();
+
+  const queryPath = eventId
+    ? `/rest/v1/event_channels?id=eq.${encodeURIComponent(eventId)}&select=*`
+    : `/rest/v1/event_channels?status=neq.disabled&select=*`;
+
+  const rows = await supabaseJson(env, queryPath).catch(() => null) as Record<string, unknown>[] | null;
 
   if (!Array.isArray(rows) || rows.length === 0) {
-    return json({ ok: true, checkedCount: 0, onlineCount: 0, offlineCount: 0 });
+    return json({ ok: true, checkedCount: 0, onlineCount: 0, offlineCount: 0, failoverCount: 0, timeoutMs });
   }
 
   let onlineCount = 0;
   let offlineCount = 0;
+  let failoverCount = 0;
   const nowIso = new Date().toISOString();
 
   for (let i = 0; i < rows.length; i += 5) {
     const chunk = rows.slice(i, i + 5);
     await Promise.all(chunk.map(async (row) => {
       const id = String(row.id);
-      const url = String(row.stream_url || "");
-      const health = await checkSingleStreamHealth(url);
-      if (health.ok) onlineCount++; else offlineCount++;
+      const health = await checkEventRowHealth(row, timeoutMs);
+      if (health.usingBackup) failoverCount++;
+      if (health.effectiveOnline) onlineCount++; else offlineCount++;
 
-      await supabaseJson(env, `/rest/v1/event_channels?id=eq.${id}`, {
+      await supabaseJson(env, `/rest/v1/event_channels?id=eq.${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify({
-          is_online: health.ok,
+          is_online: health.isOnline,
           health_status: health.statusText,
           last_checked_at: nowIso,
           updated_at: nowIso
@@ -1853,7 +1937,7 @@ async function checkEventChannelsHealth(request: Request, env: Env): Promise<Res
   }
 
   await pushConfigUpdateToAllDevices(env);
-  return json({ ok: true, checkedCount: rows.length, onlineCount, offlineCount });
+  return json({ ok: true, checkedCount: rows.length, onlineCount, offlineCount, failoverCount, timeoutMs });
 }
 
 function escapeXml(value: unknown): string {
@@ -1904,7 +1988,12 @@ function resolveEventWindow(event: Record<string, unknown>, now = Date.now()): {
 }
 
 export function isEventActiveAndValid(event: Record<string, unknown>, now = Date.now()): boolean {
-  if (event.is_online === false || String(event.is_online) === "false") return false;
+  const primaryOffline = event.is_online === false || String(event.is_online) === "false";
+  if (primaryOffline) {
+    const backupUrl = getEventBackupStreamUrl(event);
+    const bothOffline = String(event.health_status || "").toLowerCase().includes("primary + backup");
+    if (!backupUrl || bothOffline) return false;
+  }
   const status = String(event.status || "active");
   if (status === "disabled" || status === "expired") return false;
 
@@ -1942,7 +2031,7 @@ async function injectEventChannelsXmlTv(env: Env, xmlText: string): Promise<stri
   if (!xmlText || !xmlText.includes("</tv>")) return xmlText;
 
   const eventChannels = await supabaseJson(env,
-    `/rest/v1/event_channels?status=neq.disabled&is_online=neq.false&select=*`
+    `/rest/v1/event_channels?status=neq.disabled&select=*`
   ).catch(() => null) as Record<string, unknown>[] | null;
 
   if (!Array.isArray(eventChannels) || eventChannels.length === 0) return xmlText;
@@ -2448,7 +2537,14 @@ async function listEventChannels(request: Request, env: Env): Promise<Response> 
   return json({ events: sortEventChannels(visibleRows) });
 }
 
-async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChannel[]): Promise<unknown> {
+async function saveIngestedEventChannels(
+  env: Env,
+  renumbered: ParsedEventChannel[],
+  defaultPreBufferHours = 0.5,
+  defaultPostBufferHours = 0.5
+): Promise<unknown> {
+  const safeDefaultPre = clampEventBufferHours(defaultPreBufferHours, 0.5);
+  const safeDefaultPost = clampEventBufferHours(defaultPostBufferHours, 0.5);
   const existingRows = await supabaseJson(env,
     "/rest/v1/event_channels?select=id,tvg_id,status,pre_buffer_hours,post_buffer_hours,start_time,end_time,channel_number,auto_ingested"
   ).catch(() => []) as Record<string, unknown>[];
@@ -2468,8 +2564,8 @@ async function saveIngestedEventChannels(env: Env, renumbered: ParsedEventChanne
     const existing = existingMap.get(item.tvgId);
     let startTime = item.startTime;
     let endTime = item.endTime;
-    let preBufferHours = 0.5;
-    let postBufferHours = 0.5;
+    let preBufferHours = safeDefaultPre;
+    let postBufferHours = safeDefaultPost;
     let status = "active";
     let channelNumber = item.channelNumber;
     let autoIngested = true;
@@ -2592,6 +2688,8 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
     const providerUrl = typeof bodyData.url === "string" && bodyData.url.startsWith("http")
       ? bodyData.url
       : "https://starlite.best/api/list/mygbb8/167848";
+    const defaultPreBufferHours = clampEventBufferHours(bodyData.preBufferHours, 0.5);
+    const defaultPostBufferHours = clampEventBufferHours(bodyData.postBufferHours, 0.5);
 
     const response = await fetch(providerUrl, {
       headers: {
@@ -2618,7 +2716,7 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
     const deduplicated = sortEventChannels(Array.from(uniqueMap.values()));
     const renumbered = assignCategoryChannelNumbers(deduplicated);
 
-    const result = await saveIngestedEventChannels(env, renumbered);
+    const result = await saveIngestedEventChannels(env, renumbered, defaultPreBufferHours, defaultPostBufferHours);
     await pruneAutoIngestedEventChannels(env, new Set(renumbered.map((item) => item.tvgId)));
     await pushConfigUpdateToAllDevices(env);
     return json({ ok: true, ingestedCount: deduplicated.length, events: result });
@@ -2719,6 +2817,9 @@ async function injectSingleStream(request: Request, env: Env): Promise<Response>
     stream.channelNumber = `${prefix}-01`;
   }
 
+  const preBufferHours = clampEventBufferHours(input.preBufferHours, 0.5);
+  const postBufferHours = clampEventBufferHours(input.postBufferHours, 0.5);
+
   const payload = {
     tvg_id: stream.tvgId,
     title: stream.title,
@@ -2729,8 +2830,8 @@ async function injectSingleStream(request: Request, env: Env): Promise<Response>
     channel_number: stream.channelNumber,
     start_time: stream.startTime || new Date().toISOString(),
     end_time: stream.endTime || new Date(Date.now() + 3 * 3600_000).toISOString(),
-    pre_buffer_hours: 0.5,
-    post_buffer_hours: 0.5,
+    pre_buffer_hours: preBufferHours,
+    post_buffer_hours: postBufferHours,
     status: "active",
     auto_ingested: false,
     is_online: true,
@@ -2758,6 +2859,7 @@ async function createEventChannel(request: Request, env: Env): Promise<Response>
   const input = await body(request);
   const title = requiredString(input.title, "title", 180);
   const streamUrl = requiredString(input.streamUrl, "streamUrl", 2048);
+  const backupStreamUrl = optionalString(input.backupStreamUrl, "backupStreamUrl", 2048);
   const tvgId = optionalString(input.tvgId, "tvgId", 120) || `custom.${Date.now()}`;
   const sportLeague = optionalString(input.sportLeague, "sportLeague", 40) || "SPORTS";
   const groupTitle = optionalString(input.groupTitle, "groupTitle", 120) || "Major League Sports (Events)";
@@ -2766,28 +2868,39 @@ async function createEventChannel(request: Request, env: Env): Promise<Response>
   const channelNumber = optionalString(input.channelNumber, "channelNumber", 20) || `${defaultPrefix}-01`;
   const startTime = optionalString(input.startTime, "startTime", 60) || new Date().toISOString();
   const endTime = optionalString(input.endTime, "endTime", 60) || new Date(Date.now() + 3 * 3600_000).toISOString();
-  const preBufferHours = Number(input.preBufferHours ?? 0.5);
-  const postBufferHours = Number(input.postBufferHours ?? 0.5);
+  const preBufferHours = clampEventBufferHours(input.preBufferHours, 0.5);
+  const postBufferHours = clampEventBufferHours(input.postBufferHours, 0.5);
+
+  const insertBody: Record<string, unknown> = {
+    tvg_id: tvgId,
+    title,
+    sport_league: sportLeague,
+    group_title: groupTitle,
+    logo_url: logoUrl,
+    stream_url: streamUrl,
+    channel_number: channelNumber,
+    start_time: startTime,
+    end_time: endTime,
+    pre_buffer_hours: preBufferHours,
+    post_buffer_hours: postBufferHours,
+    status: "active",
+    auto_ingested: false,
+    updated_at: new Date().toISOString()
+  };
+  if (backupStreamUrl) insertBody.backup_stream_url = backupStreamUrl;
 
   const rows = await supabaseJson(env, "/rest/v1/event_channels?select=*", {
     method: "POST",
     headers: { prefer: "return=representation" },
-    body: JSON.stringify({
-      tvg_id: tvgId,
-      title,
-      sport_league: sportLeague,
-      group_title: groupTitle,
-      logo_url: logoUrl,
-      stream_url: streamUrl,
-      channel_number: channelNumber,
-      start_time: startTime,
-      end_time: endTime,
-      pre_buffer_hours: preBufferHours,
-      post_buffer_hours: postBufferHours,
-      status: "active",
-      auto_ingested: false,
-      updated_at: new Date().toISOString()
-    })
+    body: JSON.stringify(insertBody)
+  }).catch(async (err) => {
+    if (!("backup_stream_url" in insertBody)) throw err;
+    const { backup_stream_url: _omitted, ...fallbackBody } = insertBody;
+    return await supabaseJson(env, "/rest/v1/event_channels?select=*", {
+      method: "POST",
+      headers: { prefer: "return=representation" },
+      body: JSON.stringify(fallbackBody)
+    });
   }) as Record<string, unknown>[];
 
   await pushConfigUpdateToAllDevices(env);
@@ -2803,11 +2916,12 @@ async function updateEventChannel(request: Request, env: Env, eventId: string): 
   if (typeof input.sportLeague === "string") updates.sport_league = input.sportLeague.trim() || "SPORTS";
   if (typeof input.groupTitle === "string") updates.group_title = input.groupTitle.trim() || "Major League Sports (Events)";
   if (typeof input.streamUrl === "string") updates.stream_url = requiredString(input.streamUrl, "streamUrl", 2048);
+  if (input.backupStreamUrl !== undefined) updates.backup_stream_url = optionalString(input.backupStreamUrl, "backupStreamUrl", 2048);
   if (input.logoUrl !== undefined) updates.logo_url = optionalString(input.logoUrl, "logoUrl", 2048);
   if (typeof input.startTime === "string") updates.start_time = input.startTime;
   if (typeof input.endTime === "string") updates.end_time = input.endTime;
-  if (typeof input.preBufferHours === "number") updates.pre_buffer_hours = input.preBufferHours;
-  if (typeof input.postBufferHours === "number") updates.post_buffer_hours = input.postBufferHours;
+  if (typeof input.preBufferHours === "number") updates.pre_buffer_hours = clampEventBufferHours(input.preBufferHours, 0.5);
+  if (typeof input.postBufferHours === "number") updates.post_buffer_hours = clampEventBufferHours(input.postBufferHours, 0.5);
   if (typeof input.status === "string" && ["scheduled", "active", "expired", "disabled"].includes(input.status)) {
     updates.status = input.status;
   }
@@ -2819,7 +2933,18 @@ async function updateEventChannel(request: Request, env: Env, eventId: string): 
       headers: { prefer: "return=representation" },
       body: JSON.stringify(updates)
     }
-  ) as Record<string, unknown>[];
+  ).catch(async (err) => {
+    if (!("backup_stream_url" in updates)) throw err;
+    const { backup_stream_url: _omitted, ...fallbackUpdates } = updates;
+    return await supabaseJson(env,
+      `/rest/v1/event_channels?id=eq.${encodeURIComponent(eventId)}&select=*`,
+      {
+        method: "PATCH",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify(fallbackUpdates)
+      }
+    );
+  }) as Record<string, unknown>[];
 
   await pushConfigUpdateToAllDevices(env);
   return json({ event: rows[0] });
@@ -2914,7 +3039,8 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
         String(event.sport_league || "")
       )) continue;
       const channelDisplayName = "SPORTS PPV";
-      const mediaUrl = String(event.stream_url || "");
+      const { url: mediaUrl } = resolveEventDeliveryStreamUrl(event);
+      if (!mediaUrl) continue;
       const tvgIdVal = String(event.tvg_id || `event.channel.${activeIndex}`);
       const tvgId = ` tvg-id="${cleanAttribute(tvgIdVal)}"`;
       const tvgName = ` tvg-name="SPORTS PPV"`;
@@ -3178,7 +3304,7 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
   let offline = 0;
   try {
     const rows = await supabaseJson(env,
-      `/rest/v1/event_channels?status=neq.disabled&select=id,stream_url`
+      `/rest/v1/event_channels?status=neq.disabled&select=*`
     ).catch(() => null) as Record<string, unknown>[] | null;
     if (Array.isArray(rows) && rows.length > 0) {
       const nowIso = new Date().toISOString();
@@ -3186,13 +3312,12 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
         const chunk = rows.slice(i, i + 5);
         await Promise.all(chunk.map(async (row) => {
           const id = String(row.id);
-          const url = String(row.stream_url || "");
-          const health = await checkSingleStreamHealth(url);
-          if (health.ok) online++; else offline++;
-          await supabaseJson(env, `/rest/v1/event_channels?id=eq.${id}`, {
+          const health = await checkEventRowHealth(row, 3500);
+          if (health.effectiveOnline) online++; else offline++;
+          await supabaseJson(env, `/rest/v1/event_channels?id=eq.${encodeURIComponent(id)}`, {
             method: "PATCH",
             body: JSON.stringify({
-              is_online: health.ok,
+              is_online: health.isOnline,
               health_status: health.statusText,
               last_checked_at: nowIso,
               updated_at: nowIso

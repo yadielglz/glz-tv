@@ -215,3 +215,131 @@ function WeatherLines(data as Dynamic) as String
     end if
     return output + Chr(10) + "Forecast: Open-Meteo.com · Times and dates follow the forecast location."
 end function
+
+function ChannelKey(channel as Dynamic) as String
+    if type(channel) <> "roAssociativeArray" then return ""
+    id = Text(channel.id).Trim()
+    if id <> "" then return LCase(id)
+    url = Text(channel.url).Trim()
+    if url <> "" then return LCase(url)
+    return LCase(Text(channel.title).Trim())
+end function
+
+function ParseIdList(raw as Dynamic) as Object
+    result = []
+    seen = {}
+    source = Text(raw).Trim()
+    if source = "" then return result
+    items = invalid
+    if Left(source, 1) = "["
+        parsed = ParseJson(source)
+        if type(parsed) = "roArray" then items = parsed
+    end if
+    if items = invalid then items = source.Split(",")
+    for each entry in items
+        key = LCase(Text(entry).Trim())
+        if key <> "" and not seen.DoesExist(key)
+            seen[key] = true
+            result.Push(key)
+        end if
+    end for
+    return result
+end function
+
+function SerializeIdList(list as Dynamic) as String
+    clean = []
+    seen = {}
+    if type(list) = "roArray"
+        for each entry in list
+            key = LCase(Text(entry).Trim())
+            if key <> "" and not seen.DoesExist(key)
+                seen[key] = true
+                clean.Push(key)
+            end if
+        end for
+    end if
+    return FormatJson(clean)
+end function
+
+function IsFavoriteChannel(favorites as Dynamic, key as String) as Boolean
+    norm = LCase(Text(key).Trim())
+    if norm = "" or type(favorites) <> "roArray" then return false
+    for each entry in favorites
+        if LCase(Text(entry).Trim()) = norm then return true
+    end for
+    return false
+end function
+
+function ToggleFavoriteChannel(favorites as Dynamic, key as String) as Object
+    norm = LCase(Text(key).Trim())
+    result = []
+    seen = {}
+    removed = false
+    if type(favorites) = "roArray"
+        for each entry in favorites
+            val = LCase(Text(entry).Trim())
+            if val <> "" and not seen.DoesExist(val)
+                seen[val] = true
+                if val = norm
+                    removed = true
+                else
+                    result.Push(val)
+                end if
+            end if
+        end for
+    end if
+    if norm <> "" and not removed then result.Push(norm)
+    return result
+end function
+
+function RecordRecentChannel(recents as Dynamic, key as String, maxItems = 10 as Integer) as Object
+    if maxItems <= 0 then maxItems = 10
+    norm = LCase(Text(key).Trim())
+    result = []
+    seen = {}
+    if norm <> ""
+        result.Push(norm)
+        seen[norm] = true
+    end if
+    if type(recents) = "roArray"
+        for each entry in recents
+            if result.Count() >= maxItems then exit for
+            val = LCase(Text(entry).Trim())
+            if val <> "" and not seen.DoesExist(val)
+                seen[val] = true
+                result.Push(val)
+            end if
+        end for
+    end if
+    return result
+end function
+
+function ResolveChannelsByKeys(channels as Dynamic, keys as Dynamic, maxItems = 0 as Integer) as Object
+    result = []
+    if type(channels) <> "roArray" or type(keys) <> "roArray" then return result
+    byKey = {}
+    for each ch in channels
+        if type(ch) = "roAssociativeArray" and ch.isMovie <> true
+            k = ChannelKey(ch)
+            if k <> "" and not byKey.DoesExist(k) then byKey[k] = ch
+            urlKey = LCase(Text(ch.url).Trim())
+            if urlKey <> "" and not byKey.DoesExist(urlKey) then byKey[urlKey] = ch
+        end if
+    end for
+    addedUrls = {}
+    addedKeys = {}
+    for each rawKey in keys
+        if maxItems > 0 and result.Count() >= maxItems then exit for
+        norm = LCase(Text(rawKey).Trim())
+        if norm <> "" and byKey.DoesExist(norm) and not addedKeys.DoesExist(norm)
+            ch = byKey[norm]
+            urlKey = LCase(Text(ch.url).Trim())
+            if urlKey = "" or not addedUrls.DoesExist(urlKey)
+                result.Push(ch)
+                addedKeys[norm] = true
+                if urlKey <> "" then addedUrls[urlKey] = true
+            end if
+        end if
+    end for
+    return result
+end function

@@ -43,6 +43,7 @@ data class RadioPlaybackState(
     val icyArtist: String? = null,
     val retryAttempt: Int = 0,
     val errorMessage: String? = null,
+    val sleepTimerRemainingSec: Int? = null,
 ) {
     val isPlaying: Boolean get() = status == RadioPlaybackStatus.Playing
     val isBuffering: Boolean get() = status == RadioPlaybackStatus.Buffering || status == RadioPlaybackStatus.Reconnecting
@@ -61,12 +62,23 @@ class RadioPlayerController(
 ) {
     companion object {
         private const val MAX_RETRY_ATTEMPTS = 5
+        private const val PREF_FAVORITE_RADIO = "favorite_radio_stations"
+        val SLEEP_TIMER_OPTIONS_MIN = listOf(0, 15, 30, 60)
+
+        fun stationKey(station: RadioStation): String =
+            station.code.ifBlank { station.streamUrl }
     }
 
     var state by mutableStateOf(RadioPlaybackState())
         private set
 
+    var favoriteStationKeys by mutableStateOf(
+        prefs.getStringSet(PREF_FAVORITE_RADIO, emptySet()).orEmpty().toSet()
+    )
+        private set
+
     private var retryJob: Job? = null
+    private var sleepTimerJob: Job? = null
 
     private val dataSourceFactory = DefaultHttpDataSource.Factory()
         .setUserAgent("GLZ-TV-Radio/${BuildConfig.VERSION_NAME}")
@@ -229,8 +241,53 @@ class RadioPlayerController(
         playStation(prev)
     }
 
+    fun isFavorite(station: RadioStation): Boolean =
+        stationKey(station) in favoriteStationKeys
+
+    fun toggleFavorite(station: RadioStation) {
+        val key = stationKey(station)
+        val updated = if (key in favoriteStationKeys) {
+            favoriteStationKeys - key
+        } else {
+            favoriteStationKeys + key
+        }
+        favoriteStationKeys = updated
+        prefs.edit().putStringSet(PREF_FAVORITE_RADIO, updated).apply()
+    }
+
+    fun setSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes <= 0) {
+            state = state.copy(sleepTimerRemainingSec = null)
+            return
+        }
+        val totalSeconds = minutes * 60
+        state = state.copy(sleepTimerRemainingSec = totalSeconds)
+        sleepTimerJob = scope.launch {
+            var remaining = totalSeconds
+            while (remaining > 0) {
+                delay(1_000L)
+                remaining -= 1
+                if (state.station == null) {
+                    state = state.copy(sleepTimerRemainingSec = null)
+                    return@launch
+                }
+                state = state.copy(sleepTimerRemainingSec = remaining)
+            }
+            stop()
+        }
+    }
+
+    fun cycleSleepTimer() {
+        val currentSec = state.sleepTimerRemainingSec ?: 0
+        val currentMin = (currentSec + 59) / 60
+        val nextMin = SLEEP_TIMER_OPTIONS_MIN.firstOrNull { it > currentMin } ?: 0
+        setSleepTimer(nextMin)
+    }
+
     fun stop() {
         retryJob?.cancel()
+        sleepTimerJob?.cancel()
         player.stop()
         player.clearMediaItems()
         val hadStation = state.station != null
@@ -242,6 +299,7 @@ class RadioPlayerController(
 
     fun release() {
         retryJob?.cancel()
+        sleepTimerJob?.cancel()
         player.removeListener(listener)
         player.stop()
         player.release()
@@ -261,7 +319,8 @@ class RadioPlayerController(
             icyTitle = if (retryAttempt > 0) state.icyTitle else null,
             icyArtist = if (retryAttempt > 0) state.icyArtist else null,
             retryAttempt = retryAttempt,
-            errorMessage = null
+            errorMessage = null,
+            sleepTimerRemainingSec = state.sleepTimerRemainingSec
         )
         player.stop()
         player.setMediaItem(

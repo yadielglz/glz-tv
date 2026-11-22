@@ -20,7 +20,7 @@
       </Group>
       <Group id="catalog" visible="false">
         <Rectangle translation="[40,106]" width="204" height="546" color="0x0C1526FF" />
-        <LabelList id="sectionNav" translation="[48,116]" itemSize="[188,52]" itemSpacing="[0,6]" numRows="8" vertFocusAnimationStyle="fixedFocus" />
+        <LabelList id="sectionNav" translation="[48,116]" itemSize="[188,48]" itemSpacing="[0,5]" numRows="9" vertFocusAnimationStyle="fixedFocus" />
         <Group id="homeHero" translation="[264,106]" visible="false">
           <Rectangle width="976" height="144" color="0x101C30FF" />
           <Poster id="homeHeroBackdrop" width="976" height="144" loadDisplayMode="scaleToZoom" visible="false" />
@@ -46,6 +46,22 @@
         <Label id="channelCount" translation="[264,624]" width="586" height="28" color="0x94A3B8FF" font="font:SmallestSystemFont" />
       </Group>
       <Label id="footer" translation="[40,670]" width="1200" height="32" text="Left / Back  Menu   •   OK  Select   •   *  Quick Options" color="0x94A3B8FF" font="font:SmallSystemFont" />
+      <Group id="radioMiniBar" translation="[40,654]" visible="false">
+        <Rectangle width="1200" height="56" color="0x0E1B31F2" />
+        <Rectangle width="1200" height="3" color="0x38BDF8FF" />
+        <Rectangle width="5" height="56" color="0x38BDF8FF" />
+        <Group id="radioEq" translation="[20,16]">
+          <Rectangle id="eqBar0" translation="[0,16]" width="5" height="8" color="0x38BDF8FF" />
+          <Rectangle id="eqBar1" translation="[8,10]" width="5" height="14" color="0x38BDF8FF" />
+          <Rectangle id="eqBar2" translation="[16,14]" width="5" height="10" color="0x38BDF8FF" />
+          <Rectangle id="eqBar3" translation="[24,12]" width="5" height="12" color="0x38BDF8FF" />
+        </Group>
+        <Rectangle id="radioPillBg" translation="[62,14]" width="118" height="28" color="0x059669FF" />
+        <Label id="radioPillText" translation="[62,14]" width="118" height="28" horizAlign="center" vertAlign="center" color="0xFFFFFFFF" font="font:SmallestBoldSystemFont" text="LIVE" />
+        <Label id="radioMiniTitle" translation="[196,7]" width="664" height="24" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+        <Label id="radioMiniGenre" translation="[196,32]" width="664" height="20" color="0x94A3B8FF" font="font:SmallestSystemFont" />
+        <Label id="radioMiniHint" translation="[872,14]" width="308" height="28" horizAlign="right" vertAlign="center" color="0x94A3B8FF" font="font:SmallestSystemFont" text="Play/Pause · * Stop" />
+      </Group>
     </Group>
     <Video id="player" width="1280" height="720" visible="false" enableUI="false" enableTrickPlay="false" />
     <Group id="playerFocus" focusable="true" />
@@ -54,8 +70,8 @@
       <Rectangle width="1152" height="4" color="0x38BDF8FF" />
       <Poster id="osdLogo" translation="[24,24]" width="112" height="108" loadDisplayMode="scaleToFit" />
       <Label id="osdNumber" translation="[156,18]" width="130" height="36" color="0x65D5FFFF" font="font:MediumBoldSystemFont" />
-      <Label id="osdTitle" translation="[290,18]" width="480" height="36" font="font:MediumBoldSystemFont" />
-      <Label id="osdHint" translation="[776,22]" width="352" height="30" horizAlign="right" color="0x94A3B8FF" text="OK: Info  •  Right: Mini-Guide  •  Up/Down: Surf" font="font:SmallSystemFont" />
+      <Label id="osdTitle" translation="[290,18]" width="440" height="36" font="font:MediumBoldSystemFont" />
+      <Label id="osdHint" translation="[736,22]" width="392" height="30" horizAlign="right" color="0x94A3B8FF" text="OK: Info  •  Right: Guide  •  Up/Down: Zap" font="font:SmallSystemFont" />
       <Label id="osdNow" translation="[156,64]" width="972" height="34" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
       <Label id="osdNext" translation="[156,104]" width="972" height="32" color="0xA5B9D2FF" font="font:SmallSystemFont" />
     </Group>
@@ -79,5 +95,6 @@
     <Timer id="extrasTimer" duration="0.2" repeat="false" />
     <Timer id="osdTimer" duration="5" repeat="false" />
     <Timer id="miniTimer" duration="12" repeat="false" />
+    <Timer id="radioEqTimer" duration="0.25" repeat="true" />
   </children>
 </component>
