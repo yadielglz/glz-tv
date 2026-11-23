@@ -262,7 +262,8 @@ object GithubUpdateManager {
     }
 
     internal fun isNewEra(version: String): Boolean {
-        return Regex("""^(?:v)?\d{1,2}\.\d{1,2}\.\d\.\d{1,2}""").containsMatchIn(version)
+        return Regex("""^(?:v)?\d{1,2}\.\d{1,2}\.\d\.\d{1,2}""").containsMatchIn(version) ||
+            Regex("""^(?:v)?1\.(?:[4-9]\d|\d{3,})\.\d{3}(?:$|-).*""").containsMatchIn(version)
     }
 
     internal fun matchesChannel(tag: String, channel: UpdateChannel): Boolean {

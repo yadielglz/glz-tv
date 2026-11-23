@@ -49,7 +49,17 @@ class GithubUpdateManagerTest {
                 "Stable 1.43.2.03 must be visible on ${channel.id}",
                 GithubUpdateManager.matchesChannel("v1.43.2.03", channel)
             )
+            assertTrue(
+                "Stable 1.48.2.00 must be visible on ${channel.id}",
+                GithubUpdateManager.matchesChannel("v1.48.2.00", channel)
+            )
+            assertTrue(
+                "Stable 1.48.200 must be visible on ${channel.id}",
+                GithubUpdateManager.matchesChannel("v1.48.200", channel)
+            )
         }
+        assertTrue(GithubUpdateManager.compareVersions("1.48.2.00", "1.43.2.03") > 0)
+        assertTrue(GithubUpdateManager.compareVersions("1.48.200", "1.43.2.03") > 0)
     }
 
     @Test
