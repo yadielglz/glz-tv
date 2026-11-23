@@ -6045,9 +6045,8 @@ private fun VideoPlayer(
                 }
                 controlState?.selectSubtitle = { id ->
                     if (id == null) {
-                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+                        // Keep TRACK_TYPE_TEXT enabled so ExoPlayer never flushes/blanks video on CC toggle;
+                        // caption visibility is toggled instantaneously on PlayerView.subtitleView.
                         onSubtitleChanged(false, null)
                     } else subtitleSelections[id]?.let { (group, index) ->
                         val language = group.getTrackFormat(index).language
@@ -6064,39 +6063,60 @@ private fun VideoPlayer(
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    LaunchedEffect(player, captionsEnabled, captionLanguage, preferredAudioLanguage) {
+    // Keep text renderer always enabled so toggling CC on/off never triggers a Media3 track-selection reset
+    // or video blanking on live TS/HLS streams. Only update parameters when language preference changes.
+    LaunchedEffect(player, captionLanguage, preferredAudioLanguage) {
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !captionsEnabled)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             .setPreferredTextLanguage(captionLanguage.ifBlank { null })
             .setPreferredAudioLanguage(preferredAudioLanguage)
-            .setSelectUndeterminedTextLanguage(captionsEnabled)
+            .setSelectUndeterminedTextLanguage(true)
             .build()
     }
-    LaunchedEffect(activeUrl, extraSubtitles, retryAttempt) {
+    // Load external sidecar subtitles (e.g. OpenSubtitles SRT/VTT) without reloading ExoPlayer MediaItem
+    var sidecarCues by remember { mutableStateOf<List<com.glztv.app.player.SubtitleCue>>(emptyList()) }
+    var activeSidecarText by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(extraSubtitles, captionLanguage) {
+        if (extraSubtitles.isEmpty()) {
+            sidecarCues = emptyList()
+            activeSidecarText = null
+            return@LaunchedEffect
+        }
+        val selectedTrack = extraSubtitles.lastOrNull {
+            it.language.equals(captionLanguage, ignoreCase = true)
+        } ?: extraSubtitles.last()
+        sidecarCues = withContext(Dispatchers.IO) {
+            com.glztv.app.player.SidecarSubtitleParser.loadFromUri(context, selectedTrack.uri)
+        }
+    }
+    LaunchedEffect(player, captionsEnabled, sidecarCues) {
+        if (!captionsEnabled || sidecarCues.isEmpty()) {
+            activeSidecarText = null
+            return@LaunchedEffect
+        }
+        while (true) {
+            activeSidecarText = com.glztv.app.player.SidecarSubtitleParser.activeCueText(
+                sidecarCues,
+                player.currentPosition
+            )
+            delay(150L)
+        }
+    }
+    LaunchedEffect(activeUrl, retryAttempt) {
         if (retryAttempt > 0) delay((1L shl (retryAttempt - 1)) * 1_000L)
         httpFactory
             .setDefaultRequestProperties(channel.headers)
             .setUserAgent(channel.headers["User-Agent"] ?: "GLZ-TV/2.0")
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !captionsEnabled)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             .setPreferredTextLanguage(captionLanguage.ifBlank { null })
             .setPreferredAudioLanguage(preferredAudioLanguage)
-            .setSelectUndeterminedTextLanguage(captionsEnabled)
+            .setSelectUndeterminedTextLanguage(true)
             .build()
-
-        val subtitleConfigs = extraSubtitles.map { sub ->
-            MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.uri))
-                .setMimeType(sub.mimeType)
-                .setLanguage(sub.language.lowercase())
-                .setLabel(sub.label)
-                .setSelectionFlags(if (captionsEnabled && sub.language.equals(captionLanguage, ignoreCase = true)) C.SELECTION_FLAG_DEFAULT else 0)
-                .build()
-        }
 
         val mediaItem = MediaItem.Builder()
                 .setUri(activeUrl)
                 .setMediaId(channel.id)
-                .setSubtitleConfigurations(subtitleConfigs)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(channel.name)
@@ -6179,6 +6199,7 @@ private fun VideoPlayer(
     LaunchedEffect(muted) { player.volume = if (muted) 0f else 1f }
     DisposableEffect(mediaSession) { onDispose { mediaSession?.release() } }
     DisposableEffect(player) { onDispose { player.release() } }
+    val showEmbeddedSubtitles = captionsEnabled && sidecarCues.isEmpty()
     Box(modifier.background(Color.Black, RoundedCornerShape(24.dp))) {
         AndroidView(
             factory = {
@@ -6191,6 +6212,7 @@ private fun VideoPlayer(
                     controllerAutoShow = showControls
                     isFocusable = showControls
                     isFocusableInTouchMode = showControls
+                    subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
                     (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
                 }
             },
@@ -6201,10 +6223,34 @@ private fun VideoPlayer(
                 else AspectRatioFrameLayout.RESIZE_MODE_FIT
                 it.useController = showControls
                 it.controllerAutoShow = showControls
+                it.subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
                 (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
             },
             modifier = Modifier.fillMaxSize()
         )
+        AnimatedVisibility(
+            visible = captionsEnabled && !activeSidecarText.isNullOrBlank(),
+            enter = fadeIn(tween(120)),
+            exit = fadeOut(tween(120)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 48.dp, vertical = 36.dp)
+        ) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.78f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = activeSidecarText.orEmpty(),
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    lineHeight = 26.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        }
         playbackMessage?.let { message ->
             Surface(
                 color = Color.Black.copy(alpha = .82f),
