@@ -440,6 +440,9 @@ internal fun TvScreen(
     var radioFromCache by remember { mutableStateOf(false) }
     var showWeatherModal by remember { mutableStateOf(false) }
     var showYouModal by remember { mutableStateOf(false) }
+    var showFirstRunSetup by remember {
+        mutableStateOf(!prefs.getBoolean("first_run_completed", false) && !GlzHubManager.isEnrolled(prefs))
+    }
 
     fun refreshRadioStations() {
         scope.launch {
@@ -1408,6 +1411,10 @@ internal fun TvScreen(
                 speedTestTargetUrl = null
                 showSpeedTestDialog = true
             },
+            onOpenSetupWizard = {
+                showSettings = false
+                showFirstRunSetup = true
+            },
             onSyncNow = { progress -> syncEverythingNow(progress) },
             onCheckForUpdate = { checkForAppUpdate() },
             onBeginHubEnrollment = {
@@ -1463,6 +1470,37 @@ internal fun TvScreen(
             client = client,
             targetUrl = speedTestTargetUrl,
             onDismiss = { showSpeedTestDialog = false }
+        )
+    }
+
+    if (showFirstRunSetup) {
+        com.glztv.app.ui.screens.FirstRunSetupScreen(
+            appLanguage = appLanguage,
+            isAlreadyEnrolled = GlzHubManager.isEnrolled(prefs),
+            onLanguageSelected = { lang ->
+                appLanguage = lang
+                onLanguageChanged(lang)
+            },
+            onBeginEnrollment = {
+                withContext(Dispatchers.IO) {
+                    GlzHubManager.beginEnrollment(prefs, client)
+                }.also { code ->
+                    hubStatus = "Pairing code: $code"
+                }
+            },
+            onPollEnrollment = {
+                withContext(Dispatchers.IO) {
+                    runCatching { GlzHubManager.sync(prefs, client) }
+                    GlzHubManager.isEnrolled(prefs)
+                }.also { enrolled ->
+                    if (enrolled) hubStatus = "Connected to GLZ Hub"
+                }
+            },
+            onInitialSync = { progress -> syncEverythingNow(progress) },
+            onComplete = {
+                prefs.edit().putBoolean("first_run_completed", true).apply()
+                showFirstRunSetup = false
+            }
         )
     }
 
@@ -6531,6 +6569,7 @@ private fun SettingsDialog(
     screensaverTimeoutMinutes: Int = 5,
     appLanguage: String = "en",
     onOpenSpeedTest: () -> Unit,
+    onOpenSetupWizard: () -> Unit = {},
     onSyncNow: suspend ((Int, String) -> Unit) -> String,
     onCheckForUpdate: suspend () -> String,
     onBeginHubEnrollment: suspend () -> String,
@@ -6584,56 +6623,68 @@ private fun SettingsDialog(
     val viewport = LocalTvViewport.current
     BackHandler(onBack = onDismiss)
     BackHandler(enabled = showAdvanced) { showAdvanced = false }
+    // Authentic Android TV Right-Side Settings Pane over dimmed scrim
     Box(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color.Black.copy(alpha = 0.72f)),
+        contentAlignment = Alignment.CenterEnd
     ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(min = 380.dp, max = 560.dp)
+                .fillMaxWidth(if (viewport.isTvLayout) 0.50f else 0.96f),
+            shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp),
+            color = Color(0xFF16181D),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+            tonalElevation = 14.dp
+        ) {
         Column(Modifier.fillMaxSize()) {
-            // Unified Header Bar matching Weather, Radio & Quick Settings
+            // Android TV Right-Pane Header
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                color = Color(0xFF1C2028),
             ) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = viewport.safeHorizontal, vertical = if (viewport.isCompactHeight) 12.dp else 16.dp),
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                        modifier = Modifier.size(if (viewport.isCompactHeight) 40.dp else 44.dp)
+                        color = GoogleTvTokens.BlueAccent.copy(alpha = 0.16f),
+                        border = BorderStroke(1.dp, GoogleTvTokens.BlueAccent.copy(alpha = 0.35f)),
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Settings,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(22.dp)
+                                tint = GoogleTvTokens.BlueAccent,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (showAdvanced) strings.advancedOptions.uppercase(Locale.getDefault()) else strings.settingsTitle,
-                            fontSize = if (viewport.isCompactHeight) 20.sp else 24.sp,
+                            if (showAdvanced) strings.advancedOptions else strings.settingsTitle,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = Color.White
                         )
                         Text(
-                            if (showAdvanced) "Playlist, EPG, headers, names & network labels"
-                            else "Scroll · press Left / Right to change a value",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 13.sp
+                            if (showAdvanced) "Playlist, EPG, headers & network labels"
+                            else "◀ / ▶ to adjust · OK to toggle",
+                            color = GoogleTvTokens.TextSecondary,
+                            fontSize = 12.sp
                         )
                     }
                     Surface(
                         shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        color = GoogleTvTokens.BlueAccent.copy(alpha = 0.16f),
                     ) {
                         Text(
                             "v${BuildConfig.VERSION_NAME}",
@@ -6874,56 +6925,54 @@ private fun SettingsDialog(
                                 valueText = "Open Android default home application picker",
                                 onClick = { LauncherAppsManager.openHomeSettings(context) }
                             )
+                            SettingsActionRow(
+                                name = "Run First-Run Setup Wizard",
+                                valueText = "Welcome, GlzHub pairing & initial sync",
+                                onClick = onOpenSetupWizard
+                            )
                         }
                     }
                 }
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(20.dp))
             }
 
-            // Sticky Bottom Action Bar
+            // Compact Android TV Right-Pane Bottom Action Bar
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = Color.Black.copy(alpha = 0.65f),
+                color = Color(0xFF1C2028),
             ) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 36.dp, vertical = 14.dp),
+                        .padding(horizontal = 24.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
                 ) {
-                    Text(
-                        if (appLanguageValue == "es") "Arriba / Abajo para mover · Izq / Der para cambiar · Atrás para salir"
-                        else "Up / Down to move · Left / Right to change · Back to exit",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
+                    TvSettingsButton(
+                        label = strings.close,
+                        onClick = onDismiss
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        TvSettingsButton(
-                            label = strings.close,
-                            onClick = onDismiss
-                        )
-                        TvSettingsButton(
-                            label = strings.saveAndApply,
-                            onClick = {
-                                onSave(
-                                    playlistValue.trim(), epgValue.trim(), headerValue.trim(),
-                                    weatherLocationValue.trim().ifBlank { DEFAULT_WEATHER_LOCATION },
-                                    guestNameValue.trim().ifBlank { "Guest" },
-                                    connectionLabelValue.trim(), ispNameValue.trim(),
-                                    themeValue, captionsValue, languageValue.trim(), osdTimeoutValue,
-                                    screensaverTimeoutValue,
-                                    autoUpdateValue, wifiOnlyValue, autoStartValue, resumeLastValue,
-                                    startDestinationValue, updateChannelValue,
-                                    appLanguageValue
-                                )
-                            },
-                            enabled = playlistValue.startsWith("http")
-                        )
-                    }
+                    TvSettingsButton(
+                        label = strings.saveAndApply,
+                        primary = true,
+                        onClick = {
+                            onSave(
+                                playlistValue.trim(), epgValue.trim(), headerValue.trim(),
+                                weatherLocationValue.trim().ifBlank { DEFAULT_WEATHER_LOCATION },
+                                guestNameValue.trim().ifBlank { "Guest" },
+                                connectionLabelValue.trim(), ispNameValue.trim(),
+                                themeValue, captionsValue, languageValue.trim(), osdTimeoutValue,
+                                screensaverTimeoutValue,
+                                autoUpdateValue, wifiOnlyValue, autoStartValue, resumeLastValue,
+                                startDestinationValue, updateChannelValue,
+                                appLanguageValue
+                            )
+                        },
+                        enabled = playlistValue.startsWith("http")
+                    )
                 }
             }
+        }
         }
     }
 }

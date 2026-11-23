@@ -97,6 +97,30 @@ sub Main()
     resolved = ResolveChannelsByKeys(sampleChannels, ["ch.3", "missing", "CH.1", "movie:m1", "ch.2"], 2)
     Assert(resolved.Count() = 2 and resolved[0].id = "ch.3" and resolved[1].id = "ch.1", "ResolveChannelsByKeys preserves key order, skips missing/movies, and honors max cap")
 
+    ' First-Run Welcome Flow helpers
+    Assert(ShouldShowFirstRun("", "") = true, "ShouldShowFirstRun launches when first_run_done is empty and unpaired")
+    Assert(ShouldShowFirstRun(invalid, invalid) = true, "ShouldShowFirstRun handles invalid values safely")
+    Assert(ShouldShowFirstRun("1", "") = false, "ShouldShowFirstRun skips when first_run_done is 1")
+    Assert(ShouldShowFirstRun("", "tok-abc123") = false, "ShouldShowFirstRun skips existing paired devices")
+    Assert(ShouldShowFirstRun("1", "tok-abc123") = false, "ShouldShowFirstRun skips when both done and paired")
+
+    pairLoading = FirstRunPairingStatus("", "", false, "")
+    Assert(pairLoading.codeText = "Loading…" and Instr(1, pairLoading.statusText, "Requesting") > 0, "FirstRunPairingStatus shows loading before code arrives")
+    pairWaiting = FirstRunPairingStatus("GLZ-8421", "", false, "")
+    Assert(pairWaiting.codeText = "GLZ-8421" and pairWaiting.statusText = "Waiting for approval on GLZ Hub…", "FirstRunPairingStatus shows live code and auto-polling status")
+    pairErr = FirstRunPairingStatus("GLZ-8421", "Network timeout", false, "")
+    Assert(pairErr.codeText = "GLZ-8421" and pairErr.statusText = "Network timeout", "FirstRunPairingStatus surfaces error while preserving code")
+    pairDone = FirstRunPairingStatus("", "", true, "Living Room Roku")
+    Assert(pairDone.codeText = "PAIRED" and Instr(1, pairDone.statusText, "Living Room Roku") > 0, "FirstRunPairingStatus handles already-paired device")
+
+    readySummary = FirstRunReadySummary("Living Room Roku", 42, 8, true)
+    Assert(readySummary.deviceLine = "Connected to GLZ Hub · Living Room Roku", "FirstRunReadySummary shows paired device name")
+    Assert(Instr(1, readySummary.countsLine, "42 Live Channels") > 0 and Instr(1, readySummary.countsLine, "8 Radio Stations") > 0, "FirstRunReadySummary shows loaded channel and radio counts")
+    readySingular = FirstRunReadySummary("", 1, 1, true)
+    Assert(readySingular.deviceLine = "Connected to GLZ Hub · Roku TV" and Instr(1, readySingular.countsLine, "1 Live Channel") > 0 and Instr(1, readySingular.countsLine, "1 Radio Station") > 0, "FirstRunReadySummary handles singular counts and default device name")
+    readyUnpaired = FirstRunReadySummary("", 0, 0, false)
+    Assert(Instr(1, readyUnpaired.deviceLine, "Not yet paired") > 0, "FirstRunReadySummary handles unpaired state")
+
     if m.failed > 0 then print "FAILURES: "; m.failed else print "ALL FEATURE TESTS PASSED"
 end sub
 sub Assert(condition as Boolean, label as String)

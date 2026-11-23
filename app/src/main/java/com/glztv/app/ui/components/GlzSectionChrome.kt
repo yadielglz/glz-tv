@@ -53,10 +53,10 @@ fun GlzSectionShell(
     )
     GlzPanel(
         modifier = modifier.fillMaxSize(),
-        shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
-        fill = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
-        tonalElevation = 6.dp
+        shape = RoundedCornerShape(24.dp),
+        fill = Color(0xFF12151C).copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+        tonalElevation = 8.dp
     ) {
         Column(
             modifier = Modifier
@@ -110,7 +110,7 @@ fun GlzSectionHeader(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = title,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = Color(0xFFF1F3F4),
                     fontSize = if (viewport.isCompactHeight) 22.sp else 26.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -119,7 +119,7 @@ fun GlzSectionHeader(
                 if (subtitle.isNotBlank()) {
                     Text(
                         text = subtitle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color(0xFF9AA0A6),
                         fontSize = 13.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -177,7 +177,7 @@ fun GlzSectionPill(
 }
 
 /**
- * High-contrast TV-focusable action pill button shared across Weather, Radio, and Settings.
+ * High-contrast Material 3 Google TV focusable action pill shared across TV, Weather, Radio, and Settings.
  */
 @Composable
 fun GlzSectionActionButton(
@@ -192,21 +192,21 @@ fun GlzSectionActionButton(
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(999.dp)
     val bg = when {
-        !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        focused -> accent
+        !enabled -> Color(0xFF1A1D24).copy(alpha = 0.45f)
+        focused -> Color.White
         primary -> accent.copy(alpha = 0.22f)
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+        else -> Color(0xFF1A1D24)
     }
     val fg = when {
-        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-        focused -> GlzCardDefaults.onAccent(accent)
+        !enabled -> Color(0xFF9AA0A6).copy(alpha = 0.5f)
+        focused -> Color(0xFF0B0D0F)
         primary -> accent
-        else -> MaterialTheme.colorScheme.onSurface
+        else -> Color(0xFFF1F3F4)
     }
     val border = when {
-        focused -> BorderStroke(2.dp, Color.White.copy(alpha = 0.9f))
+        focused -> BorderStroke(2.dp, accent)
         primary -> BorderStroke(1.dp, accent.copy(alpha = 0.45f))
-        else -> BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f))
+        else -> BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
     }
 
     Surface(

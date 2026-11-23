@@ -34,6 +34,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -169,6 +171,93 @@ jobs:
             Glz-TV-Roku-${{ steps.version.outputs.name }}.zip.sha256
           if-no-files-found: error
 
+      - name: Generate release notes
+        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+        env:
+          CURRENT_TAG: v${{ steps.version.outputs.name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'EOF'
+          const { execFileSync } = require('node:child_process');
+          const { writeFileSync } = require('node:fs');
+
+          const currentTag = process.env.CURRENT_TAG || '';
+          let prevTag = '';
+          try {
+            prevTag = execFileSync(
+              'git',
+              ['describe', '--tags', '--abbrev=0', '--match', 'v*', '--exclude', currentTag, 'HEAD'],
+              { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+            ).trim();
+          } catch {
+            prevTag = '';
+          }
+
+          const logArgs = prevTag
+            ? ['log', '--no-merges', `${prevTag}..HEAD`, '--pretty=format:%s']
+            : ['log', '--no-merges', '-n', '30', '--pretty=format:%s'];
+          const rawSubjects = execFileSync('git', logArgs, { encoding: 'utf8' })
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+          const whatsNew = [];
+          const improvements = [];
+          const seen = new Set();
+
+          function cleanMessage(raw) {
+            let msg = raw
+              .replace(/^(?:feat|fix|perf|refactor)(?:\([^)]*\))?!?:\s*/i, '')
+              .replace(/\s*\(#\d+\)/g, '')
+              .replace(/\s*(?:\(|\[)?\b[0-9a-f]{7,40}\b(?:\)|\])?/gi, '')
+              .replace(/\s*(?:\(\s*by\s+@[A-Za-z0-9-]+\s*\)|\bby\s+@[A-Za-z0-9-]+|@[A-Za-z0-9-]+)/gi, '')
+              .replace(/https?:\/\/\S+/gi, '')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .replace(/[.,;:\s-]+$/, '');
+            if (!msg) return '';
+            return msg.charAt(0).toUpperCase() + msg.slice(1);
+          }
+
+          for (const subject of rawSubjects) {
+            if (/\[(?:skip ci|ci skip)\]/i.test(subject)) continue;
+            if (/^Merge\b/i.test(subject)) continue;
+            if (/^(?:chore|ci|build|docs|style|test|revert)(?:\([^)]*\))?!?:/i.test(subject)) continue;
+
+            const isFeat = /^feat(?:\([^)]*\))?!?:/i.test(subject);
+            const isImprovement = /^(?:fix|perf|refactor)(?:\([^)]*\))?!?:/i.test(subject);
+            if (!isFeat && !isImprovement) continue;
+
+            const cleaned = cleanMessage(subject);
+            if (!cleaned) continue;
+            const key = cleaned.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            if (isFeat) {
+              whatsNew.push(cleaned);
+            } else {
+              improvements.push(cleaned);
+            }
+          }
+
+          const sections = [];
+          if (whatsNew.length > 0) {
+            sections.push("### What's New\n\n" + whatsNew.map((item) => `- ${item}`).join('\n'));
+          }
+          if (improvements.length > 0) {
+            sections.push('### Improvements & Fixes\n\n' + improvements.map((item) => `- ${item}`).join('\n'));
+          }
+          if (sections.length === 0) {
+            sections.push('### Improvements & Fixes\n\n- General stability, performance, and reliability improvements across GLZ TV.');
+          }
+
+          const notes = sections.join('\n\n') + '\n';
+          writeFileSync('release-notes.md', notes, 'utf8');
+          console.log(notes);
+          EOF
+
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
         env:
@@ -181,7 +270,7 @@ jobs:
           checksum="$apk.sha256"
           roku_zip="Glz-TV-Roku-${{ steps.version.outputs.name }}.zip"
           roku_checksum="$roku_zip.sha256"
-          release_args=(--title "GLZ TV ${{ steps.version.outputs.name }}")
+          release_args=(--title "GLZ TV ${{ steps.version.outputs.name }}" --notes-file release-notes.md)
           if [[ "${{ steps.version.outputs.name }}" == *-testing* || "${{ steps.version.outputs.name }}" == *-weekly* || "${{ steps.version.outputs.name }}" == *-biweekly* || "${{ steps.version.outputs.name }}" == *-monthly* || "${{ steps.version.outputs.name }}" == *-beta* || "${{ steps.version.outputs.name }}" == *-family* || "${{ steps.version.outputs.name }}" == *-rc* ]]; then
             release_args+=(--prerelease --latest=false)
           fi
@@ -190,7 +279,7 @@ jobs:
             gh release upload "$tag" "$apk" "$checksum" "$roku_zip" "$roku_checksum" --clobber
             gh release edit "$tag" "${release_args[@]}"
           else
-            create_args=("$tag" "$apk" "$checksum" "$roku_zip" "$roku_checksum" --generate-notes "${release_args[@]}")
+            create_args=("$tag" "$apk" "$checksum" "$roku_zip" "$roku_checksum" "${release_args[@]}")
             if [[ "$GITHUB_REF" == refs/tags/* ]]; then
               gh release create "${create_args[@]}" --verify-tag
             else

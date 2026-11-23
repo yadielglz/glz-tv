@@ -63,6 +63,20 @@ class GithubUpdateManagerTest {
     }
 
     @Test
+    fun sanitizesReleaseNotesStrippingGithubBoilerplate() {
+        val raw = """
+            ## What's Changed
+            * feat(radio): add sleep timer and favorites by @yadielglz in https://github.com/yadielglz/glz-tv/pull/42
+            - fix(ui): seamless closed captions without blanking (#43)
+            **Full Changelog**: https://github.com/yadielglz/glz-tv/compare/v1.48.2.00...v1.48.2.50
+        """.trimIndent()
+        val bullets = GithubUpdateManager.sanitizeReleaseNotes(raw)
+        assertEquals(2, bullets.size)
+        assertEquals("Add sleep timer and favorites", bullets[0])
+        assertEquals("Seamless closed captions without blanking", bullets[1])
+    }
+
+    @Test
     fun parsesWeekDayReleaseDateCorrectly() {
         val millis = GithubUpdateManager.parseReleaseDate("1.42.6.02")
         org.junit.Assert.assertNotNull(millis)

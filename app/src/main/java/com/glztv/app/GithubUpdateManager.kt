@@ -256,9 +256,44 @@ object GithubUpdateManager {
             version = version,
             downloadUrl = asset.getString("browser_download_url"),
             releaseUrl = newest.optString("html_url"),
-            notes = newest.optString("body").take(1_200),
+            notes = newest.optString("body").take(1_600),
             publishedAt = newest.optString("published_at").ifBlank { null }
         )
+    }
+
+    /**
+     * Converts release notes into clean, user-facing bullet points by stripping
+     * raw GitHub boilerplate ("## What's Changed", "**Full Changelog**: ...",
+     * "by @user in https://...", PR numbers, and commit hashes).
+     */
+    fun sanitizeReleaseNotes(raw: String): List<String> {
+        if (raw.isBlank()) return emptyList()
+        return raw.lineSequence()
+            .map { it.trim() }
+            .filter { line ->
+                line.isNotEmpty() &&
+                    !line.startsWith("#") &&
+                    !line.startsWith("**Full Changelog**", ignoreCase = true) &&
+                    !line.contains("/compare/", ignoreCase = true) &&
+                    !line.equals("What's Changed", ignoreCase = true) &&
+                    !line.equals("New Contributors", ignoreCase = true)
+            }
+            .map { line ->
+                line.removePrefix("- ")
+                    .removePrefix("* ")
+                    .removePrefix("• ")
+                    .replace(Regex("""\s+by\s+@[\w-]+\s+in\s+https?://\S+""", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("""\s*\(#\d+\)"""), "")
+                    .replace(Regex("""^(?:feat|fix|perf|refactor|ui|chore)(?:\([^)]*\))?:\s*""", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("""\*\*([^*]+)\*\*"""), "$1")
+                    .replace(Regex("""`([^`]+)`"""), "$1")
+                    .trim()
+                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            }
+            .filter { it.length >= 4 && !it.startsWith("http://") && !it.startsWith("https://") }
+            .distinct()
+            .take(8)
+            .toList()
     }
 
     internal fun isNewEra(version: String): Boolean {

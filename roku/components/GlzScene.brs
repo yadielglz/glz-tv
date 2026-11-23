@@ -33,9 +33,31 @@ sub init()
     m.status = m.top.findNode("status")
     m.pairing = m.top.findNode("pairing")
     m.catalog = m.top.findNode("catalog")
+    m.welcomeOverlay = m.top.findNode("welcomeOverlay")
+    m.welcomeFocus = m.top.findNode("welcomeFocus")
+    m.welcomeStep1Group = m.top.findNode("welcomeStep1Group")
+    m.welcomeStep2Group = m.top.findNode("welcomeStep2Group")
+    m.welcomeStep3Group = m.top.findNode("welcomeStep3Group")
+    m.welcomeStepLabels = [
+        m.top.findNode("welcomeStep1")
+        m.top.findNode("welcomeStep2")
+        m.top.findNode("welcomeStep3")
+    ]
+    m.welcomePairingCode = m.top.findNode("welcomePairingCode")
+    m.welcomePairingStatus = m.top.findNode("welcomePairingStatus")
+    m.welcomeReadyDevice = m.top.findNode("welcomeReadyDevice")
+    m.welcomeReadyCounts = m.top.findNode("welcomeReadyCounts")
+    m.welcomeFooterHint = m.top.findNode("welcomeFooterHint")
     m.appVersion = CreateObject("roAppInfo").GetValue("glz_version")
     m.registry = CreateObject("roRegistrySection", "GlzTV")
     m.stateRegistry = CreateObject("roRegistrySection", "GlzTvState")
+    m.firstRunDone = Text(m.stateRegistry.Read("first_run_done")).Trim()
+    m.token = ""
+    if Text(m.registry.Read("paired")).Trim() = "true"
+        m.token = Text(m.registry.Read("token")).Trim()
+    end if
+    m.welcomeVisible = false : m.welcomeStep = 1 : m.welcomeButtonIndex = 0 : m.welcomeOpenedFromSettings = false
+    m.pairingCodeValue = "" : m.pairingErrorMessage = ""
     m.favoriteIds = ParseIdList(m.stateRegistry.Read("favorites"))
     m.recentIds = ParseIdList(m.stateRegistry.Read("recents"))
     m.osdTimeout = 5
@@ -76,9 +98,171 @@ sub init()
     m.radioEqTimer.ObserveField("fire", "tickRadioEq")
     m.video.ObserveField("state", "videoStateChanged")
     m.audio.ObserveField("state", "audioStateChanged")
-    m.top.SetFocus(true)
+    if ShouldShowFirstRun(m.firstRunDone, m.token)
+        openWelcomeFlow(false)
+    else
+        m.top.SetFocus(true)
+    end if
     startSync(true)
 end sub
+
+sub openWelcomeFlow(fromSettings = false as Boolean)
+    closePlayer()
+    m.welcomeOpenedFromSettings = fromSettings
+    m.welcomeVisible = true
+    m.welcomeOverlay.visible = true
+    showWelcomeStep(1)
+    m.welcomeFocus.SetFocus(true)
+end sub
+
+sub showWelcomeStep(stepIndex as Integer)
+    if stepIndex < 1 then stepIndex = 1
+    if stepIndex > 3 then stepIndex = 3
+    m.welcomeStep = stepIndex
+    m.welcomeButtonIndex = 0
+    m.welcomeStep1Group.visible = (stepIndex = 1)
+    m.welcomeStep2Group.visible = (stepIndex = 2)
+    m.welcomeStep3Group.visible = (stepIndex = 3)
+    for i = 0 to m.welcomeStepLabels.Count() - 1
+        lbl = m.welcomeStepLabels[i]
+        if lbl <> invalid
+            if i + 1 = stepIndex
+                lbl.color = "0x38BDF8FF"
+            else if i + 1 < stepIndex
+                lbl.color = "0xCBD5E1FF"
+            else
+                lbl.color = "0x64748BFF"
+            end if
+        end if
+    end for
+    if stepIndex = 1
+        if m.welcomeOpenedFromSettings
+            m.welcomeFooterHint.text = "Left / Right  Choose button   •   OK  Select   •   Back  Close"
+        else
+            m.welcomeFooterHint.text = "Left / Right  Choose button   •   OK  Select"
+        end if
+    else if stepIndex = 2
+        m.welcomeFooterHint.text = "Left / Right  Choose button   •   OK  Select   •   Back  Welcome"
+        updateWelcomePairingView()
+        if m.token = "" and m.pairingCodeValue = "" then startSync(true)
+    else
+        m.welcomeFooterHint.text = "OK  Start Watching   •   Welcome to GLZ TV"
+        updateWelcomeReadyView()
+    end if
+    updateWelcomeButtonFocus()
+    if m.welcomeVisible then m.welcomeFocus.SetFocus(true)
+end sub
+
+sub setWelcomeButtonStyle(bgId as String, labelId as String, focused as Boolean)
+    bg = m.top.findNode(bgId)
+    lbl = m.top.findNode(labelId)
+    if bg = invalid or lbl = invalid then return
+    if focused
+        bg.color = "0x38BDF8FF"
+        lbl.color = "0x080E1CFF"
+    else
+        bg.color = "0x1E293BFF"
+        lbl.color = "0xE2E8F0FF"
+    end if
+end sub
+
+sub updateWelcomeButtonFocus()
+    if m.welcomeStep = 1
+        setWelcomeButtonStyle("welcomeBtn1PrimaryBg", "welcomeBtn1PrimaryLabel", m.welcomeButtonIndex = 0)
+        setWelcomeButtonStyle("welcomeBtn1SecondaryBg", "welcomeBtn1SecondaryLabel", m.welcomeButtonIndex = 1)
+    else if m.welcomeStep = 2
+        setWelcomeButtonStyle("welcomeBtn2PrimaryBg", "welcomeBtn2PrimaryLabel", m.welcomeButtonIndex = 0)
+        setWelcomeButtonStyle("welcomeBtn2SecondaryBg", "welcomeBtn2SecondaryLabel", m.welcomeButtonIndex = 1)
+    else
+        setWelcomeButtonStyle("welcomeBtn3PrimaryBg", "welcomeBtn3PrimaryLabel", true)
+    end if
+end sub
+
+sub updateWelcomePairingView()
+    info = FirstRunPairingStatus(m.pairingCodeValue, m.pairingErrorMessage, m.token <> "", m.config.deviceName)
+    m.welcomePairingCode.text = info.codeText
+    m.welcomePairingStatus.text = info.statusText
+end sub
+
+sub updateWelcomeReadyView()
+    info = FirstRunReadySummary(m.config.deviceName, m.channels.Count(), m.stations.Count(), m.token <> "")
+    m.welcomeReadyDevice.text = info.deviceLine
+    m.welcomeReadyCounts.text = info.countsLine
+end sub
+
+sub markFirstRunDone()
+    m.firstRunDone = "1"
+    m.stateRegistry.Write("first_run_done", "1")
+    m.stateRegistry.Flush()
+end sub
+
+sub closeWelcomeFlow(goHome = true as Boolean)
+    m.welcomeVisible = false
+    m.welcomeOverlay.visible = false
+    if not m.pending
+        if goHome
+            openSectionByName("home")
+        else
+            restoreFocus()
+        end if
+    else
+        m.top.SetFocus(true)
+    end if
+end sub
+
+function handleWelcomeKey(key as String) as Boolean
+    if m.welcomeStep = 1
+        if key = "left" or key = "right"
+            if m.welcomeButtonIndex = 0 then m.welcomeButtonIndex = 1 else m.welcomeButtonIndex = 0
+            updateWelcomeButtonFocus()
+            return true
+        else if LCase(key) = "ok"
+            if m.welcomeButtonIndex = 0
+                showWelcomeStep(2)
+            else
+                markFirstRunDone()
+                closeWelcomeFlow(not m.welcomeOpenedFromSettings)
+            end if
+            return true
+        else if key = "back"
+            if m.welcomeOpenedFromSettings then closeWelcomeFlow(false)
+            return true
+        end if
+        return true
+    else if m.welcomeStep = 2
+        if key = "left" or key = "right"
+            if m.welcomeButtonIndex = 0 then m.welcomeButtonIndex = 1 else m.welcomeButtonIndex = 0
+            updateWelcomeButtonFocus()
+            return true
+        else if LCase(key) = "ok"
+            if m.welcomeButtonIndex = 0
+                m.token = "" : m.pairingCodeValue = "" : m.pairingErrorMessage = ""
+                m.version = "" : m.autoStarted = false
+                updateWelcomePairingView()
+                startSync(true, "repair")
+            else
+                if m.token <> ""
+                    showWelcomeStep(3)
+                else
+                    markFirstRunDone()
+                    closeWelcomeFlow(not m.welcomeOpenedFromSettings)
+                end if
+            end if
+            return true
+        else if key = "back"
+            showWelcomeStep(1)
+            return true
+        end if
+        return true
+    else
+        if LCase(key) = "ok" or key = "back"
+            markFirstRunDone()
+            closeWelcomeFlow(true)
+            return true
+        end if
+        return true
+    end if
+end function
 
 sub startSync(force = false as Boolean, action = "sync" as String)
     if m.task.state = "run"
@@ -178,13 +362,23 @@ sub onHubResult()
     if result = invalid then return
     if result.status = "pending"
         closePlayer() : stopRadio(false)
+        m.token = "" : m.pairingCodeValue = Text(result.code) : m.pairingErrorMessage = ""
         m.pending = true : m.channels = [] : m.movies = [] : m.rows = [] : m.stations = [] : m.summaries = {} : m.schedule = [] : m.weather = invalid
         m.extraQueue = [] : m.extraBusy = false : m.extraId++ : m.extra.control = "STOP"
         m.catalog.visible = false : m.pairing.visible = true
         m.top.findNode("pairingCode").text = result.code
         m.status.text = "Ready to pair. Each Roku gets its own channel assignment in GlzHub."
-        m.top.SetFocus(true) : scheduleSync(5)
+        if m.welcomeVisible
+            updateWelcomePairingView()
+            m.welcomeFocus.SetFocus(true)
+        else
+            m.top.SetFocus(true)
+        end if
+        scheduleSync(5)
     else if result.status = "ready"
+        m.token = Text(m.registry.Read("token")).Trim()
+        if m.token = "" then m.token = "paired"
+        m.pairingCodeValue = "" : m.pairingErrorMessage = ""
         m.pending = false : m.pairing.visible = false : m.catalog.visible = true
         config = result.config
         m.config = config
@@ -225,7 +419,14 @@ sub onHubResult()
         updateHeaderBar()
         updateRadioMiniBar()
         renderRows()
-        if not m.autoStarted
+        if m.welcomeVisible
+            if m.welcomeStep < 3
+                showWelcomeStep(3)
+            else
+                updateWelcomeReadyView()
+            end if
+            m.welcomeFocus.SetFocus(true)
+        else if not m.autoStarted
             m.autoStarted = true
             if m.registry.Read("startView") = "" and LCase(Text(config.startDestination)) = "live_tv"
                 openSectionByName("live")
@@ -245,7 +446,9 @@ sub onHubResult()
         end if
         scheduleSync(60)
     else
-        m.status.text = Text(result.message, "Network error. Retrying shortly.")
+        m.pairingErrorMessage = Text(result.message, "Network error. Retrying shortly.")
+        m.status.text = m.pairingErrorMessage
+        if m.welcomeVisible and m.welcomeStep = 2 then updateWelcomePairingView()
         retry = 15
         if result.retryAfter <> invalid then retry = result.retryAfter
         scheduleSync(retry)
@@ -306,6 +509,7 @@ sub onExtraResult()
                     end if
                 end for
             end if
+            if m.welcomeVisible and m.welcomeStep = 3 then updateWelcomeReadyView()
         else if result.mode = "weather"
             if result.location = m.weatherLocation
                 m.weather = data : m.weatherError = ""
@@ -515,6 +719,7 @@ function buildSettingsRows() as Object
         { setting: "start", number: "BOOT", title: "Default Startup Screen", description: "Opens to: " + startLabel + " · Press OK to toggle" }
         { setting: "resume", number: resumeLabel, title: "Auto-Resume Last Channel", description: "Automatically tune last watched channel on launch: " + resumeLabel }
         { setting: "radio", number: "AUDIO", title: "Background Radio Control", description: radioLabel }
+        { setting: "welcome", number: "SETUP", title: "Welcome & Setup Wizard", description: "Re-open the 3-step GLZ TV welcome and GlzHub pairing guide" }
         { setting: "repair", number: "PAIR", title: "Re-pair Roku with GlzHub", description: "Unlink current device token and generate a new pairing code" }
     ]
 end function
@@ -793,6 +998,8 @@ sub handleSettingSelection(row as Object)
         renderRows()
     else if key = "radio"
         if m.radioTitle <> "" then stopRadio() : renderRows() else openSectionByName("radio")
+    else if key = "welcome"
+        openWelcomeFlow(true)
     else if key = "repair"
         promptRepair()
     end if
@@ -1097,7 +1304,7 @@ sub playRadio(row as Object)
     end for
     if not hasUa
         ver = Text(m.appVersion)
-        if ver = "" then ver = "1.48.200"
+        if ver = "" then ver = "1.48.2.50"
         headers["User-Agent"] = "GlzTV-Roku/" + ver
     end if
     radioRow = {
@@ -1288,7 +1495,9 @@ sub onRepair()
 end sub
 
 sub restoreFocus()
-    if m.pending
+    if m.welcomeVisible
+        m.welcomeFocus.SetFocus(true)
+    else if m.pending
         m.top.SetFocus(true)
     else if m.video.visible
         if m.miniGuide.visible then m.miniList.SetFocus(true) else m.playerFocus.SetFocus(true)
@@ -1302,6 +1511,7 @@ end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
+    if m.welcomeVisible then return handleWelcomeKey(key)
     if m.video.visible
         if m.miniGuide.visible
             if key = "left" or key = "back" or key = "right"

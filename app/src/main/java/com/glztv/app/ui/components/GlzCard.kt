@@ -37,24 +37,24 @@ object GlzCardDefaults {
     val hairline = Color.White.copy(alpha = 0.12f)
 
     @Composable
-    fun panelFill(): Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    fun panelFill(): Color = Color(0xFF16181D).copy(alpha = 0.92f)
 
     @Composable
-    fun cardFill(): Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    fun cardFill(): Color = Color(0xFF1A1D24)
 
     /** Readable ink for text/icons laid directly on [accent]. */
     fun onAccent(accent: Color): Color =
         if (accent.luminance() > 0.55f) Color(0xFF0A0A0A) else Color.White
 }
 
-/** Static container card. Mirrors the rail's outer [Surface]. */
+/** Static container card. Mirrors the Material 3 Google TV elevated surface. */
 @Composable
 fun GlzPanel(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge),
     fill: Color = GlzCardDefaults.panelFill(),
-    border: BorderStroke? = null,
-    tonalElevation: androidx.compose.ui.unit.Dp = 8.dp,
+    border: BorderStroke? = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+    tonalElevation: androidx.compose.ui.unit.Dp = 6.dp,
     content: @Composable () -> Unit,
 ) {
     Surface(
@@ -68,14 +68,10 @@ fun GlzPanel(
 }
 
 /**
- * Focusable card. Identical focus/selected model to the rail's `RailDestination`:
- *
- * - rest: translucent surfaceVariant, `onSurface` content, no outline
+ * Focusable Material 3 Google TV card:
+ * - rest: elevated dark card (`#1A1D24`), `onSurface` content, subtle hairline
  * - selected: `accent @ 18%` wash, `accent` content
- * - focused: solid `accent` fill, contrast content, spring scale + accent glow
- *
- * [content] receives the current focused flag so callers can adjust secondary
- * text emphasis if they need to.
+ * - focused: crisp solid white fill (Google TV standard), dark ink, spring scale + accent border
  */
 @Composable
 fun GlzFocusCard(
@@ -85,7 +81,7 @@ fun GlzFocusCard(
     enabled: Boolean = true,
     accent: Color = MaterialTheme.colorScheme.primary,
     shape: Shape = RoundedCornerShape(GlzCardDefaults.RadiusMedium),
-    focusedScale: Float = 1.06f,
+    focusedScale: Float = 1.05f,
     restFill: Color = GlzCardDefaults.cardFill(),
     contentModifier: Modifier = Modifier,
     onFocusChange: ((Boolean) -> Unit)? = null,
@@ -94,14 +90,14 @@ fun GlzFocusCard(
     var focused by remember { mutableStateOf(false) }
 
     val container = when {
-        focused -> accent
+        focused -> Color.White
         selected -> accent.copy(alpha = 0.18f)
         else -> restFill
     }
     val contentColor = when {
-        focused -> GlzCardDefaults.onAccent(accent)
+        focused -> Color(0xFF0B0D0F)
         selected -> accent
-        else -> MaterialTheme.colorScheme.onSurface
+        else -> Color(0xFFF1F3F4)
     }
 
     Surface(
@@ -119,7 +115,7 @@ fun GlzFocusCard(
         shape = shape,
         color = container,
         contentColor = contentColor,
-        border = null,
+        border = if (!focused && selected) BorderStroke(1.dp, accent.copy(alpha = 0.45f)) else null,
         tonalElevation = if (focused) 12.dp else 2.dp,
     ) {
         Column(modifier = contentModifier, content = { content(focused) })

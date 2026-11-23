@@ -1,6 +1,6 @@
 {
   "name": "glz-tv-roku",
-  "version": "1.48.200",
+  "version": "1.48.2.50",
   "private": true,
   "scripts": {
     "check": "bsc --project bsconfig.json",

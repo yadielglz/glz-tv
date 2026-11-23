@@ -407,8 +407,8 @@ private fun QuickSettingsActionCard(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) { isFocused ->
-        val ink = if (isFocused) GlzCardDefaults.onAccent(accent) else MaterialTheme.colorScheme.onSurface
-        val subInk = if (isFocused) ink.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant
+        val ink = if (isFocused) Color(0xFF0B0D0F) else Color(0xFFF1F3F4)
+        val subInk = if (isFocused) Color(0xFF0B0D0F).copy(alpha = 0.72f) else Color(0xFF9AA0A6)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically

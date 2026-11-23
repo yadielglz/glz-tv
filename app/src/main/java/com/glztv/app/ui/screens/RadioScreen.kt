@@ -800,13 +800,13 @@ private fun RadioStationRow(
             .padding(horizontal = 14.dp, vertical = 11.dp),
     ) { focused ->
         val ink = when {
-            focused -> GlzCardDefaults.onAccent(accent)
+            focused -> Color(0xFF0B0D0F)
             selected -> accent
-            else -> MaterialTheme.colorScheme.onSurface
+            else -> Color(0xFFF1F3F4)
         }
         val secondaryInk = when {
-            focused -> GlzCardDefaults.onAccent(accent).copy(alpha = 0.78f)
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
+            focused -> Color(0xFF0B0D0F).copy(alpha = 0.72f)
+            else -> Color(0xFF9AA0A6)
         }
 
         Row(

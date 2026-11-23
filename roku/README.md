@@ -29,9 +29,13 @@ The first hardware test target is a TCL 32S301 (8102X) running Roku OS 16.0.
   surfacing them on Home and in the dedicated Favorites section.
 - Supports fullscreen live TV channel zapping via Up/Down, Channel Up/Down, or
   Fast-Forward/Rewind with instant OSD programme updates.
+- Includes a guided 3-step **First-Run Welcome & Pairing Flow** (`1 Welcome · 2 GlzHub Pairing · 3 Ready`)
+  that auto-launches on fresh unpaired devices, displays the live GlzHub pairing code with automatic
+  polling, advances to confirmation with loaded channel and radio counts once paired, and can be
+  re-opened anytime from **Settings → Welcome & Setup Wizard**. Already-paired devices skip straight to Home.
 - Shows current weather and a five-day forecast for the configured weather location.
 
-This is an installable development build (`1.48.200`), not a public Streaming Store app. It
+This is an installable development build (`1.48.2.50`), not a public Streaming Store app. It
 has passed compilation and offline parser/security tests. Physical playback,
 network pairing, and the exact 8102X remote/UI behavior still require on-device
 verification. Current Roku builds follow the unified GLZ TV release version and
@@ -58,11 +62,13 @@ replaces any existing development app; normal installed store apps remain.
 3. Sign in as **rokudev**, using the developer password from the TV.
 4. Under **Development Application Installer**, choose the ZIP with **Upload**,
    then **Install** (or **Replace with zip** / **Install**, depending on the page).
-5. The app should launch and display a `GLZ-…` pairing code.
+5. On a new unpaired Roku, the app launches the **First-Run Welcome Flow**:
+   select **Continue to Pairing** to view the live `GLZ-…` pairing code.
 6. On your phone/computer, open [GlzHub](https://glzhub.glztech.com), sign in,
-   select **Pair a TV**, and enter that code. Give the Roku a recognizable name.
-7. Assign its TV playlist in the device's settings. The TV checks automatically;
-   press `*` → **Refresh all** to fetch it immediately.
+   select **Pair Device**, and enter that code. Give the Roku a recognizable name.
+7. Once approved, the Roku automatically advances to **You're All Set!**, syncs
+   channels and radio stations, and lands on **Home** when you select **Start Watching**.
+   You can re-open the wizard anytime under **Settings → Welcome & Setup Wizard**.
 
 Repeat installation and pairing separately on each family Roku. This development
 ZIP is not installed through a shared public channel code. Store/beta publishing

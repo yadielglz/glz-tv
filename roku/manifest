@@ -1,8 +1,8 @@
 title=Glz TV
 major_version=1
 minor_version=48
-build_version=200
-glz_version=1.48.200
+build_version=250
+glz_version=1.48.2.50
 ui_resolutions=hd
 splash_color=#080E1C
 

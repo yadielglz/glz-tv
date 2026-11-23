@@ -427,7 +427,7 @@ private fun HourlyForecastRow(hourly: List<HourlyForecast>) {
                     .fillMaxSize()
                     .padding(8.dp)
             ) { focused ->
-                val ink = if (focused) GlzCardDefaults.onAccent(MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.onSurface
+                val ink = if (focused) Color(0xFF0B0D0F) else Color(0xFFF1F3F4)
                 Column(
                     Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -484,8 +484,8 @@ private fun DailyForecastGrid(forecast: List<ForecastDay>) {
                     .fillMaxSize()
                     .padding(12.dp)
             ) { focused ->
-                val ink = if (focused) GlzCardDefaults.onAccent(MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.onSurface
-                val subInk = if (focused) ink.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                val ink = if (focused) Color(0xFF0B0D0F) else Color(0xFFF1F3F4)
+                val subInk = if (focused) Color(0xFF0B0D0F).copy(alpha = 0.72f) else Color(0xFF9AA0A6)
                 Column(
                     Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,

@@ -51,11 +51,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.input.pointer.pointerInput
 import com.glztv.app.Movie
 import com.glztv.app.SubtitleTrack
 import com.glztv.app.data.OpenSubtitlesRepository
 import com.glztv.app.data.OpenSubtitlesSearchResult
 import com.glztv.app.ui.theme.GoogleTvTokens
+import com.glztv.app.ui.theme.LocalTvViewport
 import com.glztv.app.ui.theme.googleTvFocusable
 import kotlinx.coroutines.launch
 
@@ -73,29 +80,32 @@ fun MovieSubtitleDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val viewport = LocalTvViewport.current
     val initialFocus = remember { FocusRequester() }
 
+    var searchQuery by remember(movie.id) { mutableStateOf(movie.title) }
     var selectedSearchLang by remember { mutableStateOf(captionLanguage.ifBlank { "es" }) }
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<OpenSubtitlesSearchResult>>(emptyList()) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var downloadingFileId by remember { mutableStateOf<Int?>(null) }
 
-    fun doSearch(lang: String) {
+    fun doSearch(lang: String, query: String = searchQuery) {
+        val cleanQuery = query.trim().ifBlank { movie.title }
         scope.launch {
             isSearching = true
-            statusMessage = "Searching OpenSubtitles ($lang)…"
-            val results = openSubtitlesRepository.search(movie.title, movie.releaseYear, lang)
+            statusMessage = "Searching OpenSubtitles for \"$cleanQuery\" (${lang.uppercase()})…"
+            val useYear = if (cleanQuery.equals(movie.title, ignoreCase = true)) movie.releaseYear else null
+            val results = openSubtitlesRepository.search(cleanQuery, useYear, lang)
             searchResults = results
             isSearching = false
-            statusMessage = if (results.isEmpty()) "No subtitles found for ${lang.uppercase()}" else null
+            statusMessage = if (results.isEmpty()) "No subtitles found for \"$cleanQuery\" (${lang.uppercase()})" else null
         }
     }
 
     LaunchedEffect(Unit) {
-        initialFocus.requestFocus()
-        // Auto-query on first open
-        doSearch(selectedSearchLang)
+        runCatching { initialFocus.requestFocus() }
+        doSearch(selectedSearchLang, movie.title)
     }
 
     BackHandler(onBack = onDismiss)
@@ -103,18 +113,20 @@ fun MovieSubtitleDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.75f))
-            .clickable(onClick = onDismiss),
+            .background(Color.Black.copy(alpha = 0.72f))
+            .pointerInput(onDismiss) { detectTapGestures(onTap = { onDismiss() }) },
         contentAlignment = Alignment.CenterEnd
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(480.dp)
-                .clickable(enabled = false) {},
-            shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
-            color = Color(0xFF101520),
-            tonalElevation = 8.dp
+                .widthIn(min = 360.dp, max = (viewport.drawerMaxWidth + 60.dp).coerceAtMost(500.dp))
+                .fillMaxWidth(if (viewport.isTvLayout) 0.48f else 0.94f)
+                .pointerInput(Unit) { detectTapGestures(onTap = {}) },
+            shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp),
+            color = Color(0xFF16181D),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+            tonalElevation = 12.dp
         ) {
             Column(
                 modifier = Modifier
@@ -129,9 +141,9 @@ fun MovieSubtitleDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "SUBTITLES & CAPTIONS",
+                            text = "SUBTITLES & CLOSED CAPTIONS",
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = GoogleTvTokens.TextSecondary,
+                                color = GoogleTvTokens.BlueAccent,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp
                             )
@@ -146,22 +158,25 @@ fun MovieSubtitleDialog(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Box(
+                    var closeFocused by remember { mutableStateOf(false) }
+                    Surface(
+                        onClick = onDismiss,
+                        shape = CircleShape,
+                        color = if (closeFocused) Color.White else Color.White.copy(alpha = 0.10f),
+                        contentColor = if (closeFocused) Color.Black else Color.White,
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.1f))
-                            .clickable(onClick = onDismiss)
-                            .googleTvFocusable(shape = CircleShape),
-                        contentAlignment = Alignment.Center
+                            .googleTvFocusable(shape = CircleShape, onFocusChange = { closeFocused = it })
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(16.dp))
 
-                // Section 1: Quick Enable / Disable
+                // Section 1: Quick Seamless Enable / Disable
                 Text(
                     text = "STATUS",
                     color = GoogleTvTokens.TextSecondary,
@@ -190,9 +205,9 @@ fun MovieSubtitleDialog(
                     )
                 }
 
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(16.dp))
 
-                // Section 2: Search by Language
+                // Section 2: Custom Search Query + OpenSubtitles Language Picker
                 Text(
                     text = "SEARCH OPENSUBTITLES",
                     color = GoogleTvTokens.TextSecondary,
@@ -206,40 +221,73 @@ fun MovieSubtitleDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SubtitleDialogPill(
-                        label = "Español (ES)",
-                        active = selectedSearchLang.equals("es", ignoreCase = true),
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            selectedSearchLang = "es"
-                            onSelectLanguage("es")
-                            doSearch("es")
-                        }
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        singleLine = true,
+                        placeholder = {
+                            Text("Movie title or keywords…", color = GoogleTvTokens.TextSecondary, fontSize = 13.sp)
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = GoogleTvTokens.BlueAccent,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            focusedContainerColor = GoogleTvTokens.SurfaceCard,
+                            unfocusedContainerColor = GoogleTvTokens.SurfaceCard
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
                     )
-                    SubtitleDialogPill(
-                        label = "English (EN)",
-                        active = selectedSearchLang.equals("en", ignoreCase = true),
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            selectedSearchLang = "en"
-                            onSelectLanguage("en")
-                            doSearch("en")
-                        }
-                    )
-                    Box(
+                    var searchBtnFocused by remember { mutableStateOf(false) }
+                    Surface(
+                        onClick = { doSearch(selectedSearchLang, searchQuery) },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (searchBtnFocused) Color.White else GoogleTvTokens.BlueAccent,
+                        contentColor = Color(0xFF001F2A),
                         modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.1f))
-                            .clickable { doSearch(selectedSearchLang) }
-                            .googleTvFocusable(shape = CircleShape),
-                        contentAlignment = Alignment.Center
+                            .height(52.dp)
+                            .googleTvFocusable(
+                                shape = RoundedCornerShape(12.dp),
+                                focusedScale = 1.05f,
+                                onFocusChange = { searchBtnFocused = it }
+                            )
                     ) {
-                        if (isSearching) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = GoogleTvTokens.BlueAccent, strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = "Search", tint = Color.White, modifier = Modifier.size(18.dp))
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (isSearching) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color(0xFF001F2A),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(18.dp))
+                            }
+                            Text("Search", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf("es" to "ES", "en" to "EN", "fr" to "FR", "pt" to "PT").forEach { (code, label) ->
+                        SubtitleDialogPill(
+                            label = label,
+                            active = selectedSearchLang.equals(code, ignoreCase = true),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                selectedSearchLang = code
+                                onSelectLanguage(code)
+                                doSearch(code, searchQuery)
+                            }
+                        )
                     }
                 }
 

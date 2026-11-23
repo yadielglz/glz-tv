@@ -343,3 +343,51 @@ function ResolveChannelsByKeys(channels as Dynamic, keys as Dynamic, maxItems = 
     end for
     return result
 end function
+
+function ShouldShowFirstRun(firstRunDone as Dynamic, token as Dynamic) as Boolean
+    if Text(firstRunDone).Trim() = "1" then return false
+    if Text(token).Trim() <> "" then return false
+    return true
+end function
+
+function FirstRunPairingStatus(code as Dynamic, errorMessage as Dynamic, isPaired as Boolean, deviceName = "" as Dynamic) as Object
+    if isPaired
+        name = Text(deviceName).Trim()
+        if name = "" then name = "Roku TV"
+        return {
+            codeText: "PAIRED"
+            statusText: "Already paired with GLZ Hub as " + name + ". Choose Refresh Code to pair again, or Skip to continue."
+        }
+    end if
+    cleanCode = Text(code).Trim()
+    cleanErr = Text(errorMessage).Trim()
+    if cleanErr <> ""
+        if cleanCode = "" then cleanCode = "…"
+        return { codeText: cleanCode, statusText: cleanErr }
+    end if
+    if cleanCode <> ""
+        return { codeText: cleanCode, statusText: "Waiting for approval on GLZ Hub…" }
+    end if
+    return { codeText: "Loading…", statusText: "Requesting pairing code from GLZ Hub…" }
+end function
+
+function FirstRunReadySummary(deviceName as Dynamic, channelCount as Integer, radioCount as Integer, isPaired as Boolean) as Object
+    if not isPaired
+        return {
+            deviceLine: "Not yet paired with GLZ Hub"
+            countsLine: "You can pair this Roku anytime from Settings."
+        }
+    end if
+    name = Text(deviceName).Trim()
+    if name = "" then name = "Roku TV"
+    if channelCount < 0 then channelCount = 0
+    if radioCount < 0 then radioCount = 0
+    chLabel = "Live Channels"
+    if channelCount = 1 then chLabel = "Live Channel"
+    radioLabel = "Radio Stations"
+    if radioCount = 1 then radioLabel = "Radio Station"
+    return {
+        deviceLine: "Connected to GLZ Hub · " + name
+        countsLine: channelCount.ToStr() + " " + chLabel + "  ·  " + radioCount.ToStr() + " " + radioLabel + " loaded"
+    }
+end function
