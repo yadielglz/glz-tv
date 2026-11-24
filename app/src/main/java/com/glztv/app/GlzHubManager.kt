@@ -164,14 +164,16 @@ object GlzHubManager {
     ): SyncResult {
         val token = prefs.getString(DEVICE_TOKEN, null)
             ?: return SyncResult(false, null, visibleApps(prefs))
-        val response = client.newCall(
+        val (code, isSuccessful, text) = client.newCall(
             Request.Builder()
                 .url("$HUB_URL/api/v1/devices/config")
                 .header("Authorization", "Bearer $token")
                 .get()
                 .build()
-        ).execute()
-        if (response.code == 401) {
+        ).execute().use { response ->
+            Triple(response.code, response.isSuccessful, response.body?.string().orEmpty())
+        }
+        if (code == 401) {
             // A newly generated token is not recognized by /devices/config until
             // an administrator claims its enrollment. Keep pending credentials so
             // the code remains visible and adoption can finish.
@@ -186,9 +188,13 @@ object GlzHubManager {
                 .apply()
             return SyncResult(true, null, visibleApps(prefs))
         }
-        val text = response.body?.string().orEmpty()
-        check(response.isSuccessful) { "GLZ Hub returned ${response.code}" }
+        check(isSuccessful) { "GLZ Hub returned $code" }
         val config = JSONObject(text)
+        val inlineCommands = if (config.has("commands")) {
+            parseCommandsArray(config.optJSONArray("commands"))
+        } else {
+            null
+        }
         val version = config.optString("version", "0")
         val previousVersion = prefs.all[CONFIG_VERSION]?.toString()
         val experienceVersion = config.optString("experienceVersion", "default")
@@ -204,7 +210,7 @@ object GlzHubManager {
             !forceRefreshTriggered &&
             !needsMovieHydration
         ) {
-            return SyncResult(false, null, visibleApps(prefs), commands(prefs, client))
+            return SyncResult(false, null, visibleApps(prefs), inlineCommands ?: commands(prefs, client))
         }
 
         val editor = prefs.edit()
@@ -307,19 +313,24 @@ object GlzHubManager {
             changed = true,
             guestName = config.stringOrNull("guestName"),
             visibleApps = appPackages,
-            commands = commands(prefs, client),
+            commands = inlineCommands ?: commands(prefs, client),
             forceRefreshTriggered = forceRefreshTriggered
         )
     }
 
     fun commands(prefs: SharedPreferences, client: OkHttpClient): List<HubCommand> {
         val token = prefs.getString(DEVICE_TOKEN, null) ?: return emptyList()
-        val response = client.newCall(Request.Builder()
+        return client.newCall(Request.Builder()
             .url("$HUB_URL/api/v1/devices/commands")
-            .header("Authorization", "Bearer $token").get().build()).execute()
-        val text = response.body?.string().orEmpty()
-        if (!response.isSuccessful) return emptyList()
-        val items = JSONObject(text).optJSONArray("commands") ?: return emptyList()
+            .header("Authorization", "Bearer $token").get().build()).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            if (!response.isSuccessful) return@use emptyList()
+            parseCommandsArray(JSONObject(text).optJSONArray("commands"))
+        }
+    }
+
+    private fun parseCommandsArray(items: JSONArray?): List<HubCommand> {
+        if (items == null) return emptyList()
         return buildList {
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
@@ -357,14 +368,20 @@ object GlzHubManager {
             .post(payload.toString().toRequestBody(jsonMediaType)).build()).execute().close()
     }
 
+    data class HeartbeatResult(
+        val configVersion: String? = null,
+        val pendingCommandsCount: Int = 0,
+        val needsSync: Boolean = false
+    )
+
     fun heartbeat(
         prefs: SharedPreferences,
         client: OkHttpClient,
         syncProgress: SyncProgress? = null,
         lastError: String? = null
-    ) {
-        if (!prefs.getString(PAIRING_CODE, null).isNullOrBlank()) return
-        val token = prefs.getString(DEVICE_TOKEN, null) ?: return
+    ): HeartbeatResult {
+        if (!prefs.getString(PAIRING_CODE, null).isNullOrBlank()) return HeartbeatResult()
+        val token = prefs.getString(DEVICE_TOKEN, null) ?: return HeartbeatResult()
         val payload = JSONObject()
             .put("appVersion", BuildConfig.VERSION_NAME)
             .put("updateChannel", prefs.getString("update_channel", null) ?: "production")
@@ -382,13 +399,26 @@ object GlzHubManager {
                 .put("message", sync.message.take(160))
             )
         }
-        client.newCall(
+        return client.newCall(
             Request.Builder()
                 .url("$HUB_URL/api/v1/devices/heartbeat")
                 .header("Authorization", "Bearer $token")
                 .post(payload.toString().toRequestBody(jsonMediaType))
                 .build()
-        ).execute().close()
+        ).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful || body.isBlank()) return@use HeartbeatResult()
+            val json = runCatching { JSONObject(body) }.getOrNull() ?: return@use HeartbeatResult()
+            val remoteVersion = json.optString("configVersion", "").takeIf(String::isNotBlank)
+            val pendingCount = json.optInt("pendingCommandsCount", 0)
+            val savedVersion = prefs.all[CONFIG_VERSION]?.toString()
+            val versionChanged = remoteVersion != null && remoteVersion != savedVersion
+            HeartbeatResult(
+                configVersion = remoteVersion,
+                pendingCommandsCount = pendingCount,
+                needsSync = versionChanged || pendingCount > 0
+            )
+        }
     }
 
     private fun JSONObject.stringOrNull(key: String): String? =

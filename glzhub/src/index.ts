@@ -554,28 +554,36 @@ async function deviceSources(request: Request, env: Env, device: Record<string, 
   const managedPlaylistUrl = `${origin}/api/v1/devices/playlist.m3u`;
   let managedEpgUrl: unknown = null;
   let groupPlaylistId: unknown = null;
+  let playlistUpdatedAt = "";
   if (device.box_group_id) {
     const groups = await supabaseJson(env,
       `/rest/v1/box_groups?id=eq.${encodeURIComponent(String(device.box_group_id))}&owner_id=eq.${device.owner_id}&select=playlist_id`
     ) as Record<string, unknown>[];
     groupPlaylistId = groups[0]?.playlist_id ?? null;
   }
-  const effectivePlaylistId = device.assigned_playlist_id || groupPlaylistId;
+  const effectivePlaylistId = device.assigned_playlist_id || groupPlaylistId || null;
   const hasManagedAssignment = Boolean(effectivePlaylistId);
   const playlistUrl = hasManagedAssignment ? managedPlaylistUrl : (device.playlist_url || managedPlaylistUrl);
-  if (hasManagedAssignment || !device.epg_url) {
+  if (hasManagedAssignment || !device.epg_url || playlistUrl === managedPlaylistUrl) {
     const playlistFilter = effectivePlaylistId
       ? `owner_id=eq.${device.owner_id}&id=eq.${encodeURIComponent(String(effectivePlaylistId))}`
       : `owner_id=eq.${device.owner_id}&target_app=in.(tv,both)&is_published=eq.true&order=created_at.asc`;
-    const assigned = await supabaseJson(env, `/rest/v1/playlists?${playlistFilter}&select=id,epg_url`) as Record<string, unknown>[];
+    const assigned = await supabaseJson(env, `/rest/v1/playlists?${playlistFilter}&select=id,epg_url,updated_at`) as Record<string, unknown>[];
     for (const pl of assigned) {
-      if (typeof pl.epg_url === "string" && pl.epg_url.trim()) {
+      if (typeof pl.epg_url === "string" && pl.epg_url.trim() && !managedEpgUrl) {
         managedEpgUrl = pl.epg_url.trim();
-        break;
+      }
+      if (typeof pl.updated_at === "string" && pl.updated_at > playlistUpdatedAt) {
+        playlistUpdatedAt = pl.updated_at;
       }
     }
   }
-  return { playlistUrl, epgUrl: hasManagedAssignment ? (managedEpgUrl || device.epg_url || null) : (device.epg_url || managedEpgUrl || null) };
+  return {
+    playlistUrl,
+    epgUrl: hasManagedAssignment ? (managedEpgUrl || device.epg_url || null) : (device.epg_url || managedEpgUrl || null),
+    effectivePlaylistId: effectivePlaylistId ? String(effectivePlaylistId) : null,
+    playlistUpdatedAt
+  };
 }
 
 async function deviceConfig(request: Request, env: Env): Promise<Response> {
@@ -592,26 +600,100 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
       })
     }).catch(() => null);
   }
-  const { playlistUrl, epgUrl } = await deviceSources(request, env, device);
-  let profiles = device.site_id ? await supabaseJson(env,
-    `/rest/v1/guest_experience_profiles?site_id=eq.${device.site_id}&owner_id=eq.${device.owner_id}&select=*`
-  ) as Record<string, unknown>[] : [];
-  if (!profiles[0]) {
-    // Device has no site assigned (or that site has no profile yet) — fall back to
-    // the owner's most recently updated guest experience so branding, hero image
-    // and welcome copy still reach the screen.
-    profiles = await supabaseJson(env,
+  const [
+    sources,
+    siteProfiles,
+    fallbackProfiles,
+    movies,
+    commands,
+    radioRows,
+    eventRows,
+    epgRows
+  ] = await Promise.all([
+    deviceSources(request, env, device),
+    device.site_id
+      ? supabaseJson(env,
+          `/rest/v1/guest_experience_profiles?site_id=eq.${device.site_id}&owner_id=eq.${device.owner_id}&select=*`
+        ) as Promise<Record<string, unknown>[]>
+      : Promise.resolve([] as Record<string, unknown>[]),
+    // Fallback to the owner's most recently updated guest experience so branding, hero image
+    // and welcome copy still reach the screen when the device has no site or site profile.
+    supabaseJson(env,
       `/rest/v1/guest_experience_profiles?owner_id=eq.${device.owner_id}&select=*&order=updated_at.desc&limit=1`
-    ) as Record<string, unknown>[];
+    ) as Promise<Record<string, unknown>[]>,
+    supabaseJson(env,
+      `/rest/v1/movies?owner_id=eq.${device.owner_id}&is_active=eq.true&show_on_home=eq.true&select=id,title,stream_url,poster_url,backdrop_url,description,release_year,runtime_minutes,genres,request_headers&order=sort_order.asc,created_at.desc`
+    ) as Promise<Record<string, unknown>[]>,
+    supabaseJson(env,
+      `/rest/v1/device_commands?device_id=eq.${device.id}&status=eq.pending&select=*&order=created_at.asc&limit=10`
+    ).catch(() => []) as Promise<Record<string, unknown>[]>,
+    supabaseJson(env,
+      `/rest/v1/radio_stations?owner_id=eq.${device.owner_id}&is_active=eq.true&select=id,updated_at&order=id.asc`
+    ).catch(() => []) as Promise<Record<string, unknown>[]>,
+    supabaseJson(env,
+      `/rest/v1/event_channels?status=neq.disabled&select=id,tvg_id,title,stream_url,backup_stream_url,channel_number,start_time,end_time,status,is_online&order=id.asc`
+    ).catch(() => []) as Promise<Record<string, unknown>[]>,
+    supabaseJson(env,
+      `/rest/v1/epg_guides?owner_id=eq.${device.owner_id}&select=playlist_id,updated_at`
+    ).catch(() => []) as Promise<Record<string, unknown>[]>
+  ]);
+
+  const { playlistUrl, epgUrl, effectivePlaylistId, playlistUpdatedAt } = sources;
+  const profile = siteProfiles[0] ?? fallbackProfiles[0] ?? {};
+  const pendingCommandList = Array.isArray(commands) ? commands : [];
+  if (pendingCommandList.length) {
+    const ids = pendingCommandList.map((command) => command.id).join(",");
+    await supabaseJson(env, `/rest/v1/device_commands?id=in.(${ids})`, {
+      method: "PATCH",
+      headers: { prefer: "return=minimal" },
+      body: JSON.stringify({ status: "delivered", delivered_at: new Date().toISOString() })
+    }).catch(() => null);
   }
-  const profile = profiles[0] ?? {};
-  const movies = await supabaseJson(env,
-    `/rest/v1/movies?owner_id=eq.${device.owner_id}&is_active=eq.true&show_on_home=eq.true&select=id,title,stream_url,poster_url,backdrop_url,description,release_year,runtime_minutes,genres,request_headers&order=sort_order.asc,created_at.desc`
-  ) as Record<string, unknown>[];
+
+  const eventSignature = Array.isArray(eventRows)
+    ? computeEventChannelsFingerprint(eventRows)
+    : "";
+  const matchingEpgRows = Array.isArray(epgRows)
+    ? (effectivePlaylistId
+        ? epgRows.filter((row) => String(row.playlist_id || "") === effectivePlaylistId)
+        : epgRows)
+    : [];
+  let epgGuideUpdatedAt = "";
+  for (const row of matchingEpgRows) {
+    if (typeof row.updated_at === "string" && row.updated_at > epgGuideUpdatedAt) {
+      epgGuideUpdatedAt = row.updated_at;
+    }
+  }
+  const radioList = Array.isArray(radioRows) ? radioRows : [];
+
+  const [playlistRevision, epgRevision, radioVersion] = await Promise.all([
+    sha256([
+      String(playlistUrl ?? ""),
+      playlistUpdatedAt,
+      String(device.assigned_playlist_id ?? ""),
+      String(device.box_group_id ?? ""),
+      String(device.channel_policy_mode ?? ""),
+      String(device.force_refresh_token ?? ""),
+      eventSignature
+    ].join("::")),
+    sha256([
+      String(epgUrl ?? ""),
+      epgGuideUpdatedAt,
+      String(device.force_refresh_token ?? ""),
+      eventSignature
+    ].join("::")),
+    radioList.length
+      ? sha256(radioList.map((row) => `${row.id ?? ""}:${row.updated_at ?? ""}`).join("|"))
+      : Promise.resolve("empty")
+  ]);
+
   const enrichedDevice = enrichDeviceRecord(device);
   return json({
     version: device.config_version,
     experienceVersion: profile.updated_at ?? "default",
+    playlistRevision,
+    epgRevision,
+    radioVersion,
     deviceName: device.name,
     guestName: device.guest_name,
     playlistUrl,
@@ -636,6 +718,7 @@ async function deviceConfig(request: Request, env: Env): Promise<Response> {
     wifiOnly: device.wifi_only ?? false,
     updateChannel: enrichedDevice.update_channel ?? "production",
     forceRefreshToken: device.force_refresh_token ?? null,
+    commands: pendingCommandList,
     movies: movies.map((movie) => ({
       id: movie.id,
       title: movie.title,
@@ -1071,12 +1154,19 @@ async function heartbeat(request: Request, env: Env): Promise<Response> {
     patch.activity_package = optionalString(activity?.packageName, "activity package", 180);
     patch.activity_updated_at = new Date().toISOString();
   }
-  await supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}`, {
-    method: "PATCH",
-    headers: { prefer: "return=minimal" },
-    body: JSON.stringify(patch)
-  });
-  return json({ ok: true, configVersion: device.config_version });
+  const [, pendingRows] = await Promise.all([
+    supabaseJson(env, `/rest/v1/devices?id=eq.${device.id}`, {
+      method: "PATCH",
+      headers: { prefer: "return=minimal" },
+      body: JSON.stringify(patch)
+    }),
+    supabaseJson(
+      env,
+      `/rest/v1/device_commands?device_id=eq.${device.id}&status=eq.pending&select=id&limit=10`
+    ).catch(() => []) as Promise<Record<string, unknown>[]>
+  ]);
+  const pendingCommandsCount = Array.isArray(pendingRows) ? pendingRows.length : 0;
+  return json({ ok: true, configVersion: device.config_version, pendingCommandsCount });
 }
 
 async function listRadioStations(request: Request, env: Env): Promise<Response> {
@@ -1111,6 +1201,7 @@ async function createRadioStation(request: Request, env: Env): Promise<Response>
       is_active: input.is_active ?? true
     })
   }) as Record<string, unknown>[];
+  await pushConfigUpdateToAllDevices(env, { syncMessage: "Syncing radio catalog", bumpForceRefresh: false });
   return json({ station: stations[0] }, 201);
 }
 
@@ -1145,6 +1236,7 @@ async function updateRadioStation(request: Request, env: Env, stationId: string)
     }
   ) as Record<string, unknown>[];
   if (!stations[0]) return json({ error: "Radio station not found." }, 404);
+  await pushConfigUpdateToAllDevices(env, { syncMessage: "Syncing radio catalog", bumpForceRefresh: false });
   return json({ station: stations[0] });
 }
 
@@ -1155,6 +1247,7 @@ async function deleteRadioStation(request: Request, env: Env, stationId: string)
     `/rest/v1/radio_stations?id=eq.${encodeURIComponent(stationId)}&owner_id=eq.${user.id}`,
     { method: "DELETE" }
   );
+  await pushConfigUpdateToAllDevices(env, { syncMessage: "Syncing radio catalog", bumpForceRefresh: false });
   return json({ ok: true });
 }
 
@@ -1186,13 +1279,17 @@ function publicRadioStation(row: Record<string, unknown>): PublicRadioStation {
   };
 }
 
-async function radioCatalogResponse(request: Request, stations: PublicRadioStation[]): Promise<Response> {
+async function radioCatalogResponse(
+  request: Request,
+  stations: PublicRadioStation[],
+  cacheControl = "public, no-cache"
+): Promise<Response> {
   const serializedStations = JSON.stringify(stations);
   const version = await sha256(serializedStations);
   const etag = `"${version}"`;
   const headers = {
     "access-control-allow-origin": "*",
-    "cache-control": "public, max-age=60, stale-while-revalidate=300",
+    "cache-control": cacheControl,
     etag
   };
   if (request.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers });
@@ -1214,7 +1311,7 @@ async function publicRadioCatalog(request: Request, env: Env): Promise<Response>
     env,
     "/rest/v1/radio_stations?is_active=eq.true&select=station_code,name,genre,stream_url,logo_url,epg_channel_id,bitrate,request_headers&order=station_code.asc"
   ) as Record<string, unknown>[];
-  return radioCatalogResponse(request, rows.map(publicRadioStation));
+  return radioCatalogResponse(request, rows.map(publicRadioStation), "public, no-cache");
 }
 
 function moviePayload(input: Record<string, unknown>, partial = false): Record<string, unknown> {
@@ -1752,12 +1849,15 @@ async function refreshManagedGuideSource(env: Env, row: Record<string, unknown>,
   }
 }
 
-function managedGuideResponse(body: string | ReadableStream, playlistId: string, gzip: boolean): Response {
+function managedGuideResponse(body: string | ReadableStream, playlistId: string, gzip: boolean, etag?: string): Response {
   const headers = new Headers({
     "content-type": "application/xml; charset=utf-8",
-    "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+    "cache-control": "public, no-cache",
     "content-disposition": `attachment; filename="guide-${playlistId}.xml${gzip ? ".gz" : ""}"`
   });
+  if (etag) {
+    headers.set("etag", etag);
+  }
   let responseBody: BodyInit = body;
   if (gzip) {
     headers.set("content-encoding", "gzip");
@@ -2143,7 +2243,19 @@ async function exportManagedGuide(
 
   let rawXml = typeof guideBody === "string" ? guideBody : await new Response(guideBody).text();
   const guideXml = await injectEventChannelsXmlTv(env, rawXml);
-  const response = managedGuideResponse(guideXml, playlistId, gzip);
+  const etag = `"${await sha256(guideXml)}"`;
+  if (request.headers.get("if-none-match") === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        "content-type": "application/xml; charset=utf-8",
+        "cache-control": "public, no-cache",
+        "etag": etag,
+        "x-glzhub-cache": "REVALIDATED"
+      }
+    });
+  }
+  const response = managedGuideResponse(guideXml, playlistId, gzip, etag);
   response.headers.set("x-glzhub-cache", "BYPASS");
   return response;
 }
@@ -2974,12 +3086,17 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
     playlistQuery = `/rest/v1/playlists?id=eq.${encodeURIComponent(String(effectivePlaylistId))}&owner_id=eq.${device.owner_id}&select=*,playlist_items(*)`;
   }
 
-  const playlists = await supabaseJson(env, playlistQuery) as Record<string, unknown>[];
   const targetFilters = [`and(target_type.eq.device,target_id.eq.${device.id})`];
   if (group?.id) targetFilters.push(`and(target_type.eq.group,target_id.eq.${group.id})`);
-  const rules = await supabaseJson(env,
-    `/rest/v1/channel_policy_rules?owner_id=eq.${device.owner_id}&or=(${targetFilters.join(',')})&select=target_type,playlist_item_id,decision`
-  ) as Record<string, unknown>[];
+  const [playlists, rules, eventChannels] = await Promise.all([
+    supabaseJson(env, playlistQuery) as Promise<Record<string, unknown>[]>,
+    supabaseJson(env,
+      `/rest/v1/channel_policy_rules?owner_id=eq.${device.owner_id}&or=(${targetFilters.join(',')})&select=target_type,playlist_item_id,decision`
+    ) as Promise<Record<string, unknown>[]>,
+    supabaseJson(env,
+      `/rest/v1/event_channels?status=neq.disabled&select=*`
+    ).catch(() => null) as Promise<Record<string, unknown>[] | null>
+  ]);
   const groupRules = new Map(rules.filter((rule) => rule.target_type === 'group').map((rule) => [String(rule.playlist_item_id), String(rule.decision)]));
   const deviceRules = new Map(rules.filter((rule) => rule.target_type === 'device').map((rule) => [String(rule.playlist_item_id), String(rule.decision)]));
 
@@ -3021,10 +3138,6 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
   }
 
   // Inject active temporary event channels (within start - pre_buffer to end + post_buffer)
-  const eventChannels = await supabaseJson(env,
-    `/rest/v1/event_channels?status=neq.disabled&select=*`
-  ).catch(() => null) as Record<string, unknown>[] | null;
-
   if (Array.isArray(eventChannels)) {
     const sortedEvents = sortEventChannels(eventChannels);
     const now = Date.now();
@@ -3065,7 +3178,7 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
       headers: {
         "content-type": "audio/x-mpegurl; charset=utf-8",
         "etag": etag,
-        "cache-control": "private, max-age=30, stale-while-revalidate=120"
+        "cache-control": "private, no-cache"
       }
     });
   }
@@ -3075,7 +3188,7 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
     headers: {
       "content-type": "audio/x-mpegurl; charset=utf-8",
       "etag": etag,
-      "cache-control": "private, max-age=30, stale-while-revalidate=120"
+      "cache-control": "private, no-cache"
     }
   });
 }
@@ -3130,7 +3243,7 @@ async function getDeviceRadioStreams(request: Request, env: Env): Promise<Respon
     env,
     `/rest/v1/radio_stations?owner_id=eq.${device.owner_id}&is_active=eq.true&select=station_code,name,genre,stream_url,logo_url,epg_channel_id,bitrate,request_headers&order=station_code.asc`
   ) as Record<string, unknown>[];
-  return radioCatalogResponse(request, rows.map(publicRadioStation));
+  return radioCatalogResponse(request, rows.map(publicRadioStation), "private, no-cache");
 }
 
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -3238,8 +3351,40 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   return env.ASSETS.fetch(request);
 }
 
-async function pushConfigUpdateToAllDevices(env: Env): Promise<number> {
+export function computeEventChannelsFingerprint(rows: Record<string, unknown>[]): string {
+  const normalized = rows
+    .map((row) => ({
+      tvg_id: String(row.tvg_id ?? ""),
+      tvg_name: String(row.tvg_name ?? ""),
+      title: String(row.title ?? ""),
+      sport_league: String(row.sport_league ?? ""),
+      group_title: String(row.group_title ?? ""),
+      logo_url: String(row.logo_url ?? ""),
+      stream_url: String(row.stream_url ?? ""),
+      backup_stream_url: String(row.backup_stream_url ?? ""),
+      channel_number: String(row.channel_number ?? ""),
+      start_time: String(row.start_time ?? ""),
+      end_time: String(row.end_time ?? ""),
+      pre_buffer_hours: row.pre_buffer_hours ?? null,
+      post_buffer_hours: row.post_buffer_hours ?? null,
+      status: String(row.status ?? ""),
+      is_online: row.is_online ?? null,
+      auto_ingested: row.auto_ingested ?? null
+    }))
+    .sort((a, b) =>
+      a.tvg_id.localeCompare(b.tvg_id)
+      || a.channel_number.localeCompare(b.channel_number)
+      || a.title.localeCompare(b.title)
+    );
+  return JSON.stringify(normalized);
+}
+
+async function pushConfigUpdateToAllDevices(
+  env: Env,
+  options: { syncMessage?: string; bumpForceRefresh?: boolean } = {}
+): Promise<number> {
   try {
+    const { syncMessage = "Auto-syncing live event guide", bumpForceRefresh = true } = options;
     const devices = await supabaseJson(env,
       "/rest/v1/devices?select=id,owner_id,config_version"
     ).catch(() => null) as Record<string, unknown>[] | null;
@@ -3249,19 +3394,22 @@ async function pushConfigUpdateToAllDevices(env: Env): Promise<number> {
     const token = crypto.randomUUID();
     const pushedAt = new Date().toISOString();
 
-    await Promise.all(devices.map((device) =>
-      supabaseJson(env, `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}`, {
+    await Promise.all(devices.map((device) => {
+      const patch: Record<string, unknown> = {
+        config_version: Number(device.config_version || 0) + 1,
+        sync_status: "queued",
+        sync_progress: 0,
+        sync_message: syncMessage,
+        sync_updated_at: pushedAt
+      };
+      if (bumpForceRefresh) {
+        patch.force_refresh_token = token;
+      }
+      return supabaseJson(env, `/rest/v1/devices?id=eq.${encodeURIComponent(String(device.id))}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          config_version: Number(device.config_version || 0) + 1,
-          force_refresh_token: token,
-          sync_status: "queued",
-          sync_progress: 0,
-          sync_message: "Auto-syncing live event guide",
-          sync_updated_at: pushedAt
-        })
-      }).catch(() => undefined)
-    ));
+        body: JSON.stringify(patch)
+      }).catch(() => undefined);
+    }));
 
     return devices.length;
   } catch (err) {
@@ -3270,7 +3418,14 @@ async function pushConfigUpdateToAllDevices(env: Env): Promise<number> {
   }
 }
 
-async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: number; online: number; offline: number }> {
+export async function performAutoIngestAndHealthCheck(
+  env: Env
+): Promise<{ ingested: number; online: number; offline: number; pushed: boolean }> {
+  const beforeRows = await supabaseJson(env,
+    `/rest/v1/event_channels?status=neq.disabled&select=*`
+  ).catch(() => null) as Record<string, unknown>[] | null;
+  const beforeFingerprint = Array.isArray(beforeRows) ? computeEventChannelsFingerprint(beforeRows) : null;
+
   let ingested = 0;
   try {
     const providerUrl = "https://starlite.best/api/list/mygbb8/167848";
@@ -3302,26 +3457,33 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
 
   let online = 0;
   let offline = 0;
+  let afterRows: Record<string, unknown>[] | null = null;
   try {
     const rows = await supabaseJson(env,
       `/rest/v1/event_channels?status=neq.disabled&select=*`
     ).catch(() => null) as Record<string, unknown>[] | null;
+    afterRows = rows;
     if (Array.isArray(rows) && rows.length > 0) {
       const nowIso = new Date().toISOString();
       for (let i = 0; i < rows.length; i += 5) {
         const chunk = rows.slice(i, i + 5);
         await Promise.all(chunk.map(async (row) => {
           const id = String(row.id);
+          const previousOnline = row.is_online;
           const health = await checkEventRowHealth(row, 3500);
           if (health.effectiveOnline) online++; else offline++;
+          row.is_online = health.isOnline;
+          const patch: Record<string, unknown> = {
+            is_online: health.isOnline,
+            health_status: health.statusText,
+            last_checked_at: nowIso
+          };
+          if (Boolean(previousOnline) !== Boolean(health.isOnline)) {
+            patch.updated_at = nowIso;
+          }
           await supabaseJson(env, `/rest/v1/event_channels?id=eq.${encodeURIComponent(id)}`, {
             method: "PATCH",
-            body: JSON.stringify({
-              is_online: health.isOnline,
-              health_status: health.statusText,
-              last_checked_at: nowIso,
-              updated_at: nowIso
-            })
+            body: JSON.stringify(patch)
           }).catch(() => undefined);
         }));
       }
@@ -3330,10 +3492,17 @@ async function performAutoIngestAndHealthCheck(env: Env): Promise<{ ingested: nu
     console.error("Auto health check background error:", err);
   }
 
-  // Push updated config token to all registered TV devices
-  await pushConfigUpdateToAllDevices(env);
+  const afterFingerprint = Array.isArray(afterRows) ? computeEventChannelsFingerprint(afterRows) : null;
+  const changed = beforeFingerprint !== afterFingerprint;
 
-  return { ingested, online, offline };
+  // Only push fleet-wide config update when active event channels actually changed
+  let pushed = false;
+  if (changed) {
+    await pushConfigUpdateToAllDevices(env);
+    pushed = true;
+  }
+
+  return { ingested, online, offline, pushed };
 }
 
 export default {

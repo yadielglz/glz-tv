@@ -349,10 +349,15 @@ object LauncherAppsManager {
  */
 fun Drawable.toSafeImageBitmap(targetWidth: Int = 160, targetHeight: Int = 160): ImageBitmap? {
     return runCatching {
-        val w = if (intrinsicWidth > 0) intrinsicWidth else targetWidth
-        val h = if (intrinsicHeight > 0) intrinsicHeight else targetHeight
-        val finalW = w.coerceIn(48, 640)
-        val finalH = h.coerceIn(48, 360)
+        val rawW = if (intrinsicWidth > 0) intrinsicWidth else targetWidth
+        val rawH = if (intrinsicHeight > 0) intrinsicHeight else targetHeight
+        val scale = minOf(
+            targetWidth.toFloat() / rawW.coerceAtLeast(1),
+            targetHeight.toFloat() / rawH.coerceAtLeast(1),
+            1f
+        )
+        val finalW = (rawW * scale).toInt().coerceIn(48, targetWidth.coerceAtLeast(48))
+        val finalH = (rawH * scale).toInt().coerceIn(48, targetHeight.coerceAtLeast(48))
         val bitmap = Bitmap.createBitmap(finalW, finalH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val oldBounds = bounds

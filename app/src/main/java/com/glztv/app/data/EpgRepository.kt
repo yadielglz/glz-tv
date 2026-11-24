@@ -25,23 +25,36 @@ class EpgRepository(
     fun load(forceRefresh: Boolean = false): EpgGuide {
         val sourceUrl = preferences.epgUrl
         if (sourceUrl.isBlank()) return EpgGuide.Empty
-        if (!forceRefresh) cached()?.let { return it }
-        var lastError: Throwable? = null
-        repeat(if (forceRefresh) 3 else 1) { attempt ->
+        val existingCache = cached()
+        if (!forceRefresh && existingCache != null) return existingCache
+
+        val etagKey = "epg_etag_${sourceUrl.hashCode()}"
+        val savedEtag = if (existingCache != null) {
+            preferences.sharedPreferences.getString(etagKey, null)
+        } else null
+
+        repeat(if (forceRefresh) 2 else 1) { attempt ->
             runCatching {
                 val cutoff = System.currentTimeMillis() - 2L * 3600_000L
-                sourceClient.fetchStream(sourceUrl, preferences.requestHeaders) { stream ->
+                sourceClient.fetchStreamIfModified(sourceUrl, preferences.requestHeaders, savedEtag) { stream ->
                     EpgParser.parse(stream, cutoffMillis = cutoff)
                 }
-            }.onSuccess { guide ->
-                EpgCache.write(appContext, sourceUrl, guide)
-                EpgMemoryCache.set(sourceUrl, guide)
-                return guide
-            }.onFailure { error ->
-                lastError = error
-                if (attempt < 2) Thread.sleep(350L * (attempt + 1))
+            }.onSuccess { result ->
+                return when (result) {
+                    ConditionalFetchResult.NotModified -> existingCache ?: EpgGuide.Empty
+                    is ConditionalFetchResult.Modified -> {
+                        EpgCache.write(appContext, sourceUrl, result.value)
+                        EpgMemoryCache.set(sourceUrl, result.value)
+                        if (!result.etag.isNullOrBlank()) {
+                            preferences.sharedPreferences.edit().putString(etagKey, result.etag).apply()
+                        }
+                        result.value
+                    }
+                }
+            }.onFailure {
+                if (attempt == 0 && forceRefresh) Thread.sleep(300L)
             }
         }
-        return cached() ?: EpgGuide.Empty
+        return existingCache ?: EpgGuide.Empty
     }
 }

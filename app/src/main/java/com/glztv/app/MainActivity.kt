@@ -528,11 +528,13 @@ internal fun TvScreen(
         }
     }
 
-    suspend fun reportHubSync(percent: Int, message: String, syncStatus: String = "syncing") {
-        withContext(Dispatchers.IO) {
-            GlzHubManager.heartbeat(
-                prefs, client, GlzHubManager.SyncProgress(percent, message, syncStatus)
-            )
+    fun reportHubSync(percent: Int, message: String, syncStatus: String = "syncing") {
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                GlzHubManager.heartbeat(
+                    prefs, client, GlzHubManager.SyncProgress(percent, message, syncStatus)
+                )
+            }
         }
     }
 
@@ -548,8 +550,12 @@ internal fun TvScreen(
         loading = true
         status = "Loading your lineup…"
         onProgress(45, "Restoring saved channel data")
-        val cached = withContext(Dispatchers.IO) {
-            playlistRepository.cached() to epgRepository.cached()
+        val cached = if (!forceRefresh || channels.isEmpty()) {
+            withContext(Dispatchers.IO) {
+                playlistRepository.cached() to epgRepository.cached()
+            }
+        } else {
+            null to null
         }
         cached.first?.let { cachedChannels ->
             channels.clear()
@@ -573,10 +579,14 @@ internal fun TvScreen(
                 val parsedDeferred = async(Dispatchers.IO) { playlistRepository.load(forceRefresh) }
                 val guideDeferred = async(Dispatchers.IO) {
                     runCatching { epgRepository.load(forceRefresh) }
-                        .getOrElse { cached.second ?: EpgGuide.Empty }
+                        .getOrElse { cached.second ?: guide }
+                }
+                val radioDeferred = async(Dispatchers.IO) {
+                    runCatching { RadioCatalogManager.load(prefs, client).stations }.getOrNull()
                 }
                 val parsed = parsedDeferred.await()
                 val parsedGuide = guideDeferred.await()
+                radioDeferred.await()?.let { radioStations = it }
                 val matchedChannels = parsed.count { parsedGuide.forChannel(it).isNotEmpty() }
                 Triple(parsed, parsedGuide, Pair(cached.first != null && cached.second != null, matchedChannels))
             }
@@ -598,8 +608,8 @@ internal fun TvScreen(
                 selected = parsed.firstOrNull { it.id == lastId }
             }
             onProgress(90, "Publishing Android TV home channels")
-            withContext(Dispatchers.IO) {
-                TvHomePublisher.publish(context.applicationContext, parsed, parsedGuide)
+            scope.launch(Dispatchers.IO) {
+                runCatching { TvHomePublisher.publish(context.applicationContext, parsed, parsedGuide) }
             }
         }.onFailure { error ->
             if (forceRefresh) guide = EpgGuide.Empty
@@ -611,7 +621,7 @@ internal fun TvScreen(
                 else "Couldn't load channels — check your connection or Settings"
             }
         }
-        loading = false; runCatching { withContext(Dispatchers.IO) { RadioCatalogManager.load(prefs, client).stations } }.onSuccess { radioStations = it }
+        loading = false
         if (forceRefresh) refreshResult.exceptionOrNull()?.let { throw it }
     }
 
@@ -630,19 +640,18 @@ internal fun TvScreen(
     }
 
     suspend fun syncEverythingNow(onProgress: (Int, String) -> Unit): String {
-        suspend fun report(percent: Int, message: String, syncStatus: String = "syncing") {
+        fun report(percent: Int, message: String, syncStatus: String = "syncing") {
             status = message
             onProgress(percent, message)
-            reportHubSync(percent, message, syncStatus)
+            if (percent == 5 || syncStatus != "syncing") {
+                reportHubSync(percent, message, syncStatus)
+            }
         }
         return try {
         report(5, "Contacting GLZ Hub")
         val syncResult = withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
-        report(20, "Configuration received")
-        val radioCount = withContext(Dispatchers.IO) {
-            val loadedStations = RadioCatalogManager.load(prefs, client).stations; radioStations = loadedStations; loadedStations.size
-        }
-        report(35, "Radio stations updated")
+        report(25, "Configuration received")
+        var alreadyRefreshedSources = false
         for (command in syncResult.commands) {
             handleManagedHubCommand(
                 context = context,
@@ -655,7 +664,10 @@ internal fun TvScreen(
                     msg
                 }
             ) {
-                loadSources(forceRefresh = true)
+                if (!alreadyRefreshedSources) {
+                    alreadyRefreshedSources = true
+                    loadSources(forceRefresh = true)
+                }
             }
         }
         guestName = prefs.getString(GUEST_NAME, "Guest") ?: "Guest"
@@ -681,7 +693,10 @@ internal fun TvScreen(
         homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
         sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
         osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
-        loadSources(forceRefresh = true) { percent, message -> report(percent, message) }
+        if (!alreadyRefreshedSources) {
+            loadSources(forceRefresh = true) { percent, message -> report(percent, message) }
+        }
+        val radioCount = radioStations.size
         val matchedChannels = channels.count { guide.forChannel(it).isNotEmpty() }
         val result = if (BuildConfig.DEBUG) {
             "Synced now · ${channels.size} TV channels · $radioCount radio stations · " +
@@ -765,12 +780,10 @@ internal fun TvScreen(
         } else {
             loadSources()
         }
-        // Config is durable and versioned; polling it every five seconds creates needless
-        // Hub load. Keep an unclaimed pairing responsive, but otherwise separate the light
-        // heartbeat from the config/command check.
+        // Lightweight heartbeat every 25s checks remote configVersion & pendingCommandsCount
+        // so changes pushed from GlzHub reach TVs within ~25s instead of waiting 5 minutes.
         var nextConfigSyncAt = System.currentTimeMillis() + 5 * 60_000L
-        var nextHeartbeatAt = System.currentTimeMillis() + 90_000L
-        var nextCommandCheckAt = System.currentTimeMillis() + 30_000L
+        var nextHeartbeatAt = System.currentTimeMillis() + 25_000L
         var nextEpgRefreshAt = System.currentTimeMillis() + 2 * 3600_000L
         while (true) {
             delay(15_000L)
@@ -797,37 +810,22 @@ internal fun TvScreen(
                     }
                 }
             }
+            var heartbeatTriggeredSync = false
             if (!pendingEnrollment && now >= nextHeartbeatAt) {
-                runCatching { withContext(Dispatchers.IO) { GlzHubManager.heartbeat(prefs, client) } }
-                nextHeartbeatAt = now + 90_000L
+                val hb = runCatching {
+                    withContext(Dispatchers.IO) { GlzHubManager.heartbeat(prefs, client) }
+                }.getOrNull()
+                nextHeartbeatAt = now + 25_000L
+                if (hb?.needsSync == true) {
+                    heartbeatTriggeredSync = true
+                }
             }
-            if (!pendingEnrollment && now >= nextCommandCheckAt) {
-                runCatching { withContext(Dispatchers.IO) { GlzHubManager.commands(prefs, client) } }
-                    .onSuccess { commands ->
-                        for (command in commands) {
-                            handleManagedHubCommand(
-                                context = context,
-                                prefs = prefs,
-                                client = client,
-                                command = command,
-                                onCheckUpdate = {
-                                    val msg = checkForAppUpdate()
-                                    if (availableUpdate != null) showUpdateModal = true
-                                    msg
-                                }
-                            ) {
-                                loadSources(forceRefresh = true)
-                            }
-                        }
-                    }
-                nextCommandCheckAt = now + 30_000L
-            }
-            if (!pendingEnrollment && now < nextConfigSyncAt) continue
+            if (!pendingEnrollment && !heartbeatTriggeredSync && now < nextConfigSyncAt) continue
             runCatching {
                 withContext(Dispatchers.IO) { GlzHubManager.sync(prefs, client) }
             }.onSuccess { result ->
                 nextConfigSyncAt = now + 5 * 60_000L
-                nextHeartbeatAt = minOf(nextHeartbeatAt, now + 90_000L)
+                nextHeartbeatAt = now + 25_000L
                 for (command in result.commands) {
                     handleManagedHubCommand(
                         context = context,
@@ -1198,7 +1196,8 @@ internal fun TvScreen(
                     sportsBarKioskEnabled = sportsBarKioskEnabled,
                     onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
                     previewContent = {
-                        if (!radioPlaying && glzHubPreviewChannel != null) {
+                        val overlayActive = showScreensaver || showSettings || showWeatherModal || showYouModal || showFirstRunSetup
+                        if (!radioPlaying && !overlayActive && glzHubPreviewChannel != null) {
                             VideoPlayer(
                                 channel = glzHubPreviewChannel,
                                 captionsEnabled = false,
@@ -5972,11 +5971,21 @@ private fun VideoPlayer(
     val httpFactory = remember {
         DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
     }
-    val player = remember {
+    val player = remember(muted) {
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                if (muted) 3_000 else 10_000,
+                if (muted) 8_000 else 25_000,
+                if (muted) 1_000 else 1_500,
+                if (muted) 2_000 else 3_000
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
         ExoPlayer.Builder(
             context,
             DefaultRenderersFactory(context).setEnableDecoderFallback(true)
         )
+            .setLoadControl(loadControl)
             .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
             .build()
     }
@@ -6235,8 +6244,9 @@ private fun VideoPlayer(
         }
     }
     LaunchedEffect(muted) { player.volume = if (muted) 0f else 1f }
-    DisposableEffect(mediaSession) { onDispose { mediaSession?.release() } }
+    // Register player first so Compose disposes mediaSession before releasing player.
     DisposableEffect(player) { onDispose { player.release() } }
+    DisposableEffect(mediaSession) { onDispose { mediaSession?.release() } }
     val showEmbeddedSubtitles = captionsEnabled && sidecarCues.isEmpty()
     Box(modifier.background(Color.Black, RoundedCornerShape(24.dp))) {
         AndroidView(
@@ -6264,6 +6274,7 @@ private fun VideoPlayer(
                 it.subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
                 (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
             },
+            onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
         AnimatedVisibility(

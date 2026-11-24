@@ -521,8 +521,12 @@ object EpgParser {
     }
 }
 
+private val CLEAN_CHANNEL_PREFIX_REGEX =
+    Regex("^(?:ch\\s*)?\\d+\\s*[·\\.\\-\\:\\|\\s]\\s*", RegexOption.IGNORE_CASE)
+private val NORMALIZE_NON_ALNUM_REGEX = Regex("[^a-z0-9]")
+
 private fun cleanChannelName(value: String): String =
-    value.replace(Regex("^(?:ch\\s*)?\\d+\\s*[·\\.\\-\\:\\|\\s]\\s*", RegexOption.IGNORE_CASE), "").trim()
+    value.replace(CLEAN_CHANNEL_PREFIX_REGEX, "").trim()
 
 private fun normalize(value: String) =
-    value.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
+    value.lowercase(Locale.ROOT).replace(NORMALIZE_NON_ALNUM_REGEX, "")

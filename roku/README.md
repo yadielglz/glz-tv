@@ -35,7 +35,7 @@ The first hardware test target is a TCL 32S301 (8102X) running Roku OS 16.0.
   re-opened anytime from **Settings → Welcome & Setup Wizard**. Already-paired devices skip straight to Home.
 - Shows current weather and a five-day forecast for the configured weather location.
 
-This is an installable development build (`1.48.2.50`), not a public Streaming Store app. It
+This is an installable development build (`1.48.3.10`), not a public Streaming Store app. It
 has passed compilation and offline parser/security tests. Physical playback,
 network pairing, and the exact 8102X remote/UI behavior still require on-device
 verification. Current Roku builds follow the unified GLZ TV release version and

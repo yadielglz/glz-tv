@@ -1,4 +1,4 @@
-import { createLiveTV } from "/live-tv.js?v=1.48.200";
+import { createLiveTV } from "/live-tv.js?v=1.48.3.10";
 
 const liveTV = createLiveTV({ api, stopPreview: stopStreamPreview });
 const state = {
@@ -1115,7 +1115,7 @@ function updateNavBadges() {
   const fleetText = $("#fleetHealthText");
   if (fleetText) {
     fleetText.textContent = total > 0
-      ? `${onlineCount} of ${total} Online · Edge v1.48.200`
+      ? `${onlineCount} of ${total} Online · Edge v1.48.3.10`
       : "Fleet Ready · Cloudflare Edge";
   }
 }

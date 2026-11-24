@@ -49,6 +49,7 @@
     </queries>
 
     <application
+        android:name=".GlzApplication"
         android:allowBackup="true"
         android:largeHeap="true"
         android:hardwareAccelerated="true"

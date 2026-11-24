@@ -1304,7 +1304,7 @@ sub playRadio(row as Object)
     end for
     if not hasUa
         ver = Text(m.appVersion)
-        if ver = "" then ver = "1.48.2.50"
+        if ver = "" then ver = "1.48.3.10"
         headers["User-Agent"] = "GlzTV-Roku/" + ver
     end if
     radioRow = {
