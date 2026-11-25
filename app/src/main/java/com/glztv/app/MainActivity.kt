@@ -4543,21 +4543,16 @@ private fun ImmersivePlayerScreen(
                     showOsd = false
                     drawer = PlayerDrawer.MiniGuide
                 },
-                onOpenRecent = {
-                    showOsd = false
-                    if (recentChannels.size <= 1) {
-                        onPreviousChannel()
-                    } else {
-                        drawer = PlayerDrawer.Recent
-                    }
-                },
                 onOpenChannels = {
                     showOsd = false
+                    selectingMultiViewChannel = false
                     drawer = PlayerDrawer.Channels
                 },
                 onOpenMultiView = {
                     showOsd = false
+                    now = System.currentTimeMillis()
                     selectingMultiViewChannel = true
+                    drawer = PlayerDrawer.Channels
                 },
                 onInteraction = {
                     osdRevision++

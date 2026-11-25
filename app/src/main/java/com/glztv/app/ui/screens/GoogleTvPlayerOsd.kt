@@ -106,7 +106,6 @@ fun GoogleTvPlayerOsd(
     onToggleCaptions: () -> Unit = {},
     onOpenAudioSelector: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
-    onOpenRecent: () -> Unit = {},
     onOpenChannels: () -> Unit = {},
     onOpenMultiView: () -> Unit = {},
     onInteraction: () -> Unit = {},
@@ -180,14 +179,6 @@ fun GoogleTvPlayerOsd(
             onClick = {
                 onInteraction()
                 showInfoPanel = !showInfoPanel
-            }
-        ),
-        DtvOsdTab(
-            id = "last4",
-            label = "Last 4",
-            onClick = {
-                onInteraction()
-                onOpenRecent()
             }
         ),
         DtvOsdTab(
@@ -395,8 +386,9 @@ fun GoogleTvPlayerOsd(
                         .fillMaxHeight()
                         .focusRequester(requester)
                         .focusProperties {
-                            if (prevRequester != null) left = prevRequester
-                            if (nextRequester != null) right = nextRequester
+                            left = prevRequester ?: requester
+                            right = nextRequester ?: requester
+                            down = requester
                         }
                         .onKeyEvent { keyEvent ->
                             if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
@@ -413,6 +405,13 @@ fun GoogleTvPlayerOsd(
                                         if (nextRequester != null) {
                                             runCatching { nextRequester.requestFocus() }
                                         }
+                                        return@onKeyEvent true
+                                    }
+                                    android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                                    android.view.KeyEvent.KEYCODE_ENTER,
+                                    android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
+                                    android.view.KeyEvent.KEYCODE_SPACE -> {
+                                        tab.onClick()
                                         return@onKeyEvent true
                                     }
                                 }
@@ -544,7 +543,6 @@ private fun DtvStripTabItem(
                 if (nowFocused && !isFocused) onFocus()
                 isFocused = nowFocused
             }
-            .focusable(interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
