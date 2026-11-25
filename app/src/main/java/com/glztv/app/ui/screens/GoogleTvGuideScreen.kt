@@ -1,6 +1,11 @@
 package com.glztv.app.ui.screens
 
 import android.view.KeyEvent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,6 +60,7 @@ import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 import com.glztv.app.Programme
 import com.glztv.app.ui.components.GoogleTvChannelLogo
+import com.glztv.app.ui.theme.BarlowCondensedFontFamily
 import com.glztv.app.ui.theme.DtvChrome
 import com.glztv.app.ui.theme.DtvProgressBar
 import com.glztv.app.ui.theme.DtvSegmentedStripBar
@@ -86,6 +92,7 @@ fun GoogleTvGuideScreen(
 ) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     var selectedCategory by remember { mutableStateOf("ALL") }
+    var categoriesExpanded by remember { mutableStateOf(false) }
     var focusedChannel by remember { mutableStateOf(activeTunedChannel ?: channels.firstOrNull()) }
     var focusedProgramme by remember { mutableStateOf<Programme?>(null) }
 
@@ -153,14 +160,7 @@ fun GoogleTvGuideScreen(
         // 1. Shared DirecTV HD Top Command Bar
         topBar?.invoke()
 
-        // 2. DirecTV Segmented Category Filter Strip
-        DtvSegmentedStripBar(
-            items = categories,
-            selectedItem = selectedCategory,
-            onSelect = { selectedCategory = it }
-        )
-
-        // 3. Classic DirecTV Split-Top Info Banner + Framed 16:9 Live Preview
+        // 2. Classic DirecTV Split-Top Info Banner + Framed 16:9 Live Preview
         val bannerHeight = if (viewport.isCompactHeight) 136.dp else 154.dp
         Box(
             modifier = Modifier
@@ -285,6 +285,29 @@ fun GoogleTvGuideScreen(
                     .height(1.dp)
                     .align(Alignment.BottomCenter)
                     .background(DtvChrome.Divider)
+            )
+        }
+
+        // 3. Collapsible DirecTV Category Filter Bar (under Hero Banner)
+        DtvGuideCategoryToggleBar(
+            selectedCategory = selectedCategory,
+            channelCount = filteredChannels.size,
+            expanded = categoriesExpanded,
+            horizontalPad = horizontalPad,
+            onToggle = { categoriesExpanded = !categoriesExpanded }
+        )
+        AnimatedVisibility(
+            visible = categoriesExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            DtvSegmentedStripBar(
+                items = categories,
+                selectedItem = selectedCategory,
+                onSelect = { cat ->
+                    selectedCategory = cat
+                    categoriesExpanded = false
+                }
             )
         }
 
@@ -765,3 +788,93 @@ private fun DtvGuideFavPill(
         )
     }
 }
+
+@Composable
+private fun DtvGuideCategoryToggleBar(
+    selectedCategory: String,
+    channelCount: Int,
+    expanded: Boolean,
+    horizontalPad: Dp,
+    onToggle: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(30.dp)
+                .background(if (isFocused) Color.Black else Color(0xFF10141C))
+                .onFocusChanged { isFocused = it.isFocused }
+                .onKeyEvent { keyEvent ->
+                    if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                        when (keyEvent.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_CENTER,
+                            KeyEvent.KEYCODE_ENTER,
+                            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                onToggle()
+                                return@onKeyEvent true
+                            }
+                        }
+                    }
+                    false
+                }
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onToggle
+                )
+                .padding(horizontal = horizontalPad),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    Modifier
+                        .width(3.dp)
+                        .height(11.dp)
+                        .background(if (isFocused || expanded) DtvChrome.ElectricBlue else DtvChrome.ElectricBlueSoft)
+                )
+                Text(
+                    text = "CATEGORIES",
+                    color = DtvChrome.MutedText,
+                    fontSize = 11.sp,
+                    fontFamily = BarlowCondensedFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = selectedCategory,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontFamily = BarlowCondensedFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    text = "($channelCount ch)",
+                    color = DtvChrome.SecondaryText,
+                    fontSize = 11.sp
+                )
+            }
+            Text(
+                text = if (expanded) "Hide Categories ▲" else "Filter Categories ▾",
+                color = if (isFocused || expanded) DtvChrome.ElectricBlue else DtvChrome.SecondaryText,
+                fontSize = 11.sp,
+                fontFamily = BarlowCondensedFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.4.sp
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(if (isFocused) 2.dp else 1.dp)
+                .background(if (isFocused) DtvChrome.ElectricBlue else DtvChrome.Divider)
+        )
+    }
+}
+

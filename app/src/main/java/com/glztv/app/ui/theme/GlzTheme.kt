@@ -19,33 +19,44 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.glztv.app.R
 
-val GoogleSansFlexFamily = FontFamily(
-    Font(R.font.google_sans_flex, FontWeight.Light),
-    Font(R.font.google_sans_flex, FontWeight.Normal),
-    Font(R.font.google_sans_flex, FontWeight.Medium),
-    Font(R.font.google_sans_flex, FontWeight.SemiBold),
-    Font(R.font.google_sans_flex, FontWeight.Bold),
-    Font(R.font.google_sans_flex, FontWeight.ExtraBold),
-    Font(R.font.google_sans_flex, FontWeight.Black)
+val BarlowFontFamily = FontFamily(
+    Font(R.font.barlow_light, FontWeight.Light),
+    Font(R.font.barlow_regular, FontWeight.Normal),
+    Font(R.font.barlow_medium, FontWeight.Medium),
+    Font(R.font.barlow_semibold, FontWeight.SemiBold),
+    Font(R.font.barlow_bold, FontWeight.Bold),
+    Font(R.font.barlow_bold, FontWeight.ExtraBold),
+    Font(R.font.barlow_bold, FontWeight.Black)
 )
+
+val BarlowCondensedFontFamily = FontFamily(
+    Font(R.font.barlow_condensed_medium, FontWeight.Normal),
+    Font(R.font.barlow_condensed_medium, FontWeight.Medium),
+    Font(R.font.barlow_condensed_semibold, FontWeight.SemiBold),
+    Font(R.font.barlow_condensed_bold, FontWeight.Bold),
+    Font(R.font.barlow_condensed_bold, FontWeight.ExtraBold)
+)
+
+// Backwards-compatible alias so any legacy reference resolves to Barlow globally.
+val GoogleSansFlexFamily = BarlowFontFamily
 
 private val typography = Typography().run {
     copy(
-        displayLarge = displayLarge.copy(fontFamily = GoogleSansFlexFamily),
-        displayMedium = displayMedium.copy(fontFamily = GoogleSansFlexFamily),
-        displaySmall = displaySmall.copy(fontFamily = GoogleSansFlexFamily),
-        headlineLarge = headlineLarge.copy(fontFamily = GoogleSansFlexFamily),
-        headlineMedium = headlineMedium.copy(fontFamily = GoogleSansFlexFamily),
-        headlineSmall = headlineSmall.copy(fontFamily = GoogleSansFlexFamily),
-        titleLarge = titleLarge.copy(fontFamily = GoogleSansFlexFamily),
-        titleMedium = titleMedium.copy(fontFamily = GoogleSansFlexFamily),
-        titleSmall = titleSmall.copy(fontFamily = GoogleSansFlexFamily),
-        bodyLarge = bodyLarge.copy(fontFamily = GoogleSansFlexFamily),
-        bodyMedium = bodyMedium.copy(fontFamily = GoogleSansFlexFamily),
-        bodySmall = bodySmall.copy(fontFamily = GoogleSansFlexFamily),
-        labelLarge = labelLarge.copy(fontFamily = GoogleSansFlexFamily),
-        labelMedium = labelMedium.copy(fontFamily = GoogleSansFlexFamily),
-        labelSmall = labelSmall.copy(fontFamily = GoogleSansFlexFamily)
+        displayLarge = displayLarge.copy(fontFamily = BarlowFontFamily),
+        displayMedium = displayMedium.copy(fontFamily = BarlowFontFamily),
+        displaySmall = displaySmall.copy(fontFamily = BarlowFontFamily),
+        headlineLarge = headlineLarge.copy(fontFamily = BarlowFontFamily),
+        headlineMedium = headlineMedium.copy(fontFamily = BarlowFontFamily),
+        headlineSmall = headlineSmall.copy(fontFamily = BarlowFontFamily),
+        titleLarge = titleLarge.copy(fontFamily = BarlowFontFamily),
+        titleMedium = titleMedium.copy(fontFamily = BarlowFontFamily),
+        titleSmall = titleSmall.copy(fontFamily = BarlowFontFamily),
+        bodyLarge = bodyLarge.copy(fontFamily = BarlowFontFamily),
+        bodyMedium = bodyMedium.copy(fontFamily = BarlowFontFamily),
+        bodySmall = bodySmall.copy(fontFamily = BarlowFontFamily),
+        labelLarge = labelLarge.copy(fontFamily = BarlowCondensedFontFamily),
+        labelMedium = labelMedium.copy(fontFamily = BarlowCondensedFontFamily),
+        labelSmall = labelSmall.copy(fontFamily = BarlowCondensedFontFamily)
     )
 }
 

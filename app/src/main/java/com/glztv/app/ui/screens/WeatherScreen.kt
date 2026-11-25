@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.glztv.app.model.ForecastDay
 import com.glztv.app.model.HourlyForecast
 import com.glztv.app.model.WeatherInfo
+import com.glztv.app.ui.theme.BarlowCondensedFontFamily
 import com.glztv.app.ui.theme.DtvActionButton
 import com.glztv.app.ui.theme.DtvChrome
 import com.glztv.app.ui.theme.DtvSectionHeader
@@ -41,11 +42,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 /**
- * DirecTV Broadcast Weather Channel Screen (v1.48.4.10).
+ * Non-Scrollable DirecTV Broadcast Weather Channel Screen (v1.48.4.25).
  *
  * - Shared DirecTV HD Top Command Bar (`Weather` tab active).
- * - Glossy Dark Split-Top Current Conditions + Telemetry Grid (Humidity, Wind, UV, Pressure).
- * - Crisp Hairline-Bordered Hourly Forecast Strip & 7-Day Outlook Table.
+ * - Glossy Dark Broadcast Hero Banner with borderless inline telemetry (Humidity, Wind, UV, Pressure).
+ * - Non-scrollable Hourly Forecast strip + 3-Day Outlook table fitting cleanly on one TV screen.
  */
 @Composable
 fun WeatherScreen(
@@ -90,7 +91,7 @@ fun WeatherScreen(
                 }
             }
         } else {
-            // 2. Glossy Dark Broadcast Split-Top Current Conditions
+            // 2. Glossy Dark Broadcast Hero Banner (Borderless Inline Weather Info)
             val today = weather.forecast.firstOrNull()
             Box(
                 modifier = Modifier
@@ -106,9 +107,9 @@ fun WeatherScreen(
                 ) {
                     // Left: Large Broadcast Temp + Condition + Location
                     Row(
-                        modifier = Modifier.weight(1.1f),
+                        modifier = Modifier.weight(1.05f),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(18.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
                             text = weatherGlyph(weather.weatherCode),
@@ -118,7 +119,8 @@ fun WeatherScreen(
                             Text(
                                 text = "LOCAL WEATHER",
                                 color = DtvChrome.ElectricBlue,
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
+                                fontFamily = BarlowCondensedFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.0.sp
                             )
@@ -155,63 +157,70 @@ fun WeatherScreen(
                         }
                     }
 
-                    // Right: Broadcast Telemetry Grid + Refresh
+                    // Right: Borderless Inline Broadcast Telemetry + Refresh
                     Row(
-                        modifier = Modifier.weight(0.9f),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(0.95f),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DtvWeatherTelemetryCell("HUMIDITY", "${weather.humidity}%", Modifier.weight(1f))
-                        DtvWeatherTelemetryCell("WIND", "${weather.windSpeedMph} mph ${weather.windDirection}", Modifier.weight(1f))
-                        DtvWeatherTelemetryCell("UV INDEX", String.format(Locale.US, "%.1f", weather.uvIndex), Modifier.weight(1f))
-                        DtvWeatherTelemetryCell("PRESSURE", "${weather.pressureHpa} hPa", Modifier.weight(1f))
+                        DtvWeatherTelemetryItem("HUMIDITY", "${weather.humidity}%", Modifier.weight(1f))
+                        Box(Modifier.width(1.dp).height(30.dp).background(DtvChrome.Divider.copy(alpha = 0.6f)))
+                        DtvWeatherTelemetryItem("WIND", "${weather.windSpeedMph} mph ${weather.windDirection}", Modifier.weight(1f))
+                        Box(Modifier.width(1.dp).height(30.dp).background(DtvChrome.Divider.copy(alpha = 0.6f)))
+                        DtvWeatherTelemetryItem("UV INDEX", String.format(Locale.US, "%.1f", weather.uvIndex), Modifier.weight(0.8f))
+                        Box(Modifier.width(1.dp).height(30.dp).background(DtvChrome.Divider.copy(alpha = 0.6f)))
+                        DtvWeatherTelemetryItem("PRESSURE", "${weather.pressureHpa} hPa", Modifier.weight(1f))
                         DtvActionButton(label = if (loading) "..." else "Refresh", onClick = onRefresh)
                     }
                 }
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(1.dp)
+                        .height(2.dp)
                         .align(Alignment.BottomCenter)
                         .background(DtvChrome.Divider)
                 )
             }
 
-            // 3. Hourly Strip + 7-Day Forecast Table
-            LazyColumn(
+            // 3. Non-Scrollable Hourly Strip + 3-Day Outlook
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(top = 14.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .weight(1f)
+                    .padding(top = 14.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 if (weather.hourly.isNotEmpty()) {
-                    item(key = "dtv-weather-hourly") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DtvSectionHeader(
-                                title = "HOURLY FORECAST",
-                                horizontalPad = horizontalPad
-                            )
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = horizontalPad),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(weather.hourly.take(12), key = { "hr-${it.timeLabel}" }) { hour ->
-                                    DtvHourlyCell(hour)
-                                }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DtvSectionHeader(
+                            title = "HOURLY FORECAST",
+                            horizontalPad = horizontalPad
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = horizontalPad),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            weather.hourly.take(8).forEach { hour ->
+                                DtvHourlyCell(hour = hour, modifier = Modifier.weight(1f))
                             }
                         }
                     }
                 }
 
                 if (weather.forecast.isNotEmpty()) {
-                    item(key = "dtv-weather-daily-header") {
+                    val threeDay = weather.forecast.take(3)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         DtvSectionHeader(
-                            title = "7-DAY OUTLOOK",
+                            title = "3-DAY OUTLOOK",
                             horizontalPad = horizontalPad
                         )
-                    }
-                    item(key = "dtv-weather-daily-table") {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -220,14 +229,14 @@ fun WeatherScreen(
                                 .background(Color(0xFF101318))
                                 .border(1.dp, DtvChrome.Divider, RoundedCornerShape(3.dp))
                         ) {
-                            weather.forecast.take(7).forEachIndexed { idx, day ->
+                            threeDay.forEachIndexed { idx, day ->
                                 val dayLabel = remember(day.date, idx) {
                                     if (idx == 0) "Today"
                                     else runCatching { dayFmt.format(requireNotNull(inputFmt.parse(day.date))) }
                                         .getOrDefault(day.date)
                                 }
                                 DtvForecastTableRow(dayLabel = dayLabel, day = day)
-                                if (idx < weather.forecast.take(7).lastIndex) {
+                                if (idx < threeDay.lastIndex) {
                                     Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.RowDivider))
                                 }
                             }
@@ -240,31 +249,28 @@ fun WeatherScreen(
 }
 
 @Composable
-private fun DtvWeatherTelemetryCell(
+private fun DtvWeatherTelemetryItem(
     label: String,
     value: String,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(3.dp))
-            .background(Color(0xFF13171E))
-            .border(1.dp, DtvChrome.CardBorder, RoundedCornerShape(3.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Text(
             text = label,
             color = DtvChrome.MutedText,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
+            fontFamily = BarlowCondensedFontFamily,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 0.7.sp,
+            letterSpacing = 0.8.sp,
             maxLines = 1
         )
         Text(
             text = value,
-            color = DtvChrome.PrimaryText,
-            fontSize = 13.sp,
+            color = Color.White,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -273,10 +279,12 @@ private fun DtvWeatherTelemetryCell(
 }
 
 @Composable
-private fun DtvHourlyCell(hour: HourlyForecast) {
+private fun DtvHourlyCell(
+    hour: HourlyForecast,
+    modifier: Modifier = Modifier
+) {
     Column(
-        modifier = Modifier
-            .width(86.dp)
+        modifier = modifier
             .clip(RoundedCornerShape(3.dp))
             .background(DtvChrome.CardGradient)
             .border(1.dp, DtvChrome.CardBorder, RoundedCornerShape(3.dp))

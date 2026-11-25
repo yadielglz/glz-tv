@@ -194,9 +194,10 @@ fun DtvTopCommandBar(
                     Text(
                         text = "GlzTV",
                         color = Color.White,
-                        fontSize = 14.sp,
+                        fontSize = 16.sp,
+                        fontFamily = BarlowCondensedFontFamily,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.6.sp,
+                        letterSpacing = 0.8.sp,
                         maxLines = 1
                     )
                 }
@@ -511,8 +512,10 @@ private fun DtvSegmentedStripTab(
         Text(
             text = label,
             color = if (isFocused || selected) Color.White else DtvChrome.SecondaryText,
-            fontSize = 12.sp,
-            fontWeight = if (isFocused || selected) FontWeight.SemiBold else FontWeight.Medium,
+            fontSize = 13.sp,
+            fontFamily = BarlowCondensedFontFamily,
+            fontWeight = if (isFocused || selected) FontWeight.Bold else FontWeight.SemiBold,
+            letterSpacing = 0.5.sp,
             maxLines = 1,
             modifier = Modifier.align(Alignment.Center)
         )
@@ -555,9 +558,10 @@ fun DtvSectionHeader(
             Text(
                 text = title,
                 color = DtvChrome.PrimaryText,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
+                fontFamily = BarlowCondensedFontFamily,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.9.sp,
+                letterSpacing = 1.0.sp,
                 maxLines = 1
             )
         }
@@ -565,9 +569,10 @@ fun DtvSectionHeader(
             Text(
                 text = trailing,
                 color = DtvChrome.MutedText,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
+                fontFamily = BarlowCondensedFontFamily,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.7.sp,
+                letterSpacing = 0.8.sp,
                 maxLines = 1
             )
         }

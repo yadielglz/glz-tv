@@ -49,12 +49,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.glztv.app.BuildConfig
 import com.glztv.app.launcher.LauncherAppItem
 import com.glztv.app.launcher.LauncherAppsManager
 import com.glztv.app.launcher.toSafeImageBitmap
 import com.glztv.app.model.EntertainmentApp
 import com.glztv.app.ui.components.AppContextMenuDialog
+import com.glztv.app.ui.theme.BarlowCondensedFontFamily
 import com.glztv.app.ui.theme.DtvChrome
 import com.glztv.app.ui.theme.DtvSegmentedStripBar
 import com.glztv.app.ui.theme.LocalTvViewport
@@ -336,12 +338,28 @@ private fun DtvAppsManagedCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     var isFocused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
+
+    // Tier 1: Real installed Android TV app banner/icon from PackageManager
+    val installedBitmap = remember(app.packageName) {
+        val pm = context.packageManager
+        val drawable = runCatching { pm.getApplicationBanner(app.packageName) }.getOrNull()
+            ?: runCatching { pm.getApplicationIcon(app.packageName) }.getOrNull()
+        drawable?.toSafeImageBitmap(160, 160)
+    }
+
+    // Tier 2: Official high-res brand logo URL when app is not yet installed
+    val brandLogoUrl = remember(app.packageName, app.name) {
+        managedAppLogoUrl(app.packageName, app.name)
+    }
+    var remoteLogoFailed by remember(brandLogoUrl) { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .height(98.dp)
+            .height(104.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(if (isFocused) Color.Black else Color.Transparent)
             .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
@@ -369,21 +387,57 @@ private fun DtvAppsManagedCard(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(app.accent.copy(alpha = 0.85f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = app.name.take(2).uppercase(Locale.getDefault()),
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
+        when {
+            installedBitmap != null -> {
+                Image(
+                    bitmap = installedBitmap,
+                    contentDescription = app.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+            }
+            brandLogoUrl != null && !remoteLogoFailed -> {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(app.accent.copy(alpha = 0.22f))
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = brandLogoUrl,
+                        contentDescription = app.name,
+                        contentScale = ContentScale.Fit,
+                        onError = { remoteLogoFailed = true },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(6.dp))
+                    )
+                }
+            }
+            else -> {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(app.accent.copy(alpha = 0.88f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = app.name.take(3).uppercase(Locale.getDefault()),
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontFamily = BarlowCondensedFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.6.sp
+                    )
+                }
+            }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(7.dp))
         Text(
             text = app.name,
             color = if (isFocused) Color.White else DtvChrome.PrimaryText,
@@ -394,3 +448,28 @@ private fun DtvAppsManagedCard(
         )
     }
 }
+
+private fun managedAppLogoUrl(packageName: String, name: String): String? {
+    val domain = when {
+        packageName.contains("youtube", ignoreCase = true) || name.equals("YouTube", ignoreCase = true) -> "youtube.com"
+        packageName.contains("netflix", ignoreCase = true) || name.equals("Netflix", ignoreCase = true) -> "netflix.com"
+        packageName.contains("bamnetworks", ignoreCase = true) || name.equals("MLB", ignoreCase = true) -> "mlb.com"
+        packageName.contains("cbs.ott", ignoreCase = true) || name.contains("Paramount", ignoreCase = true) -> "paramountplus.com"
+        packageName.contains("disney", ignoreCase = true) || name.contains("Disney", ignoreCase = true) -> "disneyplus.com"
+        packageName.contains("peacock", ignoreCase = true) || name.contains("Peacock", ignoreCase = true) -> "peacocktv.com"
+        packageName.contains("TWCableTV", ignoreCase = true) || name.contains("Spectrum", ignoreCase = true) -> "spectrum.net"
+        packageName.contains("amazon", ignoreCase = true) || name.contains("Prime", ignoreCase = true) -> "primevideo.com"
+        packageName.contains("hulu", ignoreCase = true) || name.equals("Hulu", ignoreCase = true) -> "hulu.com"
+        packageName.contains("hbo", ignoreCase = true) || packageName.contains("wbd", ignoreCase = true) || name.equals("Max", ignoreCase = true) -> "max.com"
+        packageName.contains("spotify", ignoreCase = true) || name.equals("Spotify", ignoreCase = true) -> "spotify.com"
+        packageName.contains("plex", ignoreCase = true) || name.equals("Plex", ignoreCase = true) -> "plex.tv"
+        packageName.contains("apple", ignoreCase = true) || name.contains("Apple TV", ignoreCase = true) -> "tv.apple.com"
+        packageName.contains("espn", ignoreCase = true) || name.contains("ESPN", ignoreCase = true) -> "espn.com"
+        packageName.contains("tubi", ignoreCase = true) || name.contains("Tubi", ignoreCase = true) -> "tubitv.com"
+        packageName.contains("pluto", ignoreCase = true) || name.contains("Pluto", ignoreCase = true) -> "pluto.tv"
+        packageName.contains("twitch", ignoreCase = true) || name.equals("Twitch", ignoreCase = true) -> "twitch.tv"
+        else -> null
+    }
+    return domain?.let { "https://www.google.com/s2/favicons?domain=$it&sz=128" }
+}
+

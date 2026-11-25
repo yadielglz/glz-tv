@@ -62,6 +62,7 @@ import com.glztv.app.model.WeatherInfo
 import com.glztv.app.player.RadioPlaybackState
 import com.glztv.app.ui.components.GoogleTvChannelLogo
 import com.glztv.app.ui.components.HomeRadioPlayerBar
+import com.glztv.app.ui.theme.BarlowCondensedFontFamily
 import com.glztv.app.ui.theme.DtvActionButton
 import com.glztv.app.ui.theme.DtvChrome
 import com.glztv.app.ui.theme.DtvNavTab
@@ -203,7 +204,9 @@ fun GoogleTvHomeScreen(
             onOpenSettings = onOpenSettings
         )
 
-        // ── 2. DirecTV HD Hero Bar (Right-Third Bleed Preview OR Weather) ─────────
+        // ── 2. DirecTV HD Hero Bar (Right-Third Bleed Preview OR Property BG + Bled Weather when Radio Playing)
+        val isRadioBannerMode = radioPlaying || (currentRadioStation != null && !showPreviewVideo)
+        val propertyBgUrl = experience.heroImageUrl?.takeIf { it.isNotBlank() }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -211,8 +214,33 @@ fun GoogleTvHomeScreen(
                 .clipToBounds()
                 .background(DtvChrome.BannerGradient)
         ) {
-            // Right Third: Live TV preview bleeding smoothly into Hero OR Weather when Radio is playing
-            if (showPreviewVideo) {
+            // When Radio is playing, fill the Hero Banner with the property background image
+            if (isRadioBannerMode && propertyBgUrl != null) {
+                AsyncImage(
+                    model = propertyBgUrl,
+                    contentDescription = experience.propertyName.ifBlank { "Property" },
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                colorStops = arrayOf(
+                                    0.00f to Color(0xD90A0D12),
+                                    0.45f to Color(0x8C0A0D12),
+                                    0.72f to Color(0xCC0C1017),
+                                    1.00f to Color(0xF20B0F16)
+                                )
+                            )
+                        )
+                )
+            }
+
+            // Right Third: Live TV preview bleeding smoothly into Hero OR borderless Weather bled into Hero
+            val activePreview = previewContent
+            if (!isRadioBannerMode && activePreview != null && heroChannel != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.42f)
@@ -220,7 +248,7 @@ fun GoogleTvHomeScreen(
                         .align(Alignment.CenterEnd)
                         .clipToBounds()
                 ) {
-                    previewContent?.invoke()
+                    activePreview()
                     Box(Modifier.fillMaxSize().background(HeroPreviewLeftFade))
                 }
             } else if (weather != null) {
@@ -228,14 +256,14 @@ fun GoogleTvHomeScreen(
                     weather = weather,
                     onClick = onOpenWeather,
                     modifier = Modifier
-                        .fillMaxWidth(0.36f)
+                        .fillMaxWidth(0.38f)
                         .fillMaxHeight()
                         .align(Alignment.CenterEnd)
                         .padding(end = horizontalPad, top = 14.dp, bottom = 14.dp)
                 )
             }
 
-            // Left Two-Thirds: Clean Broadcast Channel Details + ProgressBar + Actions (zero clipping)
+            // Left Two-Thirds: Clean "Radio Playing" banner when Radio active, OR Live Broadcast details
             val active = heroChannel
             val currentProg = remember(active?.id, guide, now) {
                 active?.let { guide.nowProgrammeForChannel(it, now) }
@@ -247,12 +275,80 @@ fun GoogleTvHomeScreen(
 
             Column(
                 modifier = Modifier
-                    .fillMaxWidth(0.64f)
+                    .fillMaxWidth(0.62f)
                     .fillMaxHeight()
-                    .padding(start = horizontalPad, top = 14.dp, bottom = 14.dp, end = 16.dp),
+                    .padding(start = horizontalPad, top = 16.dp, bottom = 14.dp, end = 16.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                if (active != null) {
+                if (isRadioBannerMode) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(DtvChrome.ElectricBlue)
+                            )
+                            Text(
+                                text = "RADIO ON AIR",
+                                color = DtvChrome.ElectricBlueSoft,
+                                fontSize = 11.sp,
+                                fontFamily = BarlowCondensedFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.0.sp
+                            )
+                        }
+                        Text(
+                            text = "Radio Playing",
+                            color = Color.White,
+                            fontSize = if (viewport.isCompactHeight) 26.sp else 30.sp,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        currentRadioStation?.let { st ->
+                            val track = listOfNotNull(
+                                radioPlaybackState?.icyArtist?.takeIf { it.isNotBlank() },
+                                radioPlaybackState?.icyTitle?.takeIf { it.isNotBlank() }
+                            ).joinToString(" — ").takeIf { it.isNotBlank() }
+                            Text(
+                                text = if (track != null) "${st.name}  ·  $track" else st.name,
+                                color = DtvChrome.SecondaryText,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DtvActionButton(
+                            label = "Open Radio",
+                            primary = true,
+                            modifier = Modifier.focusRequester(watchLiveFocus),
+                            onClick = onOpenRadio
+                        )
+                        if (active != null) {
+                            DtvActionButton(
+                                label = "Watch Live",
+                                primary = false,
+                                showPlayIcon = true,
+                                onClick = { onWatchChannel(active) }
+                            )
+                        }
+                        DtvActionButton(
+                            label = "Apps",
+                            primary = false,
+                            onClick = onOpenApps
+                        )
+                    }
+                } else if (active != null) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -267,7 +363,8 @@ fun GoogleTvHomeScreen(
                             Text(
                                 text = active.number.ifBlank { "LIVE" },
                                 color = DtvChrome.ElectricBlueSoft,
-                                fontSize = 15.sp,
+                                fontSize = 16.sp,
+                                fontFamily = BarlowCondensedFontFamily,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
@@ -286,9 +383,10 @@ fun GoogleTvHomeScreen(
                                 Text(
                                     text = "ON AIR",
                                     color = Color(0xFFFCA5A5),
-                                    fontSize = 9.sp,
+                                    fontSize = 10.sp,
+                                    fontFamily = BarlowCondensedFontFamily,
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.6.sp
+                                    letterSpacing = 0.7.sp
                                 )
                             }
                         }
@@ -584,8 +682,11 @@ private fun HeroRightWeatherPanel(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(3.dp))
-            .background(if (focused) Color.Black else Color(0xCC11151C))
-            .border(if (focused) 2.dp else 1.dp, if (focused) DtvChrome.ElectricBlue else DtvChrome.Divider, RoundedCornerShape(3.dp))
+            .background(if (focused) Color(0xCC000000) else Color.Transparent)
+            .then(
+                if (focused) Modifier.border(2.dp, DtvChrome.ElectricBlue, RoundedCornerShape(3.dp))
+                else Modifier
+            )
             .onFocusChanged { focused = it.isFocused }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
@@ -598,34 +699,36 @@ private fun HeroRightWeatherPanel(
                 } else false
             }
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(16.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.End
         ) {
             Text(
                 text = "LOCAL WEATHER",
-                color = DtvChrome.ElectricBlue,
-                fontSize = 10.sp,
+                color = DtvChrome.ElectricBlueSoft,
+                fontSize = 11.sp,
+                fontFamily = BarlowCondensedFontFamily,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.8.sp
+                letterSpacing = 1.0.sp
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(text = homeWeatherIcon(weather.weatherCode), fontSize = 36.sp)
-                Column {
+                Text(text = homeWeatherIcon(weather.weatherCode), fontSize = 38.sp)
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "${weather.temperature}°",
                         color = Color.White,
-                        fontSize = 34.sp,
+                        fontSize = 38.sp,
                         fontWeight = FontWeight.Light
                     )
                     Text(
                         text = weather.location.ifBlank { "Current Location" },
-                        color = DtvChrome.SecondaryText,
+                        color = DtvChrome.PrimaryText.copy(alpha = 0.88f),
                         fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis

@@ -218,6 +218,7 @@ import com.glztv.app.player.RadioPlayerController
 import com.glztv.app.ui.GlzTvApp
 import com.glztv.app.ui.i18n.GlzStrings
 import com.glztv.app.ui.i18n.LocalGlzStrings
+import com.glztv.app.ui.screens.GuestProfileScreen
 import com.glztv.app.ui.screens.RadioScreen
 import com.glztv.app.ui.screens.WeatherScreen
 import com.glztv.app.ui.theme.LocalTvViewport
@@ -1453,22 +1454,13 @@ internal fun TvScreen(
     }
 
     if (showYouModal) {
-        val youModalFocus = remember { FocusRequester() }
-        LaunchedEffect(Unit) { runCatching { youModalFocus.requestFocus() } }
         BackHandler(onBack = { showYouModal = false })
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(horizontal = viewport.safeHorizontal, vertical = viewport.safeVertical)
-                .focusRequester(youModalFocus)
-        ) {
-            GuestYouSection(
-                guestName = guestName,
-                experience = guestExperience,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        GuestProfileScreen(
+            guestName = guestName,
+            experience = guestExperience,
+            onClose = { showYouModal = false },
+            modifier = Modifier.fillMaxSize()
+        )
     }
 
     if (showSettings) {
@@ -5996,6 +5988,16 @@ private fun MoviePlaybackScreen(
     var subtitleStatus by remember { mutableStateOf<String?>(null) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
     var autoSearched by remember(movie.id) { mutableStateOf(false) }
+    var showOsd by remember(movie.id) { mutableStateOf(true) }
+    var osdInteractionTick by remember(movie.id) { mutableStateOf(0) }
+
+    // Auto-hide movie OSD after 4.5s of inactivity during playback
+    LaunchedEffect(showOsd, osdInteractionTick, showSubtitleDialog) {
+        if (showOsd && !showSubtitleDialog) {
+            delay(4500L)
+            showOsd = false
+        }
+    }
 
     // Load cached subtitles on mount
     LaunchedEffect(movie.id) {
@@ -6042,14 +6044,41 @@ private fun MoviePlaybackScreen(
     }
 
     BackHandler(onBack = {
-        if (showSubtitleDialog) {
-            showSubtitleDialog = false
-        } else {
-            onExit()
+        when {
+            showSubtitleDialog -> showSubtitleDialog = false
+            showOsd -> showOsd = false
+            else -> onExit()
         }
     })
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP,
+                        KeyEvent.KEYCODE_DPAD_DOWN,
+                        KeyEvent.KEYCODE_DPAD_LEFT,
+                        KeyEvent.KEYCODE_DPAD_RIGHT,
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_MENU,
+                        KeyEvent.KEYCODE_INFO,
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                        KeyEvent.KEYCODE_MEDIA_PLAY,
+                        KeyEvent.KEYCODE_MEDIA_PAUSE,
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                        KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                            showOsd = true
+                            osdInteractionTick++
+                        }
+                    }
+                }
+                false
+            }
+    ) {
         VideoPlayer(
             channel = movie.asChannel(),
             captionsEnabled = localCaptionsEnabled,
@@ -6058,104 +6087,120 @@ private fun MoviePlaybackScreen(
             showControls = true,
             modifier = Modifier.fillMaxSize()
         )
-        Row(
+        AnimatedVisibility(
+            visible = showOsd,
+            enter = fadeIn(),
+            exit = fadeOut(),
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .8f), Color.Transparent)))
-                .padding(28.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(movie.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                val details = listOfNotNull(
-                    movie.releaseYear?.toString(),
-                    movie.runtimeMinutes?.let { "$it min" },
-                    movie.genres.takeIf { it.isNotEmpty() }?.joinToString(", ")
-                ).joinToString(" · ")
-                if (details.isNotBlank()) {
-                    Text(details, color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .82f), Color.Transparent)))
+                    .padding(28.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(movie.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    val details = listOfNotNull(
+                        movie.releaseYear?.toString(),
+                        movie.runtimeMinutes?.let { "$it min" },
+                        movie.genres.takeIf { it.isNotEmpty() }?.joinToString(", ")
+                    ).joinToString(" · ")
+                    if (details.isNotBlank()) {
+                        Text(details, color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
+                    }
                 }
 
-                if (subtitleStatus != null) {
-                    Spacer(Modifier.height(8.dp))
+                // Quick Actions: CC Toggle & Subtitles Menu
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color.Black.copy(alpha = 0.7f),
-                        border = BorderStroke(1.dp, GoogleTvTokens.BlueAccent.copy(alpha = 0.5f))
+                        onClick = {
+                            osdInteractionTick++
+                            val newEnabled = !localCaptionsEnabled
+                            localCaptionsEnabled = newEnabled
+                            onCaptionsChanged(newEnabled, currentCaptionLanguage)
+                        },
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (localCaptionsEnabled) DtvChrome.ElectricBlue else Color.Black.copy(alpha = 0.65f),
+                        border = BorderStroke(1.dp, if (localCaptionsEnabled) DtvChrome.ElectricBlue else DtvChrome.Divider),
+                        modifier = Modifier.googleTvFocusable(shape = RoundedCornerShape(4.dp))
                     ) {
-                        Text(
-                            text = subtitleStatus!!,
-                            color = GoogleTvTokens.BlueAccent,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.ClosedCaption,
+                                contentDescription = "Toggle CC",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = if (localCaptionsEnabled) "CC: ${currentCaptionLanguage.uppercase()}" else "CC: OFF",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Surface(
+                        onClick = {
+                            osdInteractionTick++
+                            showSubtitleDialog = true
+                        },
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color.Black.copy(alpha = 0.65f),
+                        border = BorderStroke(1.dp, DtvChrome.Divider),
+                        modifier = Modifier.googleTvFocusable(shape = RoundedCornerShape(4.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Search Subtitles",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Subtitles",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
+        }
 
-            // Quick Actions: CC Toggle & Subtitles Menu
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        if (subtitleStatus != null) {
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = Color.Black.copy(alpha = 0.78f),
+                border = BorderStroke(1.dp, DtvChrome.ElectricBlue.copy(alpha = 0.65f)),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 36.dp)
             ) {
-                Surface(
-                    onClick = {
-                        val newEnabled = !localCaptionsEnabled
-                        localCaptionsEnabled = newEnabled
-                        onCaptionsChanged(newEnabled, currentCaptionLanguage)
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (localCaptionsEnabled) GoogleTvTokens.BlueAccent else Color.White.copy(alpha = 0.15f),
-                    modifier = Modifier.googleTvFocusable(shape = RoundedCornerShape(12.dp))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ClosedCaption,
-                            contentDescription = "Toggle CC",
-                            tint = if (localCaptionsEnabled) Color.Black else Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = if (localCaptionsEnabled) "CC: ${currentCaptionLanguage.uppercase()}" else "CC: OFF",
-                            color = if (localCaptionsEnabled) Color.Black else Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Surface(
-                    onClick = { showSubtitleDialog = true },
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White.copy(alpha = 0.15f),
-                    modifier = Modifier.googleTvFocusable(shape = RoundedCornerShape(12.dp))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = "Search Subtitles",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "Subtitles",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                Text(
+                    text = subtitleStatus!!,
+                    color = DtvChrome.ElectricBlueSoft,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
             }
         }
 
@@ -6522,7 +6567,9 @@ private fun VideoPlayer(
                         resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         else AspectRatioFrameLayout.RESIZE_MODE_FIT
                         useController = showControls
-                        controllerAutoShow = showControls
+                        controllerAutoShow = false
+                        controllerShowTimeoutMs = 4500
+                        controllerHideOnTouch = true
                         isFocusable = showControls
                         isFocusableInTouchMode = showControls
                         subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
@@ -6535,7 +6582,8 @@ private fun VideoPlayer(
                     it.resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                     else AspectRatioFrameLayout.RESIZE_MODE_FIT
                     it.useController = showControls
-                    it.controllerAutoShow = showControls
+                    it.controllerAutoShow = false
+                    it.controllerShowTimeoutMs = 4500
                     it.subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
                     (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
                 },
