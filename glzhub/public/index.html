@@ -908,6 +908,10 @@
               <p>Import, organize, edit and publish channel lineups served to GLZ TV devices.</p>
             </div>
             <div class="header-actions">
+              <button id="openLiveM3uExportBtn" type="button" class="secondary">
+                <svg class="icon"><use href="#icon-studio"/></svg>
+                <span>Live M3U URL</span>
+              </button>
               <button id="addPlaylistButton" class="primary">
                 <svg class="icon"><use href="#icon-pair"/></svg>
                 <span>Add TV playlist</span>
@@ -2061,6 +2065,55 @@
     </form>
   </dialog>
 
+  <!-- Live External M3U Export Dialog -->
+  <dialog id="liveM3uExportDialog" style="max-width: 680px; width: 92vw;">
+    <div class="dialog-head">
+      <div>
+        <div class="eyebrow">EXTERNAL APP M3U EXPORT</div>
+        <h3>Live M3U URL for Other Apps</h3>
+        <p style="font-size:12px; color:var(--text-muted); margin:4px 0 0;">Dynamic URL compatible with TiviMate, VLC, Kodi, IPTV Smarters, Jellyfin &amp; Plex. Automatically updates when channels or Live Events change.</p>
+      </div>
+      <button class="icon-button" type="button" data-close-live-m3u>
+        <svg class="icon"><use href="#icon-close"/></svg>
+      </button>
+    </div>
+    <div class="form-grid" style="margin-top:12px;">
+      <label class="wide">Lineup Scope
+        <select id="liveM3uScopeSelect">
+          <option value="">Current Working Lineup (All Published TV Playlists)</option>
+        </select>
+      </label>
+      <label class="check-card wide">
+        <input id="liveM3uIncludeEvents" type="checkbox" checked>
+        <div>
+          <strong>Adapt with Live Events</strong>
+          <small>Automatically inject active Live Sports &amp; PPV events with readable match titles as they start and expire</small>
+        </div>
+      </label>
+      <div class="wide" style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+        <span id="liveM3uStatusPill" class="status-pill online">Generating live URL…</span>
+        <small style="color:var(--text-muted);">No-cache + ETag revalidation enabled</small>
+      </div>
+      <label class="wide">Active M3U Playlist URL
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="liveM3uUrlOutput" class="font-mono" type="text" readonly placeholder="Generating…" style="flex:1;">
+          <button id="copyLiveM3uUrlBtn" type="button" class="primary" style="white-space:nowrap;">Copy URL</button>
+          <a id="openLiveM3uUrlLink" class="secondary" href="#" target="_blank" rel="noopener noreferrer" style="padding:10px 12px; text-decoration:none; border-radius:var(--radius-sm); white-space:nowrap;">Open</a>
+        </div>
+      </label>
+      <label class="wide">Matching XMLTV EPG URL
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="liveM3uEpgOutput" class="font-mono" type="text" readonly placeholder="—" style="flex:1;">
+          <button id="copyLiveM3uEpgBtn" type="button" class="secondary" style="white-space:nowrap;">Copy EPG</button>
+        </div>
+      </label>
+    </div>
+    <p id="liveM3uError" class="error"></p>
+    <div class="form-actions">
+      <button type="button" class="secondary" data-close-live-m3u>Close</button>
+    </div>
+  </dialog>
+
   <!-- Live Stream Preview Dialog -->
   <dialog id="streamPreviewDialog" class="stream-preview-dialog">
     <div class="dialog-head">
@@ -2289,7 +2342,7 @@
     <span id="toastMessage" class="toast-msg">Notification</span>
   </div>
 
-  <script type="module" src="/app.js?v=1.48.3.10"></script>
+  <script type="module" src="/app.js?v=1.48.3.10-m3u"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"8a9d9fbda9c14c53b3dec2f41df6f690","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 

@@ -44,6 +44,78 @@ async function sha256(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export interface ExportM3uTokenPayload {
+  v: 1;
+  ownerId: string;
+  playlistId: string | null;
+  includeEvents: boolean;
+}
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function fromBase64Url(value: string): Uint8Array | null {
+  try {
+    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+async function importExportSigningKey(env: Env): Promise<CryptoKey> {
+  const secret = `glzhub-m3u-export-v1:${env.SUPABASE_SECRET_KEY || ""}`;
+  return crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"]
+  );
+}
+
+export async function signExportM3uToken(env: Env, payload: ExportM3uTokenPayload): Promise<string> {
+  const encodedPayload = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+  const key = await importExportSigningKey(env);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encodedPayload));
+  return `${encodedPayload}.${toBase64Url(new Uint8Array(sig))}`;
+}
+
+export async function verifyExportM3uToken(env: Env, token: string): Promise<ExportM3uTokenPayload | null> {
+  const dot = token.indexOf(".");
+  if (dot <= 0 || dot >= token.length - 1) return null;
+  const encodedPayload = token.slice(0, dot);
+  const encodedSig = token.slice(dot + 1);
+  const sigBytes = fromBase64Url(encodedSig);
+  const payloadBytes = fromBase64Url(encodedPayload);
+  if (!sigBytes || !payloadBytes) return null;
+  const key = await importExportSigningKey(env);
+  const valid = await crypto.subtle.verify("HMAC", key, sigBytes, new TextEncoder().encode(encodedPayload));
+  if (!valid) return null;
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(payloadBytes)) as Record<string, unknown>;
+    if (parsed.v !== 1 || typeof parsed.ownerId !== "string" || !parsed.ownerId.trim()) return null;
+    const playlistId = typeof parsed.playlistId === "string" && parsed.playlistId.trim()
+      ? parsed.playlistId.trim()
+      : null;
+    return {
+      v: 1,
+      ownerId: parsed.ownerId.trim(),
+      playlistId,
+      includeEvents: parsed.includeEvents !== false
+    };
+  } catch {
+    return null;
+  }
+}
+
 function clientAddress(request: Request): string {
   return request.headers.get("cf-connecting-ip")
     ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
@@ -3071,6 +3143,107 @@ async function deleteEventChannel(request: Request, env: Env, eventId: string): 
   return json({ ok: true });
 }
 
+function formatExternalEventTitle(event: Record<string, unknown>): string {
+  const rawTitle = String(event.title || "Live Sports Event").replace(/[\r\n]+/g, " ").trim();
+  const league = String(event.sport_league || "").replace(/[\r\n]+/g, " ").trim();
+  if (!league) return rawTitle;
+  const upperTitle = rawTitle.toUpperCase();
+  const upperLeague = league.toUpperCase();
+  if (upperTitle.startsWith(upperLeague)) return rawTitle;
+  return `${league}: ${rawTitle}`;
+}
+
+function buildM3uDocument(options: {
+  playlists: Record<string, unknown>[];
+  eventChannels: Record<string, unknown>[] | null;
+  includeEvents?: boolean;
+  externalEventTitles?: boolean;
+  fallbackEpgUrl?: string;
+  shouldIncludeItem?: (item: Record<string, unknown>) => boolean;
+}): { m3uContent: string; channelCount: number; activeEventsCount: number; headerEpgUrl: string } {
+  const {
+    playlists,
+    eventChannels,
+    includeEvents = true,
+    externalEventTitles = false,
+    fallbackEpgUrl = "https://play.glztech.com/epg.xml.gz",
+    shouldIncludeItem
+  } = options;
+  const cleanText = (value: unknown): string => String(value ?? "").replace(/[\r\n]+/g, " ").trim();
+  const cleanAttribute = (value: unknown): string => cleanText(value).replace(/"/g, "'");
+
+  const firstPlaylistEpg = playlists.find((pl) => typeof pl.epg_url === "string" && pl.epg_url.trim())?.epg_url;
+  const headerEpgUrl = typeof firstPlaylistEpg === "string" && firstPlaylistEpg.trim()
+    ? cleanAttribute(firstPlaylistEpg)
+    : cleanAttribute(fallbackEpgUrl);
+  let m3uContent = `#EXTM3U x-tvg-url="${headerEpgUrl}"\n\n`;
+  let channelCount = 0;
+
+  for (const pl of playlists) {
+    const groupTitle = cleanAttribute(pl.title || "TV");
+    const items = [...((pl.playlist_items as Record<string, unknown>[]) || [])];
+    items.sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+
+    for (const item of items) {
+      const title = cleanText(item.title || "Untitled Channel");
+      const duration = Number(item.duration_seconds || -1);
+      const mediaUrl = String(item.media_url || "");
+      const metadata = (item.metadata && typeof item.metadata === "object") ? item.metadata as Record<string, unknown> : {};
+      if (metadata.hidden === true || metadata.hidden === "true") continue;
+      if (shouldIncludeItem && !shouldIncludeItem(item)) continue;
+
+      const tvgId = metadata.tvg_id || metadata.tvgId ? ` tvg-id="${cleanAttribute(metadata.tvg_id || metadata.tvgId)}"` : "";
+      const tvgChno = metadata.tvg_chno || metadata.tvgChno ? ` tvg-chno="${cleanAttribute(metadata.tvg_chno || metadata.tvgChno)}"` : "";
+      const tvgLogo = metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url ? ` tvg-logo="${cleanAttribute(metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url)}"` : "";
+      const isRadio = metadata.radio === true || metadata.radio === "true" ? ' radio="true"' : "";
+
+      const channelGroup = cleanAttribute(metadata.group || groupTitle);
+      m3uContent += `#EXTINF:${duration}${tvgId}${tvgChno}${tvgLogo}${isRadio} group-title="${channelGroup}",${title}\n${mediaUrl}\n\n`;
+      channelCount++;
+    }
+  }
+
+  let activeEventsCount = 0;
+  // Inject active temporary event channels (within start - pre_buffer to end + post_buffer)
+  if (includeEvents && Array.isArray(eventChannels)) {
+    const sortedEvents = sortEventChannels(eventChannels);
+    const now = Date.now();
+    let activeIndex = 1;
+    for (const event of sortedEvents) {
+      if (!isEventActiveAndValid(event, now)) continue;
+      if (event.auto_ingested === true && !isLiveEventChannel(
+        String(event.group_title || ""),
+        String(event.title || ""),
+        String(event.tvg_id || ""),
+        String(event.tvg_name || ""),
+        String(event.sport_league || "")
+      )) continue;
+      const { url: mediaUrl } = resolveEventDeliveryStreamUrl(event);
+      if (!mediaUrl) continue;
+      const channelDisplayName = externalEventTitles
+        ? cleanText(formatExternalEventTitle(event))
+        : "SPORTS PPV";
+      const tvgIdVal = String(event.tvg_id || `event.channel.${activeIndex}`);
+      const tvgId = ` tvg-id="${cleanAttribute(tvgIdVal)}"`;
+      const tvgName = ` tvg-name="${cleanAttribute(channelDisplayName)}"`;
+      const chnoValue = String(event.channel_number || `30-${String(activeIndex).padStart(2, '0')}`);
+      const tvgChno = ` tvg-chno="${cleanAttribute(chnoValue)}"`;
+      const tvgLogo = event.logo_url ? ` tvg-logo="${cleanAttribute(event.logo_url)}"` : "";
+      const channelGroup = cleanAttribute(event.group_title || "Major League Sports (Events)");
+      const eventTitleAttr = ` x-event-title="${cleanAttribute(event.title || "Live Sports Event")}"`;
+      const eventLeagueAttr = ` x-event-league="${cleanAttribute(event.sport_league || "SPORTS")}"`;
+      const { startMs: gameStartMs, endMs: gameEndMs } = resolveEventWindow(event, now);
+      const eventStartAttr = ` x-event-start="${Math.round(gameStartMs)}"`;
+      const eventEndAttr = ` x-event-end="${Math.round(gameEndMs)}"`;
+      m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo}${eventTitleAttr}${eventLeagueAttr}${eventStartAttr}${eventEndAttr} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
+      activeIndex++;
+      activeEventsCount++;
+    }
+  }
+
+  return { m3uContent, channelCount, activeEventsCount, headerEpgUrl };
+}
+
 async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Response> {
   const device = await deviceForToken(request, env);
 
@@ -3099,77 +3272,21 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
   ]);
   const groupRules = new Map(rules.filter((rule) => rule.target_type === 'group').map((rule) => [String(rule.playlist_item_id), String(rule.decision)]));
   const deviceRules = new Map(rules.filter((rule) => rule.target_type === 'device').map((rule) => [String(rule.playlist_item_id), String(rule.decision)]));
+  const deviceMode = String(device.channel_policy_mode || 'inherit');
 
-  const cleanText = (value: unknown): string => String(value ?? "").replace(/[\r\n]+/g, " ").trim();
-  const cleanAttribute = (value: unknown): string => cleanText(value).replace(/"/g, "'");
-
-  const firstPlaylistEpg = playlists.find((pl) => typeof pl.epg_url === "string" && pl.epg_url.trim())?.epg_url;
-  const headerEpgUrl = typeof firstPlaylistEpg === "string" && firstPlaylistEpg.trim()
-    ? cleanAttribute(firstPlaylistEpg)
-    : "https://play.glztech.com/epg.xml.gz";
-  let m3uContent = `#EXTM3U x-tvg-url="${headerEpgUrl}"\n\n`;
-
-  for (const pl of playlists) {
-    const groupTitle = cleanAttribute(pl.title || "TV");
-    const items = (pl.playlist_items as Record<string, unknown>[]) || [];
-    items.sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
-
-    for (const item of items) {
-      const title = cleanText(item.title || "Untitled Channel");
-      const duration = Number(item.duration_seconds || -1);
-      const mediaUrl = String(item.media_url || "");
-      const metadata = (item.metadata && typeof item.metadata === "object") ? item.metadata as Record<string, unknown> : {};
-      if (metadata.hidden === true || metadata.hidden === "true") continue;
-      const deviceMode = String(device.channel_policy_mode || 'inherit');
+  const { m3uContent } = buildM3uDocument({
+    playlists,
+    eventChannels,
+    includeEvents: true,
+    externalEventTitles: false,
+    shouldIncludeItem: (item) => {
       const decision = deviceRules.get(String(item.id))
         ?? (deviceMode !== 'inherit' ? deviceMode : undefined)
         ?? (useGroupPolicy ? groupRules.get(String(item.id)) : undefined)
         ?? String(useGroupPolicy ? (group?.default_channel_policy || 'allow') : 'allow');
-      if (decision === 'block') continue;
-
-      const tvgId = metadata.tvg_id || metadata.tvgId ? ` tvg-id="${cleanAttribute(metadata.tvg_id || metadata.tvgId)}"` : "";
-      const tvgChno = metadata.tvg_chno || metadata.tvgChno ? ` tvg-chno="${cleanAttribute(metadata.tvg_chno || metadata.tvgChno)}"` : "";
-      const tvgLogo = metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url ? ` tvg-logo="${cleanAttribute(metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url)}"` : "";
-      const isRadio = metadata.radio === true || metadata.radio === "true" ? ' radio="true"' : "";
-
-      const channelGroup = cleanAttribute(metadata.group || groupTitle);
-      m3uContent += `#EXTINF:${duration}${tvgId}${tvgChno}${tvgLogo}${isRadio} group-title="${channelGroup}",${title}\n${mediaUrl}\n\n`;
+      return decision !== 'block';
     }
-  }
-
-  // Inject active temporary event channels (within start - pre_buffer to end + post_buffer)
-  if (Array.isArray(eventChannels)) {
-    const sortedEvents = sortEventChannels(eventChannels);
-    const now = Date.now();
-    let activeIndex = 1;
-    for (const event of sortedEvents) {
-      if (!isEventActiveAndValid(event, now)) continue;
-      if (event.auto_ingested === true && !isLiveEventChannel(
-        String(event.group_title || ""),
-        String(event.title || ""),
-        String(event.tvg_id || ""),
-        String(event.tvg_name || ""),
-        String(event.sport_league || "")
-      )) continue;
-      const channelDisplayName = "SPORTS PPV";
-      const { url: mediaUrl } = resolveEventDeliveryStreamUrl(event);
-      if (!mediaUrl) continue;
-      const tvgIdVal = String(event.tvg_id || `event.channel.${activeIndex}`);
-      const tvgId = ` tvg-id="${cleanAttribute(tvgIdVal)}"`;
-      const tvgName = ` tvg-name="SPORTS PPV"`;
-      const chnoValue = String(event.channel_number || `30-${String(activeIndex).padStart(2, '0')}`);
-      const tvgChno = ` tvg-chno="${cleanAttribute(chnoValue)}"`;
-      const tvgLogo = event.logo_url ? ` tvg-logo="${cleanAttribute(event.logo_url)}"` : "";
-      const channelGroup = cleanAttribute(event.group_title || "Major League Sports (Events)");
-      const eventTitleAttr = ` x-event-title="${cleanAttribute(event.title || "Live Sports Event")}"`;
-      const eventLeagueAttr = ` x-event-league="${cleanAttribute(event.sport_league || "SPORTS")}"`;
-      const { startMs: gameStartMs, endMs: gameEndMs } = resolveEventWindow(event, now);
-      const eventStartAttr = ` x-event-start="${Math.round(gameStartMs)}"`;
-      const eventEndAttr = ` x-event-end="${Math.round(gameEndMs)}"`;
-      m3uContent += `#EXTINF:-1${tvgId}${tvgName}${tvgChno}${tvgLogo}${eventTitleAttr}${eventLeagueAttr}${eventStartAttr}${eventEndAttr} group-title="${channelGroup}",${channelDisplayName}\n${mediaUrl}\n\n`;
-      activeIndex++;
-    }
-  }
+  });
 
   const etag = `"${await sha256(m3uContent)}"`;
   if (request.headers.get("if-none-match") === etag) {
@@ -3191,6 +3308,112 @@ async function getDeviceM3UPlaylist(request: Request, env: Env): Promise<Respons
       "cache-control": "private, no-cache"
     }
   });
+}
+
+async function resolveExternalExportData(
+  env: Env,
+  origin: string,
+  ownerId: string,
+  playlistId: string | null,
+  includeEvents: boolean
+) {
+  const playlistQuery = playlistId
+    ? `/rest/v1/playlists?id=eq.${encodeURIComponent(playlistId)}&owner_id=eq.${encodeURIComponent(ownerId)}&select=*,playlist_items(*)`
+    : `/rest/v1/playlists?owner_id=eq.${encodeURIComponent(ownerId)}&target_app=in.(tv,both)&is_published=eq.true&select=*,playlist_items(*)&order=created_at.asc`;
+
+  const [playlists, eventChannels, guides] = await Promise.all([
+    supabaseJson(env, playlistQuery) as Promise<Record<string, unknown>[]>,
+    includeEvents
+      ? (supabaseJson(env, `/rest/v1/event_channels?status=neq.disabled&select=*`).catch(() => null) as Promise<Record<string, unknown>[] | null>)
+      : Promise.resolve(null),
+    supabaseJson(env, `/rest/v1/epg_guides?owner_id=eq.${encodeURIComponent(ownerId)}&select=playlist_id`).catch(() => []) as Promise<Record<string, unknown>[]>
+  ]);
+
+  const managedGuideIds = new Set((guides || []).map((g) => String(g.playlist_id || "")));
+  const firstManagedPlaylist = playlists.find((pl) => managedGuideIds.has(String(pl.id || "")));
+  const fallbackEpgUrl = firstManagedPlaylist
+    ? `${origin}/api/v1/guides/${encodeURIComponent(String(firstManagedPlaylist.id))}.xml.gz`
+    : "https://play.glztech.com/epg.xml.gz";
+
+  const built = buildM3uDocument({
+    playlists,
+    eventChannels,
+    includeEvents,
+    externalEventTitles: true,
+    fallbackEpgUrl
+  });
+
+  return { playlists, ...built };
+}
+
+async function createExternalM3uUrl(request: Request, env: Env): Promise<Response> {
+  const user = await adminUser(request, env);
+  const input = await body(request).catch(() => ({} as Record<string, unknown>));
+  const playlistId = optionalString(input.playlistId ?? input.playlist_id, "playlistId", 80);
+  const includeEvents = input.includeEvents !== false;
+
+  let playlistTitle = "All Published TV Playlists";
+  if (playlistId) {
+    const owned = await ownedPlaylist(request, env, playlistId);
+    playlistTitle = String(owned.playlist.title || "TV Playlist");
+  }
+
+  const origin = new URL(request.url).origin;
+  const token = await signExportM3uToken(env, {
+    v: 1,
+    ownerId: user.id,
+    playlistId,
+    includeEvents
+  });
+  const data = await resolveExternalExportData(env, origin, user.id, playlistId, includeEvents);
+
+  return json({
+    url: `${origin}/api/v1/export/m3u/${token}.m3u`,
+    epgUrl: data.headerEpgUrl,
+    scope: playlistId ? "playlist" : "working",
+    playlistId,
+    playlistTitle,
+    includeEvents,
+    channelCount: data.channelCount,
+    activeEventsCount: data.activeEventsCount
+  });
+}
+
+async function getExternalM3UPlaylist(request: Request, env: Env, token: string): Promise<Response> {
+  const payload = await verifyExportM3uToken(env, token);
+  if (!payload) return json({ error: "Invalid or expired M3U export URL." }, 404);
+
+  const origin = new URL(request.url).origin;
+  const { playlists, m3uContent } = await resolveExternalExportData(
+    env,
+    origin,
+    payload.ownerId,
+    payload.playlistId,
+    payload.includeEvents
+  );
+  if (payload.playlistId && playlists.length === 0) {
+    return json({ error: "Playlist not found." }, 404);
+  }
+
+  const filename = payload.playlistId && playlists[0]?.title
+    ? `${String(playlists[0].title).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "glz-tv"}-live.m3u`
+    : "glz-tv-live.m3u";
+  const etag = `"${await sha256(m3uContent)}"`;
+  const headers: Record<string, string> = {
+    "content-type": "audio/x-mpegurl; charset=utf-8",
+    "content-disposition": `inline; filename="${filename}"`,
+    "etag": etag,
+    "cache-control": "no-cache",
+    "access-control-allow-origin": "*"
+  };
+
+  if (request.headers.get("if-none-match") === etag) {
+    return new Response(null, { status: 304, headers });
+  }
+  if (request.method === "HEAD") {
+    return new Response(null, { status: 200, headers });
+  }
+  return new Response(m3uContent, { status: 200, headers });
 }
 
 // Return a bounded JSON guide instead of making older Roku TVs inflate XMLTV.
@@ -3254,6 +3477,10 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (path === "/api/v1/radio/stations" && request.method === "GET") return publicRadioCatalog(request, env);
   const publicGuide = path.match(/^\/api\/v1\/guides\/([0-9a-f-]+)\.xml(\.gz)?$/i);
   if (publicGuide && request.method === "GET") return exportManagedGuide(request, env, ctx, publicGuide[1], Boolean(publicGuide[2]));
+  const externalM3u = path.match(/^\/api\/v1\/export\/m3u\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)(?:\.m3u8?)?$/i);
+  if (externalM3u && (request.method === "GET" || request.method === "HEAD")) {
+    return getExternalM3UPlaylist(request, env, externalM3u[1]);
+  }
   if (path === "/api/v1/public-config") {
     return json({ supabaseUrl: env.SUPABASE_URL, publishableKey: env.SUPABASE_PUBLISHABLE_KEY });
   }
@@ -3323,6 +3550,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (adminMovie && request.method === "PATCH") return updateMovie(request, env, adminMovie[1]);
   if (adminMovie && request.method === "DELETE") return deleteMovie(request, env, adminMovie[1]);
 
+  if (path === "/api/v1/admin/export-m3u-url" && request.method === "POST") return createExternalM3uUrl(request, env);
   if (path === "/api/v1/admin/playlists" && request.method === "GET") return listPlaylists(request, env);
   if (path === "/api/v1/admin/epg/fetch" && request.method === "GET") return fetchGuidePreview(request, env);
   if (path === "/api/v1/admin/playlists" && request.method === "POST") return createPlaylist(request, env);

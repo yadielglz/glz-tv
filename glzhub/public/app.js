@@ -2506,7 +2506,8 @@ function renderPlaylists() {
         </div>
         <div class="studio-card-actions">
           <button type="button" class="secondary import-playlist" data-id="${pl.id}">Import M3U</button>
-          <button type="button" class="secondary export-playlist" data-id="${pl.id}">Export M3U</button>
+          <button type="button" class="secondary live-export-playlist" data-id="${pl.id}">Live URL</button>
+          <button type="button" class="secondary export-playlist" data-id="${pl.id}">Download M3U</button>
           <button type="button" class="secondary edit-guide" data-id="${pl.id}">EPG Studio</button>
           <button type="button" class="secondary push-playlist" data-id="${pl.id}">Push to Fleet</button>
           <button type="button" class="secondary toggle-playlist" data-id="${pl.id}">${pl.is_published ? "Unpublish" : "Publish"}</button>
@@ -2614,6 +2615,7 @@ function renderPlaylists() {
     state.importPlaylistId = btn.dataset.id;
     $("#m3uFileInput").click();
   }));
+  $$(".live-export-playlist").forEach((btn) => btn.addEventListener("click", () => openLiveM3uExportDialog(btn.dataset.id)));
   $$(".export-playlist").forEach((btn) => btn.addEventListener("click", () => exportPlaylist(btn.dataset.id)));
   $$(".edit-guide").forEach((btn) => btn.addEventListener("click", () => {
     epgState.playlistId = btn.dataset.id;
@@ -2840,6 +2842,95 @@ function exportPlaylist(id) {
   URL.revokeObjectURL(url);
   toast("M3U exported.");
 }
+
+async function refreshLiveM3uExportUrl() {
+  const scopeSelect = $("#liveM3uScopeSelect");
+  const eventsCheck = $("#liveM3uIncludeEvents");
+  const urlInput = $("#liveM3uUrlOutput");
+  const openLink = $("#openLiveM3uUrlLink");
+  const epgInput = $("#liveM3uEpgOutput");
+  const statusPill = $("#liveM3uStatusPill");
+  const errorEl = $("#liveM3uError");
+  if (!urlInput) return;
+
+  const playlistId = scopeSelect?.value || null;
+  const includeEvents = eventsCheck ? eventsCheck.checked : true;
+  if (errorEl) errorEl.textContent = "";
+  if (statusPill) {
+    statusPill.className = "status-pill";
+    statusPill.textContent = "Generating live URL…";
+  }
+  urlInput.value = "";
+  if (epgInput) epgInput.value = "";
+
+  try {
+    const result = await api("/api/v1/admin/export-m3u-url", {
+      method: "POST",
+      body: JSON.stringify({ playlistId, includeEvents })
+    });
+    urlInput.value = result.url || "";
+    if (openLink) openLink.href = result.url || "#";
+    if (epgInput) epgInput.value = result.epgUrl || "";
+    if (statusPill) {
+      statusPill.className = "status-pill online";
+      const ch = Number(result.channelCount || 0);
+      const ev = Number(result.activeEventsCount || 0);
+      statusPill.textContent = includeEvents
+        ? `${ch} channel${ch === 1 ? "" : "s"} · ${ev} live event${ev === 1 ? "" : "s"} active now`
+        : `${ch} channel${ch === 1 ? "" : "s"} · Live Events off`;
+    }
+  } catch (error) {
+    if (errorEl) errorEl.textContent = error.message || "Failed to generate live M3U URL.";
+    if (statusPill) {
+      statusPill.className = "status-pill offline";
+      statusPill.textContent = "Unable to generate URL";
+    }
+  }
+}
+
+async function openLiveM3uExportDialog(playlistId = "") {
+  const dialog = $("#liveM3uExportDialog");
+  const scopeSelect = $("#liveM3uScopeSelect");
+  if (!dialog || !scopeSelect) return;
+  if (!state.playlists.length) {
+    await loadPlaylists().catch(() => {});
+  }
+  scopeSelect.innerHTML = `<option value="">Current Working Lineup (All Published TV Playlists)</option>` + (state.playlists || []).map((pl) =>
+    `<option value="${escapeHtml(pl.id)}">${escapeHtml(pl.title)} (${(pl.playlist_items || []).length} channels${pl.is_published ? "" : " · Draft"})</option>`
+  ).join("");
+  scopeSelect.value = playlistId || "";
+  dialog.showModal();
+  await refreshLiveM3uExportUrl();
+}
+
+$("#openLiveM3uExportBtn")?.addEventListener("click", () => openLiveM3uExportDialog(""));
+$$("[data-close-live-m3u]").forEach((btn) => btn.addEventListener("click", () => $("#liveM3uExportDialog")?.close()));
+$("#liveM3uScopeSelect")?.addEventListener("change", () => refreshLiveM3uExportUrl());
+$("#liveM3uIncludeEvents")?.addEventListener("change", () => refreshLiveM3uExportUrl());
+$("#copyLiveM3uUrlBtn")?.addEventListener("click", async () => {
+  const value = $("#liveM3uUrlOutput")?.value?.trim();
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast("Live M3U URL copied to clipboard.", "success");
+  } catch {
+    $("#liveM3uUrlOutput")?.select();
+    document.execCommand("copy");
+    showToast("Live M3U URL copied.", "success");
+  }
+});
+$("#copyLiveM3uEpgBtn")?.addEventListener("click", async () => {
+  const value = $("#liveM3uEpgOutput")?.value?.trim();
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast("XMLTV EPG URL copied to clipboard.", "success");
+  } catch {
+    $("#liveM3uEpgOutput")?.select();
+    document.execCommand("copy");
+    showToast("XMLTV EPG URL copied.", "success");
+  }
+});
 
 $("#m3uFileInput")?.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
