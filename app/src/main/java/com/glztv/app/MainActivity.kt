@@ -115,6 +115,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -123,6 +124,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -4124,16 +4126,56 @@ private fun ChannelCard(
     }
 }
 
+private val DtvPanelBgGradient = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.00f to Color(0xF71C2026),
+        0.30f to Color(0xF80F1216),
+        1.00f to Color(0xFA060709)
+    )
+)
+private val DtvPanelHeaderGradient = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.00f to Color(0xFA22262D),
+        0.55f to Color(0xFA14171D),
+        1.00f to Color(0xFA0E1014)
+    )
+)
+private val DtvPanelBlue = Color(0xFF1990FF)
+private val DtvPanelDivider = Color(0xFF2B3038)
+private val DtvPanelRowDivider = Color(0xFF1F242B)
+private val DtvPanelPrimaryText = Color(0xFFE0E4EA)
+private val DtvPanelSecondaryText = Color(0xFF88909B)
+
 @Composable
 private fun DrawerSectionLabel(text: String) {
-    Text(
-        text,
-        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-        color = GoogleTvTokens.TextSecondary,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Black,
-        letterSpacing = 0.5.sp
-    )
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(DtvPanelDivider)
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF15181E))
+                .padding(horizontal = 20.dp, vertical = 7.dp)
+        ) {
+            Text(
+                text,
+                color = DtvPanelSecondaryText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(DtvPanelDivider)
+        )
+    }
 }
 
 @Composable
@@ -4146,60 +4188,105 @@ private fun GoogleTvDrawerActionRow(
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    Surface(
-        onClick = onClick,
-        modifier = modifier
-            .googleTvFocusable(
-                shape = RoundedCornerShape(14.dp),
-                focusedScale = 1.02f,
-                onFocusChange = { isFocused = it }
-            ),
-        shape = RoundedCornerShape(14.dp),
-        color = when {
-            isFocused -> Color.White
-            active -> GoogleTvTokens.BlueAccent.copy(alpha = 0.22f)
-            else -> Color.White.copy(alpha = 0.06f)
-        },
-        contentColor = when {
-            isFocused -> Color.Black
-            active -> GoogleTvTokens.BlueAccent
-            else -> Color.White
-        }
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                icon,
-                contentDescription = title,
-                modifier = Modifier.size(20.dp),
-                tint = if (isFocused) Color.Black else if (active) GoogleTvTokens.BlueAccent else Color.White
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(
+                    when {
+                        isFocused -> Color.Black
+                        active -> DtvPanelBlue.copy(alpha = 0.14f)
+                        else -> Color.Transparent
+                    }
                 )
-                if (subtitle != null) {
+                .onFocusChanged { isFocused = it.isFocused }
+                .onKeyEvent { keyEvent ->
+                    if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                        when (keyEvent.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_CENTER,
+                            KeyEvent.KEYCODE_ENTER,
+                            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                onClick()
+                                return@onKeyEvent true
+                            }
+                        }
+                    }
+                    false
+                }
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                )
+        ) {
+            if (isFocused) {
+                Box(
+                    Modifier
+                        .width(4.dp)
+                        .matchParentSize()
+                )
+                Box(
+                    Modifier
+                        .width(4.dp)
+                        .height(54.dp)
+                        .align(Alignment.CenterStart)
+                        .background(DtvPanelBlue)
+                )
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = title,
+                    modifier = Modifier.size(20.dp),
+                    tint = when {
+                        isFocused -> DtvPanelBlue
+                        active -> DtvPanelBlue
+                        else -> DtvPanelSecondaryText
+                    }
+                )
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
                     Text(
-                        subtitle,
-                        fontSize = 11.sp,
-                        color = if (isFocused) Color.Black.copy(alpha = 0.70f) else GoogleTvTokens.TextSecondary
+                        title,
+                        color = if (isFocused) Color.White else DtvPanelPrimaryText,
+                        fontSize = 14.sp,
+                        fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (subtitle != null) {
+                        Text(
+                            subtitle,
+                            fontSize = 12.sp,
+                            color = if (isFocused) DtvPanelPrimaryText.copy(alpha = 0.72f) else DtvPanelSecondaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                if (active) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = DtvPanelBlue
                     )
                 }
             }
-            if (active) {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = if (isFocused) Color.Black else GoogleTvTokens.BlueAccent
-                )
-            }
         }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(DtvPanelRowDivider)
+        )
     }
 }
 
@@ -4587,139 +4674,115 @@ private fun ImmersivePlayerScreen(
             modifier = Modifier.align(Alignment.TopStart)
         ) {
             val drawerWidth = if (maxWidth < 520.dp) maxWidth * .88f else 430.dp
-            // Flush to the left screen edge; only the inner (right) corners are rounded.
-            Surface(
-                Modifier.width(drawerWidth).fillMaxHeight(),
-                color = GoogleTvTokens.SurfaceCardTranslucent,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
-                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
-                shadowElevation = 0.dp
+            Box(
+                Modifier
+                    .width(drawerWidth)
+                    .fillMaxHeight()
+                    .background(DtvPanelBgGradient)
             ) {
-                Column(Modifier.fillMaxSize().padding(top = 22.dp)) {
-                    // Header Channel Identity
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        GoogleTvChannelLogo(
-                            channel = channel,
-                            size = 52.dp,
-                            guide = guide,
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
-                                ) {
-                                    Text(
-                                        channel.number.ifBlank { "LIVE" },
-                                        Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                        color = GoogleTvTokens.BlueAccent,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                }
-                                if (channel.id in favorites) {
-                                    Spacer(Modifier.width(6.dp))
-                                    Icon(
-                                        Icons.Default.Star,
-                                        contentDescription = "Favorite",
-                                        tint = GoogleTvTokens.StarGold,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.height(3.dp))
-                            Text(
-                                channel.name,
-                                color = Color.White,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Black,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
+                // Crisp DirecTV 1dp vertical border on the right inner edge
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterEnd)
+                        .background(DtvPanelDivider)
+                )
 
-                    // ON NOW Live Synopsis Card
-                    Surface(
+                Column(Modifier.fillMaxSize()) {
+                    // DirecTV Glossy Dark Channel Header Bar
+                    Column(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        color = Color.White.copy(alpha = 0.06f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.06f))
+                            .background(DtvPanelHeaderGradient)
+                            .padding(horizontal = 20.dp, vertical = 16.dp)
                     ) {
-                        Column(Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier
-                                        .size(6.dp)
-                                        .background(GoogleTvTokens.LiveRed, CircleShape)
-                                )
-                                Spacer(Modifier.width(6.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            GoogleTvChannelLogo(
+                                channel = channel,
+                                size = 44.dp,
+                                guide = guide,
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        channel.number.ifBlank { "LIVE" },
+                                        color = DtvPanelPrimaryText,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    if (channel.id in favorites) {
+                                        Spacer(Modifier.width(8.dp))
+                                        Icon(
+                                            Icons.Default.Star,
+                                            contentDescription = "Favorite",
+                                            tint = GoogleTvTokens.StarGold,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
                                 Text(
-                                    "NOW PLAYING",
-                                    color = GoogleTvTokens.LiveRed,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = 0.5.sp
+                                    channel.name,
+                                    color = DtvPanelSecondaryText,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            currentProgramme?.title ?: "Live Broadcast",
+                            color = DtvPanelPrimaryText,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        currentProgramme?.let { prog ->
+                            val start = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))
+                            val end = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))
+                            val progProgress = ((now - prog.startMillis).toFloat() / (prog.endMillis - prog.startMillis).coerceAtLeast(1L)).coerceIn(0f, 1f)
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                currentProgramme?.title ?: "Live Broadcast",
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                "$start - $end",
+                                color = DtvPanelSecondaryText,
+                                fontSize = 12.sp
                             )
-                            currentProgramme?.let { prog ->
-                                val start = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))
-                                val end = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.endMillis))
-                                val progProgress = ((now - prog.startMillis).toFloat() / (prog.endMillis - prog.startMillis).coerceAtLeast(1L)).coerceIn(0f, 1f)
-                                Spacer(Modifier.height(6.dp))
-                                LinearProgressIndicator(
-                                    progress = { progProgress },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = GoogleTvTokens.BlueAccent,
-                                    trackColor = Color.White.copy(alpha = 0.12f)
-                                )
-                                Spacer(Modifier.height(5.dp))
-                                Text(
-                                    "$start – $end",
-                                    color = GoogleTvTokens.TextSecondary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
+                            Spacer(Modifier.height(6.dp))
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .background(Color.White.copy(alpha = 0.14f))
+                            ) {
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth(progProgress)
+                                        .fillMaxHeight()
+                                        .background(DtvPanelBlue)
                                 )
                             }
                         }
                     }
 
-                    // Section Title
-                    Text(
-                        if (selectingMultiViewChannel) "SELECT SECOND CHANNEL FOR MULTIVIEW" else "ALL CHANNELS (${channels.size})",
-                        Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
-                        color = GoogleTvTokens.TextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.5.sp
+                    // Section Strip
+                    DrawerSectionLabel(
+                        if (selectingMultiViewChannel) "SELECT SECOND CHANNEL FOR MULTI-VIEW"
+                        else "CHANNELS (${channels.size})"
                     )
 
-                    // Channels List
+                    // DirecTV-Style Dense Hairline-Separated Channels List
                     LazyColumn(
                         Modifier.fillMaxSize(),
                         state = channelListState,
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        contentPadding = PaddingValues(bottom = 20.dp)
                     ) {
                         itemsIndexed(
                             drawerRows,
@@ -4731,70 +4794,98 @@ private fun ImmersivePlayerScreen(
                                 val groupedCount = channels.count { ppvChannelPrefix(it) == prefix }
                                 val collapsed = prefix in collapsedPpvPrefixes
                                 var headerFocused by remember(prefix) { mutableStateOf(false) }
+                                val headerInteraction = remember(prefix) { MutableInteractionSource() }
                                 val label = when (prefix) {
                                     "29" -> "PPV & COMBAT EVENTS"
                                     "30" -> "MAJOR SPORTS EVENTS"
                                     else -> "MLB EVENTS"
                                 }
-                                Surface(
-                                    onClick = {
-                                        collapsedPpvPrefixes = if (collapsed) {
-                                            collapsedPpvPrefixes - prefix
-                                        } else {
-                                            collapsedPpvPrefixes + prefix
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .googleTvFocusable(
-                                            shape = RoundedCornerShape(12.dp),
-                                            focusedScale = 1.02f,
-                                            onFocusChange = { headerFocused = it }
-                                        ),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (headerFocused) Color.White else GoogleTvTokens.BlueAccent.copy(alpha = 0.13f),
-                                    contentColor = if (headerFocused) Color.Black else Color.White
-                                ) {
-                                    Row(
-                                        Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                val toggleGroup = {
+                                    collapsedPpvPrefixes = if (collapsed) {
+                                        collapsedPpvPrefixes - prefix
+                                    } else {
+                                        collapsedPpvPrefixes + prefix
+                                    }
+                                }
+                                Column(Modifier.fillMaxWidth()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(if (headerFocused) Color.Black else Color(0xFF14181F))
+                                            .onFocusChanged { headerFocused = it.isFocused }
+                                            .onKeyEvent { keyEvent ->
+                                                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                                                    when (keyEvent.nativeKeyEvent.keyCode) {
+                                                        KeyEvent.KEYCODE_DPAD_CENTER,
+                                                        KeyEvent.KEYCODE_ENTER,
+                                                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                                            toggleGroup()
+                                                            return@onKeyEvent true
+                                                        }
+                                                    }
+                                                }
+                                                false
+                                            }
+                                            .clickable(
+                                                interactionSource = headerInteraction,
+                                                indication = null,
+                                                onClick = toggleGroup
+                                            )
                                     ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = if (headerFocused) Color.Black.copy(alpha = 0.10f) else GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
+                                        if (headerFocused) {
+                                            Box(
+                                                Modifier
+                                                    .width(4.dp)
+                                                    .height(46.dp)
+                                                    .align(Alignment.CenterStart)
+                                                    .background(DtvPanelBlue)
+                                            )
+                                        }
+                                        Row(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 20.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
                                                 prefix,
-                                                Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Black
+                                                color = DtvPanelBlue,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.width(34.dp)
+                                            )
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    label,
+                                                    color = if (headerFocused) Color.White else DtvPanelPrimaryText,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    letterSpacing = 0.5.sp
+                                                )
+                                                Text(
+                                                    "$groupedCount channel${if (groupedCount == 1) "" else "s"}",
+                                                    fontSize = 11.sp,
+                                                    color = DtvPanelSecondaryText
+                                                )
+                                            }
+                                            Icon(
+                                                if (collapsed) Icons.Default.ChevronRight else Icons.Default.KeyboardArrowDown,
+                                                contentDescription = if (collapsed) "Expand channel $prefix" else "Collapse channel $prefix",
+                                                tint = if (headerFocused) Color.White else DtvPanelSecondaryText,
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
-                                        Spacer(Modifier.width(10.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            Text(label, fontSize = 11.sp, fontWeight = FontWeight.Black)
-                                            Text(
-                                                "$groupedCount channel${if (groupedCount == 1) "" else "s"}",
-                                                fontSize = 10.sp,
-                                                color = if (headerFocused) Color.Black.copy(alpha = 0.65f) else GoogleTvTokens.TextSecondary
-                                            )
-                                        }
-                                        Icon(
-                                            if (collapsed) Icons.Default.ChevronRight else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = if (collapsed) "Expand channel $prefix" else "Collapse channel $prefix",
-                                            modifier = Modifier.size(20.dp)
-                                        )
                                     }
+                                    Box(Modifier.fillMaxWidth().height(1.dp).background(DtvPanelDivider))
                                 }
                             } else if (item != null) {
-                            val isTuned = item.id == channel.id
-                            var isFocused by remember(item.id) { mutableStateOf(false) }
-                            val itemProgramme = remember(item.id, guide, now) {
-                                guide.nowProgrammeForChannel(item, now)
-                            }
-
-                            Surface(
-                                onClick = {
+                                val isTuned = item.id == channel.id
+                                var isFocused by remember(item.id) { mutableStateOf(false) }
+                                val rowInteraction = remember(item.id) { MutableInteractionSource() }
+                                val itemProgramme = remember(item.id, guide, now) {
+                                    guide.nowProgrammeForChannel(item, now)
+                                }
+                                val selectItem = {
                                     if (selectingMultiViewChannel) {
                                         onAddToMultiView(item)
                                         selectingMultiViewChannel = false
@@ -4802,94 +4893,112 @@ private fun ImmersivePlayerScreen(
                                         onTune(item)
                                     }
                                     drawer = PlayerDrawer.None
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .then(if (isTuned) Modifier.focusRequester(selectedChannelFocus) else Modifier)
-                                    .googleTvFocusable(
-                                        shape = RoundedCornerShape(12.dp),
-                                        focusedScale = 1.02f,
-                                        onFocusChange = { isFocused = it }
-                                    ),
-                                shape = RoundedCornerShape(12.dp),
-                                color = when {
-                                    isFocused -> Color.White
-                                    isTuned -> GoogleTvTokens.BlueAccent.copy(alpha = 0.22f)
-                                    else -> Color.White.copy(alpha = 0.04f)
-                                },
-                                contentColor = if (isFocused) Color.Black else Color.White
-                            ) {
-                                Row(
-                                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    GoogleTvChannelLogo(
-                                        channel = item,
-                                        size = 36.dp,
-                                        guide = guide,
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = if (isFocused) Color.Black.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.10f)
+                                }
+
+                                Column(Modifier.fillMaxWidth()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .then(if (isTuned) Modifier.focusRequester(selectedChannelFocus) else Modifier)
+                                            .background(
+                                                when {
+                                                    isFocused -> Color.Black
+                                                    isTuned -> DtvPanelBlue.copy(alpha = 0.16f)
+                                                    else -> Color.Transparent
+                                                }
+                                            )
+                                            .onFocusChanged { isFocused = it.isFocused }
+                                            .onKeyEvent { keyEvent ->
+                                                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                                                    when (keyEvent.nativeKeyEvent.keyCode) {
+                                                        KeyEvent.KEYCODE_DPAD_CENTER,
+                                                        KeyEvent.KEYCODE_ENTER,
+                                                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                                            selectItem()
+                                                            return@onKeyEvent true
+                                                        }
+                                                    }
+                                                }
+                                                false
+                                            }
+                                            .clickable(
+                                                interactionSource = rowInteraction,
+                                                indication = null,
+                                                onClick = selectItem
+                                            )
                                     ) {
-                                        Text(
-                                            item.number.ifBlank { "—" },
-                                            Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Black,
-                                            color = if (isFocused) Color.Black else if (isTuned) GoogleTvTokens.BlueAccent else GoogleTvTokens.TextSecondary
-                                        )
-                                    }
-                                    Spacer(Modifier.width(10.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            item.name,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            itemProgramme?.title ?: "Live Programming",
-                                            fontSize = 11.sp,
-                                            color = if (isFocused) Color.Black.copy(alpha = 0.70f) else GoogleTvTokens.TextSecondary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    if (isTuned) {
-                                        Spacer(Modifier.width(6.dp))
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = GoogleTvTokens.LiveRed.copy(alpha = if (isFocused) 0.25f else 0.20f)
+                                        if (isFocused) {
+                                            Box(
+                                                Modifier
+                                                    .width(4.dp)
+                                                    .height(54.dp)
+                                                    .align(Alignment.CenterStart)
+                                                    .background(DtvPanelBlue)
+                                            )
+                                        }
+                                        Row(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Row(
-                                                Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                            ) {
-                                                Box(Modifier.size(4.dp).background(GoogleTvTokens.LiveRed, CircleShape))
+                                            Text(
+                                                item.number.ifBlank { "—" },
+                                                color = when {
+                                                    isFocused -> Color.White
+                                                    isTuned -> DtvPanelBlue
+                                                    else -> DtvPanelSecondaryText
+                                                },
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isFocused || isTuned) FontWeight.SemiBold else FontWeight.Medium,
+                                                maxLines = 1,
+                                                modifier = Modifier.width(42.dp)
+                                            )
+                                            GoogleTvChannelLogo(
+                                                channel = item,
+                                                size = 34.dp,
+                                                guide = guide,
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                            Spacer(Modifier.width(12.dp))
+                                            Column(Modifier.weight(1f)) {
                                                 Text(
-                                                    "LIVE",
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Black,
-                                                    color = GoogleTvTokens.LiveRed
+                                                    item.name,
+                                                    color = if (isFocused) Color.White else DtvPanelPrimaryText,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = if (isFocused || isTuned) FontWeight.SemiBold else FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    itemProgramme?.title ?: "Live Programming",
+                                                    fontSize = 12.sp,
+                                                    color = if (isFocused) DtvPanelPrimaryText.copy(alpha = 0.72f) else DtvPanelSecondaryText,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            if (isTuned) {
+                                                Spacer(Modifier.width(8.dp))
+                                                Box(
+                                                    Modifier
+                                                        .size(7.dp)
+                                                        .clip(CircleShape)
+                                                        .background(DtvPanelBlue)
+                                                )
+                                            } else if (item.id in favorites) {
+                                                Spacer(Modifier.width(8.dp))
+                                                Icon(
+                                                    Icons.Default.Star,
+                                                    contentDescription = null,
+                                                    tint = GoogleTvTokens.StarGold,
+                                                    modifier = Modifier.size(13.dp)
                                                 )
                                             }
                                         }
-                                    } else if (item.id in favorites) {
-                                        Spacer(Modifier.width(6.dp))
-                                        Icon(
-                                            Icons.Default.Star,
-                                            contentDescription = null,
-                                            tint = if (isFocused) Color(0xFFE6A700) else GoogleTvTokens.StarGold,
-                                            modifier = Modifier.size(13.dp)
-                                        )
                                     }
+                                    Box(Modifier.fillMaxWidth().height(1.dp).background(DtvPanelRowDivider))
                                 }
-                            }
                             }
                         }
                     }
@@ -4903,202 +5012,228 @@ private fun ImmersivePlayerScreen(
             exit = panelExit(fromLeft = false),
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
-            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .92f else 440.dp
-            // Flush to the right screen edge; only the inner (left) corners are rounded.
-            Surface(
-                Modifier.width(drawerWidth).fillMaxHeight(),
-                color = GoogleTvTokens.SurfaceCardTranslucent,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
-                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)),
-                shadowElevation = 0.dp
+            val drawerWidth = if (maxWidth < 520.dp) maxWidth * .92f else 420.dp
+            Box(
+                Modifier
+                    .width(drawerWidth)
+                    .fillMaxHeight()
+                    .background(DtvPanelBgGradient)
             ) {
-                LazyColumn(
-                    Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 22.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp)
-                ) {
-                    item {
-                        Column(Modifier.padding(bottom = 8.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
-                                ) {
-                                    Text(
-                                        "CONTROLS & SETTINGS",
-                                        Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = GoogleTvTokens.BlueAccent,
-                                        letterSpacing = 0.5.sp
-                                    )
+                // Crisp DirecTV 1dp vertical border on the left inner edge
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterStart)
+                        .background(DtvPanelDivider)
+                )
+
+                Column(Modifier.fillMaxSize()) {
+                    // DirecTV Glossy Dark Header Bar
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(DtvPanelHeaderGradient)
+                            .padding(horizontal = 20.dp, vertical = 18.dp)
+                    ) {
+                        Text(
+                            "AUDIO / VIDEO & OPTIONS",
+                            color = DtvPanelBlue,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Stream Options",
+                            color = DtvPanelPrimaryText,
+                            fontSize = 21.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                        Text(
+                            "${channel.number.ifBlank { "LIVE" }}  ${channel.name}",
+                            color = DtvPanelSecondaryText,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    LazyColumn(
+                        Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 24.dp)
+                    ) {
+                        // --- PLAYBACK CONTROLS ---
+                        item { DrawerSectionLabel("PLAYBACK CONTROLS") }
+                        item {
+                            Column {
+                                GoogleTvDrawerActionRow(
+                                    title = "Previous Channel",
+                                    subtitle = "Return to last watched channel",
+                                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                                    onClick = { onPreviousChannel(); drawer = PlayerDrawer.None },
+                                    modifier = Modifier.fillMaxWidth().focusRequester(firstServiceFocus)
+                                )
+                                GoogleTvDrawerActionRow(
+                                    title = "Recent Channels",
+                                    subtitle = "Browse channel history",
+                                    icon = Icons.Default.History,
+                                    onClick = { now = System.currentTimeMillis(); drawer = PlayerDrawer.Recent },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                GoogleTvDrawerActionRow(
+                                    title = "Add to Multi-View",
+                                    subtitle = "Split-screen dual playback",
+                                    icon = Icons.Default.Dashboard,
+                                    onClick = { now = System.currentTimeMillis(); selectingMultiViewChannel = true; drawer = PlayerDrawer.Channels },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                GoogleTvDrawerActionRow(
+                                    title = if (showDiagnostics) "Hide Stream Diagnostics" else "Stream Diagnostics",
+                                    subtitle = if (showDiagnostics) "Diagnostics overlay visible" else "View live bitrate, codecs & dropped frames",
+                                    icon = Icons.Default.Info,
+                                    active = showDiagnostics,
+                                    onClick = { showDiagnostics = !showDiagnostics },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        if (playbackControls.audioTracks.isNotEmpty()) {
+                            item { DrawerSectionLabel("AUDIO TRACKS") }
+                            item {
+                                Column {
+                                    playbackControls.audioTracks.forEach { track ->
+                                        GoogleTvDrawerActionRow(
+                                            title = track.label,
+                                            subtitle = if (track.selected) "Currently selected" else "Select audio feed",
+                                            icon = Icons.AutoMirrored.Filled.VolumeUp,
+                                            active = track.selected,
+                                            onClick = { playbackControls.chooseAudio(track.id) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
                             }
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "Stream Options",
-                                color = Color.White,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                            Text(
-                                "${channel.name} · Live Stream",
-                                color = GoogleTvTokens.TextSecondary,
-                                fontSize = 12.sp
-                            )
                         }
-                    }
 
-                    // --- PLAYBACK CONTROLS ---
-                    item { DrawerSectionLabel("PLAYBACK CONTROLS") }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            GoogleTvDrawerActionRow(
-                                title = "Previous Channel",
-                                subtitle = "Return to last watched channel",
-                                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                                onClick = { onPreviousChannel(); drawer = PlayerDrawer.None },
-                                modifier = Modifier.fillMaxWidth().focusRequester(firstServiceFocus)
-                            )
-                            GoogleTvDrawerActionRow(
-                                title = "Recent Channels",
-                                subtitle = "Browse channel history",
-                                icon = Icons.Default.History,
-                                onClick = { now = System.currentTimeMillis(); drawer = PlayerDrawer.Recent },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            GoogleTvDrawerActionRow(
-                                title = "Add to MultiView",
-                                subtitle = "Split-screen dual playback",
-                                icon = Icons.Default.Dashboard,
-                                onClick = { now = System.currentTimeMillis(); selectingMultiViewChannel = true; drawer = PlayerDrawer.Channels },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            GoogleTvDrawerActionRow(
-                                title = if (showDiagnostics) "Hide Stream Diagnostics" else "Stream Diagnostics",
-                                subtitle = if (showDiagnostics) "Diagnostics overlay visible" else "View live bitrate, codecs & dropped frames",
-                                icon = Icons.Default.Info,
-                                active = showDiagnostics,
-                                onClick = { showDiagnostics = !showDiagnostics },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-
-                    if (playbackControls.audioTracks.isNotEmpty()) {
-                        item { DrawerSectionLabel("AUDIO TRACKS") }
+                        item { DrawerSectionLabel("SUBTITLES / CC") }
                         item {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                playbackControls.audioTracks.forEach { track ->
+                            Column {
+                                GoogleTvDrawerActionRow(
+                                    title = "Off",
+                                    subtitle = if (!captionsEnabled) "Captions disabled" else "Turn off captions",
+                                    icon = Icons.Default.ClosedCaption,
+                                    active = !captionsEnabled,
+                                    onClick = { playbackControls.chooseSubtitle(null) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                playbackControls.subtitleTracks.forEach { track ->
+                                    val isSelected = track.selected && captionsEnabled
                                     GoogleTvDrawerActionRow(
                                         title = track.label,
-                                        subtitle = if (track.selected) "Currently selected" else "Select audio feed",
-                                        icon = Icons.AutoMirrored.Filled.VolumeUp,
-                                        active = track.selected,
-                                        onClick = { playbackControls.chooseAudio(track.id) },
+                                        subtitle = if (isSelected) "Active captions" else "Select subtitle language",
+                                        icon = Icons.Default.ClosedCaption,
+                                        active = isSelected,
+                                        onClick = { playbackControls.chooseSubtitle(track.id) },
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }
                             }
                         }
-                    }
 
-                    item { DrawerSectionLabel("SUBTITLES / CC") }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            GoogleTvDrawerActionRow(
-                                title = "Off",
-                                subtitle = if (!captionsEnabled) "Captions disabled" else "Turn off captions",
-                                icon = Icons.Default.ClosedCaption,
-                                active = !captionsEnabled,
-                                onClick = { playbackControls.chooseSubtitle(null) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            playbackControls.subtitleTracks.forEach { track ->
-                                val isSelected = track.selected && captionsEnabled
-                                GoogleTvDrawerActionRow(
-                                    title = track.label,
-                                    subtitle = if (isSelected) "Active captions" else "Select subtitle language",
-                                    icon = Icons.Default.ClosedCaption,
-                                    active = isSelected,
-                                    onClick = { playbackControls.chooseSubtitle(track.id) },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                        // --- OTHER APPS ---
+                        item { DrawerSectionLabel("ENTERTAINMENT APPS") }
+                        items(entertainmentApps, key = { "service-${it.packageName}" }) { app ->
+                            val launchIntent = remember(app.packageName) {
+                                findAppLaunchIntent(context, app.packageName)
                             }
-                        }
-                    }
-
-                    // --- OTHER APPS ---
-                    item { DrawerSectionLabel("ENTERTAINMENT APPS") }
-                    items(entertainmentApps, key = { "service-${it.packageName}" }) { app ->
-                        val launchIntent = remember(app.packageName) {
-                            findAppLaunchIntent(context, app.packageName)
-                        }
-                        val icon = remember(app.packageName, launchIntent) {
-                            if (launchIntent == null) null else runCatching {
-                                context.packageManager.getApplicationIcon(app.packageName)
-                            }.getOrNull()
-                        }
-                        var isFocused by remember(app.packageName) { mutableStateOf(false) }
-                        Surface(
-                            onClick = {
+                            val icon = remember(app.packageName, launchIntent) {
+                                if (launchIntent == null) null else runCatching {
+                                    context.packageManager.getApplicationIcon(app.packageName)
+                                }.getOrNull()
+                            }
+                            var isFocused by remember(app.packageName) { mutableStateOf(false) }
+                            val appInteraction = remember(app.packageName) { MutableInteractionSource() }
+                            val openApp = {
                                 GlzHubManager.reportLaunchedApp(prefs, app.name, app.packageName)
                                 scope.launch(Dispatchers.IO) {
                                     GlzHubManager.heartbeat(prefs, client)
                                 }
                                 launchEntertainmentApp(context, app.packageName, launchIntent)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .googleTvFocusable(
-                                    shape = RoundedCornerShape(16.dp),
-                                    focusedScale = 1.02f,
-                                    onFocusChange = { isFocused = it }
-                                ),
-                            shape = RoundedCornerShape(16.dp),
-                            color = when {
-                                isFocused -> Color.White
-                                else -> Color.White.copy(alpha = 0.06f)
-                            },
-                            contentColor = if (isFocused) Color.Black else Color.White
-                        ) {
-                            Row(
-                                Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                AdaptiveAppIcon(
-                                    icon = icon,
-                                    appName = app.name,
-                                    accent = app.accent,
-                                    size = 46.dp
-                                )
-                                Spacer(Modifier.width(14.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        app.name,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                    Text(
-                                        if (launchIntent == null) "Install from store" else "Launch app",
-                                        color = if (isFocused) Color.Black.copy(alpha = 0.70f) else GoogleTvTokens.TextSecondary,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isFocused) Color.Black else GoogleTvTokens.BlueAccent.copy(alpha = 0.20f)
+                            }
+                            Column(Modifier.fillMaxWidth()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(if (isFocused) Color.Black else Color.Transparent)
+                                        .onFocusChanged { isFocused = it.isFocused }
+                                        .onKeyEvent { keyEvent ->
+                                            if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                                                when (keyEvent.nativeKeyEvent.keyCode) {
+                                                    KeyEvent.KEYCODE_DPAD_CENTER,
+                                                    KeyEvent.KEYCODE_ENTER,
+                                                    KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                                        openApp()
+                                                        return@onKeyEvent true
+                                                    }
+                                                }
+                                            }
+                                            false
+                                        }
+                                        .clickable(
+                                            interactionSource = appInteraction,
+                                            indication = null,
+                                            onClick = openApp
+                                        )
                                 ) {
-                                    Text(
-                                        if (launchIntent == null) "INSTALL" else "OPEN",
-                                        Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = if (isFocused) Color.White else GoogleTvTokens.BlueAccent,
-                                        letterSpacing = 0.5.sp
-                                    )
+                                    if (isFocused) {
+                                        Box(
+                                            Modifier
+                                                .width(4.dp)
+                                                .height(60.dp)
+                                                .align(Alignment.CenterStart)
+                                                .background(DtvPanelBlue)
+                                        )
+                                    }
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AdaptiveAppIcon(
+                                            icon = icon,
+                                            appName = app.name,
+                                            accent = app.accent,
+                                            size = 38.dp
+                                        )
+                                        Spacer(Modifier.width(14.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                app.name,
+                                                color = if (isFocused) Color.White else DtvPanelPrimaryText,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                if (launchIntent == null) "Install from store" else "Launch app",
+                                                color = if (isFocused) DtvPanelPrimaryText.copy(alpha = 0.72f) else DtvPanelSecondaryText,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                        Text(
+                                            if (launchIntent == null) "INSTALL" else "OPEN",
+                                            color = if (isFocused) DtvPanelBlue else DtvPanelSecondaryText,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.6.sp
+                                        )
+                                    }
                                 }
+                                Box(Modifier.fillMaxWidth().height(1.dp).background(DtvPanelRowDivider))
                             }
                         }
                     }
