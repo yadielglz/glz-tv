@@ -1,13 +1,11 @@
 package com.glztv.app.ui.screens
 
-import android.content.Context
 import android.view.KeyEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,10 +13,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,26 +22,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,52 +46,55 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.glztv.app.BuildConfig
 import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 import com.glztv.app.GuestExperience
 import com.glztv.app.Movie
 import com.glztv.app.RadioStation
-import com.glztv.app.launcher.LauncherAppItem
-import com.glztv.app.launcher.LauncherAppsManager
-import com.glztv.app.launcher.toSafeImageBitmap
 import com.glztv.app.model.EntertainmentApp
 import com.glztv.app.model.NetworkInfo
 import com.glztv.app.model.WeatherInfo
 import com.glztv.app.player.RadioPlaybackState
-import com.glztv.app.ui.components.AppContextMenuDialog
 import com.glztv.app.ui.components.GoogleTvChannelLogo
 import com.glztv.app.ui.components.HomeRadioPlayerBar
 import com.glztv.app.ui.theme.DtvActionButton
 import com.glztv.app.ui.theme.DtvChrome
 import com.glztv.app.ui.theme.DtvNavTab
 import com.glztv.app.ui.theme.DtvProgressBar
-import com.glztv.app.ui.theme.DtvSectionHeader
 import com.glztv.app.ui.theme.DtvTopCommandBar
 import com.glztv.app.ui.theme.LocalTvViewport
 import com.glztv.app.ui.theme.formatDtvCompactTime
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Locale
 
+private val HeroPreviewLeftFade = Brush.horizontalGradient(
+    colorStops = arrayOf(
+        0.00f to Color(0xFF0E1116),
+        0.22f to Color(0xD90E1116),
+        0.52f to Color(0x330E1116),
+        1.00f to Color.Transparent
+    )
+)
+
 /**
- * Classic DirecTV HD Home Screen (v1.48.4.10).
+ * Non-Scrollable DirecTV HD Home Dashboard (v1.48.4.15).
  *
- * 1. Shared DirecTV HD Top Command Bar (`Home` active).
- * 2. Classic DirecTV HD Split-Top Broadcast Panel:
- *    - Left: Live channel logo, number, callsign, LIVE badge, show title, time,
- *      synopsis, electric-blue progress bar, and crisp Watch Live / Full Guide / Favorite controls.
- *    - Right: Sharp framed 16:9 TextureView live TV preview box with 1dp metallic border.
- * 3. Persistent Mini Radio Player bar when audio is active.
- * 4. Hairline-bordered DirecTV content rows: Live Sports & Events, My Channels,
- *    Your Apps, Movies & On Demand, and GLZ Radio.
+ * - Top Bar: "GlzTV" wordmark, navigation tabs (Home | Live TV | Guide | Movies | Radio | Apps | Weather),
+ *   and borderless right-side Weather, Clock, Name, Settings.
+ * - Hero Bar: Live TV preview bleeds across the right third (no redundant channel badge);
+ *   when Radio is playing / no preview, Weather takes the right third. Left side shows channel/program,
+ *   progress bar, and Watch Live + Apps + Favorite (zero clipping).
+ * - Strong DirecTV Divider separating Hero Bar from the non-scrollable 2-Column Dashboard:
+ *   - Left Column (44%): Live Sports & Events (up to 3 compact DirecTV rows + "More in Guide ▸")
+ *     plus Weather Widget whenever there are fewer than 3 live events.
+ *   - Right Column (56%): Compact 2x3 DirecTV My Channels grid (6 channels + "All N in Guide ▸").
+ * - Bottom Edge: Flush DirecTV Radio Player Bar when Radio is active.
  */
 @Composable
 fun GoogleTvHomeScreen(
@@ -128,6 +119,7 @@ fun GoogleTvHomeScreen(
     onOpenGuide: () -> Unit,
     onOpenMovies: () -> Unit = {},
     onOpenRadio: () -> Unit,
+    onOpenApps: () -> Unit = {},
     onOpenWeather: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenWelcome: () -> Unit = {},
@@ -145,36 +137,8 @@ fun GoogleTvHomeScreen(
     onOpenSpeedTest: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val viewport = LocalTvViewport.current
-    val prefs = remember { context.getSharedPreferences("glz_tv", Context.MODE_PRIVATE) }
-    val dockListState = rememberLazyListState()
-
-    var installedApps by remember { mutableStateOf<List<LauncherAppItem>>(emptyList()) }
-    var contextMenuApp by remember { mutableStateOf<LauncherAppItem?>(null) }
-
-    val isFamilyMode = isFamilyChannel || BuildConfig.DEBUG
-
-    fun refreshInstalledApps() {
-        if (isFamilyMode) {
-            scope.launch {
-                installedApps = LauncherAppsManager.loadInstalledApps(context, prefs)
-            }
-        }
-    }
-
-    if (isFamilyMode) {
-        DisposableEffect(isFamilyMode) {
-            refreshInstalledApps()
-            val receiver = LauncherAppsManager.registerAppListener(context) {
-                refreshInstalledApps()
-            }
-            onDispose {
-                runCatching { context.unregisterReceiver(receiver) }
-            }
-        }
-    }
+    val horizontalPad = viewport.safeHorizontal.coerceAtLeast(24.dp)
 
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -195,11 +159,8 @@ fun GoogleTvHomeScreen(
             resumeChannel?.let { add(it) }
             channels.filter { it.id in favorites }.forEach { add(it) }
             recentChannels.forEach { add(it) }
-            channels.filterNot { it.isLiveEvent() }.take(14).forEach { add(it) }
-        }.distinctBy { it.id }.take(16)
-    }
-    val visibleInstalledApps = remember(installedApps) {
-        installedApps.filterNot { it.isHidden }
+            channels.filterNot { it.isLiveEvent() }.take(12).forEach { add(it) }
+        }.distinctBy { it.id }.take(6)
     }
 
     val watchLiveFocus = remember { FocusRequester() }
@@ -208,462 +169,385 @@ fun GoogleTvHomeScreen(
         runCatching { watchLiveFocus.requestFocus() }
     }
 
-    val horizontalPad = viewport.safeHorizontal.coerceAtLeast(28.dp)
-    val splitHeight = if (viewport.isCompactHeight) 172.dp else 198.dp
+    val showPreviewVideo = !radioPlaying && previewContent != null && heroChannel != null
+    val heroHeight = if (viewport.isCompactHeight) 178.dp else 196.dp
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(DtvChrome.ScreenBg)
     ) {
-        Column(Modifier.fillMaxSize()) {
-            // ── 1. Shared DirecTV HD Top Command Bar ──────────────────────────────
-            DtvTopCommandBar(
-                activeTab = DtvNavTab.Home,
-                nowMillis = now,
-                weather = weather,
-                guestLabel = guestName.ifBlank { experience.propertyName.ifBlank { "Guest" } },
-                hasUpdate = hasUpdate,
-                showMoviesTab = movies.isNotEmpty(),
-                sportsBarKioskEnabled = sportsBarKioskEnabled,
-                onSelectTab = { tab ->
-                    when (tab) {
-                        DtvNavTab.Home -> scope.launch { dockListState.animateScrollToItem(0) }
-                        DtvNavTab.LiveTv -> (heroChannel ?: channels.firstOrNull())?.let(onWatchChannel) ?: onOpenGuide()
-                        DtvNavTab.Guide -> onOpenGuide()
-                        DtvNavTab.Movies -> onOpenMovies()
-                        DtvNavTab.Radio -> onOpenRadio()
-                        DtvNavTab.Weather -> onOpenWeather()
-                        DtvNavTab.SportsBar -> onStartSportsBarKiosk()
-                    }
-                },
-                onOpenUpdate = onOpenUpdate,
-                onOpenWelcome = onOpenWelcome,
-                onOpenSettings = onOpenSettings
-            )
-
-            // ── 2. Classic DirecTV HD Split-Top Broadcast Panel ───────────────────
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(splitHeight)
-                    .background(DtvChrome.BannerGradient)
-            ) {
-                val active = heroChannel
-                val currentProg = remember(active?.id, guide, now) {
-                    active?.let { guide.nowProgrammeForChannel(it, now) }
+        // ── 1. Shared DirecTV HD Top Bar ("GlzTV") ────────────────────────────────
+        DtvTopCommandBar(
+            activeTab = DtvNavTab.Home,
+            nowMillis = now,
+            weather = weather,
+            guestLabel = guestName.ifBlank { experience.propertyName.ifBlank { "Guest" } },
+            hasUpdate = hasUpdate,
+            showMoviesTab = movies.isNotEmpty(),
+            sportsBarKioskEnabled = sportsBarKioskEnabled,
+            onSelectTab = { tab ->
+                when (tab) {
+                    DtvNavTab.Home -> runCatching { watchLiveFocus.requestFocus() }
+                    DtvNavTab.LiveTv -> (heroChannel ?: channels.firstOrNull())?.let(onWatchChannel) ?: onOpenGuide()
+                    DtvNavTab.Guide -> onOpenGuide()
+                    DtvNavTab.Movies -> onOpenMovies()
+                    DtvNavTab.Radio -> onOpenRadio()
+                    DtvNavTab.Apps -> onOpenApps()
+                    DtvNavTab.Weather -> onOpenWeather()
+                    DtvNavTab.SportsBar -> onStartSportsBarKiosk()
                 }
-                val progProgress = currentProg?.let {
-                    ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
-                        .coerceIn(0f, 1f)
-                } ?: 0f
+            },
+            onOpenUpdate = onOpenUpdate,
+            onOpenWelcome = onOpenWelcome,
+            onOpenSettings = onOpenSettings
+        )
 
-                Row(
+        // ── 2. DirecTV HD Hero Bar (Right-Third Bleed Preview OR Weather) ─────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(heroHeight)
+                .clipToBounds()
+                .background(DtvChrome.BannerGradient)
+        ) {
+            // Right Third: Live TV preview bleeding smoothly into Hero OR Weather when Radio is playing
+            if (showPreviewVideo) {
+                Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = horizontalPad, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxWidth(0.42f)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterEnd)
+                        .clipToBounds()
                 ) {
-                    // Left: Broadcast Channel & Program Details
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        if (active != null) {
-                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    GoogleTvChannelLogo(
-                                        channel = active,
-                                        size = if (viewport.isCompactHeight) 32.dp else 36.dp,
-                                        guide = guide,
-                                        shape = RoundedCornerShape(4.dp)
-                                    )
-                                    Text(
-                                        text = active.number.ifBlank { "LIVE" },
-                                        color = DtvChrome.PrimaryText,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = active.name,
-                                        color = DtvChrome.SecondaryText,
-                                        fontSize = 14.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .background(Color(0x2EEF4444), RoundedCornerShape(2.dp))
-                                            .border(1.dp, Color(0x66EF4444), RoundedCornerShape(2.dp))
-                                            .padding(horizontal = 6.dp, vertical = 1.dp)
-                                    ) {
-                                        Text(
-                                            text = "ON AIR",
-                                            color = Color(0xFFFCA5A5),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.6.sp
-                                        )
-                                    }
-                                    if (eventChannels.isNotEmpty()) {
-                                        Box(
-                                            modifier = Modifier
-                                                .background(DtvChrome.ElectricBlue.copy(alpha = 0.16f), RoundedCornerShape(2.dp))
-                                                .border(1.dp, DtvChrome.ElectricBlue.copy(alpha = 0.45f), RoundedCornerShape(2.dp))
-                                                .padding(horizontal = 6.dp, vertical = 1.dp)
-                                        ) {
-                                            Text(
-                                                text = "${eventChannels.size} LIVE EVENT${if (eventChannels.size == 1) "" else "S"}",
-                                                color = DtvChrome.ElectricBlueSoft,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                letterSpacing = 0.5.sp
-                                            )
-                                        }
-                                    }
-                                }
+                    previewContent?.invoke()
+                    Box(Modifier.fillMaxSize().background(HeroPreviewLeftFade))
+                }
+            } else if (weather != null) {
+                HeroRightWeatherPanel(
+                    weather = weather,
+                    onClick = onOpenWeather,
+                    modifier = Modifier
+                        .fillMaxWidth(0.36f)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterEnd)
+                        .padding(end = horizontalPad, top = 14.dp, bottom = 14.dp)
+                )
+            }
 
-                                val heroTitle = currentProg?.title?.takeIf { it.isNotBlank() }
-                                    ?: active.eventTitle?.takeIf { it.isNotBlank() }
-                                    ?: active.name
-                                Text(
-                                    text = heroTitle,
-                                    color = Color.White,
-                                    fontSize = if (viewport.isCompactHeight) 21.sp else 25.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+            // Left Two-Thirds: Clean Broadcast Channel Details + ProgressBar + Actions (zero clipping)
+            val active = heroChannel
+            val currentProg = remember(active?.id, guide, now) {
+                active?.let { guide.nowProgrammeForChannel(it, now) }
+            }
+            val progProgress = currentProg?.let {
+                ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
+                    .coerceIn(0f, 1f)
+            } ?: 0f
 
-                                val timeRange = currentProg?.let {
-                                    "${formatDtvCompactTime(it.startMillis)} - ${formatDtvCompactTime(it.endMillis)}"
-                                } ?: "Live Broadcast"
-                                val sub = buildList {
-                                    add(timeRange)
-                                    if (active.group.isNotBlank()) add(active.group)
-                                }.joinToString(", ")
-                                Text(
-                                    text = sub,
-                                    color = DtvChrome.SecondaryText,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-
-                                currentProg?.description?.takeIf { it.isNotBlank() }?.let { desc ->
-                                    Text(
-                                        text = desc,
-                                        color = DtvChrome.PrimaryText.copy(alpha = 0.78f),
-                                        fontSize = 12.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                if (currentProg != null) {
-                                    DtvProgressBar(
-                                        progress = progProgress,
-                                        modifier = Modifier.width(260.dp)
-                                    )
-                                }
-                            }
-
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                DtvActionButton(
-                                    label = "Watch Live",
-                                    primary = true,
-                                    showPlayIcon = true,
-                                    modifier = Modifier.focusRequester(watchLiveFocus),
-                                    onClick = { onWatchChannel(active) }
-                                )
-                                DtvActionButton(
-                                    label = "Full Guide",
-                                    primary = false,
-                                    onClick = onOpenGuide
-                                )
-                                DtvHomeFavIconButton(
-                                    isFavorite = active.id in favorites,
-                                    onClick = { onToggleFavorite(active.id) }
-                                )
-                            }
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = "Welcome to GLZ TV",
-                                    color = Color.White,
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Normal
-                                )
-                                Text(
-                                    text = "Open Guide, Radio, or Settings to get started.",
-                                    color = DtvChrome.SecondaryText,
-                                    fontSize = 13.sp
-                                )
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                DtvActionButton(
-                                    label = "Open Guide",
-                                    primary = true,
-                                    modifier = Modifier.focusRequester(watchLiveFocus),
-                                    onClick = onOpenGuide
-                                )
-                                DtvActionButton(
-                                    label = "GLZ Radio",
-                                    primary = false,
-                                    onClick = onOpenRadio
-                                )
-                            }
-                        }
-                    }
-
-                    // Right: Sharp Framed 16:9 TextureView Live Preview Window
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(16f / 9f)
-                            .clip(RoundedCornerShape(3.dp))
-                            .clipToBounds()
-                            .background(Color.Black)
-                            .border(1.dp, DtvChrome.Divider, RoundedCornerShape(3.dp))
-                    ) {
-                        if (previewContent != null) {
-                            previewContent()
-                        } else {
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .background(DtvChrome.CardGradient),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = active?.name ?: "GLZ TV",
-                                    color = DtvChrome.SecondaryText,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                        // Crisp subtle corner channel tag inside the framed preview
-                        if (active != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.64f)
+                    .fillMaxHeight()
+                    .padding(start = horizontalPad, top = 14.dp, bottom = 14.dp, end = 16.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (active != null) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            GoogleTvChannelLogo(
+                                channel = active,
+                                size = 30.dp,
+                                guide = guide,
+                                shape = RoundedCornerShape(3.dp)
+                            )
+                            Text(
+                                text = active.number.ifBlank { "LIVE" },
+                                color = DtvChrome.ElectricBlueSoft,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = active.name,
+                                color = DtvChrome.SecondaryText,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(8.dp)
-                                    .background(Color(0xCC06080B), RoundedCornerShape(2.dp))
-                                    .border(1.dp, DtvChrome.Divider, RoundedCornerShape(2.dp))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    .background(Color(0x2EEF4444), RoundedCornerShape(2.dp))
+                                    .border(1.dp, Color(0x66EF4444), RoundedCornerShape(2.dp))
+                                    .padding(horizontal = 6.dp, vertical = 1.dp)
                             ) {
                                 Text(
-                                    text = "${active.number.ifBlank { "LIVE" }} ${active.name}".take(20),
-                                    color = DtvChrome.PrimaryText,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1
+                                    text = "ON AIR",
+                                    color = Color(0xFFFCA5A5),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.6.sp
                                 )
                             }
                         }
+
+                        val heroTitle = currentProg?.title?.takeIf { it.isNotBlank() }
+                            ?: active.eventTitle?.takeIf { it.isNotBlank() }
+                            ?: active.name
+                        Text(
+                            text = heroTitle,
+                            color = Color.White,
+                            fontSize = if (viewport.isCompactHeight) 22.sp else 25.sp,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        val timeRange = currentProg?.let {
+                            "${formatDtvCompactTime(it.startMillis)} - ${formatDtvCompactTime(it.endMillis)}"
+                        } ?: "Live Broadcast"
+                        Text(
+                            text = buildList {
+                                add(timeRange)
+                                if (active.group.isNotBlank()) add(active.group)
+                            }.joinToString(", "),
+                            color = DtvChrome.SecondaryText,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        if (currentProg != null) {
+                            Spacer(Modifier.height(2.dp))
+                            DtvProgressBar(
+                                progress = progProgress,
+                                modifier = Modifier.width(240.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DtvActionButton(
+                            label = "Watch Live",
+                            primary = true,
+                            showPlayIcon = true,
+                            modifier = Modifier.focusRequester(watchLiveFocus),
+                            onClick = { onWatchChannel(active) }
+                        )
+                        DtvActionButton(
+                            label = "Apps",
+                            primary = false,
+                            onClick = onOpenApps
+                        )
+                        DtvHomeFavToggle(
+                            isFavorite = active.id in favorites,
+                            onClick = { onToggleFavorite(active.id) }
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Welcome to GlzTV",
+                            color = Color.White,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                        Text(
+                            text = "Open Guide, Apps, or Radio to begin.",
+                            color = DtvChrome.SecondaryText,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DtvActionButton(
+                            label = "Open Guide",
+                            primary = true,
+                            modifier = Modifier.focusRequester(watchLiveFocus),
+                            onClick = onOpenGuide
+                        )
+                        DtvActionButton(
+                            label = "Apps",
+                            primary = false,
+                            onClick = onOpenApps
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── Strong DirecTV Divider between Hero Bar and 2-Column Dashboard ────────
+        Box(Modifier.fillMaxWidth().height(2.dp).background(DtvChrome.Divider))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.ElectricBlue.copy(alpha = 0.35f)))
+
+        // ── 3. Non-Scrollable 2-Column DirecTV Dashboard ──────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = horizontalPad, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            // LEFT COLUMN (44%): Live Sports & Events + Weather Widget (when < 3 events)
+            Column(
+                modifier = Modifier
+                    .weight(0.44f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val visibleEvents = eventChannels.take(3)
+                if (visibleEvents.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            Box(Modifier.size(6.dp).clip(CircleShape).background(DtvChrome.LiveRed))
+                            Text(
+                                text = "LIVE SPORTS & EVENTS",
+                                color = DtvChrome.PrimaryText,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.9.sp
+                            )
+                        }
+                        if (eventChannels.size > 3) {
+                            DtvMoreLinkChip(
+                                label = "+${eventChannels.size - 3} more ▸",
+                                onClick = onOpenGuide
+                            )
+                        } else {
+                            Text(
+                                text = "${eventChannels.size} LIVE",
+                                color = DtvChrome.MutedText,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        visibleEvents.forEach { eventCh ->
+                            val prog = remember(eventCh.id, guide, now) {
+                                guide.nowProgrammeForChannel(eventCh, now)
+                            }
+                            val pct = prog?.let {
+                                ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
+                                    .coerceIn(0f, 1f)
+                            } ?: 0.5f
+                            DtvCompactEventRow(
+                                channel = eventCh,
+                                progress = pct,
+                                onClick = { onWatchChannel(eventCh) }
+                            )
+                        }
                     }
                 }
 
-                // Hairline bottom divider under split-top panel
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(DtvChrome.Divider)
-                )
+                // Weather Widget in Left Column whenever there are 0, 1, or 2 live events
+                if (visibleEvents.size < 3 && weather != null) {
+                    DtvHomeWeatherWidget(
+                        weather = weather,
+                        compact = visibleEvents.isNotEmpty(),
+                        onClick = onOpenWeather,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    )
+                }
             }
 
-            // ── 3. Persistent Mini Radio Player Bar (when Radio is active) ────────
-            AnimatedVisibility(
-                visible = currentRadioStation != null,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+            // Crisp Vertical DirecTV Divider between Left and Right columns
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(DtvChrome.Divider)
+            )
+
+            // RIGHT COLUMN (56%): Compact 2x3 DirecTV My Channels Grid + "All in Guide ▸"
+            Column(
+                modifier = Modifier
+                    .weight(0.56f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                HomeRadioPlayerBar(
-                    station = currentRadioStation,
-                    isPlaying = radioPlaying,
-                    playbackState = radioPlaybackState,
-                    onTogglePlayPause = onToggleRadioPlayPause,
-                    onStop = onStopRadio,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Box(Modifier.width(3.dp).height(11.dp).background(DtvChrome.ElectricBlue))
+                        Text(
+                            text = "MY CHANNELS",
+                            color = DtvChrome.PrimaryText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.9.sp
+                        )
+                    }
+                    DtvMoreLinkChip(
+                        label = "All ${channels.size} in Guide ▸",
+                        onClick = onOpenGuide
+                    )
+                }
+
+                // 3 rows × 2 columns = 6 crisp compact DirecTV channel tiles (zero scrolling)
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = horizontalPad, vertical = 6.dp)
-                )
-            }
-
-            // ── 4. DirecTV HD Content Rows Below ──────────────────────────────────
-            LazyColumn(
-                state = dockListState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(top = 14.dp, bottom = 26.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                // Row 1: Live Sports & Events (auto-hides when empty)
-                if (eventChannels.isNotEmpty()) {
-                    item(key = "dtv-home-events") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DtvSectionHeader(
-                                title = "LIVE SPORTS & EVENTS",
-                                trailing = "${eventChannels.size} LIVE NOW",
-                                showLiveDot = true,
-                                horizontalPad = horizontalPad
-                            )
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = horizontalPad),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                items(eventChannels, key = { "ev-${it.id}" }) { eventCh ->
-                                    val prog = remember(eventCh.id, guide, now) {
-                                        guide.nowProgrammeForChannel(eventCh, now)
-                                    }
-                                    val pct = prog?.let {
-                                        ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
-                                            .coerceIn(0f, 1f)
-                                    } ?: 0.5f
-                                    DtvHomeLiveEventCard(
-                                        channel = eventCh,
-                                        progress = pct,
-                                        onClick = { onWatchChannel(eventCh) }
-                                    )
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    val rows = myChannels.chunked(2)
+                    rows.forEach { pair ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            pair.forEach { ch ->
+                                val prog = remember(ch.id, guide, now) {
+                                    guide.nowProgrammeForChannel(ch, now)
                                 }
+                                val pct = prog?.let {
+                                    ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
+                                        .coerceIn(0f, 1f)
+                                } ?: 0f
+                                val timeLabel = prog?.let {
+                                    "${formatDtvCompactTime(it.startMillis)} - ${formatDtvCompactTime(it.endMillis)}"
+                                } ?: "Live"
+                                DtvCompactChannelCard(
+                                    channel = ch,
+                                    programmeTitle = prog?.title ?: ch.eventTitle ?: "Live Broadcast",
+                                    timeRange = timeLabel,
+                                    progress = pct,
+                                    isFavorite = ch.id in favorites,
+                                    guide = guide,
+                                    onClick = { onWatchChannel(ch) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                )
                             }
-                        }
-                    }
-                }
-
-                // Row 2: My Channels (Merged Favorites + Recent + Top Lineup)
-                if (myChannels.isNotEmpty()) {
-                    item(key = "dtv-home-channels") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DtvSectionHeader(
-                                title = "MY CHANNELS",
-                                trailing = "FAVORITES & RECENT",
-                                horizontalPad = horizontalPad
-                            )
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = horizontalPad),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                items(myChannels, key = { "mych-${it.id}" }) { ch ->
-                                    val prog = remember(ch.id, guide, now) {
-                                        guide.nowProgrammeForChannel(ch, now)
-                                    }
-                                    val pct = prog?.let {
-                                        ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
-                                            .coerceIn(0f, 1f)
-                                    } ?: 0f
-                                    val timeLabel = prog?.let {
-                                        "${formatDtvCompactTime(it.startMillis)} - ${formatDtvCompactTime(it.endMillis)}"
-                                    } ?: "Live"
-                                    DtvHomeChannelCard(
-                                        channel = ch,
-                                        programmeTitle = prog?.title ?: ch.eventTitle ?: "Live Broadcast",
-                                        timeRange = timeLabel,
-                                        progress = pct,
-                                        isFavorite = ch.id in favorites,
-                                        guide = guide,
-                                        onClick = { onWatchChannel(ch) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Row 3: Your Apps
-                if (visibleInstalledApps.isNotEmpty() || entertainmentApps.isNotEmpty()) {
-                    item(key = "dtv-home-apps") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DtvSectionHeader(
-                                title = "APPS",
-                                trailing = if (isFamilyMode && visibleInstalledApps.isNotEmpty()) "HOLD OK FOR OPTIONS" else null,
-                                horizontalPad = horizontalPad
-                            )
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = horizontalPad),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                if (isFamilyMode && visibleInstalledApps.isNotEmpty()) {
-                                    items(visibleInstalledApps, key = { "inst-${it.packageName}" }) { app ->
-                                        DtvHomeInstalledAppTile(
-                                            app = app,
-                                            onClick = { LauncherAppsManager.launchApp(context, app.packageName) },
-                                            onLongPress = { contextMenuApp = app }
-                                        )
-                                    }
-                                } else {
-                                    items(entertainmentApps, key = { "ent-${it.packageName}" }) { app ->
-                                        DtvHomeEntertainmentAppTile(
-                                            app = app,
-                                            onClick = { onLaunchApp(app) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Row 4: Movies & On Demand
-                if (movies.isNotEmpty()) {
-                    item(key = "dtv-home-movies") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DtvSectionHeader(
-                                title = "MOVIES & ON DEMAND",
-                                trailing = "${movies.size} TITLES",
-                                horizontalPad = horizontalPad
-                            )
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = horizontalPad),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(movies, key = { "mov-${it.id}" }) { movie ->
-                                    DtvMoviePosterCard(
-                                        movie = movie,
-                                        onClick = { onWatchMovie(movie) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Row 5: GLZ Radio
-                if (radioStations.isNotEmpty()) {
-                    item(key = "dtv-home-radio") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DtvSectionHeader(
-                                title = "GLZ RADIO",
-                                trailing = "${radioStations.size} STATIONS",
-                                horizontalPad = horizontalPad
-                            )
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = horizontalPad),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                items(radioStations, key = { "rad-${it.code}-${it.name}" }) { station ->
-                                    val isCurrent = currentRadioStation != null &&
-                                        currentRadioStation.code == station.code &&
-                                        currentRadioStation.streamUrl == station.streamUrl
-                                    DtvHomeRadioCard(
-                                        station = station,
-                                        isActive = isCurrent && radioPlaying,
-                                        onClick = { onPlayRadioStation(station) }
-                                    )
-                                }
+                            if (pair.size == 1) {
+                                Spacer(Modifier.weight(1f))
                             }
                         }
                     }
@@ -671,29 +555,451 @@ fun GoogleTvHomeScreen(
             }
         }
 
-        // App Context Menu Dialog (Family Mode long-press)
-        contextMenuApp?.let { app ->
-            AppContextMenuDialog(
-                app = app,
-                onOpenApp = { LauncherAppsManager.launchApp(context, app.packageName) },
-                onToggleFavorite = {
-                    LauncherAppsManager.setFavorite(prefs, app.packageName, !app.isFavorite)
-                    refreshInstalledApps()
-                },
-                onToggleHide = {
-                    LauncherAppsManager.setHidden(prefs, app.packageName, !app.isHidden)
-                    refreshInstalledApps()
-                },
-                onOpenDetails = { LauncherAppsManager.openAppDetails(context, app.packageName) },
-                onUninstall = { LauncherAppsManager.uninstallApp(context, app.packageName) },
-                onDismiss = { contextMenuApp = null }
+        // ── 4. Flush DirecTV Radio Player Bar (docked at bottom when Radio active)
+        AnimatedVisibility(
+            visible = currentRadioStation != null,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            HomeRadioPlayerBar(
+                station = currentRadioStation,
+                isPlaying = radioPlaying,
+                playbackState = radioPlaybackState,
+                onTogglePlayPause = onToggleRadioPlayPause,
+                onStop = onStopRadio
             )
         }
     }
 }
 
 @Composable
-private fun DtvHomeFavIconButton(
+private fun HeroRightWeatherPanel(
+    weather: WeatherInfo,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var focused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val today = weather.forecast.firstOrNull()
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (focused) Color.Black else Color(0xCC11151C))
+            .border(if (focused) 2.dp else 1.dp, if (focused) DtvChrome.ElectricBlue else DtvChrome.Divider, RoundedCornerShape(3.dp))
+            .onFocusChanged { focused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> { onClick(); true }
+                        else -> false
+                    }
+                } else false
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "LOCAL WEATHER",
+                color = DtvChrome.ElectricBlue,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(text = homeWeatherIcon(weather.weatherCode), fontSize = 36.sp)
+                Column {
+                    Text(
+                        text = "${weather.temperature}°",
+                        color = Color.White,
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Light
+                    )
+                    Text(
+                        text = weather.location.ifBlank { "Current Location" },
+                        color = DtvChrome.SecondaryText,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Text(
+                text = buildList {
+                    add("Feels ${weather.feelsLike}°")
+                    if (today != null) add("H ${today.high}° / L ${today.low}°")
+                    add("${weather.humidity}% hum")
+                }.joinToString(" · "),
+                color = DtvChrome.SecondaryText,
+                fontSize = 11.sp,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun DtvCompactEventRow(
+    channel: Channel,
+    progress: Float,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val league = channel.eventLeague?.takeIf { it.isNotBlank() } ?: "LIVE"
+    val title = channel.eventTitle?.takeIf { it.isNotBlank() } ?: channel.name
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(62.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (isFocused) Color.Black else Color.Transparent)
+            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
+            .border(
+                width = if (isFocused) 2.dp else 1.dp,
+                color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
+                shape = RoundedCornerShape(3.dp)
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> { onClick(); true }
+                        else -> false
+                    }
+                } else false
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+    ) {
+        Box(
+            Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(if (isFocused) DtvChrome.ElectricBlue else DtvChrome.LiveRed)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = league.uppercase(Locale.getDefault()),
+                    color = DtvChrome.ElectricBlueSoft,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.6.sp
+                )
+                Text(
+                    text = "● LIVE · ${channel.number.ifBlank { "PPV" }}",
+                    color = Color(0xFFF87171),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Text(
+                text = title,
+                color = if (isFocused) Color.White else DtvChrome.PrimaryText,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            DtvProgressBar(progress = progress.coerceIn(0.06f, 1f), modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun DtvHomeWeatherWidget(
+    weather: WeatherInfo,
+    compact: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var focused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val today = weather.forecast.firstOrNull()
+    val inputFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    val dayFmt = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (focused) Color.Black else Color.Transparent)
+            .then(if (!focused) Modifier.background(DtvChrome.CardGradient) else Modifier)
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
+                shape = RoundedCornerShape(3.dp)
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> { onClick(); true }
+                        else -> false
+                    }
+                } else false
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "LOCAL WEATHER",
+                    color = DtvChrome.ElectricBlue,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = "Full Forecast ▸",
+                    color = if (focused) DtvChrome.ElectricBlueSoft else DtvChrome.MutedText,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(text = homeWeatherIcon(weather.weatherCode), fontSize = if (compact) 26.sp else 36.sp)
+                    Column {
+                        Text(
+                            text = "${weather.temperature}°",
+                            color = Color.White,
+                            fontSize = if (compact) 24.sp else 34.sp,
+                            fontWeight = FontWeight.Light
+                        )
+                        Text(
+                            text = weather.location.ifBlank { "Current Location" },
+                            color = DtvChrome.SecondaryText,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    if (today != null) {
+                        Text(
+                            text = "H ${today.high}° / L ${today.low}°",
+                            color = DtvChrome.PrimaryText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Text(
+                        text = "${weather.humidity}% hum · ${weather.windSpeedMph} mph",
+                        color = DtvChrome.SecondaryText,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            if (!compact && weather.forecast.size >= 3) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    weather.forecast.take(4).forEachIndexed { idx, day ->
+                        val label = remember(day.date, idx) {
+                            if (idx == 0) "Today"
+                            else runCatching { dayFmt.format(requireNotNull(inputFmt.parse(day.date))) }
+                                .getOrDefault(day.date.takeLast(2))
+                        }
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color(0xFF101319), RoundedCornerShape(2.dp))
+                                .border(1.dp, DtvChrome.RowDivider, RoundedCornerShape(2.dp))
+                                .padding(vertical = 5.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(label, color = DtvChrome.MutedText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(homeWeatherIcon(day.weatherCode), fontSize = 14.sp)
+                            Text("${day.high}°/${day.low}°", color = DtvChrome.PrimaryText, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DtvCompactChannelCard(
+    channel: Channel,
+    programmeTitle: String,
+    timeRange: String,
+    progress: Float,
+    isFavorite: Boolean,
+    guide: EpgGuide,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (isFocused) Color.Black else Color.Transparent)
+            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
+            .border(
+                width = if (isFocused) 2.dp else 1.dp,
+                color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
+                shape = RoundedCornerShape(3.dp)
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> { onClick(); true }
+                        else -> false
+                    }
+                } else false
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+    ) {
+        if (isFocused) {
+            Box(Modifier.width(3.dp).fillMaxHeight().background(DtvChrome.ElectricBlue))
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                GoogleTvChannelLogo(
+                    channel = channel,
+                    size = 22.dp,
+                    guide = guide,
+                    shape = RoundedCornerShape(2.dp)
+                )
+                Text(
+                    text = channel.number.ifBlank { "—" },
+                    color = if (isFocused) DtvChrome.ElectricBlueSoft else DtvChrome.SecondaryText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = channel.name,
+                    color = if (isFocused) Color.White else DtvChrome.PrimaryText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isFavorite) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        tint = DtvChrome.Gold,
+                        modifier = Modifier.size(11.dp)
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = programmeTitle,
+                    color = if (isFocused) Color.White else DtvChrome.SecondaryText,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = timeRange,
+                    color = DtvChrome.MutedText,
+                    fontSize = 9.sp,
+                    maxLines = 1
+                )
+            }
+            DtvProgressBar(progress = progress, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun DtvMoreLinkChip(
+    label: String,
+    onClick: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    Text(
+        text = label,
+        color = if (focused) Color.White else DtvChrome.ElectricBlueSoft,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(2.dp))
+            .background(if (focused) DtvChrome.ElectricBlue else Color.Transparent)
+            .onFocusChanged { focused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> { onClick(); true }
+                        else -> false
+                    }
+                } else false
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    )
+}
+
+@Composable
+private fun DtvHomeFavToggle(
     isFavorite: Boolean,
     onClick: () -> Unit
 ) {
@@ -711,19 +1017,12 @@ private fun DtvHomeFavIconButton(
                     when (keyEvent.nativeKeyEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_CENTER,
                         KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            onClick()
-                            return@onKeyEvent true
-                        }
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> { onClick(); true }
+                        else -> false
                     }
-                }
-                false
+                } else false
             }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -731,359 +1030,6 @@ private fun DtvHomeFavIconButton(
             contentDescription = if (isFavorite) "Remove favorite" else "Add favorite",
             tint = if (isFavorite) DtvChrome.Gold else DtvChrome.PrimaryText,
             modifier = Modifier.size(17.dp)
-        )
-    }
-}
-
-@Composable
-private fun DtvHomeLiveEventCard(
-    channel: Channel,
-    progress: Float,
-    onClick: () -> Unit
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
-    val league = channel.eventLeague?.takeIf { it.isNotBlank() } ?: "LIVE"
-    val title = channel.eventTitle?.takeIf { it.isNotBlank() } ?: channel.name
-
-    Row(
-        modifier = Modifier
-            .width(256.dp)
-            .height(86.dp)
-            .clip(RoundedCornerShape(3.dp))
-            .background(if (isFocused) Color.Black else Color.Transparent)
-            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
-                shape = RoundedCornerShape(3.dp)
-            )
-            .onFocusChanged { isFocused = it.isFocused }
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    when (keyEvent.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            onClick()
-                            return@onKeyEvent true
-                        }
-                    }
-                }
-                false
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-    ) {
-        // DirecTV signature left vertical accent bar
-        Box(
-            Modifier
-                .width(3.dp)
-                .fillMaxHeight()
-                .background(if (isFocused) DtvChrome.ElectricBlue else DtvChrome.LiveRed)
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 11.dp, vertical = 9.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = league.uppercase(Locale.getDefault()),
-                    color = DtvChrome.ElectricBlueSoft,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.6.sp
-                )
-                Text(
-                    text = "● LIVE · ${channel.number.ifBlank { "PPV" }}",
-                    color = Color(0xFFF87171),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Text(
-                text = title,
-                color = if (isFocused) Color.White else DtvChrome.PrimaryText,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 16.sp
-            )
-            DtvProgressBar(progress = progress.coerceIn(0.05f, 1f), modifier = Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
-private fun DtvHomeChannelCard(
-    channel: Channel,
-    programmeTitle: String,
-    timeRange: String,
-    progress: Float,
-    isFavorite: Boolean,
-    guide: EpgGuide,
-    onClick: () -> Unit
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
-
-    Column(
-        modifier = Modifier
-            .width(216.dp)
-            .height(88.dp)
-            .clip(RoundedCornerShape(3.dp))
-            .background(if (isFocused) Color.Black else Color.Transparent)
-            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
-                shape = RoundedCornerShape(3.dp)
-            )
-            .onFocusChanged { isFocused = it.isFocused }
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    when (keyEvent.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            onClick()
-                            return@onKeyEvent true
-                        }
-                    }
-                }
-                false
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 11.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            GoogleTvChannelLogo(
-                channel = channel,
-                size = 26.dp,
-                guide = guide,
-                shape = RoundedCornerShape(3.dp)
-            )
-            Text(
-                text = channel.number.ifBlank { "—" },
-                color = if (isFocused) DtvChrome.ElectricBlueSoft else DtvChrome.SecondaryText,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = channel.name,
-                color = if (isFocused) Color.White else DtvChrome.PrimaryText,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            if (isFavorite) {
-                Icon(
-                    Icons.Default.Star,
-                    contentDescription = null,
-                    tint = DtvChrome.Gold,
-                    modifier = Modifier.size(12.dp)
-                )
-            }
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = programmeTitle,
-                color = if (isFocused) Color.White else DtvChrome.PrimaryText.copy(alpha = 0.85f),
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = timeRange,
-                color = DtvChrome.MutedText,
-                fontSize = 10.sp,
-                maxLines = 1
-            )
-        }
-        DtvProgressBar(progress = progress, modifier = Modifier.fillMaxWidth())
-    }
-}
-
-@Composable
-private fun DtvHomeInstalledAppTile(
-    app: LauncherAppItem,
-    onClick: () -> Unit,
-    onLongPress: () -> Unit
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
-    val scope = rememberCoroutineScope()
-    var longPressJob by remember { mutableStateOf<Job?>(null) }
-    var longPressTriggered by remember { mutableStateOf(false) }
-    val iconBitmap = remember(app.packageName, app.banner, app.icon) {
-        (app.banner ?: app.icon)?.toSafeImageBitmap(128, 128)
-    }
-
-    Column(
-        modifier = Modifier
-            .width(120.dp)
-            .height(82.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (isFocused) Color.Black else Color.Transparent)
-            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
-                shape = RoundedCornerShape(4.dp)
-            )
-            .onFocusChanged { focused ->
-                isFocused = focused.isFocused
-                if (!focused.isFocused) longPressJob?.cancel()
-            }
-            .onKeyEvent { keyEvent ->
-                val code = keyEvent.nativeKeyEvent.keyCode
-                val isSelect = code == KeyEvent.KEYCODE_DPAD_CENTER ||
-                    code == KeyEvent.KEYCODE_ENTER ||
-                    code == KeyEvent.KEYCODE_NUMPAD_ENTER
-                if (isSelect) {
-                    if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                        if (keyEvent.nativeKeyEvent.repeatCount == 0) {
-                            longPressTriggered = false
-                            longPressJob?.cancel()
-                            longPressJob = scope.launch {
-                                delay(550L)
-                                longPressTriggered = true
-                                onLongPress()
-                            }
-                        }
-                        return@onKeyEvent true
-                    } else if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
-                        longPressJob?.cancel()
-                        if (!longPressTriggered) onClick()
-                        longPressTriggered = false
-                        return@onKeyEvent true
-                    }
-                }
-                false
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        if (iconBitmap != null) {
-            Image(
-                bitmap = iconBitmap,
-                contentDescription = app.label,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(6.dp))
-            )
-        } else {
-            Icon(
-                Icons.Default.Apps,
-                contentDescription = app.label,
-                tint = DtvChrome.PrimaryText,
-                modifier = Modifier.size(30.dp)
-            )
-        }
-        Spacer(Modifier.height(5.dp))
-        Text(
-            text = app.label,
-            color = if (isFocused) Color.White else DtvChrome.PrimaryText,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun DtvHomeEntertainmentAppTile(
-    app: EntertainmentApp,
-    onClick: () -> Unit
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
-    Column(
-        modifier = Modifier
-            .width(120.dp)
-            .height(82.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (isFocused) Color.Black else Color.Transparent)
-            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
-                shape = RoundedCornerShape(4.dp)
-            )
-            .onFocusChanged { isFocused = it.isFocused }
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    when (keyEvent.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            onClick()
-                            return@onKeyEvent true
-                        }
-                    }
-                }
-                false
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(app.accent.copy(alpha = 0.85f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = app.name.take(2).uppercase(Locale.getDefault()),
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Spacer(Modifier.height(5.dp))
-        Text(
-            text = app.name,
-            color = if (isFocused) Color.White else DtvChrome.PrimaryText,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -1118,19 +1064,12 @@ internal fun DtvMoviePosterCard(
                     when (keyEvent.nativeKeyEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_CENTER,
                         KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            onClick()
-                            return@onKeyEvent true
-                        }
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> { onClick(); true }
+                        else -> false
                     }
-                }
-                false
+                } else false
             }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
     ) {
         if (movie.posterUrl.isNotBlank()) {
             AsyncImage(
@@ -1178,108 +1117,13 @@ internal fun DtvMoviePosterCard(
     }
 }
 
-@Composable
-private fun DtvHomeRadioCard(
-    station: RadioStation,
-    isActive: Boolean,
-    onClick: () -> Unit
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
-    Column(
-        modifier = Modifier
-            .width(140.dp)
-            .height(104.dp)
-            .clip(RoundedCornerShape(3.dp))
-            .background(if (isFocused) Color.Black else Color.Transparent)
-            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = when {
-                    isFocused -> DtvChrome.ElectricBlue
-                    isActive -> DtvChrome.ElectricBlue.copy(alpha = 0.7f)
-                    else -> DtvChrome.CardBorder
-                },
-                shape = RoundedCornerShape(3.dp)
-            )
-            .onFocusChanged { isFocused = it.isFocused }
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    when (keyEvent.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            onClick()
-                            return@onKeyEvent true
-                        }
-                    }
-                }
-                false
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(10.dp),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            if (!station.logoUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = station.logoUrl,
-                    contentDescription = station.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(DtvChrome.ElectricBlue.copy(alpha = 0.20f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Radio,
-                        contentDescription = null,
-                        tint = DtvChrome.ElectricBlue,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-            if (isActive) {
-                Text(
-                    text = "ON AIR",
-                    color = DtvChrome.ElectricBlueSoft,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.6.sp
-                )
-            }
-        }
-        Column {
-            Text(
-                text = station.name,
-                color = if (isFocused) Color.White else DtvChrome.PrimaryText,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = station.genre.ifBlank { "GLZ Radio" },
-                color = DtvChrome.SecondaryText,
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
+private fun homeWeatherIcon(code: Int): String = when (code) {
+    0 -> "☀️"
+    1, 2 -> "⛅"
+    3 -> "☁️"
+    45, 48 -> "🌫️"
+    51, 53, 55, 61, 63, 65, 80, 81, 82 -> "🌧️"
+    71, 73, 75, 85, 86 -> "❄️"
+    95, 96, 99 -> "⛈️"
+    else -> "🌤️"
 }

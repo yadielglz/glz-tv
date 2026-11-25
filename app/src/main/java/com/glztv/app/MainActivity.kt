@@ -190,6 +190,7 @@ import com.glztv.app.ui.components.GlzCardDefaults
 import com.glztv.app.ui.screens.GoogleTvGuideScreen
 import com.glztv.app.ui.screens.GoogleTvHomeScreen
 import com.glztv.app.ui.screens.GoogleTvPlayerOsd
+import com.glztv.app.ui.screens.AppsScreen
 import com.glztv.app.ui.screens.MoviesScreen
 import com.glztv.app.ui.theme.DtvChrome
 import com.glztv.app.ui.theme.DtvNavTab
@@ -1004,6 +1005,7 @@ internal fun TvScreen(
                 section == AppSection.Live ||
                 section == AppSection.Movies ||
                 section == AppSection.Radio ||
+                section == AppSection.Apps ||
                 section == AppSection.Weather
             if (!immersive && !isDtvFullScreenSection) {
                 SlimHeader(
@@ -1026,6 +1028,7 @@ internal fun TvScreen(
             section == AppSection.Live ||
             section == AppSection.Movies ||
             section == AppSection.Radio ||
+            section == AppSection.Apps ||
             section == AppSection.Weather
         var topBarNow by remember { mutableStateOf(System.currentTimeMillis()) }
         LaunchedEffect(Unit) {
@@ -1064,6 +1067,7 @@ internal fun TvScreen(
                         }
                         DtvNavTab.Movies -> section = AppSection.Movies
                         DtvNavTab.Radio -> section = AppSection.Radio
+                        DtvNavTab.Apps -> section = AppSection.Apps
                         DtvNavTab.Weather -> section = AppSection.Weather
                         DtvNavTab.SportsBar -> section = AppSection.SportsBarKiosk
                     }
@@ -1226,6 +1230,20 @@ internal fun TvScreen(
                     topBar = { sharedDtvTopBar(DtvNavTab.Radio) },
                     modifier = Modifier.fillMaxSize()
                 )
+            } else if (section == AppSection.Apps) {
+                AppsScreen(
+                    entertainmentApps = managedEntertainmentApps,
+                    isFamilyChannel = isFamilyChannel,
+                    onLaunchApp = { app ->
+                        if (radioPlaying) toggleRadioPlayPause()
+                        val launched = LauncherAppsManager.launchApp(context, app.packageName)
+                        if (!launched) {
+                            launchEntertainmentApp(context, app.packageName, null)
+                        }
+                    },
+                    topBar = { sharedDtvTopBar(DtvNavTab.Apps) },
+                    modifier = Modifier.fillMaxSize()
+                )
             } else if (section == AppSection.Weather) {
                 WeatherScreen(
                     weather = weather,
@@ -1304,6 +1322,7 @@ internal fun TvScreen(
                     onOpenGuide = { stopRadio(); section = AppSection.Live },
                     onOpenMovies = { section = AppSection.Movies },
                     onOpenRadio = { section = AppSection.Radio },
+                    onOpenApps = { section = AppSection.Apps },
                     onOpenWeather = { section = AppSection.Weather },
                     onOpenSettings = { showSettings = true },
                     onOpenWelcome = { showYouModal = true },
@@ -1380,6 +1399,7 @@ internal fun TvScreen(
                             AppSection.Live,
                             AppSection.Movies,
                             AppSection.Radio,
+                            AppSection.Apps,
                             AppSection.Weather,
                             AppSection.SportsBarKiosk -> Unit
                             AppSection.You -> GuestYouSection(

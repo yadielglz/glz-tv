@@ -113,6 +113,7 @@ enum class DtvNavTab(val label: String) {
     Guide("Guide"),
     Movies("Movies"),
     Radio("Radio"),
+    Apps("Apps"),
     Weather("Weather"),
     SportsBar("Sports Bar")
 }
@@ -137,7 +138,7 @@ fun formatDtvCompactDate(millis: Long): String = synchronized(dtvDateFmt) {
 }
 
 /**
- * Shared DirecTV HD Top Command Bar pinned identically across Home, Guide, Movies, Radio, and Weather.
+ * Shared DirecTV HD Top Command Bar pinned identically across Home, Guide, Movies, Radio, Apps, and Weather.
  */
 @Composable
 fun DtvTopCommandBar(
@@ -155,11 +156,10 @@ fun DtvTopCommandBar(
     modifier: Modifier = Modifier
 ) {
     val viewport = LocalTvViewport.current
-    val horizontalPad = viewport.safeHorizontal.coerceAtLeast(28.dp)
-    val barHeight = if (viewport.isCompactHeight) 44.dp else 48.dp
+    val horizontalPad = viewport.safeHorizontal.coerceAtLeast(24.dp)
+    val barHeight = if (viewport.isCompactHeight) 42.dp else 46.dp
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Subtle 1dp metallic top highlight
         Box(
             Modifier
                 .fillMaxWidth()
@@ -175,7 +175,7 @@ fun DtvTopCommandBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: GLZ TV brand + hairline-separated navigation tabs
+            // Left: GlzTV wordmark + hairline-separated navigation tabs
             Row(
                 modifier = Modifier.fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically
@@ -192,11 +192,11 @@ fun DtvTopCommandBar(
                             .background(DtvChrome.ElectricBlue)
                     )
                     Text(
-                        text = "GLZ TV",
-                        color = DtvChrome.PrimaryText,
-                        fontSize = 13.sp,
+                        text = "GlzTV",
+                        color = Color.White,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.4.sp,
+                        letterSpacing = 0.6.sp,
                         maxLines = 1
                     )
                 }
@@ -208,6 +208,7 @@ fun DtvTopCommandBar(
                     add(DtvNavTab.Guide)
                     if (showMoviesTab) add(DtvNavTab.Movies)
                     add(DtvNavTab.Radio)
+                    add(DtvNavTab.Apps)
                     add(DtvNavTab.Weather)
                     if (sportsBarKioskEnabled) add(DtvNavTab.SportsBar)
                 }
@@ -222,10 +223,11 @@ fun DtvTopCommandBar(
                 }
             }
 
-            // Right: Update (if available) · Weather · Clock · Guest · Settings
+            // Right: Borderless inline broadcast telemetry (Update · Weather · Clock · Name · Settings)
             Row(
+                modifier = Modifier.fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 if (hasUpdate) {
                     DtvTopStatusChip(
@@ -251,7 +253,7 @@ fun DtvTopCommandBar(
                             Icons.Default.WbSunny,
                             contentDescription = "Weather",
                             tint = Color(0xFFFBBF24),
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
@@ -259,15 +261,15 @@ fun DtvTopCommandBar(
                 Text(
                     text = formatDtvCompactTime(nowMillis),
                     color = DtvChrome.PrimaryText,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 4.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp)
                 )
 
                 if (guestLabel.isNotBlank()) {
                     DtvTopStatusChip(
-                        label = guestLabel.take(16),
+                        label = guestLabel.take(14),
                         onClick = onOpenWelcome
                     )
                 }
@@ -280,7 +282,7 @@ fun DtvTopCommandBar(
                         Icons.Default.Settings,
                         contentDescription = "Settings",
                         tint = DtvChrome.PrimaryText,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -331,7 +333,7 @@ private fun DtvTopBarTab(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = if (compact) 11.dp else 14.dp)
+            .padding(horizontal = if (compact) 10.dp else 12.dp)
     ) {
         Text(
             text = label,
@@ -356,18 +358,22 @@ private fun DtvTopStatusChip(
     val bg = when {
         isFocused -> Color.Black
         accent -> DtvChrome.ElectricBlue
-        else -> Color(0xFF171B22)
-    }
-    val borderColor = when {
-        isFocused -> DtvChrome.ElectricBlue
-        accent -> DtvChrome.ElectricBlue
-        else -> DtvChrome.Divider
+        else -> Color.Transparent
     }
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(3.dp))
+            .fillMaxHeight()
             .background(bg)
-            .border(if (isFocused) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(3.dp))
+            .drawBehind {
+                if (isFocused) {
+                    val barH = 3.dp.toPx()
+                    drawRect(
+                        color = DtvChrome.ElectricBlue,
+                        topLeft = Offset(0f, size.height - barH),
+                        size = Size(size.width, barH)
+                    )
+                }
+            }
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
@@ -387,7 +393,7 @@ private fun DtvTopStatusChip(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = if (label == null) 7.dp else 9.dp, vertical = 5.dp),
+            .padding(horizontal = if (label == null) 9.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
@@ -396,8 +402,8 @@ private fun DtvTopStatusChip(
             Text(
                 text = label,
                 color = if (isFocused || accent) Color.White else DtvChrome.PrimaryText,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
+                fontSize = 13.sp,
+                fontWeight = if (isFocused || accent) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1
             )
         }
