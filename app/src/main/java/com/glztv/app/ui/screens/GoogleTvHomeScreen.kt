@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -260,7 +261,7 @@ fun GoogleTvHomeScreen(
     }
 
     val horizontalPad = viewport.safeHorizontal.coerceAtLeast(32.dp)
-    val heroHeight = if (viewport.isCompactHeight) 235.dp else 280.dp
+    val heroHeight = if (viewport.isCompactHeight) 188.dp else 215.dp
 
     Box(
         modifier = modifier
@@ -295,6 +296,7 @@ fun GoogleTvHomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(heroHeight)
+                    .clipToBounds()
                     .background(HomeHeroFallbackGradient)
             ) {
                 if (previewContent != null) {
@@ -318,7 +320,7 @@ fun GoogleTvHomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = horizontalPad, vertical = if (viewport.isCompactHeight) 16.dp else 22.dp),
+                        .padding(horizontal = horizontalPad, vertical = 14.dp),
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {

@@ -1208,7 +1208,8 @@ internal fun TvScreen(
                                 muted = true,
                                 createMediaSession = false,
                                 keepScreenOn = false,
-                                cropVideo = true
+                                cropVideo = true,
+                                useTextureView = true
                             )
                         }
                     },
@@ -6108,6 +6109,7 @@ private fun VideoPlayer(
     keepScreenOn: Boolean = true,
     cropVideo: Boolean = false,
     showControls: Boolean = false,
+    useTextureView: Boolean = false,
     controlState: PlaybackControlState? = null,
     preferredAudioLanguage: String? = null,
     extraSubtitles: List<SubtitleTrack> = emptyList(),
@@ -6397,35 +6399,62 @@ private fun VideoPlayer(
     DisposableEffect(player) { onDispose { player.release() } }
     DisposableEffect(mediaSession) { onDispose { mediaSession?.release() } }
     val showEmbeddedSubtitles = captionsEnabled && sidecarCues.isEmpty()
-    Box(modifier.background(Color.Black, RoundedCornerShape(24.dp))) {
-        AndroidView(
-            factory = {
-                PlayerView(it).apply {
-                    this.player = player
-                    this.keepScreenOn = keepScreenOn
-                    resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    Box(modifier.background(Color.Black, if (useTextureView) androidx.compose.ui.graphics.RectangleShape else RoundedCornerShape(24.dp))) {
+        if (useTextureView) {
+            AndroidView(
+                factory = { ctx ->
+                    (android.view.LayoutInflater.from(ctx)
+                        .inflate(R.layout.player_view_texture, null, false) as PlayerView).apply {
+                        this.player = player
+                        this.keepScreenOn = keepScreenOn
+                        resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        useController = false
+                        controllerAutoShow = false
+                        isFocusable = false
+                        isFocusableInTouchMode = false
+                        subtitleView?.visibility = android.view.View.GONE
+                    }
+                },
+                update = {
+                    it.player = player
+                    it.keepScreenOn = keepScreenOn
+                    it.resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                     else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    useController = showControls
-                    controllerAutoShow = showControls
-                    isFocusable = showControls
-                    isFocusableInTouchMode = showControls
-                    subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
-                    (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
-                }
-            },
-            update = {
-                it.player = player
-                it.keepScreenOn = keepScreenOn
-                it.resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                it.useController = showControls
-                it.controllerAutoShow = showControls
-                it.subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
-                (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
-            },
-            onRelease = { it.player = null },
-            modifier = Modifier.fillMaxSize()
-        )
+                },
+                onRelease = { it.player = null },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            AndroidView(
+                factory = {
+                    PlayerView(it).apply {
+                        this.player = player
+                        this.keepScreenOn = keepScreenOn
+                        resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        useController = showControls
+                        controllerAutoShow = showControls
+                        isFocusable = showControls
+                        isFocusableInTouchMode = showControls
+                        subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
+                        (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+                    }
+                },
+                update = {
+                    it.player = player
+                    it.keepScreenOn = keepScreenOn
+                    it.resizeMode = if (cropVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    it.useController = showControls
+                    it.controllerAutoShow = showControls
+                    it.subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
+                    (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+                },
+                onRelease = { it.player = null },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
         AnimatedVisibility(
             visible = captionsEnabled && !activeSidecarText.isNullOrBlank(),
             enter = fadeIn(tween(120)),
