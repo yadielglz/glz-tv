@@ -1,18 +1,17 @@
 package com.glztv.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,21 +21,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,45 +38,39 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
 import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 import com.glztv.app.Programme
 import com.glztv.app.ui.components.GoogleTvChannelLogo
-import com.glztv.app.ui.theme.GoogleTvTokens
-import com.glztv.app.ui.theme.googleTvFocusable
+import com.glztv.app.ui.theme.DtvChrome
+import com.glztv.app.ui.theme.DtvProgressBar
+import com.glztv.app.ui.theme.DtvSegmentedStripBar
+import com.glztv.app.ui.theme.LocalTvViewport
+import com.glztv.app.ui.theme.formatDtvCompactTime
 import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
-private val sharedTimeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-
-private fun formatGuideTime(millis: Long): String {
-    return synchronized(sharedTimeFormat) {
-        sharedTimeFormat.format(Date(millis))
-    }
-}
 
 /**
- * Authentic Google TV 1:1 Live Guide Experience.
+ * Authentic DirecTV HD Live Program Guide (v1.48.4.10).
+ *
  * Features:
- * - Top Category Pills Bar
- * - Top Hero Synopsis with live video PiP
- * - Sticky Channel Header Column (stays fixed on left)
- * - Proportional Synchronized Horizontal Timeline
- * - Real-time "NOW" indicator needle
+ * - Shared DirecTV HD Top Command Bar (`Guide` tab active).
+ * - DirecTV Segmented Category Strip (ALL | FAVORITES | LIVE EVENTS | RECENT | Groups).
+ * - Split-Top Program Info Banner + Framed 16:9 TextureView Live Preview.
+ * - Crisp Rectangular 1dp-Bordered EPG Grid with Sticky Channel Column,
+ *   Synchronized Time-Window Stepper, and Electric-Blue Vertical "NOW" Line.
  */
 @Composable
 fun GoogleTvGuideScreen(
@@ -96,6 +81,7 @@ fun GoogleTvGuideScreen(
     onToggleFavorite: (String) -> Unit,
     onWatchChannel: (Channel) -> Unit,
     previewContent: @Composable () -> Unit,
+    topBar: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -106,10 +92,8 @@ fun GoogleTvGuideScreen(
     val topChannelFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        delay(150L)
-        try {
-            topChannelFocusRequester.requestFocus()
-        } catch (_: Exception) {}
+        delay(140L)
+        runCatching { topChannelFocusRequester.requestFocus() }
     }
 
     LaunchedEffect(Unit) {
@@ -119,7 +103,6 @@ fun GoogleTvGuideScreen(
         }
     }
 
-    // Categories derived from channels
     val hasLiveEvents = remember(channels) { channels.any { it.isLiveEvent() } }
     val categories = remember(channels, hasLiveEvents) {
         val groups = channels.mapNotNull { it.group.takeIf(String::isNotBlank) }.distinct()
@@ -150,102 +133,211 @@ fun GoogleTvGuideScreen(
     }
 
     val displayChannel = focusedChannel ?: activeTunedChannel ?: filteredChannels.firstOrNull()
+    val viewport = LocalTvViewport.current
+    val horizontalPad = viewport.safeHorizontal.coerceAtLeast(24.dp)
 
-    val viewport = com.glztv.app.ui.theme.LocalTvViewport.current
-    // 30-minute timeline window with zero shared ScrollState contention across rows
     val halfHour = 30 * 60 * 1000L
     val visibleSlots = if (viewport.widthDp >= 1180.dp) 5 else 4
-    val maxOffsetSlots = 12 // up to 6 hours ahead
+    val maxOffsetSlots = 12
     var timelineOffsetSlots by remember { mutableStateOf(0) }
     val baseTimelineStart = now - (now % halfHour)
     val timelineStart = baseTimelineStart + timelineOffsetSlots * halfHour
     val timelineEnd = timelineStart + visibleSlots * halfHour
-    val channelColumnWidth = viewport.guideChannelColWidth
+    val channelColumnWidth = viewport.guideChannelColWidth.coerceAtLeast(188.dp)
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(GoogleTvTokens.BackgroundDark)
+            .background(DtvChrome.ScreenBg)
     ) {
-        // 1. TOP CATEGORY PILLS BAR
-        GoogleTvCategoryPillsBar(
-            categories = categories,
-            selectedCategory = selectedCategory,
-            onSelectCategory = { selectedCategory = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = viewport.safeHorizontal, vertical = 10.dp)
+        // 1. Shared DirecTV HD Top Command Bar
+        topBar?.invoke()
+
+        // 2. DirecTV Segmented Category Filter Strip
+        DtvSegmentedStripBar(
+            items = categories,
+            selectedItem = selectedCategory,
+            onSelect = { selectedCategory = it }
         )
 
-        // 2. TOP HERO SYNOPSIS PANEL WITH LIVE PREVIEW
-        displayChannel?.let { ch ->
-            GoogleTvHeroSynopsisPanel(
-                channel = ch,
-                focusedProgramme = focusedProgramme,
-                guide = guide,
-                now = now,
-                isFavorite = ch.id in favorites,
-                onToggleFavorite = { onToggleFavorite(ch.id) },
-                onWatch = { onWatchChannel(ch) },
-                previewContent = previewContent,
+        // 3. Classic DirecTV Split-Top Info Banner + Framed 16:9 Live Preview
+        val bannerHeight = if (viewport.isCompactHeight) 136.dp else 154.dp
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(bannerHeight)
+                .background(DtvChrome.BannerGradient)
+        ) {
+            Row(
                 modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = horizontalPad, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left: Selected Channel + Show Synopsis
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    if (displayChannel != null) {
+                        val activeProg = focusedProgramme
+                            ?: remember(displayChannel.id, guide, now) {
+                                guide.nowProgrammeForChannel(displayChannel, now)
+                            }
+                        val isFav = displayChannel.id in favorites
+                        val progProgress = activeProg?.let {
+                            ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
+                                .coerceIn(0f, 1f)
+                        } ?: 0f
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                GoogleTvChannelLogo(
+                                    channel = displayChannel,
+                                    size = 30.dp,
+                                    guide = guide,
+                                    shape = RoundedCornerShape(3.dp)
+                                )
+                                Text(
+                                    text = displayChannel.number.ifBlank { "LIVE" },
+                                    color = DtvChrome.ElectricBlueSoft,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = displayChannel.name,
+                                    color = DtvChrome.PrimaryText,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                DtvGuideFavPill(
+                                    isFavorite = isFav,
+                                    onClick = { onToggleFavorite(displayChannel.id) }
+                                )
+                            }
+
+                            Text(
+                                text = activeProg?.title ?: displayChannel.eventTitle ?: displayChannel.name,
+                                color = Color.White,
+                                fontSize = if (viewport.isCompactHeight) 18.sp else 21.sp,
+                                fontWeight = FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+                            val timeRange = activeProg?.let {
+                                "${formatDtvCompactTime(it.startMillis)} - ${formatDtvCompactTime(it.endMillis)}"
+                            } ?: "Live Broadcast"
+                            Text(
+                                text = buildList {
+                                    add(timeRange)
+                                    if (displayChannel.group.isNotBlank()) add(displayChannel.group)
+                                }.joinToString(", "),
+                                color = DtvChrome.SecondaryText,
+                                fontSize = 12.sp,
+                                maxLines = 1
+                            )
+
+                            activeProg?.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                                Text(
+                                    text = desc,
+                                    color = DtvChrome.PrimaryText.copy(alpha = 0.80f),
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        if (activeProg != null && now in activeProg.startMillis..activeProg.endMillis) {
+                            DtvProgressBar(progress = progProgress, modifier = Modifier.width(240.dp))
+                        }
+                    }
+                }
+
+                // Right: Framed 16:9 Live Preview Window
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(3.dp))
+                        .clipToBounds()
+                        .background(Color.Black)
+                        .border(1.dp, DtvChrome.Divider, RoundedCornerShape(3.dp))
+                ) {
+                    previewContent()
+                }
+            }
+
+            Box(
+                Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = viewport.safeHorizontal, vertical = 6.dp)
+                    .height(1.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(DtvChrome.Divider)
             )
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        // 3. EPG GRID (STICKY CHANNEL COLUMN + SYNCHRONIZED VIRTUALIZED TIMELINE WINDOW)
+        // 4. DirecTV HD Rectangular EPG Grid
         BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(horizontal = viewport.safeHorizontal)
+                .padding(horizontal = horizontalPad)
         ) {
             val listState = rememberLazyListState()
             val availableTimelineWidth = (maxWidth - channelColumnWidth).coerceAtLeast(240.dp)
             val slotWidth = availableTimelineWidth / visibleSlots
 
             Column(Modifier.fillMaxSize()) {
-                // Header Timeline Row (Channels + Time Window Stepper + Slots)
+                // Timeline Header Row
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .height(34.dp),
+                        .height(34.dp)
+                        .background(DtvChrome.StripGradient),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // "CHANNELS" Sticky Column Header with Earlier / Now / Later controls
+                    // Left Channel Column Header with Time Stepper
                     Row(
                         Modifier
                             .width(channelColumnWidth)
                             .fillMaxHeight()
-                            .background(GoogleTvTokens.SurfaceCard, RoundedCornerShape(topStart = 8.dp))
                             .padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            if (timelineOffsetSlots == 0) "NOW" else "+${timelineOffsetSlots * 30}m",
-                            color = GoogleTvTokens.BlueAccent,
+                            if (timelineOffsetSlots == 0) "ON NOW" else "+${timelineOffsetSlots * 30}m",
+                            color = DtvChrome.ElectricBlue,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 0.5.sp
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.6.sp
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            GuideTimeNavChip(
+                            DtvGuideTimeButton(
                                 label = "◀",
                                 enabled = timelineOffsetSlots > 0,
                                 onClick = { timelineOffsetSlots = (timelineOffsetSlots - 2).coerceAtLeast(0) }
                             )
                             if (timelineOffsetSlots > 0) {
-                                GuideTimeNavChip(
+                                DtvGuideTimeButton(
                                     label = "NOW",
                                     enabled = true,
                                     onClick = { timelineOffsetSlots = 0 }
                                 )
                             }
-                            GuideTimeNavChip(
+                            DtvGuideTimeButton(
                                 label = "▶",
                                 enabled = timelineOffsetSlots < maxOffsetSlots,
                                 onClick = { timelineOffsetSlots = (timelineOffsetSlots + 2).coerceAtMost(maxOffsetSlots) }
@@ -253,91 +345,323 @@ fun GoogleTvGuideScreen(
                         }
                     }
 
-                    // Synchronized Visible Time Slots Header
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(DtvChrome.Divider))
+
+                    // Time Slot Columns
                     Row(
                         Modifier
                             .width(availableTimelineWidth)
-                            .fillMaxHeight()
+                            .fillMaxHeight(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        repeat(visibleSlots) { slotIndex ->
-                            val slotTime = timelineStart + slotIndex * halfHour
+                        for (slot in 0 until visibleSlots) {
+                            val slotTime = timelineStart + slot * halfHour
                             Box(
-                                Modifier
+                                modifier = Modifier
                                     .width(slotWidth)
                                     .fillMaxHeight()
-                                    .background(GoogleTvTokens.SurfaceTimelineSlot)
-                                    .border(0.5.dp, Color.White.copy(alpha = 0.05f)),
+                                    .padding(horizontal = 10.dp),
                                 contentAlignment = Alignment.CenterStart
                             ) {
                                 Text(
-                                    formatGuideTime(slotTime),
-                                    Modifier.padding(start = 10.dp),
+                                    text = formatDtvCompactTime(slotTime),
+                                    color = if (slot == 0 && timelineOffsetSlots == 0) Color.White else DtvChrome.SecondaryText,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = GoogleTvTokens.TextPrimary
+                                    fontWeight = if (slot == 0 && timelineOffsetSlots == 0) FontWeight.SemiBold else FontWeight.Medium,
+                                    maxLines = 1
                                 )
+                            }
+                            if (slot < visibleSlots - 1) {
+                                Box(Modifier.width(1.dp).fillMaxHeight().background(DtvChrome.Divider.copy(alpha = 0.7f)))
                             }
                         }
                     }
                 }
 
-                // Visual separation between table header and channel grid
-                Spacer(Modifier.height(5.dp))
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(Color.White.copy(alpha = 0.18f))
-                )
-                Spacer(Modifier.height(5.dp))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.Divider))
 
-                // Channel Rows
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(bottom = 20.dp)
-                ) {
-                    itemsIndexed(filteredChannels, key = { index, ch -> "gtv-${ch.id}-$index" }) { index, channel ->
-                        GoogleTvGridRow(
-                            channel = channel,
-                            guide = guide,
-                            windowStart = timelineStart,
-                            windowEnd = timelineEnd,
-                            now = now,
-                            slotWidth = slotWidth,
-                            halfHour = halfHour,
-                            channelColumnWidth = channelColumnWidth,
-                            totalTimelineWidth = availableTimelineWidth,
-                            isFavorite = channel.id in favorites,
-                            channelBadgeModifier = if (index == 0) Modifier.focusRequester(topChannelFocusRequester) else Modifier,
-                            onToggleFavorite = { onToggleFavorite(channel.id) },
-                            onFocusChannel = {
-                                focusedChannel = channel
-                                focusedProgramme = guide.nowProgrammeForChannel(channel, now)
-                            },
-                            onFocusProgramme = { prog ->
-                                focusedChannel = channel
-                                focusedProgramme = prog
-                            },
-                            onWatch = { onWatchChannel(channel) }
+                // Grid Body + Vertical NOW Needle
+                Box(Modifier.fillMaxSize()) {
+                    if (filteredChannels.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "No channels in this category.",
+                                color = DtvChrome.SecondaryText,
+                                fontSize = 14.sp
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            itemsIndexed(
+                                filteredChannels,
+                                key = { index, ch -> "dtv-epg-$index-${ch.id}" }
+                            ) { index, ch ->
+                                val rowProgs = remember(ch.id, guide, timelineStart, timelineEnd) {
+                                    guide.forChannel(ch).filter { prog ->
+                                        prog.endMillis > timelineStart && prog.startMillis < timelineEnd
+                                    }
+                                }
+                                DtvGuideChannelRow(
+                                    channel = ch,
+                                    programmes = rowProgs,
+                                    guide = guide,
+                                    isTuned = ch.id == activeTunedChannel?.id,
+                                    isFavorite = ch.id in favorites,
+                                    now = now,
+                                    timelineStart = timelineStart,
+                                    timelineEnd = timelineEnd,
+                                    channelColumnWidth = channelColumnWidth,
+                                    timelineWidth = availableTimelineWidth,
+                                    firstCellFocusRequester = if (index == 0) topChannelFocusRequester else null,
+                                    onFocusCell = { prog ->
+                                        focusedChannel = ch
+                                        focusedProgramme = prog
+                                    },
+                                    onWatch = { onWatchChannel(ch) }
+                                )
+                            }
+                        }
+                    }
+
+                    // Electric-Blue Vertical NOW Needle
+                    if (now in timelineStart..timelineEnd) {
+                        val fraction = ((now - timelineStart).toFloat() / (timelineEnd - timelineStart).coerceAtLeast(1L))
+                            .coerceIn(0f, 1f)
+                        val density = LocalDensity.current
+                        val needleX = with(density) {
+                            (channelColumnWidth + availableTimelineWidth * fraction).roundToPx()
+                        }
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset(needleX, 0) }
+                                .width(2.dp)
+                                .fillMaxHeight()
+                                .background(DtvChrome.ElectricBlue.copy(alpha = 0.85f))
                         )
                     }
                 }
             }
+        }
+    }
+}
 
-            // Real-time "NOW" Needle Cursor (zero ScrollState reads)
-            if (now in timelineStart..timelineEnd) {
-                TimelineNeedle(
-                    now = now,
-                    timelineStart = timelineStart,
-                    slots = visibleSlots,
-                    halfHour = halfHour,
-                    channelColumnWidth = channelColumnWidth,
-                    totalTimelineWidth = availableTimelineWidth,
-                    maxWidth = maxWidth
+@Composable
+private fun DtvGuideChannelRow(
+    channel: Channel,
+    programmes: List<Programme>,
+    guide: EpgGuide,
+    isTuned: Boolean,
+    isFavorite: Boolean,
+    now: Long,
+    timelineStart: Long,
+    timelineEnd: Long,
+    channelColumnWidth: Dp,
+    timelineWidth: Dp,
+    firstCellFocusRequester: FocusRequester?,
+    onFocusCell: (Programme?) -> Unit,
+    onWatch: () -> Unit
+) {
+    val rowHeight = 54.dp
+    val totalDuration = (timelineEnd - timelineStart).coerceAtLeast(1L).toFloat()
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(rowHeight),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Fixed Left Channel Identity Cell
+            Row(
+                modifier = Modifier
+                    .width(channelColumnWidth)
+                    .fillMaxHeight()
+                    .background(if (isTuned) DtvChrome.ElectricBlue.copy(alpha = 0.14f) else Color(0xFF101318))
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = channel.number.ifBlank { "—" },
+                    color = if (isTuned) DtvChrome.ElectricBlueSoft else DtvChrome.SecondaryText,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    modifier = Modifier.width(36.dp)
+                )
+                GoogleTvChannelLogo(
+                    channel = channel,
+                    size = 26.dp,
+                    guide = guide,
+                    shape = RoundedCornerShape(3.dp)
+                )
+                Text(
+                    text = channel.name,
+                    color = if (isTuned) Color.White else DtvChrome.PrimaryText,
+                    fontSize = 12.sp,
+                    fontWeight = if (isTuned) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isFavorite) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        tint = DtvChrome.Gold,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+
+            Box(Modifier.width(1.dp).fillMaxHeight().background(DtvChrome.Divider))
+
+            // Programme Cells Track
+            Row(
+                modifier = Modifier
+                    .width(timelineWidth)
+                    .fillMaxHeight()
+            ) {
+                if (programmes.isEmpty()) {
+                    DtvGuideProgrammeCell(
+                        title = channel.eventTitle ?: channel.name,
+                        subtitle = "Live Broadcast",
+                        isLiveNow = true,
+                        width = timelineWidth,
+                        focusRequester = firstCellFocusRequester,
+                        onFocus = { onFocusCell(null) },
+                        onClick = onWatch
+                    )
+                } else {
+                    var cursor = timelineStart
+                    var firstAttached = false
+                    for (prog in programmes) {
+                        val clampedStart = prog.startMillis.coerceIn(timelineStart, timelineEnd)
+                        val clampedEnd = prog.endMillis.coerceIn(timelineStart, timelineEnd)
+                        if (clampedEnd <= clampedStart) continue
+
+                        if (clampedStart > cursor) {
+                            val gapFrac = (clampedStart - cursor) / totalDuration
+                            val gapWidth = (timelineWidth * gapFrac).coerceAtLeast(12.dp)
+                            DtvGuideProgrammeCell(
+                                title = channel.name,
+                                subtitle = "",
+                                isLiveNow = false,
+                                width = gapWidth,
+                                focusRequester = if (!firstAttached) { firstAttached = true; firstCellFocusRequester } else null,
+                                onFocus = { onFocusCell(null) },
+                                onClick = onWatch
+                            )
+                        }
+
+                        val frac = (clampedEnd - clampedStart) / totalDuration
+                        val cellWidth = (timelineWidth * frac).coerceAtLeast(24.dp)
+                        val isLiveNow = now in prog.startMillis..prog.endMillis
+                        val sub = "${formatDtvCompactTime(prog.startMillis)} - ${formatDtvCompactTime(prog.endMillis)}"
+                        DtvGuideProgrammeCell(
+                            title = prog.title,
+                            subtitle = sub,
+                            isLiveNow = isLiveNow,
+                            width = cellWidth,
+                            focusRequester = if (!firstAttached) { firstAttached = true; firstCellFocusRequester } else null,
+                            onFocus = { onFocusCell(prog) },
+                            onClick = onWatch
+                        )
+                        cursor = clampedEnd
+                    }
+                    if (cursor < timelineEnd) {
+                        val remFrac = (timelineEnd - cursor) / totalDuration
+                        val remWidth = (timelineWidth * remFrac).coerceAtLeast(12.dp)
+                        DtvGuideProgrammeCell(
+                            title = "Programming TBA",
+                            subtitle = "",
+                            isLiveNow = false,
+                            width = remWidth,
+                            focusRequester = null,
+                            onFocus = { onFocusCell(null) },
+                            onClick = onWatch
+                        )
+                    }
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.RowDivider))
+    }
+}
+
+@Composable
+private fun DtvGuideProgrammeCell(
+    title: String,
+    subtitle: String,
+    isLiveNow: Boolean,
+    width: Dp,
+    focusRequester: FocusRequester?,
+    onFocus: () -> Unit,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val bg = when {
+        isFocused -> Color.Black
+        isLiveNow -> Color(0xFF171C24)
+        else -> Color(0xFF0E1116)
+    }
+
+    Box(
+        modifier = Modifier
+            .width(width)
+            .fillMaxHeight()
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .background(bg)
+            .border(
+                width = if (isFocused) 2.dp else 0.5.dp,
+                color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.RowDivider
+            )
+            .onFocusChanged {
+                val focused = it.isFocused
+                if (focused && !isFocused) onFocus()
+                isFocused = focused
+            }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            onClick()
+                            return@onKeyEvent true
+                        }
+                    }
+                }
+                false
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                color = if (isFocused) Color.White else DtvChrome.PrimaryText,
+                fontSize = 13.sp,
+                fontWeight = if (isFocused || isLiveNow) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    color = if (isFocused) DtvChrome.ElectricBlueSoft else DtvChrome.MutedText,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -345,566 +669,99 @@ fun GoogleTvGuideScreen(
 }
 
 @Composable
-private fun GuideTimeNavChip(
+private fun DtvGuideTimeButton(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    var focused by remember { mutableStateOf(false) }
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        shape = RoundedCornerShape(6.dp),
-        color = when {
-            !enabled -> Color.White.copy(alpha = 0.04f)
-            focused -> Color.White
-            else -> Color.White.copy(alpha = 0.12f)
-        },
-        contentColor = when {
-            !enabled -> Color.White.copy(alpha = 0.3f)
-            focused -> Color.Black
-            else -> Color.White
-        },
-        modifier = Modifier.googleTvFocusable(
-            shape = RoundedCornerShape(6.dp),
-            focusedScale = 1.08f,
-            onFocusChange = { focused = it }
-        )
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(2.dp))
+            .background(if (isFocused) Color.Black else Color(0xFF1A1E26))
+            .border(1.dp, if (isFocused) DtvChrome.ElectricBlue else DtvChrome.Divider, RoundedCornerShape(2.dp))
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (enabled && keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            onClick()
+                            return@onKeyEvent true
+                        }
+                    }
+                }
+                false
+            }
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 7.dp, vertical = 3.dp)
     ) {
         Text(
             text = label,
+            color = when {
+                !enabled -> DtvChrome.MutedText.copy(alpha = 0.4f)
+                isFocused -> Color.White
+                else -> DtvChrome.PrimaryText
+            },
             fontSize = 10.sp,
-            fontWeight = FontWeight.Black,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+            fontWeight = FontWeight.Bold
         )
     }
 }
 
-/**
- * Top Category Pills Bar with Google TV focus physics.
- */
 @Composable
-private fun GoogleTvCategoryPillsBar(
-    categories: List<String>,
-    selectedCategory: String,
-    onSelectCategory: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LazyRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp)
-    ) {
-        items(categories) { category ->
-            val isSelected = category.equals(selectedCategory, ignoreCase = true)
-            var isFocused by remember { mutableStateOf(false) }
-
-            Surface(
-                onClick = { onSelectCategory(category) },
-                shape = CircleShape,
-                color = when {
-                    isFocused -> Color.White
-                    isSelected -> GoogleTvTokens.BlueAccent
-                    else -> Color.White.copy(alpha = 0.08f)
-                },
-                contentColor = when {
-                    isFocused -> Color.Black
-                    isSelected -> Color(0xFF001F2A)
-                    else -> Color.White
-                },
-                modifier = Modifier.googleTvFocusable(
-                    shape = CircleShape,
-                    focusedScale = 1.06f,
-                    onFocusChange = { isFocused = it }
-                )
-            ) {
-                Text(
-                    text = category.uppercase(),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.5.sp,
-                    maxLines = 1
-                )
-            }
-        }
-    }
-}
-
-/**
- * Top Hero Synopsis Panel.
- * Left: Program Metadata, Title, Description, Progress, and Watch Action.
- * Right: Live stream PiP player window with rounded borders.
- */
-@Composable
-private fun GoogleTvHeroSynopsisPanel(
-    channel: Channel,
-    focusedProgramme: Programme?,
-    guide: EpgGuide,
-    now: Long,
+private fun DtvGuideFavPill(
     isFavorite: Boolean,
-    onToggleFavorite: () -> Unit,
-    onWatch: () -> Unit,
-    previewContent: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    onClick: () -> Unit
 ) {
-    val current = remember(channel, guide, now) {
-        guide.nowProgrammeForChannel(channel, now)
-    }
-    val activeProg = focusedProgramme ?: current
-    val isLive = activeProg != null && activeProg.startMillis <= now && activeProg.endMillis > now
-
-    val progress = activeProg?.let {
-        if (it.startMillis <= now && it.endMillis > now) {
-            ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L)).coerceIn(0f, 1f)
-        } else 0f
-    } ?: 0f
-
-    val remainingMinutes = activeProg?.let {
-        if (it.startMillis <= now && it.endMillis > now) {
-            ((it.endMillis - now).coerceAtLeast(0L) + 59_999L) / 60_000L
-        } else null
-    }
-
-    val heroBaseColor = Color(0xFF0B0D0F)
-    val viewport = com.glztv.app.ui.theme.LocalTvViewport.current
-
-    Surface(
-        modifier = modifier.height(viewport.guideHeroHeight),
-        shape = RoundedCornerShape(16.dp),
-        color = heroBaseColor
-    ) {
-        Box(Modifier.fillMaxSize()) {
-            // 1. Right-side live stream preview with gradient blend across the right 1/3 of the hero card
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(0.42f)
-                    .align(Alignment.CenterEnd)
-                    .background(heroBaseColor)
-            ) {
-                Box(Modifier.fillMaxSize()) {
-                    previewContent()
-                }
-
-                // Continuous horizontal dissolve gradient matching Home screen hero card:
-                // Left edge (0.00f) is 100% solid heroBaseColor, easing out so the right 1/3 is clear & vibrant.
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.horizontalGradient(
-                                0.00f to heroBaseColor,
-                                0.18f to heroBaseColor.copy(alpha = 0.85f),
-                                0.36f to heroBaseColor.copy(alpha = 0.35f),
-                                0.50f to Color.Transparent,
-                                1.00f to Color.Transparent
-                            )
-                        )
-                )
-
-                // Subtle vertical edge vignettes for top and bottom framing
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0.00f to heroBaseColor.copy(alpha = 0.35f),
-                                0.15f to Color.Transparent,
-                                0.85f to Color.Transparent,
-                                1.00f to heroBaseColor.copy(alpha = 0.35f)
-                            )
-                        )
-                )
-            }
-
-            // 2. Foreground Left Metadata Column
-            Column(
-                Modifier
-                    .fillMaxWidth(0.66f)
-                    .fillMaxHeight()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // Channel Identity Line
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        GoogleTvChannelLogo(channel, 26.dp, guide, shape = RoundedCornerShape(6.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "${channel.number.ifBlank { "CH" }} · ${channel.name}",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        if (isLive) {
-                            Surface(
-                                shape = CircleShape,
-                                color = GoogleTvTokens.LiveRed.copy(alpha = 0.20f)
-                            ) {
-                                Text(
-                                    "LIVE",
-                                    Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = GoogleTvTokens.LiveRed
-                                )
-                            }
-                        }
-                        activeProg?.let { prog ->
-                            val startStr = formatGuideTime(prog.startMillis)
-                            val endStr = formatGuideTime(prog.endMillis)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "$startStr – $endStr",
-                                color = GoogleTvTokens.TextSecondary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            remainingMinutes?.let {
-                                Text(
-                                    " · $it min left",
-                                    color = GoogleTvTokens.BlueAccent,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    // Show Title
-                    Text(
-                        activeProg?.title ?: "Live Programming",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    // Progress Bar
-                    if (isLive) {
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier
-                                .fillMaxWidth(0.6f)
-                                .height(2.5.dp)
-                                .clip(RoundedCornerShape(1.dp)),
-                            color = GoogleTvTokens.BlueAccent,
-                            trackColor = Color.White.copy(alpha = 0.12f)
-                        )
-                    } else {
-                        Spacer(Modifier.height(2.5.dp))
-                    }
-
-                    // Description
-                    Text(
-                        activeProg?.description?.takeIf(String::isNotBlank)
-                            ?: "Watch live broadcast from ${channel.name}.",
-                        color = GoogleTvTokens.TextSecondary,
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
-
-                // Quick Action Buttons
-                Row(
-                    modifier = Modifier.padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    var watchFocused by remember { mutableStateOf(false) }
-                    Surface(
-                        onClick = onWatch,
-                        shape = CircleShape,
-                        color = if (watchFocused) Color.White else GoogleTvTokens.BlueAccent,
-                        contentColor = Color(0xFF001F2A),
-                        border = if (watchFocused) androidx.compose.foundation.BorderStroke(2.dp, GoogleTvTokens.BlueAccent) else null,
-                        modifier = Modifier.googleTvFocusable(
-                            shape = CircleShape,
-                            focusedScale = 1.06f,
-                            onFocusChange = { watchFocused = it }
-                        )
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, Modifier.size(15.dp))
-                            Text("WATCH", fontSize = 12.sp, fontWeight = FontWeight.Black)
-                        }
-                    }
-
-                    var favFocused by remember { mutableStateOf(false) }
-                    Surface(
-                        onClick = onToggleFavorite,
-                        shape = CircleShape,
-                        color = if (favFocused) Color.White else Color.White.copy(alpha = 0.12f),
-                        contentColor = when {
-                            favFocused -> Color.Black
-                            isFavorite -> GoogleTvTokens.StarGold
-                            else -> Color.White
-                        },
-                        modifier = Modifier.googleTvFocusable(
-                            shape = CircleShape,
-                            focusedScale = 1.06f,
-                            onFocusChange = { favFocused = it }
-                        )
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Icon(
-                                if (isFavorite) Icons.Default.Star else Icons.Outlined.StarOutline,
-                                contentDescription = null,
-                                Modifier.size(14.dp),
-                                tint = when {
-                                    favFocused -> Color.Black
-                                    isFavorite -> GoogleTvTokens.StarGold
-                                    else -> Color.White
-                                }
-                            )
-                            Text(if (isFavorite) "FAVORITED" else "FAVORITE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Google TV EPG Row.
- * Left: Sticky Channel Badge (Never scrolls horizontally).
- * Right: Horizontal timeline with proportional programme duration blocks.
- */
-@Composable
-private fun GoogleTvGridRow(
-    channel: Channel,
-    guide: EpgGuide,
-    windowStart: Long,
-    windowEnd: Long,
-    now: Long,
-    slotWidth: Dp,
-    halfHour: Long,
-    channelColumnWidth: Dp,
-    totalTimelineWidth: Dp,
-    isFavorite: Boolean,
-    channelBadgeModifier: Modifier = Modifier,
-    onToggleFavorite: () -> Unit,
-    onFocusChannel: () -> Unit,
-    onFocusProgramme: (Programme) -> Unit,
-    onWatch: () -> Unit
-) {
-    val programmes = remember(channel, guide) { guide.forChannel(channel) }
-    val visible = remember(programmes, windowStart, windowEnd) {
-        programmes.filter { it.endMillis > windowStart && it.startMillis < windowEnd }
-    }
-    var channelFocused by remember { mutableStateOf(false) }
-
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
-        Modifier
-            .fillMaxWidth()
-            .height(48.dp)
+        modifier = Modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (isFocused) Color.Black else Color(0xFF171B22))
+            .border(1.dp, if (isFocused) DtvChrome.ElectricBlue else DtvChrome.Divider, RoundedCornerShape(3.dp))
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            onClick()
+                            return@onKeyEvent true
+                        }
+                    }
+                }
+                false
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 7.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // 1. STICKY CHANNEL COLUMN BADGE
-        Surface(
-            onClick = onWatch,
-            modifier = Modifier
-                .width(channelColumnWidth)
-                .fillMaxHeight()
-                .then(channelBadgeModifier)
-                .googleTvFocusable(
-                    shape = RoundedCornerShape(8.dp),
-                    focusedScale = 1.02f,
-                    onFocusChange = {
-                        channelFocused = it
-                        if (it) onFocusChannel()
-                    }
-                ),
-            shape = RoundedCornerShape(8.dp),
-            color = if (channelFocused) Color.White else GoogleTvTokens.SurfaceCard,
-            contentColor = if (channelFocused) Color.Black else Color.White
-        ) {
-            Row(
-                Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                GoogleTvChannelLogo(channel, 28.dp, guide, shape = RoundedCornerShape(6.dp))
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            channel.number.ifBlank { "TV" },
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            color = if (channelFocused) Color.Black else GoogleTvTokens.BlueAccent
-                        )
-                        if (isFavorite) {
-                            Spacer(Modifier.width(4.dp))
-                            Icon(
-                                Icons.Default.Star,
-                                contentDescription = null,
-                                tint = GoogleTvTokens.StarGold,
-                                modifier = Modifier.size(11.dp)
-                            )
-                        }
-                    }
-                    Text(
-                        channel.name,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-
-        // 2. SYNCHRONIZED VIRTUALIZED TIMELINE PROGRAMME BLOCKS (zero shared ScrollState)
-        Box(
-            Modifier
-                .width(totalTimelineWidth)
-                .fillMaxHeight()
-        ) {
-            if (visible.isEmpty()) {
-                var emptyFocused by remember(channel.id) { mutableStateOf(false) }
-                Surface(
-                    onClick = onWatch,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 2.dp)
-                        .googleTvFocusable(
-                            shape = RoundedCornerShape(8.dp),
-                            focusedScale = 1.01f,
-                            onFocusChange = {
-                                emptyFocused = it
-                                if (it) onFocusChannel()
-                            }
-                        ),
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (emptyFocused) Color.White.copy(alpha = 0.25f) else GoogleTvTokens.SurfaceTimelineSlot
-                ) {
-                    Box(Modifier.fillMaxSize().padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
-                        Text(
-                            "Live Broadcast · Click to watch",
-                            fontSize = 12.sp,
-                            color = if (emptyFocused) Color.White else GoogleTvTokens.TextSecondary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            } else {
-                visible.forEach { programme ->
-                    val clippedStart = maxOf(programme.startMillis, windowStart)
-                    val clippedEnd = minOf(programme.endMillis, windowEnd)
-                    if (clippedEnd <= clippedStart) return@forEach
-                    val durationRatio = (clippedEnd - clippedStart).toFloat() / halfHour.toFloat()
-                    val startOffsetRatio = (clippedStart - windowStart).toFloat() / halfHour.toFloat()
-                    val startOffset = slotWidth * startOffsetRatio
-                    val rawWidth = slotWidth * durationRatio
-                    val availableWidth = (totalTimelineWidth - startOffset).coerceAtLeast(0.dp)
-                    val blockWidth = rawWidth.coerceAtMost(availableWidth)
-                    if (blockWidth <= 2.dp) return@forEach
-                    val isCurrent = programme.startMillis <= now && programme.endMillis > now
-                    var progFocused by remember(channel.id, programme.startMillis) { mutableStateOf(false) }
-
-                    Surface(
-                        onClick = onWatch,
-                        modifier = Modifier
-                            .offset(x = startOffset)
-                            .width(blockWidth)
-                            .fillMaxHeight()
-                            .padding(horizontal = 1.dp)
-                            .googleTvFocusable(
-                                shape = RoundedCornerShape(8.dp),
-                                focusedScale = 1.0f,
-                                onFocusChange = {
-                                    progFocused = it
-                                    if (it) onFocusProgramme(programme)
-                                }
-                            ),
-                        shape = RoundedCornerShape(8.dp),
-                        color = when {
-                            progFocused -> Color.White
-                            isCurrent -> GoogleTvTokens.SurfaceTimelineSlotActive
-                            else -> GoogleTvTokens.SurfaceTimelineSlot
-                        },
-                        contentColor = if (progFocused) Color.Black else Color.White
-                    ) {
-                        Column(
-                            Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                programme.title,
-                                fontSize = 12.sp,
-                                fontWeight = if (isCurrent || progFocused) FontWeight.Bold else FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            val startFormatted = formatGuideTime(programme.startMillis)
-                            Text(
-                                startFormatted,
-                                fontSize = 10.sp,
-                                color = if (progFocused) Color.Black.copy(alpha = 0.7f) else GoogleTvTokens.TextSecondary
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        Icon(
+            imageVector = if (isFavorite) Icons.Default.Star else Icons.Outlined.StarOutline,
+            contentDescription = "Favorite",
+            tint = if (isFavorite) DtvChrome.Gold else DtvChrome.SecondaryText,
+            modifier = Modifier.size(13.dp)
+        )
+        Text(
+            text = if (isFavorite) "Favorited" else "Favorite",
+            color = if (isFocused) Color.White else DtvChrome.SecondaryText,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
-
-@Composable
-private fun TimelineNeedle(
-    now: Long,
-    timelineStart: Long,
-    slots: Int,
-    halfHour: Long,
-    channelColumnWidth: Dp,
-    totalTimelineWidth: Dp,
-    maxWidth: Dp
-) {
-    val density = LocalDensity.current
-    val channelColPx = with(density) { channelColumnWidth.toPx() }
-    val totalTimelinePx = with(density) { totalTimelineWidth.toPx() }
-    val maxScreenPx = with(density) { maxWidth.toPx() }
-
-    Box(
-        Modifier
-            .width(2.dp)
-            .fillMaxHeight()
-            .offset {
-                val elapsedRatio = (now - timelineStart).toFloat() / (slots * halfHour).toFloat()
-                val needleTimelineX = totalTimelinePx * elapsedRatio
-                val screenXPx = channelColPx + needleTimelineX
-
-                if (screenXPx in channelColPx..maxScreenPx) {
-                    IntOffset(screenXPx.toInt() - 1, 0)
-                } else {
-                    IntOffset(-10000, 0)
-                }
-            }
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        GoogleTvTokens.BlueAccent,
-                        GoogleTvTokens.BlueAccent.copy(alpha = 0.5f),
-                        Color.Transparent
-                    )
-                )
-            )
-    )
-}
-

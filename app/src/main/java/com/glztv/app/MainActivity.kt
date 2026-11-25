@@ -190,6 +190,10 @@ import com.glztv.app.ui.components.GlzCardDefaults
 import com.glztv.app.ui.screens.GoogleTvGuideScreen
 import com.glztv.app.ui.screens.GoogleTvHomeScreen
 import com.glztv.app.ui.screens.GoogleTvPlayerOsd
+import com.glztv.app.ui.screens.MoviesScreen
+import com.glztv.app.ui.theme.DtvChrome
+import com.glztv.app.ui.theme.DtvNavTab
+import com.glztv.app.ui.theme.DtvTopCommandBar
 import com.glztv.app.ui.components.GoogleTvMiniGuide
 import com.glztv.app.ui.components.GoogleTvChannelLogo
 import com.glztv.app.ui.theme.GoogleTvTokens
@@ -996,7 +1000,12 @@ internal fun TvScreen(
         Scaffold(
             containerColor = Color.Transparent,
         topBar = {
-            if (!immersive && section != AppSection.Live && section != AppSection.Home) {
+            val isDtvFullScreenSection = section == AppSection.Home ||
+                section == AppSection.Live ||
+                section == AppSection.Movies ||
+                section == AppSection.Radio ||
+                section == AppSection.Weather
+            if (!immersive && !isDtvFullScreenSection) {
                 SlimHeader(
                     loading = loading,
                     contentLoaded = channels.isNotEmpty(),
@@ -1013,7 +1022,58 @@ internal fun TvScreen(
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(if (immersive || section == AppSection.Live || section == AppSection.Home) PaddingValues(0.dp) else padding)) {
+        val isDtvFullScreenSection = section == AppSection.Home ||
+            section == AppSection.Live ||
+            section == AppSection.Movies ||
+            section == AppSection.Radio ||
+            section == AppSection.Weather
+        var topBarNow by remember { mutableStateOf(System.currentTimeMillis()) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(30_000L)
+                topBarNow = System.currentTimeMillis()
+            }
+        }
+        val sharedDtvTopBar: @Composable (DtvNavTab) -> Unit = { activeTab ->
+            DtvTopCommandBar(
+                activeTab = activeTab,
+                nowMillis = topBarNow,
+                weather = weather,
+                guestLabel = guestName.ifBlank { guestExperience.propertyName.ifBlank { "Guest" } },
+                hasUpdate = availableUpdate != null,
+                showMoviesTab = managedMovies.isNotEmpty(),
+                sportsBarKioskEnabled = sportsBarKioskEnabled,
+                onSelectTab = { tab ->
+                    when (tab) {
+                        DtvNavTab.Home -> section = AppSection.Home
+                        DtvNavTab.LiveTv -> {
+                            stopRadio()
+                            val targetCh = selected ?: resumeChannel ?: ordered.firstOrNull()
+                            if (targetCh != null) {
+                                section = AppSection.Live
+                                tuneChannel(targetCh)
+                                playerActive = true
+                            } else {
+                                section = AppSection.Live
+                            }
+                        }
+                        DtvNavTab.Guide -> {
+                            stopRadio()
+                            playerActive = false
+                            section = AppSection.Live
+                        }
+                        DtvNavTab.Movies -> section = AppSection.Movies
+                        DtvNavTab.Radio -> section = AppSection.Radio
+                        DtvNavTab.Weather -> section = AppSection.Weather
+                        DtvNavTab.SportsBar -> section = AppSection.SportsBarKiosk
+                    }
+                },
+                onOpenUpdate = { showUpdateModal = true },
+                onOpenWelcome = { showYouModal = true },
+                onOpenSettings = { showSettings = true }
+            )
+        }
+        Box(Modifier.fillMaxSize().padding(if (immersive || isDtvFullScreenSection) PaddingValues(0.dp) else padding)) {
             if (immersive) {
                 val activeMovie = selectedMovie
                 val activeChannel = selected
@@ -1117,8 +1177,9 @@ internal fun TvScreen(
                         playerActive = true
                     },
                     previewContent = {
+                        val overlayActive = showScreensaver || showSettings || showWeatherModal || showYouModal || showFirstRunSetup
                         val previewCh = selected ?: ordered.firstOrNull()
-                        if (previewCh != null) {
+                        if (!overlayActive && previewCh != null) {
                             VideoPlayer(
                                 channel = previewCh,
                                 captionsEnabled = false,
@@ -1127,10 +1188,67 @@ internal fun TvScreen(
                                 muted = false,
                                 createMediaSession = false,
                                 keepScreenOn = false,
-                                cropVideo = true
+                                cropVideo = true,
+                                useTextureView = true
                             )
                         }
                     },
+                    topBar = { sharedDtvTopBar(DtvNavTab.Guide) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (section == AppSection.Movies) {
+                MoviesScreen(
+                    movies = managedMovies,
+                    onWatchMovie = { movie ->
+                        stopRadio()
+                        selectedMovie = movie
+                        GlzHubManager.reportActivity(prefs, "movie", movie.title)
+                    },
+                    topBar = { sharedDtvTopBar(DtvNavTab.Movies) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (section == AppSection.Radio) {
+                RadioScreen(
+                    stations = radioStations,
+                    playbackState = radioState,
+                    loading = radioLoading,
+                    fromCache = radioFromCache,
+                    favoriteStationKeys = radioController.favoriteStationKeys,
+                    onPlayStation = ::playRadioStation,
+                    onTogglePlayPause = ::toggleRadioPlayPause,
+                    onStop = ::stopRadio,
+                    onRetry = { radioController.retry() },
+                    onNextStation = { radioController.playNext(radioStations) },
+                    onPreviousStation = { radioController.playPrevious(radioStations) },
+                    onToggleFavorite = { radioController.toggleFavorite(it) },
+                    onCycleSleepTimer = { radioController.cycleSleepTimer() },
+                    onRefreshStations = ::refreshRadioStations,
+                    topBar = { sharedDtvTopBar(DtvNavTab.Radio) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (section == AppSection.Weather) {
+                WeatherScreen(
+                    weather = weather,
+                    location = weatherLocation,
+                    loading = weatherLoading,
+                    error = weatherError,
+                    onRefresh = {
+                        scope.launch {
+                            weatherLoading = true
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    weatherRepository.load(weatherLocation)
+                                }
+                            }.onSuccess {
+                                weather = it
+                                weatherError = null
+                            }.onFailure {
+                                weatherError = it.message ?: "Weather service unavailable"
+                            }
+                            weatherLoading = false
+                        }
+                    },
+                    topBar = { sharedDtvTopBar(DtvNavTab.Weather) },
                     modifier = Modifier.fillMaxSize()
                 )
             } else if (section == AppSection.Home) {
@@ -1184,8 +1302,9 @@ internal fun TvScreen(
                         prefs.edit().putStringSet(FAVORITES, favorites).apply()
                     },
                     onOpenGuide = { stopRadio(); section = AppSection.Live },
+                    onOpenMovies = { section = AppSection.Movies },
                     onOpenRadio = { section = AppSection.Radio },
-                    onOpenWeather = { showWeatherModal = true },
+                    onOpenWeather = { section = AppSection.Weather },
                     onOpenSettings = { showSettings = true },
                     onOpenWelcome = { showYouModal = true },
                     onLaunchApp = { app ->
@@ -1257,68 +1376,17 @@ internal fun TvScreen(
                             label = "section"
                         ) { visibleSection ->
                         when (visibleSection) {
-                            AppSection.Home -> Unit
-                            AppSection.Live -> GuideSection(
-                                channels = ordered,
-                                guide = guide,
-                                previewChannel = ordered.firstOrNull {
-                                    !homePreviewChannelId.isNullOrBlank() && (
-                                        it.id == homePreviewChannelId ||
-                                        it.number == homePreviewChannelId ||
-                                        it.name.equals(homePreviewChannelId, ignoreCase = true)
-                                    )
-                                },
-                                captionLanguage = captionLanguage,
-                                favorites = favorites,
-                                onWatch = tuneChannel,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            AppSection.Radio -> RadioScreen(
-                                stations = radioStations,
-                                playbackState = radioState,
-                                loading = radioLoading,
-                                fromCache = radioFromCache,
-                                favoriteStationKeys = radioController.favoriteStationKeys,
-                                onPlayStation = ::playRadioStation,
-                                onTogglePlayPause = ::toggleRadioPlayPause,
-                                onStop = ::stopRadio,
-                                onRetry = { radioController.retry() },
-                                onNextStation = { radioController.playNext(radioStations) },
-                                onPreviousStation = { radioController.playPrevious(radioStations) },
-                                onToggleFavorite = { radioController.toggleFavorite(it) },
-                                onCycleSleepTimer = { radioController.cycleSleepTimer() },
-                                onRefreshStations = ::refreshRadioStations,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            AppSection.Weather -> WeatherScreen(
-                                weather = weather,
-                                location = weatherLocation,
-                                loading = weatherLoading,
-                                error = weatherError,
-                                onRefresh = {
-                                    scope.launch {
-                                        weatherLoading = true
-                                        runCatching {
-                                            withContext(Dispatchers.IO) {
-                                                weatherRepository.load(weatherLocation)
-                                            }
-                                        }.onSuccess {
-                                            weather = it
-                                            weatherError = null
-                                        }.onFailure {
-                                            weatherError = it.message ?: "Weather service unavailable"
-                                        }
-                                        weatherLoading = false
-                                    }
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            AppSection.Home,
+                            AppSection.Live,
+                            AppSection.Movies,
+                            AppSection.Radio,
+                            AppSection.Weather,
+                            AppSection.SportsBarKiosk -> Unit
                             AppSection.You -> GuestYouSection(
                                 guestName = guestName,
                                 experience = guestExperience,
                                 modifier = Modifier.fillMaxSize()
                             )
-                            AppSection.SportsBarKiosk -> Unit
                         }
                         }
                     }
@@ -6622,62 +6690,71 @@ private fun SettingsChoiceRow(
     focusRequester: FocusRequester? = null
 ) {
     var focused by remember { mutableStateOf(false) }
-    val accent = MaterialTheme.colorScheme.primary
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (first && focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(16.dp),
-                focusedScale = 1.02f,
-                glowColor = accent,
-                onFocusChange = { focused = it }
-            )
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
-                when (event.nativeKeyEvent.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> { onPrev(); true }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> { onNext(); true }
-                    else -> false
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .then(if (first && focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                .background(if (focused) Color.Black else Color.Transparent)
+                .onFocusChanged { focused = it.isFocused }
+                .onPreviewKeyEvent { event ->
+                    if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+                    when (event.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_LEFT -> { onPrev(); true }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> { onNext(); true }
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> { onNext(); true }
+                        else -> false
+                    }
                 }
-            }
-            .clickable { onNext() },
-        shape = RoundedCornerShape(16.dp),
-        color = if (focused) accent.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onNext)
         ) {
-            Text(
-                name,
-                Modifier.weight(1f),
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = Color.White
-            )
-            Text(
-                "‹",
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-                color = if (focused) accent else Color.White.copy(alpha = 0.45f)
-            )
-            Text(
-                valueText,
-                Modifier.padding(horizontal = 14.dp),
-                fontWeight = FontWeight.Black,
-                fontSize = 15.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = if (focused) accent else Color.White
-            )
-            Text(
-                "›",
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-                color = if (focused) accent else Color.White.copy(alpha = 0.45f)
-            )
+            if (focused) {
+                Box(
+                    Modifier
+                        .width(4.dp)
+                        .height(52.dp)
+                        .align(Alignment.CenterStart)
+                        .background(DtvChrome.ElectricBlue)
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    name,
+                    Modifier.weight(1f),
+                    fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
+                    fontSize = 15.sp,
+                    color = if (focused) Color.White else DtvChrome.PrimaryText
+                )
+                Text(
+                    "‹",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = if (focused) DtvChrome.ElectricBlue else DtvChrome.MutedText
+                )
+                Text(
+                    valueText,
+                    Modifier.padding(horizontal = 12.dp),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (focused) DtvChrome.ElectricBlueSoft else DtvChrome.PrimaryText
+                )
+                Text(
+                    "›",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = if (focused) DtvChrome.ElectricBlue else DtvChrome.MutedText
+                )
+            }
         }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.RowDivider))
     }
 }
 
@@ -6693,44 +6770,69 @@ private fun SettingsActionRow(
     focusRequester: FocusRequester? = null
 ) {
     var focused by remember { mutableStateOf(false) }
-    val accent = MaterialTheme.colorScheme.primary
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (first && focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(16.dp),
-                focusedScale = 1.02f,
-                glowColor = accent,
-                onFocusChange = { focused = it }
-            )
-            .clickable(enabled = enabled, onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = if (focused) accent.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                if (valueText.isNotBlank()) {
-                    Text(
-                        valueText,
-                        fontSize = 12.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .then(if (first && focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                .background(if (focused) Color.Black else Color.Transparent)
+                .onFocusChanged { focused = it.isFocused }
+                .onKeyEvent { keyEvent ->
+                    if (enabled && keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                        when (keyEvent.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_CENTER,
+                            KeyEvent.KEYCODE_ENTER,
+                            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                onClick()
+                                return@onKeyEvent true
+                            }
+                        }
+                    }
+                    false
                 }
+                .clickable(enabled = enabled, interactionSource = interactionSource, indication = null, onClick = onClick)
+        ) {
+            if (focused) {
+                Box(
+                    Modifier
+                        .width(4.dp)
+                        .height(54.dp)
+                        .align(Alignment.CenterStart)
+                        .background(DtvChrome.ElectricBlue)
+                )
             }
-            Text(
-                "OK ▸",
-                fontWeight = FontWeight.Black,
-                fontSize = 13.sp,
-                color = if (focused) accent else Color.White.copy(alpha = 0.55f)
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        name,
+                        fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
+                        fontSize = 15.sp,
+                        color = if (focused) Color.White else DtvChrome.PrimaryText
+                    )
+                    if (valueText.isNotBlank()) {
+                        Text(
+                            valueText,
+                            fontSize = 12.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (focused) DtvChrome.PrimaryText.copy(alpha = 0.72f) else DtvChrome.SecondaryText
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "▸",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = if (focused) DtvChrome.ElectricBlue else DtvChrome.MutedText
+                )
+            }
         }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.RowDivider))
     }
 }
 
@@ -6812,28 +6914,33 @@ private fun SettingsDialog(
     val viewport = LocalTvViewport.current
     BackHandler(onBack = onDismiss)
     BackHandler(enabled = showAdvanced) { showAdvanced = false }
-    // Authentic Android TV Right-Side Settings Pane over dimmed scrim
+    // DirecTV HD Right-Side Settings Pane over dimmed scrim
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.72f)),
         contentAlignment = Alignment.CenterEnd
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .widthIn(min = 380.dp, max = 560.dp)
-                .fillMaxWidth(if (viewport.isTvLayout) 0.50f else 0.96f),
-            shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp),
-            color = Color(0xFF16181D),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
-            tonalElevation = 14.dp
+                .widthIn(min = 420.dp, max = 600.dp)
+                .fillMaxWidth(if (viewport.isTvLayout) 0.52f else 0.96f)
+                .background(DtvChrome.PanelBgGradient)
         ) {
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .align(Alignment.CenterStart)
+                    .background(DtvChrome.Divider)
+            )
         Column(Modifier.fillMaxSize()) {
-            // Android TV Right-Pane Header
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Color(0xFF1C2028),
+            // DirecTV Glossy Dark Header Bar
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DtvChrome.TopBarGradient)
             ) {
                 Row(
                     Modifier
@@ -6841,63 +6948,56 @@ private fun SettingsDialog(
                         .padding(horizontal = 24.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = GoogleTvTokens.BlueAccent.copy(alpha = 0.16f),
-                        border = BorderStroke(1.dp, GoogleTvTokens.BlueAccent.copy(alpha = 0.35f)),
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = null,
-                                tint = GoogleTvTokens.BlueAccent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (showAdvanced) strings.advancedOptions else strings.settingsTitle,
-                            fontSize = 20.sp,
+                            text = if (showAdvanced) "ADVANCED CONFIGURATION" else "SYSTEM & PREFERENCES",
+                            color = DtvChrome.ElectricBlue,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.0.sp
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            if (showAdvanced) strings.advancedOptions else strings.settingsTitle,
+                            fontSize = 21.sp,
+                            fontWeight = FontWeight.Normal,
                             color = Color.White
                         )
                         Text(
                             if (showAdvanced) "Playlist, EPG, headers & network labels"
-                            else "◀ / ▶ to adjust · OK to toggle",
-                            color = GoogleTvTokens.TextSecondary,
+                            else "◀ / ▶ to adjust  ·  OK to select",
+                            color = DtvChrome.SecondaryText,
                             fontSize = 12.sp
                         )
                     }
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = GoogleTvTokens.BlueAccent.copy(alpha = 0.16f),
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(DtvChrome.ElectricBlue.copy(alpha = 0.16f))
+                            .border(1.dp, DtvChrome.ElectricBlue.copy(alpha = 0.45f), RoundedCornerShape(3.dp))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             "v${BuildConfig.VERSION_NAME}",
-                            Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                            fontWeight = FontWeight.Black,
+                            fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.primary
+                            color = DtvChrome.ElectricBlueSoft
                         )
                     }
                 }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.Divider))
             }
 
-            // Main Body — one scrolling column. Left / Right changes a value.
+            // Main Body — hairline-separated DirecTV settings rows.
             Column(
                 Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .verticalScroll(bodyScrollState)
-                    .padding(horizontal = 36.dp, vertical = 16.dp),
+                    .verticalScroll(bodyScrollState),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Column(
-                    Modifier.widthIn(max = 760.dp).fillMaxWidth().focusGroup(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    Modifier.fillMaxWidth().focusGroup()
                 ) {
                     if (showAdvanced) {
                         SettingsActionRow(
@@ -7068,8 +7168,32 @@ private fun SettingsDialog(
                         SettingsLabel("ANDROID TV SETTINGS")
                         SettingsActionRow(
                             name = "Android TV Settings",
-                            valueText = "Device preferences, apps, storage & accounts",
+                            valueText = "Device preferences, storage & accounts",
                             onClick = { LauncherAppsManager.openAndroidSettings(context) }
+                        )
+                        SettingsActionRow(
+                            name = "Display & Sound",
+                            valueText = "Resolution, HDR, audio output & screen settings",
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS)
+                                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }.onFailure { LauncherAppsManager.openAndroidSettings(context) }
+                            }
+                        )
+                        SettingsActionRow(
+                            name = "Apps & Storage",
+                            valueText = "Manage installed Android TV applications",
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent(android.provider.Settings.ACTION_APPLICATION_SETTINGS)
+                                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }.onFailure { LauncherAppsManager.openAndroidSettings(context) }
+                            }
                         )
                         SettingsActionRow(
                             name = "Wi-Fi & Network Settings",
@@ -7125,11 +7249,13 @@ private fun SettingsDialog(
                 Spacer(Modifier.height(20.dp))
             }
 
-            // Compact Android TV Right-Pane Bottom Action Bar
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Color(0xFF1C2028),
+            // DirecTV HD Bottom Action Bar
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DtvChrome.TopBarGradient)
             ) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.Divider))
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -7175,6 +7301,7 @@ private fun TvSettingsButton(
     modifier: Modifier = Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
     val isPrimary = primary ?: (
         label.contains("Save", ignoreCase = true) ||
             label.contains("Guardar", ignoreCase = true) ||
@@ -7183,41 +7310,49 @@ private fun TvSettingsButton(
             label.contains("Generate", ignoreCase = true) ||
             label.contains("Generar", ignoreCase = true)
         )
-    val accent = MaterialTheme.colorScheme.primary
-    val shape = RoundedCornerShape(999.dp)
-
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
+    val bg = when {
+        focused && isPrimary -> Color.White
+        focused -> Color.Black
+        isPrimary -> DtvChrome.ElectricBlue
+        else -> Color(0xFF171B22)
+    }
+    val fg = when {
+        focused && isPrimary -> Color.Black
+        focused -> Color.White
+        isPrimary -> Color.White
+        else -> DtvChrome.PrimaryText
+    }
+    val borderColor = when {
+        focused -> DtvChrome.ElectricBlue
+        isPrimary -> DtvChrome.ElectricBlue
+        else -> DtvChrome.Divider
+    }
+    Box(
         modifier = modifier
-            .tvFocusableWithPhysics(
-                shape = shape,
-                focusedScale = 1.05f,
-                glowColor = if (isPrimary) accent else Color.White,
-                onFocusChange = { focused = it }
-            ),
-        shape = shape,
-        color = when {
-            focused && isPrimary -> accent
-            focused -> Color.White
-            isPrimary -> accent.copy(alpha = 0.22f)
-            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-        },
-        contentColor = when {
-            focused -> Color.Black
-            isPrimary -> accent
-            else -> MaterialTheme.colorScheme.onSurface
-        },
-        border = when {
-            focused -> BorderStroke(2.dp, Color.White.copy(alpha = 0.9f))
-            isPrimary -> BorderStroke(1.dp, accent.copy(alpha = 0.45f))
-            else -> BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f))
-        }
+            .clip(RoundedCornerShape(3.dp))
+            .background(bg)
+            .border(if (focused) 2.dp else 1.dp, borderColor, RoundedCornerShape(3.dp))
+            .onFocusChanged { focused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (enabled && keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            onClick()
+                            return@onKeyEvent true
+                        }
+                    }
+                }
+                false
+            }
+            .clickable(enabled = enabled, interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp)
     ) {
         Text(
             label,
-            Modifier.padding(horizontal = 20.dp, vertical = 11.dp),
-            fontWeight = FontWeight.Bold,
+            color = fg,
+            fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp
         )
     }
@@ -7249,21 +7384,20 @@ private fun ProtectedSourceField(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp)
             .tvFocusableWithPhysics(
-                shape = RoundedCornerShape(16.dp),
-                focusedScale = 1.02f,
-                glowColor = MaterialTheme.colorScheme.secondary,
+                shape = RoundedCornerShape(4.dp),
+                focusedScale = 1.01f,
+                glowColor = DtvChrome.ElectricBlue,
                 onFocusChange = {
                     focused = it
                     if (!it) editing = false
                 }
             )
             .clickable(enabled = enabled) { editing = true },
-        shape = RoundedCornerShape(16.dp),
-        color = when {
-            focused -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
-            else -> Color.White.copy(alpha = 0.05f)
-        },
+        shape = RoundedCornerShape(4.dp),
+        color = if (focused) Color.Black else Color(0xFF13171E),
+        border = BorderStroke(if (focused) 2.dp else 1.dp, if (focused) DtvChrome.ElectricBlue else DtvChrome.Divider)
     ) {
         OutlinedTextField(
             value = value,
@@ -7272,15 +7406,15 @@ private fun ProtectedSourceField(
                 .fillMaxWidth()
                 .focusRequester(focusRequester)
                 .focusProperties { canFocus = editing },
-            label = { Text(label, fontWeight = FontWeight.Bold) },
+            label = { Text(label, fontWeight = FontWeight.SemiBold) },
             readOnly = !editing,
             enabled = enabled,
             singleLine = singleLine,
             minLines = minLines,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.secondary,
-                focusedLabelColor = MaterialTheme.colorScheme.secondary,
-                cursorColor = MaterialTheme.colorScheme.secondary,
+                focusedBorderColor = DtvChrome.ElectricBlue,
+                focusedLabelColor = DtvChrome.ElectricBlueSoft,
+                cursorColor = DtvChrome.ElectricBlue,
                 unfocusedBorderColor = Color.Transparent
             ),
             supportingText = {
@@ -7291,7 +7425,7 @@ private fun ProtectedSourceField(
                         help.isNotBlank() -> help
                         else -> "Press OK to edit"
                     },
-                    color = if (focused) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (focused) DtvChrome.ElectricBlueSoft else DtvChrome.SecondaryText
                 )
             }
         )
@@ -7300,14 +7434,7 @@ private fun ProtectedSourceField(
 
 @Composable
 private fun SettingsLabel(value: String) {
-    Text(
-        value,
-        Modifier.padding(top = 10.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Black,
-        letterSpacing = 1.2.sp
-    )
+    DrawerSectionLabel(value)
 }
 
 private fun toggleFavorite(values: Set<String>, id: String) =

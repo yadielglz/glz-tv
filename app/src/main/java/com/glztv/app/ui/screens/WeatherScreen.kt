@@ -1,12 +1,9 @@
 package com.glztv.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,53 +13,40 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Air
-import androidx.compose.material.icons.filled.Compress
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Thermostat
-import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.glztv.app.model.ForecastDay
 import com.glztv.app.model.HourlyForecast
 import com.glztv.app.model.WeatherInfo
-import com.glztv.app.ui.components.GlzCardDefaults
-import com.glztv.app.ui.components.GlzFocusCard
-import com.glztv.app.ui.components.GlzPanel
-import com.glztv.app.ui.components.GlzSectionActionButton
-import com.glztv.app.ui.components.GlzSectionHeader
-import com.glztv.app.ui.components.GlzSectionShell
-import com.glztv.app.ui.components.tvFocusableWithPhysics
-import com.glztv.app.ui.i18n.LocalGlzStrings
+import com.glztv.app.ui.theme.DtvActionButton
+import com.glztv.app.ui.theme.DtvChrome
+import com.glztv.app.ui.theme.DtvSectionHeader
 import com.glztv.app.ui.theme.LocalTvViewport
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+/**
+ * DirecTV Broadcast Weather Channel Screen (v1.48.4.10).
+ *
+ * - Shared DirecTV HD Top Command Bar (`Weather` tab active).
+ * - Glossy Dark Split-Top Current Conditions + Telemetry Grid (Humidity, Wind, UV, Pressure).
+ * - Crisp Hairline-Bordered Hourly Forecast Strip & 7-Day Outlook Table.
+ */
 @Composable
 fun WeatherScreen(
     weather: WeatherInfo?,
@@ -70,199 +54,183 @@ fun WeatherScreen(
     loading: Boolean,
     error: String?,
     onRefresh: () -> Unit,
+    topBar: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val strings = LocalGlzStrings.current
     val viewport = LocalTvViewport.current
-    val compactHeight = viewport.isCompactHeight
+    val horizontalPad = viewport.safeHorizontal.coerceAtLeast(28.dp)
 
-    GlzSectionShell(modifier = modifier) {
-        GlzSectionHeader(
-            title = strings.weatherTitle,
-            subtitle = weather?.location ?: location.ifBlank { strings.weatherSubtitle },
-            icon = Icons.Default.WbSunny,
-            accent = MaterialTheme.colorScheme.primary,
-            trailing = {
-                GlzSectionActionButton(
-                    label = if (loading) strings.buffering else strings.refresh,
-                    icon = Icons.Default.Refresh,
-                    onClick = onRefresh,
-                    enabled = !loading,
-                    primary = true
-                )
-            }
-        )
+    val inputFmt = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    val dayFmt = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(DtvChrome.ScreenBg)
+    ) {
+        // 1. Shared DirecTV HD Top Command Bar
+        topBar?.invoke()
 
         if (loading && weather == null) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                LinearProgressIndicator(
-                    Modifier.width(240.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = DtvChrome.ElectricBlue, strokeWidth = 2.5.dp)
             }
         } else if (weather == null) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Text(
-                        "Weather unavailable",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = error ?: "Weather data unavailable for ${location.ifBlank { "current location" }}",
+                        color = DtvChrome.SecondaryText,
+                        fontSize = 14.sp
                     )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        error ?: "Check the configured weather location in Settings.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 13.sp
-                    )
+                    DtvActionButton(label = "Retry", primary = true, onClick = onRefresh)
                 }
             }
         } else {
-            Column(
-                Modifier
+            // 2. Glossy Dark Broadcast Split-Top Current Conditions
+            val today = weather.forecast.firstOrNull()
+            Box(
+                modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(if (compactHeight) 10.dp else 14.dp)
+                    .background(DtvChrome.BannerGradient)
             ) {
                 Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = horizontalPad, vertical = if (viewport.isCompactHeight) 14.dp else 18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    WeatherHeroCard(
-                        weather = weather,
-                        modifier = Modifier
-                            .weight(1.25f)
-                            .height(if (compactHeight) 176.dp else 204.dp)
-                    )
-                    WeatherMetricsPanel(
-                        weather = weather,
-                        modifier = Modifier
-                            .weight(1.75f)
-                            .height(if (compactHeight) 176.dp else 204.dp)
-                    )
-                }
+                    // Left: Large Broadcast Temp + Condition + Location
+                    Row(
+                        modifier = Modifier.weight(1.1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        Text(
+                            text = weatherGlyph(weather.weatherCode),
+                            fontSize = if (viewport.isCompactHeight) 46.sp else 54.sp
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "LOCAL WEATHER",
+                                color = DtvChrome.ElectricBlue,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.0.sp
+                            )
+                            Row(
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = "${weather.temperature}°",
+                                    color = Color.White,
+                                    fontSize = if (viewport.isCompactHeight) 44.sp else 52.sp,
+                                    fontWeight = FontWeight.Light
+                                )
+                                Column(Modifier.padding(bottom = 6.dp)) {
+                                    Text(
+                                        text = weatherLabel(weather.weatherCode),
+                                        color = DtvChrome.PrimaryText,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = buildList {
+                                            add(weather.location.ifBlank { location })
+                                            add("Feels ${weather.feelsLike}°")
+                                            if (today != null) add("H ${today.high}° / L ${today.low}°")
+                                        }.joinToString("  ·  "),
+                                        color = DtvChrome.SecondaryText,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
 
+                    // Right: Broadcast Telemetry Grid + Refresh
+                    Row(
+                        modifier = Modifier.weight(0.9f),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DtvWeatherTelemetryCell("HUMIDITY", "${weather.humidity}%", Modifier.weight(1f))
+                        DtvWeatherTelemetryCell("WIND", "${weather.windSpeedMph} mph ${weather.windDirection}", Modifier.weight(1f))
+                        DtvWeatherTelemetryCell("UV INDEX", String.format(Locale.US, "%.1f", weather.uvIndex), Modifier.weight(1f))
+                        DtvWeatherTelemetryCell("PRESSURE", "${weather.pressureHpa} hPa", Modifier.weight(1f))
+                        DtvActionButton(label = if (loading) "..." else "Refresh", onClick = onRefresh)
+                    }
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(DtvChrome.Divider)
+                )
+            }
+
+            // 3. Hourly Strip + 7-Day Forecast Table
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(top = 14.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 if (weather.hourly.isNotEmpty()) {
-                    WeatherSectionHeader(strings.weatherHourly.uppercase(Locale.getDefault()), "Next 18 hours progression")
-                    HourlyForecastRow(weather.hourly)
+                    item(key = "dtv-weather-hourly") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            DtvSectionHeader(
+                                title = "HOURLY FORECAST",
+                                horizontalPad = horizontalPad
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = horizontalPad),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(weather.hourly.take(12), key = { "hr-${it.timeLabel}" }) { hour ->
+                                    DtvHourlyCell(hour)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (weather.forecast.isNotEmpty()) {
-                    WeatherSectionHeader(strings.weatherDaily.uppercase(Locale.getDefault()), "5-day outlook & precipitation")
-                    DailyForecastGrid(weather.forecast)
-                }
-
-                Spacer(Modifier.height(6.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun WeatherSectionHeader(title: String, subtitle: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-    ) {
-        Text(
-            title,
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp,
-            letterSpacing = 0.5.sp,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            "•",
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            fontSize = 12.sp
-        )
-        Text(
-            subtitle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp
-        )
-    }
-}
-
-@Composable
-private fun WeatherHeroCard(weather: WeatherInfo, modifier: Modifier = Modifier) {
-    val gradientColors = remember(weather.weatherCode) {
-        getAtmosphericGradient(weather.weatherCode)
-    }
-    val todayForecast = weather.forecast.firstOrNull()
-
-    GlzPanel(
-        modifier = modifier,
-        shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge)
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Brush.linearGradient(gradientColors))
-                .padding(20.dp)
-        ) {
-            Column(
-                Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column {
-                        Text(
-                            "${weather.temperature}°",
-                            fontSize = 58.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White,
-                            lineHeight = 60.sp
-                        )
-                        Text(
-                            weatherDescription(weather.weatherCode),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White.copy(alpha = 0.95f)
+                    item(key = "dtv-weather-daily-header") {
+                        DtvSectionHeader(
+                            title = "7-DAY OUTLOOK",
+                            horizontalPad = horizontalPad
                         )
                     }
-                    Text(
-                        weatherSymbol(weather.weatherCode),
-                        fontSize = 56.sp,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color.White.copy(alpha = 0.12f),
-                    ) {
-                        Text(
-                            "Feels like ${weather.feelsLike}°",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    if (todayForecast != null) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.White.copy(alpha = 0.12f),
+                    item(key = "dtv-weather-daily-table") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = horizontalPad)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color(0xFF101318))
+                                .border(1.dp, DtvChrome.Divider, RoundedCornerShape(3.dp))
                         ) {
-                            Text(
-                                "H: ${todayForecast.high}°  L: ${todayForecast.low}°",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            weather.forecast.take(7).forEachIndexed { idx, day ->
+                                val dayLabel = remember(day.date, idx) {
+                                    if (idx == 0) "Today"
+                                    else runCatching { dayFmt.format(requireNotNull(inputFmt.parse(day.date))) }
+                                        .getOrDefault(day.date)
+                                }
+                                DtvForecastTableRow(dayLabel = dayLabel, day = day)
+                                if (idx < weather.forecast.take(7).lastIndex) {
+                                    Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.RowDivider))
+                                }
+                            }
                         }
                     }
                 }
@@ -272,334 +240,152 @@ private fun WeatherHeroCard(weather: WeatherInfo, modifier: Modifier = Modifier)
 }
 
 @Composable
-private fun WeatherMetricsPanel(weather: WeatherInfo, modifier: Modifier = Modifier) {
-    GlzPanel(
-        modifier = modifier,
-        shape = RoundedCornerShape(GlzCardDefaults.RadiusLarge)
-    ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                MetricItem(
-                    title = "HUMIDITY",
-                    value = "${weather.humidity}%",
-                    subtitle = if (weather.humidity > 65) "High moisture" else "Comfortable",
-                    icon = Icons.Default.WaterDrop,
-                    accentColor = Color(0xFF00E5FF),
-                    modifier = Modifier.weight(1f)
-                )
-                MetricItem(
-                    title = "WIND",
-                    value = "${weather.windSpeedMph} mph",
-                    subtitle = "Direction ${weather.windDirection}",
-                    icon = Icons.Default.Air,
-                    accentColor = Color(0xFF00E676),
-                    modifier = Modifier.weight(1f)
-                )
-                MetricItem(
-                    title = "UV INDEX",
-                    value = String.format(Locale.US, "%.1f", weather.uvIndex),
-                    subtitle = uvRiskLabel(weather.uvIndex),
-                    icon = Icons.Default.WbSunny,
-                    accentColor = Color(0xFFFFB300),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                MetricItem(
-                    title = "PRESSURE",
-                    value = "${weather.pressureHpa} hPa",
-                    subtitle = if (weather.pressureHpa > 1013) "High pressure" else "Low pressure",
-                    icon = Icons.Default.Compress,
-                    accentColor = Color(0xFFB388FF),
-                    modifier = Modifier.weight(1f)
-                )
-                MetricItem(
-                    title = "FEELS LIKE",
-                    value = "${weather.feelsLike}°",
-                    subtitle = if (weather.feelsLike > weather.temperature) "Warmer than actual" else "Normal",
-                    icon = Icons.Default.Thermostat,
-                    accentColor = Color(0xFFFF5252),
-                    modifier = Modifier.weight(1f)
-                )
-                MetricItem(
-                    title = "PRECIPITATION",
-                    value = "${weather.forecast.firstOrNull()?.precipitationChance ?: 0}%",
-                    subtitle = "Today's probability",
-                    icon = Icons.Default.WaterDrop,
-                    accentColor = Color(0xFF40C4FF),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MetricItem(
-    title: String,
+private fun DtvWeatherTelemetryCell(
+    label: String,
     value: String,
-    subtitle: String,
-    icon: ImageVector,
-    accentColor: Color,
     modifier: Modifier = Modifier
 ) {
-    GlzPanel(
-        modifier = modifier.fillMaxHeight(),
-        shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
-        tonalElevation = 0.dp
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(Color(0xFF13171E))
+            .border(1.dp, DtvChrome.CardBorder, RoundedCornerShape(3.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    title,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.5.sp,
-                    color = accentColor
-                )
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = accentColor.copy(alpha = 0.8f),
-                    modifier = Modifier.size(14.dp)
-                )
-            }
+        Text(
+            text = label,
+            color = DtvChrome.MutedText,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.7.sp,
+            maxLines = 1
+        )
+        Text(
+            text = value,
+            color = DtvChrome.PrimaryText,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun DtvHourlyCell(hour: HourlyForecast) {
+    Column(
+        modifier = Modifier
+            .width(86.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(DtvChrome.CardGradient)
+            .border(1.dp, DtvChrome.CardBorder, RoundedCornerShape(3.dp))
+            .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = hour.timeLabel,
+            color = DtvChrome.SecondaryText,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
+        )
+        Text(text = weatherGlyph(hour.weatherCode), fontSize = 20.sp)
+        Text(
+            text = "${hour.temperature}°",
+            color = Color.White,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        if (hour.precipitationChance > 0) {
             Text(
-                value,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Black,
-                color = Color.White
-            )
-            Text(
-                subtitle,
+                text = "${hour.precipitationChance}%",
+                color = DtvChrome.ElectricBlueSoft,
                 fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                fontWeight = FontWeight.Medium
             )
         }
     }
 }
 
 @Composable
-private fun HourlyForecastRow(hourly: List<HourlyForecast>) {
-    LazyRow(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
-    ) {
-        items(hourly) { item ->
-            GlzFocusCard(
-                onClick = {},
-                selected = item.timeLabel == "NOW",
-                shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
-                focusedScale = 1.05f,
-                modifier = Modifier
-                    .width(92.dp)
-                    .height(134.dp),
-                contentModifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp)
-            ) { focused ->
-                val ink = if (focused) Color(0xFF0B0D0F) else Color(0xFFF1F3F4)
-                Column(
-                    Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        item.timeLabel,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (!focused && item.timeLabel == "NOW") MaterialTheme.colorScheme.primary else ink
-                    )
-                    Text(
-                        weatherSymbol(item.weatherCode),
-                        fontSize = 26.sp
-                    )
-                    Text(
-                        "${item.temperature}°",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Black,
-                        color = ink
-                    )
-                    if (item.precipitationChance > 0) {
-                        Text(
-                            "☂ ${item.precipitationChance}%",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (focused) ink else Color(0xFF40C4FF)
-                        )
-                    } else {
-                        Spacer(Modifier.height(11.dp))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DailyForecastGrid(forecast: List<ForecastDay>) {
+private fun DtvForecastTableRow(
+    dayLabel: String,
+    day: ForecastDay
+) {
     Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        forecast.forEachIndexed { index, day ->
-            GlzFocusCard(
-                onClick = {},
-                selected = index == 0,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(164.dp),
-                shape = RoundedCornerShape(GlzCardDefaults.RadiusSmall),
-                focusedScale = 1.04f,
-                contentModifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp)
-            ) { focused ->
-                val ink = if (focused) Color(0xFF0B0D0F) else Color(0xFFF1F3F4)
-                val subInk = if (focused) Color(0xFF0B0D0F).copy(alpha = 0.72f) else Color(0xFF9AA0A6)
-                Column(
-                    Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        if (index == 0) "TODAY" else dayLabel(day.date),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black,
-                        color = if (!focused && index == 0) MaterialTheme.colorScheme.primary else ink
-                    )
-                    Text(
-                        weatherSymbol(day.weatherCode),
-                        fontSize = 32.sp
-                    )
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "${day.high}° / ${day.low}°",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Black,
-                            color = ink
-                        )
-                        Text(
-                            weatherDescription(day.weatherCode),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = subInk,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Text(
-                        "☂ ${day.precipitationChance}%",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = when {
-                            focused -> ink
-                            day.precipitationChance > 0 -> Color(0xFF00E5FF)
-                            else -> subInk.copy(alpha = 0.6f)
-                        }
-                    )
-                }
-            }
+        Text(
+            text = dayLabel,
+            color = DtvChrome.PrimaryText,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.width(130.dp)
+        )
+        Text(
+            text = weatherGlyph(day.weatherCode),
+            fontSize = 18.sp,
+            modifier = Modifier.width(34.dp)
+        )
+        Text(
+            text = weatherLabel(day.weatherCode),
+            color = DtvChrome.SecondaryText,
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = if (day.precipitationChance > 0) "${day.precipitationChance}% precip" else "Dry",
+            color = if (day.precipitationChance > 0) DtvChrome.ElectricBlueSoft else DtvChrome.MutedText,
+            fontSize = 12.sp,
+            modifier = Modifier.width(96.dp)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "H ${day.high}°",
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "L ${day.low}°",
+                color = DtvChrome.SecondaryText,
+                fontSize = 13.sp
+            )
         }
     }
 }
 
-private fun getAtmosphericGradient(weatherCode: Int): List<Color> = when (weatherCode) {
-    0, 1 -> listOf(
-        Color(0xFFFF8F00).copy(alpha = 0.65f),
-        Color(0xFFE65100).copy(alpha = 0.40f),
-        Color(0xFF101524).copy(alpha = 0.85f)
-    )
-    2, 3 -> listOf(
-        Color(0xFF37474F).copy(alpha = 0.70f),
-        Color(0xFF1E2A38).copy(alpha = 0.60f),
-        Color(0xFF101524).copy(alpha = 0.90f)
-    )
-    in 51..67, in 80..82 -> listOf(
-        Color(0xFF0277BD).copy(alpha = 0.65f),
-        Color(0xFF00363A).copy(alpha = 0.50f),
-        Color(0xFF090C15).copy(alpha = 0.90f)
-    )
-    in 71..77, 85, 86 -> listOf(
-        Color(0xFF0097A7).copy(alpha = 0.60f),
-        Color(0xFF004D57).copy(alpha = 0.50f),
-        Color(0xFF090C15).copy(alpha = 0.90f)
-    )
-    in 95..99 -> listOf(
-        Color(0xFF512DA8).copy(alpha = 0.70f),
-        Color(0xFF311B92).copy(alpha = 0.55f),
-        Color(0xFF0A0216).copy(alpha = 0.92f)
-    )
-    else -> listOf(
-        Color(0xFF004F55).copy(alpha = 0.65f),
-        Color(0xFF1A2136).copy(alpha = 0.65f),
-        Color(0xFF101524).copy(alpha = 0.90f)
-    )
-}
-
-private fun uvRiskLabel(uv: Double): String = when {
-    uv < 3.0 -> "Low risk"
-    uv < 6.0 -> "Moderate"
-    uv < 8.0 -> "High"
-    uv < 11.0 -> "Very high"
-    else -> "Extreme"
-}
-
-private fun dayLabel(value: String): String = runCatching {
-    val input = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    val output = SimpleDateFormat("EEE", Locale.getDefault())
-    output.format(requireNotNull(input.parse(value))).uppercase(Locale.getDefault())
-}.getOrDefault(value)
-
-private fun weatherSymbol(code: Int): String = when (code) {
-    0 -> "☀"
+private fun weatherGlyph(code: Int): String = when (code) {
+    0 -> "☀️"
     1, 2 -> "⛅"
-    3 -> "☁"
-    45, 48 -> "≋"
-    in 51..67, in 80..82 -> "☂"
-    in 71..77, 85, 86 -> "❄"
-    in 95..99 -> "ϟ"
-    else -> "°"
+    3 -> "☁️"
+    45, 48 -> "🌫️"
+    51, 53, 55, 61, 63, 65, 80, 81, 82 -> "🌧️"
+    71, 73, 75, 85, 86 -> "❄️"
+    95, 96, 99 -> "⛈️"
+    else -> "🌤️"
 }
 
-private fun weatherDescription(code: Int): String = when (code) {
-    0 -> "Clear Sky"
-    1 -> "Mostly Clear"
+private fun weatherLabel(code: Int): String = when (code) {
+    0 -> "Clear"
+    1 -> "Mainly Clear"
     2 -> "Partly Cloudy"
     3 -> "Overcast"
-    45, 48 -> "Foggy"
-    in 51..57 -> "Light Drizzle"
-    in 61..67, in 80..82 -> "Rain Showers"
-    in 71..77, 85, 86 -> "Snowfall"
-    in 95..99 -> "Thunderstorms"
-    else -> "Mixed Conditions"
+    45, 48 -> "Fog"
+    51, 53, 55 -> "Drizzle"
+    61, 63, 65 -> "Rain"
+    71, 73, 75 -> "Snow"
+    80, 81, 82 -> "Rain Showers"
+    95, 96, 99 -> "Thunderstorm"
+    else -> "Fair"
 }
