@@ -55,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -849,6 +850,16 @@ private fun HybridTopBarTab(
         modifier = Modifier
             .fillMaxHeight()
             .background(if (isFocused || active) Color.Black else Color.Transparent)
+            .drawBehind {
+                if (isFocused || active) {
+                    val barHeight = 3.dp.toPx()
+                    drawRect(
+                        color = if (isFocused) HomeElectricBlue else HomeElectricBlue.copy(alpha = 0.75f),
+                        topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - barHeight),
+                        size = androidx.compose.ui.geometry.Size(size.width, barHeight)
+                    )
+                }
+            }
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
@@ -875,17 +886,9 @@ private fun HybridTopBarTab(
             color = if (isFocused || active) Color.White else HomeSecondaryText,
             fontSize = 13.sp,
             fontWeight = if (isFocused || active) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
             modifier = Modifier.align(Alignment.Center)
         )
-        if (isFocused || active) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(if (isFocused) HomeElectricBlue else HomeElectricBlue.copy(alpha = 0.65f))
-            )
-        }
     }
 }
 
