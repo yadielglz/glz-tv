@@ -4515,9 +4515,9 @@ private fun ImmersivePlayerScreen(
 
         AnimatedVisibility(
             visible = drawer == PlayerDrawer.None && showOsd,
-            modifier = Modifier.align(Alignment.BottomCenter),
-            enter = fadeIn(animationSpec = tween(180)) + slideInVertically(animationSpec = tween(180)) { it / 4 },
-            exit = fadeOut(animationSpec = tween(650)) + slideOutVertically(animationSpec = tween(650)) { it / 4 }
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = fadeIn(animationSpec = tween(180)) + slideInVertically(animationSpec = tween(180)) { -it / 2 },
+            exit = fadeOut(animationSpec = tween(350)) + slideOutVertically(animationSpec = tween(350)) { -it / 2 }
         ) {
             GoogleTvPlayerOsd(
                 channel = channel,
@@ -4541,7 +4541,26 @@ private fun ImmersivePlayerScreen(
                 },
                 onOpenGuide = {
                     showOsd = false
-                    onExit()
+                    drawer = PlayerDrawer.MiniGuide
+                },
+                onOpenRecent = {
+                    showOsd = false
+                    if (recentChannels.size <= 1) {
+                        onPreviousChannel()
+                    } else {
+                        drawer = PlayerDrawer.Recent
+                    }
+                },
+                onOpenChannels = {
+                    showOsd = false
+                    drawer = PlayerDrawer.Channels
+                },
+                onOpenMultiView = {
+                    showOsd = false
+                    selectingMultiViewChannel = true
+                },
+                onInteraction = {
+                    osdRevision++
                 }
             )
         }
