@@ -1,6 +1,7 @@
 package com.glztv.app.ui.theme
 
 import android.view.KeyEvent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,11 +44,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.glztv.app.R
 import com.glztv.app.model.WeatherInfo
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -180,27 +184,14 @@ fun DtvTopCommandBar(
                 modifier = Modifier.fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    modifier = Modifier.padding(end = 14.dp)
-                ) {
-                    Box(
-                        Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(DtvChrome.ElectricBlue)
-                    )
-                    Text(
-                        text = "GlzTV",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontFamily = BarlowCondensedFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        maxLines = 1
-                    )
-                }
+                Image(
+                    painter = painterResource(id = R.drawable.glztv_logo_horizontal),
+                    contentDescription = "GlzTV",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .padding(end = 14.dp)
+                        .height(if (viewport.isCompactHeight) 22.dp else 25.dp)
+                )
                 Box(Modifier.width(1.dp).fillMaxHeight().background(DtvChrome.Divider))
 
                 val navTabs = buildList {

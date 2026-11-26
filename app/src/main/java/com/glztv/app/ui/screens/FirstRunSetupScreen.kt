@@ -363,17 +363,30 @@ private fun WelcomeStepPane(
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(
-                text = "Welcome to GLZ TV",
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Everything you watch and listen to, organized for the big screen.",
-                color = GoogleTvTokens.TextSecondary,
-                fontSize = 14.sp
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(id = com.glztv.app.R.drawable.glztv_logo_stacked),
+                    contentDescription = "GlzTV",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.height(64.dp)
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Welcome to GlzTV",
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Everything you watch and listen to, organized for the big screen.",
+                        color = GoogleTvTokens.TextSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

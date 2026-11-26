@@ -333,25 +333,37 @@ fun GoogleTvPlayerOsd(
 
                 Spacer(Modifier.width(24.dp))
 
-                // Right: Crisp Current Time & Date (clean, no third-party logo)
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                // Right: Monochrome Broadcast Bug + Crisp Current Time & Date
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(
-                        text = nowTimeText,
-                        color = DtvPrimaryText,
-                        fontSize = if (viewport.isCompactHeight) 20.sp else 23.sp,
-                        fontWeight = FontWeight.Normal,
-                        maxLines = 1
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.glztv.app.R.drawable.glztv_logo_bug),
+                        contentDescription = "GlzTV",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                        alpha = 0.72f,
+                        modifier = Modifier.height(if (viewport.isCompactHeight) 16.dp else 18.dp)
                     )
-                    Text(
-                        text = nowDateText,
-                        color = DtvSecondaryText,
-                        fontSize = if (viewport.isCompactHeight) 13.sp else 15.sp,
-                        fontWeight = FontWeight.Normal,
-                        maxLines = 1
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                    ) {
+                        Text(
+                            text = nowTimeText,
+                            color = DtvPrimaryText,
+                            fontSize = if (viewport.isCompactHeight) 20.sp else 23.sp,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = nowDateText,
+                            color = DtvSecondaryText,
+                            fontSize = if (viewport.isCompactHeight) 13.sp else 15.sp,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
 

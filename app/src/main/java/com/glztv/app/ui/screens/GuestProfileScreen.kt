@@ -1,5 +1,6 @@
 package com.glztv.app.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +35,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.glztv.app.GuestExperience
 import com.glztv.app.GuestService
+import com.glztv.app.R
 import com.glztv.app.ui.theme.BarlowCondensedFontFamily
 import com.glztv.app.ui.theme.DtvActionButton
 import com.glztv.app.ui.theme.DtvChrome
@@ -103,16 +106,13 @@ fun GuestProfileScreen(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(DtvChrome.ElectricBlue))
-                Text(
-                    text = "GlzTV",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontFamily = BarlowCondensedFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp
+                Image(
+                    painter = painterResource(id = R.drawable.glztv_logo_horizontal),
+                    contentDescription = "GlzTV",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.height(if (viewport.isCompactHeight) 22.dp else 25.dp)
                 )
                 Box(Modifier.width(1.dp).height(18.dp).background(DtvChrome.Divider))
                 Text(

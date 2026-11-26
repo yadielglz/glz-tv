@@ -209,12 +209,12 @@ fun AmbientScreensaverScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = accent.copy(alpha = 0.20f),
-                        border = BorderStroke(1.dp, accent.copy(alpha = 0.40f)),
-                        modifier = Modifier.size(10.dp)
-                    ) {}
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.glztv.app.R.drawable.glztv_logo_emblem),
+                        contentDescription = "GlzTV",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                        modifier = Modifier.size(22.dp)
+                    )
                     Text(
                         text = if (guestName.isNotBlank() && !guestName.equals("Guest", ignoreCase = true)) {
                             "$greeting, $guestName"
