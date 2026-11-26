@@ -42,6 +42,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -197,6 +198,8 @@ import com.glztv.app.ui.theme.DtvNavTab
 import com.glztv.app.ui.theme.DtvTopCommandBar
 import com.glztv.app.ui.components.GoogleTvMiniGuide
 import com.glztv.app.ui.components.GoogleTvChannelLogo
+import com.glztv.app.ui.components.DtvChannelSurfBar
+import com.glztv.app.ui.components.DtvChannelNumberHud
 import com.glztv.app.ui.theme.GoogleTvTokens
 import com.glztv.app.ui.theme.googleTvFocusable
 import com.glztv.app.launcher.LauncherAppsManager
@@ -534,6 +537,48 @@ internal fun TvScreen(
     }
     var lastUserInteractionTime by remember { mutableStateOf(System.currentTimeMillis()) }
     var lastSpeedTestResult by remember { mutableStateOf<SpeedTestResult?>(null) }
+
+    // Sleep Timer (Off -> 15m -> 30m -> 60m -> 90m -> Off): stops playback & enters Ambient Screensaver
+    var sleepTimerEndMillis by remember { mutableStateOf<Long?>(null) }
+    var sleepTimerRemainingMin by remember { mutableStateOf<Int?>(null) }
+    val sleepPresetsMinutes = remember { listOf(15, 30, 60, 90) }
+    fun cycleSleepTimer() {
+        val current = sleepTimerRemainingMin
+        val nextPreset = when {
+            current == null -> sleepPresetsMinutes.first()
+            else -> sleepPresetsMinutes.firstOrNull { it > current }
+        }
+        if (nextPreset == null) {
+            sleepTimerEndMillis = null
+            sleepTimerRemainingMin = null
+        } else {
+            sleepTimerEndMillis = System.currentTimeMillis() + nextPreset * 60_000L
+            sleepTimerRemainingMin = nextPreset
+        }
+    }
+    LaunchedEffect(sleepTimerEndMillis) {
+        val endAt = sleepTimerEndMillis
+        if (endAt == null) {
+            sleepTimerRemainingMin = null
+            return@LaunchedEffect
+        }
+        while (true) {
+            val remainingMs = endAt - System.currentTimeMillis()
+            if (remainingMs <= 0L) {
+                sleepTimerEndMillis = null
+                sleepTimerRemainingMin = null
+                playerActive = false
+                selectedMovie = null
+                multiViewSecondary = null
+                stopRadio()
+                GlzHubManager.reportActivity(prefs, "idle")
+                showScreensaver = true
+                break
+            }
+            sleepTimerRemainingMin = ((remainingMs + 59_999L) / 60_000L).toInt().coerceAtLeast(1)
+            delay(15_000L)
+        }
+    }
 
     val keepScreenAwake = radioPlaying || section == AppSection.SportsBarKiosk ||
         (section == AppSection.Home && keepAwakeAtHome)
@@ -1183,6 +1228,8 @@ internal fun TvScreen(
                             ?.let(tuneChannel)
                     },
                     onAddToMultiView = { multiViewSecondary = it },
+                    sleepTimerRemainingMinutes = sleepTimerRemainingMin,
+                    onCycleSleepTimer = { cycleSleepTimer() },
                     onTune = tuneChannel,
                     onExit = {
                         playerActive = false
@@ -4526,6 +4573,8 @@ private fun ImmersivePlayerScreen(
     onRunSpeedTest: ((String) -> Unit)? = null,
     onPreviousChannel: () -> Unit,
     onAddToMultiView: (Channel) -> Unit,
+    sleepTimerRemainingMinutes: Int? = null,
+    onCycleSleepTimer: () -> Unit = {},
     onTune: (Channel) -> Unit,
     onExit: () -> Unit
 ) {
@@ -4592,20 +4641,76 @@ private fun ImmersivePlayerScreen(
             runCatching { playerFocus.requestFocus() }
         }
     }
-    LaunchedEffect(channel.id) {
-        // The ready callback below turns this on at the exact point playback starts.
-        showOsd = false
-    }
-
-    fun stepChannel(direction: Int) {
-        val currentIndex = channels.indexOfFirst { it.id == channel.id }
-        if (currentIndex >= 0 && channels.isNotEmpty()) {
-            onTune(channels[(currentIndex + direction + channels.size) % channels.size])
+    var surfChannel by remember { mutableStateOf<Channel?>(null) }
+    var surfRevision by remember { mutableStateOf(0) }
+    var digitBuffer by remember { mutableStateOf("") }
+    var digitRevision by remember { mutableStateOf(0) }
+    val matchedDigitChannel = remember(digitBuffer, channels) {
+        if (digitBuffer.isEmpty()) null
+        else {
+            val targetNum = digitBuffer.toIntOrNull()
+            channels.firstOrNull { ch ->
+                val raw = ch.number.trim()
+                raw == digitBuffer || (targetNum != null && raw.toIntOrNull() == targetNum)
+            }
         }
     }
 
+    LaunchedEffect(channel.id) {
+        // The ready callback below turns this on at the exact point playback starts.
+        showOsd = false
+        surfChannel = null
+        digitBuffer = ""
+    }
+    LaunchedEffect(showOsd, drawer) {
+        if (showOsd || drawer != PlayerDrawer.None) {
+            surfChannel = null
+            digitBuffer = ""
+        }
+    }
+    // Channel Surfer auto-tune: dwelling 2.0s on a surfed channel tunes to it automatically
+    LaunchedEffect(surfChannel?.id, surfRevision) {
+        val target = surfChannel ?: return@LaunchedEffect
+        delay(2_000L)
+        surfChannel = null
+        if (target.id != channel.id) {
+            onTune(target)
+        }
+    }
+    // Direct 0-9 channel number entry auto-tune after 1.6s
+    LaunchedEffect(digitBuffer, digitRevision) {
+        if (digitBuffer.isEmpty()) return@LaunchedEffect
+        delay(1_600L)
+        val target = matchedDigitChannel
+        digitBuffer = ""
+        if (target != null && target.id != channel.id) {
+            onTune(target)
+        }
+    }
+
+    fun stepSurfChannel(direction: Int) {
+        if (channels.isEmpty()) return
+        val base = surfChannel ?: channel
+        val baseIndex = channels.indexOfFirst { it.id == base.id }.coerceAtLeast(0)
+        val nextIndex = (baseIndex + direction + channels.size) % channels.size
+        digitBuffer = ""
+        now = System.currentTimeMillis()
+        surfChannel = channels[nextIndex]
+        surfRevision++
+    }
+
+    fun digitFromKeyCode(keyCode: Int): Int? = when (keyCode) {
+        in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> keyCode - KeyEvent.KEYCODE_0
+        in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> keyCode - KeyEvent.KEYCODE_NUMPAD_0
+        else -> null
+    }
+
     BackHandler {
-        if (drawer != PlayerDrawer.None) {
+        if (digitBuffer.isNotEmpty()) {
+            digitBuffer = ""
+        } else if (surfChannel != null) {
+            surfChannel = null
+        } else if (drawer != PlayerDrawer.None) {
             drawer = PlayerDrawer.None
         } else if (showOsd) {
             showOsd = false
@@ -4646,9 +4751,16 @@ private fun ImmersivePlayerScreen(
             .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+                val keyCode = event.nativeKeyEvent.keyCode
 
-                if (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK) {
-                    if (drawer != PlayerDrawer.None) {
+                if (keyCode == KeyEvent.KEYCODE_BACK) {
+                    if (digitBuffer.isNotEmpty()) {
+                        digitBuffer = ""
+                        return@onPreviewKeyEvent true
+                    } else if (surfChannel != null) {
+                        surfChannel = null
+                        return@onPreviewKeyEvent true
+                    } else if (drawer != PlayerDrawer.None) {
                         drawer = PlayerDrawer.None
                         playerFocus.requestFocus()
                         return@onPreviewKeyEvent true
@@ -4659,10 +4771,36 @@ private fun ImmersivePlayerScreen(
                     }
                 }
 
+                // Direct 0-9 channel number entry & instant Last Channel flip when no drawer is open
+                if (drawer == PlayerDrawer.None) {
+                    if (keyCode == KeyEvent.KEYCODE_LAST_CHANNEL) {
+                        surfChannel = null
+                        digitBuffer = ""
+                        showOsd = false
+                        onPreviousChannel()
+                        return@onPreviewKeyEvent true
+                    }
+                    val digit = digitFromKeyCode(keyCode)
+                    if (digit != null) {
+                        if (digit == 0 && digitBuffer.isEmpty()) {
+                            // Pressing 0 alone instantly flips to the previous channel
+                            surfChannel = null
+                            showOsd = false
+                            onPreviousChannel()
+                        } else if (digitBuffer.length < 4) {
+                            surfChannel = null
+                            showOsd = false
+                            digitBuffer += digit.toString()
+                            digitRevision++
+                        }
+                        return@onPreviewKeyEvent true
+                    }
+                }
+
                 // When OSD is shown and no drawer is active, allow D-pad to navigate OSD buttons!
                 if (showOsd && drawer == PlayerDrawer.None) {
                     osdRevision++
-                    when (event.nativeKeyEvent.keyCode) {
+                    when (keyCode) {
                         KeyEvent.KEYCODE_BACK,
                         KeyEvent.KEYCODE_DPAD_UP -> {
                             showOsd = false
@@ -4684,10 +4822,12 @@ private fun ImmersivePlayerScreen(
                     }
                 }
 
-                when (event.nativeKeyEvent.keyCode) {
+                when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
                         if (drawer == PlayerDrawer.None) {
                             now = System.currentTimeMillis()
+                            surfChannel = null
+                            digitBuffer = ""
                             showOsd = false
                             drawer = PlayerDrawer.Channels
                             true
@@ -4696,6 +4836,8 @@ private fun ImmersivePlayerScreen(
                     KeyEvent.KEYCODE_DPAD_RIGHT -> {
                         if (drawer == PlayerDrawer.None) {
                             now = System.currentTimeMillis()
+                            surfChannel = null
+                            digitBuffer = ""
                             showOsd = false
                             drawer = PlayerDrawer.Services
                             true
@@ -4705,40 +4847,33 @@ private fun ImmersivePlayerScreen(
                     KeyEvent.KEYCODE_ENTER,
                     KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                         if (drawer == PlayerDrawer.None) {
-                            now = System.currentTimeMillis()
-                            showOsd = true
+                            if (digitBuffer.isNotEmpty()) {
+                                val target = matchedDigitChannel
+                                digitBuffer = ""
+                                if (target != null && target.id != channel.id) onTune(target)
+                            } else if (surfChannel != null) {
+                                val target = surfChannel
+                                surfChannel = null
+                                if (target != null && target.id != channel.id) onTune(target)
+                            } else {
+                                now = System.currentTimeMillis()
+                                showOsd = true
+                            }
                             true
                         } else false
                     }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (drawer == PlayerDrawer.None) {
-                            now = System.currentTimeMillis()
-                            showOsd = true
-                            true
-                        } else false
-                    }
-                    KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (drawer == PlayerDrawer.None) {
-                            now = System.currentTimeMillis()
-                            showOsd = false
-                            drawer = PlayerDrawer.MiniGuide
-                            true
-                        } else false
-                    }
-                    // Channel keys step channels directly
+                    // DirecTV Bottom Channel Surfer: UP / CH+ steps +1, DOWN / CH- steps -1, auto-tunes on 2s dwell
+                    KeyEvent.KEYCODE_DPAD_UP,
                     KeyEvent.KEYCODE_CHANNEL_UP -> {
                         if (drawer == PlayerDrawer.None) {
-                            now = System.currentTimeMillis()
-                            stepChannel(1)
-                            showOsd = true
+                            stepSurfChannel(1)
                             true
                         } else false
                     }
+                    KeyEvent.KEYCODE_DPAD_DOWN,
                     KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                         if (drawer == PlayerDrawer.None) {
-                            now = System.currentTimeMillis()
-                            stepChannel(-1)
-                            showOsd = true
+                            stepSurfChannel(-1)
                             true
                         } else false
                     }
@@ -4746,6 +4881,8 @@ private fun ImmersivePlayerScreen(
                     KeyEvent.KEYCODE_MENU -> {
                         if (drawer == PlayerDrawer.None) {
                             now = System.currentTimeMillis()
+                            surfChannel = null
+                            digitBuffer = ""
                             showOsd = false
                             drawer = PlayerDrawer.Services
                             true
@@ -4825,9 +4962,56 @@ private fun ImmersivePlayerScreen(
                     selectingMultiViewChannel = true
                     drawer = PlayerDrawer.Channels
                 },
+                sleepTimerRemainingMinutes = sleepTimerRemainingMinutes,
+                onCycleSleepTimer = {
+                    osdRevision++
+                    onCycleSleepTimer()
+                },
                 onInteraction = {
                     osdRevision++
                 }
+            )
+        }
+
+        // Compact DirecTV Bottom Channel Surfer (UP/DOWN or CH+/CH-): never overshadows the top OSD
+        var lastSurfChannel by remember { mutableStateOf<Channel?>(null) }
+        if (surfChannel != null) lastSurfChannel = surfChannel
+        AnimatedVisibility(
+            visible = drawer == PlayerDrawer.None && !showOsd && surfChannel != null,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 22.dp, start = 28.dp, end = 28.dp),
+            enter = fadeIn(animationSpec = tween(150)) + slideInVertically(animationSpec = tween(150)) { it / 2 },
+            exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(animationSpec = tween(200)) { it / 2 }
+        ) {
+            val previewCh = surfChannel ?: lastSurfChannel
+            if (previewCh != null) {
+                val surfProg = remember(previewCh.id, guide, now) {
+                    guide.nowProgrammeForChannel(previewCh, now)
+                }
+                DtvChannelSurfBar(
+                    surfChannel = previewCh,
+                    currentProgramme = surfProg,
+                    guide = guide,
+                    nowMillis = now,
+                    isCurrentChannel = previewCh.id == channel.id
+                )
+            }
+        }
+
+        // Direct 0-9 Channel Number Entry HUD (top-right)
+        AnimatedVisibility(
+            visible = drawer == PlayerDrawer.None && digitBuffer.isNotEmpty(),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 24.dp, end = 36.dp),
+            enter = fadeIn(animationSpec = tween(120)),
+            exit = fadeOut(animationSpec = tween(180))
+        ) {
+            DtvChannelNumberHud(
+                digits = digitBuffer,
+                matchedChannel = matchedDigitChannel,
+                guide = guide
             )
         }
 
@@ -4947,7 +5131,13 @@ private fun ImmersivePlayerScreen(
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    initialDelayMillis = 1200,
+                                    velocity = 34.dp
+                                )
                         )
                         currentProgramme?.let { prog ->
                             val start = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(prog.startMillis))

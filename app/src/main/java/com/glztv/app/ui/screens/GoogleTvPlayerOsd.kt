@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -108,6 +109,8 @@ fun GoogleTvPlayerOsd(
     onOpenGuide: () -> Unit = {},
     onOpenChannels: () -> Unit = {},
     onOpenMultiView: () -> Unit = {},
+    sleepTimerRemainingMinutes: Int? = null,
+    onCycleSleepTimer: () -> Unit = {},
     onInteraction: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -222,6 +225,15 @@ fun GoogleTvPlayerOsd(
                 onInteraction()
                 onOpenMultiView()
             }
+        ),
+        DtvOsdTab(
+            id = "sleep",
+            label = if (sleepTimerRemainingMinutes != null) "Sleep ${sleepTimerRemainingMinutes}m" else "Sleep",
+            indicatorColor = if (sleepTimerRemainingMinutes != null) DtvElectricBlue else null,
+            onClick = {
+                onInteraction()
+                onCycleSleepTimer()
+            }
         )
     )
 
@@ -302,7 +314,13 @@ fun GoogleTvPlayerOsd(
                         fontSize = if (viewport.isCompactHeight) 21.sp else 25.sp,
                         fontWeight = FontWeight.Normal,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(
+                                iterations = Int.MAX_VALUE,
+                                initialDelayMillis = 1200,
+                                velocity = 36.dp
+                            )
                     )
                     Text(
                         text = subtitleText,
