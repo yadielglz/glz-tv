@@ -2652,34 +2652,103 @@ export function parseConMeM3u(m3uText: string): ParsedEventChannel[] {
   return assignCategoryChannelNumbers(events);
 }
 
-function getChannelPrefix(sportLeague: string, title: string, groupTitle: string, tvgId: string): "31" | "30" | "29" {
-  const fullText = `${sportLeague} ${title} ${groupTitle} ${tvgId}`.toUpperCase();
-
-  // Tier 1: MLB Events -> 31-XX
-  if (sportLeague === "MLB" || /\b(MLB|BASEBALL)\b/i.test(fullText)) {
-    return "31";
-  }
-
-  // Tier 2: NBA, NFL, college football, and NHL events -> 30-XX
-  const isUSMajor = /\b(NBA|NFL|NCAA|NCAAF|CFB|COLLEGE\s*FOOTBALL|NHL)\b/i.test(fullText);
-  if (isUSMajor || ["NBA", "NFL", "NCAA", "NHL"].includes(sportLeague)) {
-    return "30";
-  }
-
-  // Tier 3: UFC, boxing, and manually selected PPV events -> 29-XX
-  return "29";
+export interface EventChannelRanges {
+  mode: "dashed" | "sequential";
+  mlb: number;
+  major: number;
+  ppv: number;
 }
 
-function assignCategoryChannelNumbers(events: ParsedEventChannel[]): ParsedEventChannel[] {
+export const DEFAULT_EVENT_CHANNEL_RANGES: EventChannelRanges = {
+  mode: "dashed",
+  mlb: 31,
+  major: 30,
+  ppv: 29
+};
+
+export function normalizeEventChannelRanges(raw: unknown): EventChannelRanges {
+  const obj = (raw && typeof raw === "object") ? raw as Record<string, unknown> : {};
+  const mode = String(obj.mode || "dashed").toLowerCase() === "sequential" ? "sequential" : "dashed";
+  const clamp = (val: unknown, fallback: number): number => {
+    const n = Number(val);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(9999, Math.max(1, Math.round(n)));
+  };
+  return {
+    mode,
+    mlb: clamp(obj.mlb, DEFAULT_EVENT_CHANNEL_RANGES.mlb),
+    major: clamp(obj.major, DEFAULT_EVENT_CHANNEL_RANGES.major),
+    ppv: clamp(obj.ppv, DEFAULT_EVENT_CHANNEL_RANGES.ppv)
+  };
+}
+
+export function formatEventChannelNumber(base: number, index: number, mode: "dashed" | "sequential"): string {
+  if (mode === "sequential") {
+    return String(base + index);
+  }
+  return `${base}-${String(index + 1).padStart(2, "0")}`;
+}
+
+async function loadEventChannelRanges(env: Env): Promise<EventChannelRanges> {
+  try {
+    const rows = await supabaseJson(
+      env,
+      "/rest/v1/hub_settings?key=eq.live_event_channel_ranges&select=value&limit=1"
+    ) as Array<{ value?: unknown }>;
+    if (Array.isArray(rows) && rows.length > 0 && rows[0]?.value) {
+      return normalizeEventChannelRanges(rows[0].value);
+    }
+  } catch {
+    // Table may not exist yet before migration 032 is applied; fall back safely to defaults.
+  }
+  return { ...DEFAULT_EVENT_CHANNEL_RANGES };
+}
+
+async function saveEventChannelRanges(env: Env, ranges: EventChannelRanges): Promise<EventChannelRanges> {
+  const normalized = normalizeEventChannelRanges(ranges);
+  await supabaseJson(env, "/rest/v1/hub_settings?on_conflict=key&select=key,value", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify({
+      key: "live_event_channel_ranges",
+      value: normalized,
+      updated_at: new Date().toISOString()
+    })
+  });
+  return normalized;
+}
+
+function getEventChannelTier(sportLeague: string, title: string, groupTitle: string, tvgId: string): "mlb" | "major" | "ppv" {
+  const fullText = `${sportLeague} ${title} ${groupTitle} ${tvgId}`.toUpperCase();
+
+  // Tier 1: MLB Events
+  if (sportLeague === "MLB" || /\b(MLB|BASEBALL)\b/i.test(fullText)) {
+    return "mlb";
+  }
+
+  // Tier 2: NBA, NFL, college football, and NHL events
+  const isUSMajor = /\b(NBA|NFL|SUNDAY\s+TICKET|RED\s*ZONE|TNF|SNF|MNF|NCAA|NCAAF|CFB|COLLEGE\s*FOOTBALL|NHL)\b/i.test(fullText);
+  if (isUSMajor || ["NBA", "NFL", "NCAA", "NHL"].includes(sportLeague)) {
+    return "major";
+  }
+
+  // Tier 3: UFC, boxing, and manually selected PPV events
+  return "ppv";
+}
+
+export function assignCategoryChannelNumbers(
+  events: ParsedEventChannel[],
+  ranges: EventChannelRanges = DEFAULT_EVENT_CHANNEL_RANGES
+): ParsedEventChannel[] {
   const mlbEvents: ParsedEventChannel[] = [];
   const usMajorEvents: ParsedEventChannel[] = [];
   const ppvEvents: ParsedEventChannel[] = [];
 
   for (const item of events) {
-    const prefix = getChannelPrefix(item.sportLeague, item.title, item.groupTitle, item.tvgId);
-    if (prefix === "31") {
+    const tier = getEventChannelTier(item.sportLeague, item.title, item.groupTitle, item.tvgId);
+    if (tier === "mlb") {
       mlbEvents.push(item);
-    } else if (prefix === "30") {
+    } else if (tier === "major") {
       usMajorEvents.push(item);
     } else {
       ppvEvents.push(item);
@@ -2690,20 +2759,90 @@ function assignCategoryChannelNumbers(events: ParsedEventChannel[]): ParsedEvent
 
   mlbEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   mlbEvents.forEach((item, idx) => {
-    result.push({ ...item, channelNumber: `31-${String(idx + 1).padStart(2, "0")}` });
+    result.push({ ...item, channelNumber: formatEventChannelNumber(ranges.mlb, idx, ranges.mode) });
   });
 
   usMajorEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   usMajorEvents.forEach((item, idx) => {
-    result.push({ ...item, channelNumber: `30-${String(idx + 1).padStart(2, "0")}` });
+    result.push({ ...item, channelNumber: formatEventChannelNumber(ranges.major, idx, ranges.mode) });
   });
 
   ppvEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   ppvEvents.forEach((item, idx) => {
-    result.push({ ...item, channelNumber: `29-${String(idx + 1).padStart(2, "0")}` });
+    result.push({ ...item, channelNumber: formatEventChannelNumber(ranges.ppv, idx, ranges.mode) });
   });
 
   return sortEventChannels(result);
+}
+
+async function getEventChannelRangesHandler(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  const ranges = await loadEventChannelRanges(env);
+  return json({ ok: true, ranges });
+}
+
+async function updateEventChannelRangesHandler(request: Request, env: Env): Promise<Response> {
+  await adminUser(request, env);
+  try {
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const normalized = normalizeEventChannelRanges(body);
+    await saveEventChannelRanges(env, normalized);
+
+    // Immediately renumber all existing auto-ingested live events while preserving manual overrides
+    const rows = await supabaseJson(
+      env,
+      "/rest/v1/event_channels?select=id,tvg_id,title,sport_league,group_title,start_time,auto_ingested,channel_number"
+    ) as Array<Record<string, unknown>>;
+
+    const autoRows = (rows || []).filter((r) => r.auto_ingested !== false);
+    const mlbRows: Array<Record<string, unknown>> = [];
+    const majorRows: Array<Record<string, unknown>> = [];
+    const ppvRows: Array<Record<string, unknown>> = [];
+
+    for (const row of autoRows) {
+      const tier = getEventChannelTier(
+        String(row.sport_league || ""),
+        String(row.title || ""),
+        String(row.group_title || ""),
+        String(row.tvg_id || "")
+      );
+      if (tier === "mlb") mlbRows.push(row);
+      else if (tier === "major") majorRows.push(row);
+      else ppvRows.push(row);
+    }
+
+    const byStart = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+      new Date(String(a.start_time || 0)).getTime() - new Date(String(b.start_time || 0)).getTime();
+    mlbRows.sort(byStart);
+    majorRows.sort(byStart);
+    ppvRows.sort(byStart);
+
+    const updates: Array<{ id: string; channelNumber: string }> = [];
+    mlbRows.forEach((row, idx) => {
+      const next = formatEventChannelNumber(normalized.mlb, idx, normalized.mode);
+      if (String(row.channel_number || "") !== next) updates.push({ id: String(row.id), channelNumber: next });
+    });
+    majorRows.forEach((row, idx) => {
+      const next = formatEventChannelNumber(normalized.major, idx, normalized.mode);
+      if (String(row.channel_number || "") !== next) updates.push({ id: String(row.id), channelNumber: next });
+    });
+    ppvRows.forEach((row, idx) => {
+      const next = formatEventChannelNumber(normalized.ppv, idx, normalized.mode);
+      if (String(row.channel_number || "") !== next) updates.push({ id: String(row.id), channelNumber: next });
+    });
+
+    await Promise.all(updates.map(({ id, channelNumber }) =>
+      supabaseJson(env, `/rest/v1/event_channels?id=eq.${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ channel_number: channelNumber, updated_at: new Date().toISOString() })
+      })
+    ));
+
+    await pushConfigUpdateToAllDevices(env);
+    return json({ ok: true, ranges: normalized, renumberedCount: updates.length });
+  } catch (err) {
+    return json({ ok: false, error: (err as Error).message }, 400);
+  }
 }
 
 export interface ScheduledSportsGame {
@@ -3074,7 +3213,8 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
       }
     }
     const deduplicated = Array.from(uniqueMap.values());
-    const renumbered = assignCategoryChannelNumbers(deduplicated);
+    const ranges = await loadEventChannelRanges(env);
+    const renumbered = assignCategoryChannelNumbers(deduplicated, ranges);
 
     const result = await saveIngestedEventChannels(env, renumbered, defaultPreBufferHours, defaultPostBufferHours);
     await pruneAutoIngestedEventChannels(env, new Set(renumbered.map((item) => item.tvgId)));
@@ -3173,8 +3313,10 @@ async function injectSingleStream(request: Request, env: Env): Promise<Response>
   }
 
   if (!stream.channelNumber) {
-    const prefix = getChannelPrefix(stream.sportLeague || "SPORTS", stream.title, stream.groupTitle || "", stream.tvgId || "");
-    stream.channelNumber = `${prefix}-01`;
+    const ranges = await loadEventChannelRanges(env);
+    const tier = getEventChannelTier(stream.sportLeague || "SPORTS", stream.title, stream.groupTitle || "", stream.tvgId || "");
+    const base = tier === "mlb" ? ranges.mlb : tier === "major" ? ranges.major : ranges.ppv;
+    stream.channelNumber = formatEventChannelNumber(base, 0, ranges.mode);
   }
 
   const preBufferHours = clampEventBufferHours(input.preBufferHours, 0.5);
@@ -3224,8 +3366,13 @@ async function createEventChannel(request: Request, env: Env): Promise<Response>
   const sportLeague = optionalString(input.sportLeague, "sportLeague", 40) || "SPORTS";
   const groupTitle = optionalString(input.groupTitle, "groupTitle", 120) || "Major League Sports (Events)";
   const logoUrl = optionalString(input.logoUrl, "logoUrl", 2048);
-  const defaultPrefix = getChannelPrefix(sportLeague, title, groupTitle, tvgId);
-  const channelNumber = optionalString(input.channelNumber, "channelNumber", 20) || `${defaultPrefix}-01`;
+  let channelNumber = optionalString(input.channelNumber, "channelNumber", 20);
+  if (!channelNumber) {
+    const ranges = await loadEventChannelRanges(env);
+    const tier = getEventChannelTier(sportLeague, title, groupTitle, tvgId);
+    const base = tier === "mlb" ? ranges.mlb : tier === "major" ? ranges.major : ranges.ppv;
+    channelNumber = formatEventChannelNumber(base, 0, ranges.mode);
+  }
   const startTime = optionalString(input.startTime, "startTime", 60) || new Date().toISOString();
   const endTime = optionalString(input.endTime, "endTime", 60) || new Date(Date.now() + 3 * 3600_000).toISOString();
   const preBufferHours = clampEventBufferHours(input.preBufferHours, 0.5);
@@ -3712,6 +3859,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (path === "/api/v1/admin/event-channels" && request.method === "GET") return listEventChannels(request, env);
   if (path === "/api/v1/admin/event-channels/provider-feed" && request.method === "GET") return fetchProviderFeed(request, env);
   if (path === "/api/v1/admin/event-channels/inject-single" && request.method === "POST") return injectSingleStream(request, env);
+  if (path === "/api/v1/admin/event-channels/ranges" && request.method === "GET") return getEventChannelRangesHandler(request, env);
+  if (path === "/api/v1/admin/event-channels/ranges" && request.method === "PUT") return updateEventChannelRangesHandler(request, env);
   if (path === "/api/v1/admin/event-channels/ingest" && request.method === "POST") return ingestEventChannels(request, env);
   if (path === "/api/v1/admin/event-channels/check-health" && request.method === "POST") return checkEventChannelsHealth(request, env);
   if (path === "/api/v1/admin/event-channels" && request.method === "POST") return createEventChannel(request, env);
@@ -3849,7 +3998,8 @@ export async function performAutoIngestAndHealthCheck(
           if (!uniqueMap.has(item.tvgId)) uniqueMap.set(item.tvgId, item);
         }
         const deduplicated = Array.from(uniqueMap.values());
-        const renumbered = assignCategoryChannelNumbers(deduplicated);
+        const ranges = await loadEventChannelRanges(env);
+        const renumbered = assignCategoryChannelNumbers(deduplicated, ranges);
         await saveIngestedEventChannels(env, renumbered).catch((err) => console.error("Auto-ingest save error:", err));
         await pruneAutoIngestedEventChannels(env, new Set(renumbered.map((item) => item.tvgId)));
         ingested = deduplicated.length;

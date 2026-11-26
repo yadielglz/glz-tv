@@ -1187,6 +1187,7 @@
                 <span>Sync Feed</span>
               </button>
               <button id="checkStreamHealthBtn" type="button" class="secondary">Check Health</button>
+              <button id="openEventRangesBtn" type="button" class="secondary">Channel Ranges</button>
               <button id="addEventChannelBtn" type="button" class="secondary">+ Add Custom Event</button>
             </div>
           </div>
@@ -1529,6 +1530,32 @@
                       <option value="block">Block all channels in lineup (Whitelist mode)</option>
                     </select>
                   </label>
+                </div>
+              </div>
+
+              <div class="editor-card" id="eventChannelRangesCard">
+                <h4 class="card-title">Live Event Channel Ranges</h4>
+                <p class="field-help" style="margin-bottom:14px;">Customize which channel numbers auto-ingested Live Events use so they never collide with your main lineup. Saving immediately renumbers existing auto-ingested events and pushes the update to all TVs.</p>
+                <div class="form-grid">
+                  <label class="wide">Numbering Format
+                    <select id="eventRangeMode">
+                      <option value="dashed" selected>Dashed Subchannels (e.g. 31-01, 31-02)</option>
+                      <option value="sequential">Sequential Integers (e.g. 910, 911, 912)</option>
+                    </select>
+                  </label>
+                  <label>MLB Base / Prefix
+                    <input id="eventRangeMlb" type="number" min="1" max="9999" value="31">
+                  </label>
+                  <label>Major Sports (NFL / NBA / NHL / NCAA)
+                    <input id="eventRangeMajor" type="number" min="1" max="9999" value="30">
+                  </label>
+                  <label>PPV &amp; Combat (UFC / Boxing / Other)
+                    <input id="eventRangePpv" type="number" min="1" max="9999" value="29">
+                  </label>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; flex-wrap:wrap;">
+                  <div id="eventRangePreview" class="field-help" style="margin:0; font-family:monospace;">MLB: 31-01, 31-02 · Major: 30-01, 30-02 · PPV: 29-01, 29-02</div>
+                  <button id="saveEventRangesBtn" type="button" class="primary">Save &amp; Renumber Live Events</button>
                 </div>
               </div>
 

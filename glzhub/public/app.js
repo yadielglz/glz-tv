@@ -4254,4 +4254,78 @@ $$("[data-close-event]").forEach((btn) => btn.addEventListener("click", () => $(
 $("#eventForm")?.addEventListener("submit", saveEventChannel);
 $("#deleteEventBtn")?.addEventListener("click", () => deleteEventChannel($("#eventId").value));
 
+function formatEventRangeSample(base, mode) {
+  const n = Math.max(1, Math.min(9999, Math.round(Number(base) || 1)));
+  return mode === "sequential" ? `${n}, ${n + 1}` : `${n}-01, ${n}-02`;
+}
+
+function updateEventRangePreview() {
+  const el = $("#eventRangePreview");
+  if (!el) return;
+  const mode = $("#eventRangeMode")?.value === "sequential" ? "sequential" : "dashed";
+  const mlb = $("#eventRangeMlb")?.value ?? 31;
+  const major = $("#eventRangeMajor")?.value ?? 30;
+  const ppv = $("#eventRangePpv")?.value ?? 29;
+  el.textContent = `MLB: ${formatEventRangeSample(mlb, mode)} · Major: ${formatEventRangeSample(major, mode)} · PPV: ${formatEventRangeSample(ppv, mode)}`;
+}
+
+async function loadEventChannelRanges() {
+  try {
+    const res = await api("/api/v1/admin/event-channels/ranges");
+    const r = res?.ranges;
+    if (!r) return;
+    if ($("#eventRangeMode")) $("#eventRangeMode").value = r.mode === "sequential" ? "sequential" : "dashed";
+    if ($("#eventRangeMlb")) $("#eventRangeMlb").value = r.mlb ?? 31;
+    if ($("#eventRangeMajor")) $("#eventRangeMajor").value = r.major ?? 30;
+    if ($("#eventRangePpv")) $("#eventRangePpv").value = r.ppv ?? 29;
+    updateEventRangePreview();
+  } catch {
+    updateEventRangePreview();
+  }
+}
+
+async function saveEventChannelRanges() {
+  const btn = $("#saveEventRangesBtn");
+  if (btn) btn.disabled = true;
+  const payload = {
+    mode: $("#eventRangeMode")?.value === "sequential" ? "sequential" : "dashed",
+    mlb: Number($("#eventRangeMlb")?.value || 31),
+    major: Number($("#eventRangeMajor")?.value || 30),
+    ppv: Number($("#eventRangePpv")?.value || 29)
+  };
+  try {
+    const res = await api("/api/v1/admin/event-channels/ranges", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+    const count = Number(res?.renumberedCount || 0);
+    showToast(
+      count > 0
+        ? `Saved ranges & renumbered ${count} live event channel${count === 1 ? "" : "s"}!`
+        : "Saved Live Event channel ranges!",
+      "success"
+    );
+    await loadEventChannels();
+  } catch (err) {
+    showToast(`Failed to save ranges: ${err.message}`, "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+["#eventRangeMode", "#eventRangeMlb", "#eventRangeMajor", "#eventRangePpv"].forEach((sel) => {
+  $(sel)?.addEventListener("input", updateEventRangePreview);
+  $(sel)?.addEventListener("change", updateEventRangePreview);
+});
+$("#saveEventRangesBtn")?.addEventListener("click", saveEventChannelRanges);
+$("#openEventRangesBtn")?.addEventListener("click", () => {
+  showView("settings");
+  document.querySelector('[data-set-tab="set-pane-streaming"]')?.click();
+  loadEventChannelRanges();
+  setTimeout(() => $("#eventChannelRangesCard")?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+});
+document.querySelector('[data-set-tab="set-pane-streaming"]')?.addEventListener("click", loadEventChannelRanges);
+updateEventRangePreview();
+
+
 
