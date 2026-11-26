@@ -1011,7 +1011,13 @@
                   <label>Property Name<input id="propertyName" required maxlength="100" placeholder="e.g. GLZ Hotel &amp; Resort"></label>
                   <label>Welcome Message / Tagline<input id="welcomeMessage" required maxlength="180" placeholder="e.g. Relax, explore, and enjoy your stay."></label>
                   <label class="wide">Logo URL (PNG / SVG)<input id="logoUrl" type="url" placeholder="https://…/logo.png"><small class="field-help">High-resolution transparent logo displayed on the TV Home bar.</small></label>
-                  <label class="wide">Hero Background Image URL (16:9 4K / 1080p)<input id="heroImageUrl" type="url" placeholder="https://…/hero.jpg"><small class="field-help">High-definition luxury backdrop displayed behind the Home portal.</small></label>
+                  <label class="wide">Hero Background Image or Video URL (16:9 JPG / PNG / MP4)
+                    <div style="display:flex; gap:8px; align-items:center;">
+                      <input id="heroImageUrl" type="url" placeholder="https://…/hero.jpg or /assets/glztv-ambient-wallpaper.mp4" style="flex:1;">
+                      <button id="useGlzAmbientVideoBtn" type="button" class="secondary" style="white-space:nowrap;">Use GlzTV Ambient Video</button>
+                    </div>
+                    <small class="field-help">Supports 16:9 images or looping MP4 ambient videos displayed behind the Home portal (Roku automatically uses the matching still backdrop).</small>
+                  </label>
                 </div>
               </div>
               <div class="editor-card" id="brandingPreviewCard">

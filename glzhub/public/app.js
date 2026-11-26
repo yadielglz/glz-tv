@@ -557,10 +557,30 @@ function updateBrandingPreview() {
 
   const heroBackdrop = $("#heroPreviewBackdrop");
   if (heroBackdrop) {
-    if (hero) {
-      heroBackdrop.style.backgroundImage = `linear-gradient(135deg, rgba(15,32,56,0.6) 0%, rgba(6,12,22,0.9) 100%), url('${hero}')`;
+    const existingVid = heroBackdrop.querySelector("video.hero-preview-video");
+    const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(hero);
+    if (hero && isVideo) {
+      heroBackdrop.style.backgroundImage = "linear-gradient(135deg, rgba(15,32,56,0.6) 0%, rgba(6,12,22,0.9) 100%)";
+      let vid = existingVid;
+      if (!vid) {
+        vid = document.createElement("video");
+        vid.className = "hero-preview-video";
+        vid.muted = true;
+        vid.loop = true;
+        vid.autoplay = true;
+        vid.playsInline = true;
+        vid.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.55;pointer-events:none;z-index:0;";
+        heroBackdrop.style.position = "relative";
+        heroBackdrop.insertBefore(vid, heroBackdrop.firstChild);
+      }
+      if (vid.src !== hero) vid.src = hero;
     } else {
-      heroBackdrop.style.backgroundImage = "";
+      if (existingVid) existingVid.remove();
+      if (hero) {
+        heroBackdrop.style.backgroundImage = `linear-gradient(135deg, rgba(15,32,56,0.6) 0%, rgba(6,12,22,0.9) 100%), url('${hero}')`;
+      } else {
+        heroBackdrop.style.backgroundImage = "";
+      }
     }
   }
 }
@@ -4326,6 +4346,16 @@ $("#openEventRangesBtn")?.addEventListener("click", () => {
 });
 document.querySelector('[data-set-tab="set-pane-streaming"]')?.addEventListener("click", loadEventChannelRanges);
 updateEventRangePreview();
+
+$("#useGlzAmbientVideoBtn")?.addEventListener("click", () => {
+  const input = $("#heroImageUrl");
+  if (!input) return;
+  input.value = `${window.location.origin}/assets/glztv-ambient-wallpaper.mp4`;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  updateBrandingPreview();
+  showToast("GlzTV Ambient Wallpaper Video selected — click Save to apply to devices.", "info");
+});
+
 
 
 

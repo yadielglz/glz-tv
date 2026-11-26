@@ -131,6 +131,7 @@ fun GoogleTvHomeScreen(
     sportsBarKioskEnabled: Boolean = false,
     onStartSportsBarKiosk: () -> Unit = {},
     previewContent: (@Composable () -> Unit)? = null,
+    propertyVideoBackdrop: (@Composable () -> Unit)? = null,
     isFamilyChannel: Boolean = false,
     hasUpdate: Boolean = false,
     onOpenUpdate: () -> Unit = {},
@@ -217,9 +218,18 @@ fun GoogleTvHomeScreen(
                 .clipToBounds()
                 .background(DtvChrome.BannerGradient)
         ) {
-            // Whenever Radio is active OR no GlzHub preview channel is set, show Property Image (or GlzTV orbital wallpaper fallback)
+            // Whenever Radio is active OR no GlzHub preview channel is set, show Property Video/Image (or GlzTV orbital wallpaper fallback)
             if (!showPreviewVideo) {
-                if (propertyBgUrl != null) {
+                val isVideoBackdrop = propertyVideoBackdrop != null
+                if (isVideoBackdrop) {
+                    Image(
+                        painter = painterResource(id = R.drawable.glztv_splash_bg),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    propertyVideoBackdrop?.invoke()
+                } else if (propertyBgUrl != null) {
                     AsyncImage(
                         model = propertyBgUrl,
                         contentDescription = experience.propertyName.ifBlank { "Property" },

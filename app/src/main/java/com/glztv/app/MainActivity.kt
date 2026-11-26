@@ -1366,6 +1366,41 @@ internal fun TvScreen(
                             }
                         }
                     } else null,
+                    propertyVideoBackdrop = guestExperience.heroImageUrl
+                        ?.trim()
+                        ?.takeIf { url ->
+                            url.isNotBlank() && Regex("\\.(mp4|webm|m3u8|mov)(\\?|$)", RegexOption.IGNORE_CASE).containsMatchIn(url)
+                        }
+                        ?.let { videoUrl ->
+                            {
+                                val overlayActive = showScreensaver || showSettings || showWeatherModal || showYouModal || showFirstRunSetup
+                                if (!overlayActive) {
+                                    val backdropChannel = remember(videoUrl) {
+                                        Channel(
+                                            "property-backdrop-video",
+                                            guestExperience.propertyName.ifBlank { "GlzTV" },
+                                            "Ambient",
+                                            "",
+                                            "",
+                                            videoUrl,
+                                            emptyMap()
+                                        )
+                                    }
+                                    VideoPlayer(
+                                        channel = backdropChannel,
+                                        captionsEnabled = false,
+                                        captionLanguage = captionLanguage,
+                                        modifier = Modifier.fillMaxSize(),
+                                        muted = true,
+                                        createMediaSession = false,
+                                        keepScreenOn = false,
+                                        cropVideo = true,
+                                        useTextureView = true,
+                                        loop = true
+                                    )
+                                }
+                            }
+                        },
                     isFamilyChannel = isFamilyChannel,
                     hasUpdate = availableUpdate != null,
                     onOpenUpdate = { showUpdateModal = true },
@@ -6287,6 +6322,7 @@ private fun VideoPlayer(
     cropVideo: Boolean = false,
     showControls: Boolean = false,
     useTextureView: Boolean = false,
+    loop: Boolean = false,
     controlState: PlaybackControlState? = null,
     preferredAudioLanguage: String? = null,
     extraSubtitles: List<SubtitleTrack> = emptyList(),
@@ -6316,6 +6352,9 @@ private fun VideoPlayer(
             .setLoadControl(loadControl)
             .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
             .build()
+    }
+    LaunchedEffect(player, loop) {
+        player.repeatMode = if (loop) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
     }
     val mediaSession = remember(createMediaSession, channel.id) {
         if (createMediaSession) {

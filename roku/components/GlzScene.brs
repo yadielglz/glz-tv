@@ -406,9 +406,11 @@ sub updateHomeHero()
     pill = welcome.weatherPill
     if pill = "" then pill = m.channels.Count().ToStr() + " Live  •  " + m.movies.Count().ToStr() + " Movies"
 
+    heroIsStillImage = IsWebUrl(welcome.heroImage) and Instr(1, LCase(welcome.heroImage), ".mp4") = 0 and Instr(1, LCase(welcome.heroImage), ".webm") = 0 and Instr(1, LCase(welcome.heroImage), ".m3u8") = 0
+
     if previewCh <> invalid
         ' GlzHub Preview Channel mode
-        if IsWebUrl(welcome.heroImage)
+        if heroIsStillImage
             backdrop.uri = welcome.heroImage
             backdrop.visible = true
             scrim.visible = true
@@ -453,7 +455,7 @@ sub updateHomeHero()
         end if
     else
         ' No GlzHub preview channel set: Property Image (or GlzTV orbital wallpaper) + Property Welcome
-        if IsWebUrl(welcome.heroImage)
+        if heroIsStillImage
             backdrop.uri = welcome.heroImage
         else
             backdrop.uri = "pkg:/images/splash_hd.jpg"
