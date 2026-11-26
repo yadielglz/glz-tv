@@ -241,11 +241,11 @@ fun DtvTopCommandBar(
                         label = "${weather.temperature}°",
                         onClick = { onSelectTab(DtvNavTab.Weather) }
                     ) {
-                        Icon(
-                            Icons.Default.WbSunny,
-                            contentDescription = "Weather",
-                            tint = Color(0xFFFBBF24),
-                            modifier = Modifier.size(14.dp)
+                        com.glztv.app.ui.components.DtvWeatherIcon(
+                            weatherCode = weather.weatherCode,
+                            size = 15.dp,
+                            isNight = com.glztv.app.ui.components.isLocalNight(nowMillis),
+                            contentDescription = "Weather"
                         )
                     }
                 }

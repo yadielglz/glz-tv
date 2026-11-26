@@ -766,7 +766,11 @@ private fun HeroRightWeatherPanel(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(text = homeWeatherIcon(weather.weatherCode), fontSize = 38.sp)
+                com.glztv.app.ui.components.DtvWeatherIcon(
+                    weatherCode = weather.weatherCode,
+                    size = 40.dp,
+                    contentDescription = "Weather"
+                )
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "${weather.temperature}°",
@@ -947,7 +951,11 @@ private fun DtvHomeWeatherWidget(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(text = homeWeatherIcon(weather.weatherCode), fontSize = if (compact) 26.sp else 36.sp)
+                    com.glztv.app.ui.components.DtvWeatherIcon(
+                        weatherCode = weather.weatherCode,
+                        size = if (compact) 28.dp else 38.dp,
+                        contentDescription = "Weather"
+                    )
                     Column {
                         Text(
                             text = "${weather.temperature}°",
@@ -1001,7 +1009,11 @@ private fun DtvHomeWeatherWidget(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(label, color = DtvChrome.MutedText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            Text(homeWeatherIcon(day.weatherCode), fontSize = 14.sp)
+                            com.glztv.app.ui.components.DtvWeatherIcon(
+                                weatherCode = day.weatherCode,
+                                size = 16.dp,
+                                isNight = false
+                            )
                             Text("${day.high}°/${day.low}°", color = DtvChrome.PrimaryText, fontSize = 10.sp)
                         }
                     }

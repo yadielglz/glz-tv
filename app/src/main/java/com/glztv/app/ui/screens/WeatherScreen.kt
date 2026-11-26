@@ -111,9 +111,10 @@ fun WeatherScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text(
-                            text = weatherGlyph(weather.weatherCode),
-                            fontSize = if (viewport.isCompactHeight) 46.sp else 54.sp
+                        com.glztv.app.ui.components.DtvWeatherIcon(
+                            weatherCode = weather.weatherCode,
+                            size = if (viewport.isCompactHeight) 48.dp else 56.dp,
+                            contentDescription = weatherLabel(weather.weatherCode)
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
@@ -299,7 +300,11 @@ private fun DtvHourlyCell(
             fontWeight = FontWeight.Medium,
             maxLines = 1
         )
-        Text(text = weatherGlyph(hour.weatherCode), fontSize = 20.sp)
+        com.glztv.app.ui.components.DtvWeatherIcon(
+            weatherCode = hour.weatherCode,
+            size = 22.dp,
+            isNight = com.glztv.app.ui.components.isNightHourLabel(hour.timeLabel)
+        )
         Text(
             text = "${hour.temperature}°",
             color = Color.White,
@@ -335,11 +340,13 @@ private fun DtvForecastTableRow(
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.width(130.dp)
         )
-        Text(
-            text = weatherGlyph(day.weatherCode),
-            fontSize = 18.sp,
-            modifier = Modifier.width(34.dp)
-        )
+        Box(modifier = Modifier.width(34.dp), contentAlignment = Alignment.CenterStart) {
+            com.glztv.app.ui.components.DtvWeatherIcon(
+                weatherCode = day.weatherCode,
+                size = 20.dp,
+                isNight = false
+            )
+        }
         Text(
             text = weatherLabel(day.weatherCode),
             color = DtvChrome.SecondaryText,

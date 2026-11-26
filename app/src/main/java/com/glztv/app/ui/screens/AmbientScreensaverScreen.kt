@@ -535,9 +535,10 @@ private fun AmbientWeatherCard(
                         )
                     }
                 }
-                Text(
-                    text = ambientWeatherSymbol(weather.weatherCode),
-                    fontSize = if (compact) 48.sp else 56.sp
+                com.glztv.app.ui.components.DtvWeatherIcon(
+                    weatherCode = weather.weatherCode,
+                    size = if (compact) 48.dp else 56.dp,
+                    contentDescription = ambientWeatherDescription(weather.weatherCode)
                 )
             }
 
@@ -580,7 +581,11 @@ private fun AmbientWeatherCard(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Text(text = ambientWeatherSymbol(day.weatherCode), fontSize = 20.sp)
+                                com.glztv.app.ui.components.DtvWeatherIcon(
+                                    weatherCode = day.weatherCode,
+                                    size = 20.dp,
+                                    isNight = false
+                                )
                                 Text(
                                     text = "${day.high}°/${day.low}°",
                                     color = Color.White,
