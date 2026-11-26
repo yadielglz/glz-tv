@@ -39,7 +39,7 @@ public final class M3uParser {
             if (line.startsWith("#") || pendingInfo == null) continue;
 
             Map<String, String> attributes = attributes(pendingInfo);
-            int comma = pendingInfo.indexOf(',');
+            int comma = findUnquotedComma(pendingInfo);
             String name = comma >= 0 ? pendingInfo.substring(comma + 1).trim() : "Channel";
             if (name.isEmpty()) name = attributes.getOrDefault("tvg-name", "Channel");
             String id = attributes.getOrDefault("tvg-id", name);
@@ -58,6 +58,22 @@ public final class M3uParser {
             pendingHeaders = new HashMap<>();
         }
         return channels;
+    }
+
+    private static int findUnquotedComma(String line) {
+        boolean inDouble = false;
+        boolean inSingle = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '"' && !inSingle) {
+                inDouble = !inDouble;
+            } else if (c == '\'' && !inDouble) {
+                inSingle = !inSingle;
+            } else if (c == ',' && !inDouble && !inSingle) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static long parseEventTimeMillis(String raw) {

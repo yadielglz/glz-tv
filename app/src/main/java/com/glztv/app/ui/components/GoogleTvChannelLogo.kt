@@ -141,7 +141,7 @@ fun GoogleTvChannelLogo(
 }
 
 @DrawableRes
-private fun resolveLiveEventSportDrawable(channel: Channel): Int {
+internal fun resolveLiveEventSportDrawable(channel: Channel): Int {
     val text = "${channel.id} ${channel.name} ${channel.group} ${channel.eventTitle.orEmpty()}".uppercase()
     return when {
         Regex("\\b(NFL|SUNDAY\\s+TICKET|RED\\s*ZONE|TNF|SNF|MNF)\\b").containsMatchIn(text) -> R.drawable.ic_sport_nfl

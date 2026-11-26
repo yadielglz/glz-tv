@@ -6,6 +6,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -47,19 +48,29 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
 import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 import com.glztv.app.Programme
+import com.glztv.app.R
 import com.glztv.app.ui.components.GoogleTvChannelLogo
+import com.glztv.app.ui.components.resolveLiveEventSportDrawable
 import com.glztv.app.ui.theme.BarlowCondensedFontFamily
 import com.glztv.app.ui.theme.DtvChrome
 import com.glztv.app.ui.theme.DtvProgressBar
@@ -497,48 +508,14 @@ private fun DtvGuideChannelRow(
                 .height(rowHeight),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Fixed Left Channel Identity Cell
-            Row(
-                modifier = Modifier
-                    .width(channelColumnWidth)
-                    .fillMaxHeight()
-                    .background(if (isTuned) DtvChrome.ElectricBlue.copy(alpha = 0.14f) else Color(0xFF101318))
-                    .padding(horizontal = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = channel.number.ifBlank { "—" },
-                    color = if (isTuned) DtvChrome.ElectricBlueSoft else DtvChrome.SecondaryText,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    modifier = Modifier.width(36.dp)
-                )
-                GoogleTvChannelLogo(
-                    channel = channel,
-                    size = 26.dp,
-                    guide = guide,
-                    shape = RoundedCornerShape(3.dp)
-                )
-                Text(
-                    text = channel.name,
-                    color = if (isTuned) Color.White else DtvChrome.PrimaryText,
-                    fontSize = 12.sp,
-                    fontWeight = if (isTuned) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (isFavorite) {
-                    Icon(
-                        Icons.Default.Star,
-                        contentDescription = null,
-                        tint = DtvChrome.Gold,
-                        modifier = Modifier.size(12.dp)
-                    )
-                }
-            }
+            // Fixed Left Channel Identity Cell (Full-Height Left-Edge Logo Bleed + Number + Call Sign)
+            DtvGuideChannelIdentityCell(
+                channel = channel,
+                guide = guide,
+                isTuned = isTuned,
+                isFavorite = isFavorite,
+                width = channelColumnWidth
+            )
 
             Box(Modifier.width(1.dp).fillMaxHeight().background(DtvChrome.Divider))
 
@@ -877,4 +854,192 @@ private fun DtvGuideCategoryToggleBar(
         )
     }
 }
+
+private val ParenthesizedCallSignRegex = Regex(
+    "[(\\[]([WKCX][A-Z]{2,3})(?:-(?:TV|DT|HD|CD|LD|LP))?[)\\]]",
+    RegexOption.IGNORE_CASE
+)
+private val SuffixedCallSignRegex = Regex(
+    "\\b([WKCX][A-Z]{2,3})-(?:TV|DT|HD|CD|LD|LP)\\b",
+    RegexOption.IGNORE_CASE
+)
+private val IdCallSignRegex = Regex(
+    "(?:^|[._-])([wkcx][a-z]{3})(?:[._-]|$)",
+    RegexOption.IGNORE_CASE
+)
+private val CallSignExcludedWords = setOf(
+    "WEST", "WILD", "WORD", "WORK", "WINE", "WALL", "WAVE", "WIDE", "WISE", "WING",
+    "KIDS", "KING", "KISS", "KICK", "KEEP", "KNOW",
+    "CINE", "CLUB", "CITY", "CAFE", "COOK", "COOL", "CARE", "CARS", "CASH", "CAST", "CORE", "CRIME", "CUBA",
+    "CNN", "CBS", "CNBC", "XTRA", "XBOX"
+)
+
+/**
+ * Extracts an explicit 3-4 letter broadcast call sign (e.g. WBAY, WCBS, KTTV, WAPA, WKAQ)
+ * when present in the channel name or EPG/channel ID. Leaves cable, music, and event
+ * channel names completely untouched when no explicit broadcast call sign exists.
+ */
+internal fun epgDisplayLabel(channel: Channel): String {
+    val name = channel.name.trim()
+    val padded = " $name "
+
+    ParenthesizedCallSignRegex.find(padded)?.groupValues?.getOrNull(1)?.uppercase()?.let { code ->
+        if (code !in CallSignExcludedWords) return code
+    }
+    SuffixedCallSignRegex.find(name)?.groupValues?.getOrNull(1)?.uppercase()?.let { code ->
+        if (code !in CallSignExcludedWords) return code
+    }
+    // Check dot-delimited provider IDs such as "abc.wbay.green.bay.wi.us" or "cbs.wfrv.green.bay.wi.us"
+    val idLower = channel.id.lowercase()
+    if (idLower.endsWith(".us") || idLower.endsWith(".ca") || idLower.endsWith(".pr") || idLower.endsWith(".mx")) {
+        IdCallSignRegex.findAll(channel.id).forEach { match ->
+            val code = match.groupValues[1].uppercase()
+            if (code !in CallSignExcludedWords) return code
+        }
+    }
+    return name
+}
+
+@Composable
+private fun DtvGuideChannelIdentityCell(
+    channel: Channel,
+    guide: EpgGuide,
+    isTuned: Boolean,
+    isFavorite: Boolean,
+    width: Dp
+) {
+    val cellBg = if (isTuned) Color(0xFF102033) else Color(0xFF101318)
+    val context = LocalContext.current
+    val sportBadgeRes = remember(channel.id, channel.name, channel.group, channel.eventTitle) {
+        if (channel.isLiveEvent()) resolveLiveEventSportDrawable(channel) else null
+    }
+    val logoUrl = remember(channel.id, channel.logoUrl, guide) {
+        channel.logoUrl.takeIf { it.isNotBlank() } ?: guide.logoForChannel(channel)
+    }
+    val logoModel = remember(logoUrl, channel.headers) {
+        if (logoUrl.isNullOrBlank()) null
+        else if (channel.headers.isEmpty()) logoUrl
+        else {
+            val headersBuilder = NetworkHeaders.Builder()
+            channel.headers.forEach { (k, v) -> headersBuilder.set(k, v) }
+            ImageRequest.Builder(context)
+                .data(logoUrl)
+                .httpHeaders(headersBuilder.build())
+                .build()
+        }
+    }
+    var remoteLoaded by remember(logoModel) { mutableStateOf(false) }
+    val displayLabel = remember(channel.id, channel.name) { epgDisplayLabel(channel) }
+
+    Box(
+        modifier = Modifier
+            .width(width)
+            .fillMaxHeight()
+            .background(cellBg)
+            .clipToBounds()
+    ) {
+        // Left-edge full-height logo bleed fading smoothly into cell background
+        Box(
+            modifier = Modifier
+                .width(66.dp)
+                .fillMaxHeight()
+                .align(Alignment.CenterStart)
+                .clipToBounds()
+        ) {
+            if (sportBadgeRes != null) {
+                Image(
+                    painter = painterResource(id = sportBadgeRes),
+                    contentDescription = "${channel.name} logo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (logoModel != null) {
+                AsyncImage(
+                    model = logoModel,
+                    contentDescription = "${channel.name} logo",
+                    contentScale = ContentScale.Fit,
+                    onSuccess = { remoteLoaded = true },
+                    onError = { remoteLoaded = false },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = 6.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
+                )
+            }
+            if (sportBadgeRes == null && !remoteLoaded) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF161C26)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = channel.monogram.ifBlank { "TV" },
+                        color = DtvChrome.SecondaryText,
+                        fontSize = 13.sp,
+                        fontFamily = BarlowCondensedFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+            }
+            // Smooth right-edge fade into cell background
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            colorStops = arrayOf(
+                                0.00f to Color.Transparent,
+                                0.58f to Color.Transparent,
+                                1.00f to cellBg
+                            )
+                        )
+                    )
+            )
+        }
+
+        // Right side: Channel Number + Broadcast Call Sign (or full name) + Favorite Star
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 64.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (channel.number.isNotBlank()) {
+                    Text(
+                        text = channel.number,
+                        color = if (isTuned) DtvChrome.ElectricBlueSoft else DtvChrome.SecondaryText,
+                        fontSize = 12.sp,
+                        fontFamily = BarlowCondensedFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.4.sp,
+                        maxLines = 1
+                    )
+                }
+                Text(
+                    text = displayLabel,
+                    color = if (isTuned) Color.White else DtvChrome.PrimaryText,
+                    fontSize = 13.sp,
+                    fontWeight = if (isTuned) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (isFavorite) {
+                Icon(
+                    Icons.Default.Star,
+                    contentDescription = null,
+                    tint = DtvChrome.Gold,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+    }
+}
+
 
