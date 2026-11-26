@@ -83,6 +83,8 @@ fun AmbientScreensaverScreen(
     radioStationName: String? = null,
     radioGenre: String? = null,
     radioLogoUrl: String? = null,
+    propertyImageUrl: String? = null,
+    videoBackdrop: (@Composable () -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -159,24 +161,6 @@ fun AmbientScreensaverScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF07090F))
-            .drawBehind {
-                val r1 = size.maxDimension * 0.65f
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(ambientPalette.first.copy(alpha = 0.24f), Color.Transparent),
-                        center = Offset(size.width * 0.18f, size.height * 0.22f),
-                        radius = r1
-                    )
-                )
-                val r2 = size.maxDimension * 0.58f
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(ambientPalette.second.copy(alpha = 0.18f), Color.Transparent),
-                        center = Offset(size.width * 0.84f, size.height * 0.78f),
-                        radius = r2
-                    )
-                )
-            }
             .focusRequester(focusRequester)
             .focusable()
             .clickable(onClick = onDismiss)
@@ -188,11 +172,53 @@ fun AmbientScreensaverScreen(
                     false
                 }
             }
-            .padding(horizontal = viewport.safeHorizontal + 12.dp, vertical = viewport.safeVertical + 8.dp)
     ) {
+        // Edge-to-edge fullscreen ambient backdrop: Property Loop Video -> Property Image -> GlzTV Broadcast Wallpaper
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = com.glztv.app.R.drawable.glztv_splash_bg),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        if (videoBackdrop != null) {
+            videoBackdrop()
+        } else if (!propertyImageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = propertyImageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        // Dark atmospheric readability scrim + subtle ambient color tint
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0x9905080D),
+                            Color(0x5505080D),
+                            Color(0xCC05080D)
+                        )
+                    )
+                )
+                .drawBehind {
+                    val r1 = size.maxDimension * 0.65f
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(ambientPalette.first.copy(alpha = 0.16f), Color.Transparent),
+                            center = Offset(size.width * 0.18f, size.height * 0.22f),
+                            radius = r1
+                        )
+                    )
+                }
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(horizontal = viewport.safeHorizontal + 12.dp, vertical = viewport.safeVertical + 8.dp)
                 .graphicsLayer {
                     translationX = driftX
                     translationY = driftY

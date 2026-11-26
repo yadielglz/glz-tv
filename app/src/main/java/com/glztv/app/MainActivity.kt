@@ -969,16 +969,29 @@ internal fun TvScreen(
         }
     }
 
-    LaunchedEffect(screensaverTimeoutMinutes, showScreensaver, immersive, radioPlaying, showSettings, showSpeedTestDialog) {
-        if (screensaverTimeoutMinutes <= 0) return@LaunchedEffect
+    val isVideoPlaybackActive = immersive || playerActive || selectedMovie != null || multiViewSecondary != null || section == AppSection.SportsBarKiosk
+    LaunchedEffect(isVideoPlaybackActive) {
+        if (isVideoPlaybackActive) {
+            showScreensaver = false
+            lastUserInteractionTime = System.currentTimeMillis()
+        } else {
+            // Reset idle timer when returning from video playback so screensaver doesn't fire immediately
+            lastUserInteractionTime = System.currentTimeMillis()
+        }
+    }
+
+    LaunchedEffect(screensaverTimeoutMinutes, showScreensaver, isVideoPlaybackActive, showSettings, showSpeedTestDialog, showFirstRunSetup) {
+        if (screensaverTimeoutMinutes <= 0 || isVideoPlaybackActive || showFirstRunSetup) return@LaunchedEffect
         while (true) {
             delay(5_000L)
+            if (isVideoPlaybackActive || showFirstRunSetup) {
+                lastUserInteractionTime = System.currentTimeMillis()
+                continue
+            }
             val idleTime = System.currentTimeMillis() - lastUserInteractionTime
             val timeoutMillis = screensaverTimeoutMinutes * 60 * 1000L
             if (idleTime >= timeoutMillis && !showScreensaver && !showSettings && !showSpeedTestDialog) {
-                if (!immersive || radioPlaying) {
-                    showScreensaver = true
-                }
+                showScreensaver = true
             }
         }
     }
@@ -1640,6 +1653,9 @@ internal fun TvScreen(
         enter = fadeIn(tween(400)),
         exit = fadeOut(tween(300))
     ) {
+        val saverBackdropUrl = guestExperience.heroImageUrl?.trim()?.takeIf { it.isNotBlank() }
+        val saverIsVideo = saverBackdropUrl != null &&
+            Regex("\\.(mp4|webm|m3u8|mov)(\\?|$)", RegexOption.IGNORE_CASE).containsMatchIn(saverBackdropUrl)
         AmbientScreensaverScreen(
             weather = weather,
             guestName = guestName,
@@ -1647,6 +1663,34 @@ internal fun TvScreen(
             radioStationName = currentRadioStation?.name,
             radioGenre = currentRadioStation?.genre,
             radioLogoUrl = currentRadioStation?.logoUrl,
+            propertyImageUrl = if (!saverIsVideo) saverBackdropUrl else null,
+            videoBackdrop = if (saverIsVideo && saverBackdropUrl != null) {
+                {
+                    val saverChannel = remember(saverBackdropUrl) {
+                        Channel(
+                            "screensaver-backdrop-video",
+                            guestExperience.propertyName.ifBlank { "GlzTV" },
+                            "Ambient",
+                            "",
+                            "",
+                            saverBackdropUrl,
+                            emptyMap()
+                        )
+                    }
+                    VideoPlayer(
+                        channel = saverChannel,
+                        captionsEnabled = false,
+                        captionLanguage = captionLanguage,
+                        modifier = Modifier.fillMaxSize(),
+                        muted = true,
+                        createMediaSession = false,
+                        keepScreenOn = true,
+                        cropVideo = true,
+                        useTextureView = true,
+                        loop = true
+                    )
+                }
+            } else null,
             onDismiss = {
                 lastUserInteractionTime = System.currentTimeMillis()
                 showScreensaver = false
