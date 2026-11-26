@@ -195,4 +195,32 @@ class GithubUpdateManagerTest {
         assertTrue("Should be past milestone on Nov 21", statusNov21.isPastMilestone)
         assertTrue("Should force update on Nov 21 (7+ days past mark)", statusNov21.isForceRequired)
     }
+
+    @Test
+    fun mobileSuffixTagsStayIsolatedBetweenMobileAndTvBuilds() {
+        assertTrue(GithubUpdateManager.isMobileTag("v1.48.5.35M"))
+        assertTrue(GithubUpdateManager.isMobileTag("v1.48.5.30-mobile"))
+        assertFalse(GithubUpdateManager.isMobileTag("v1.48.5.35"))
+
+        // TV builds must never match Mobile releases
+        UpdateChannel.values().forEach { channel ->
+            assertFalse(
+                "TV ${channel.id} must ignore M mobile tag",
+                GithubUpdateManager.matchesChannel("v1.48.5.35M", channel, isMobileBuild = false)
+            )
+            assertFalse(
+                "TV ${channel.id} must ignore -mobile tag",
+                GithubUpdateManager.matchesChannel("v1.48.5.30-mobile", channel, isMobileBuild = false)
+            )
+        }
+
+        // Mobile builds match both M and -mobile tags, never TV tags
+        assertTrue(GithubUpdateManager.matchesChannel("v1.48.5.35M", UpdateChannel.PRODUCTION, isMobileBuild = true))
+        assertTrue(GithubUpdateManager.matchesChannel("v1.48.5.30-mobile", UpdateChannel.PRODUCTION, isMobileBuild = true))
+        assertFalse(GithubUpdateManager.matchesChannel("v1.48.5.35", UpdateChannel.PRODUCTION, isMobileBuild = true))
+
+        // Version progression across mobile tags
+        assertTrue(GithubUpdateManager.compareVersions("1.48.5.35M", "1.48.5.30") > 0)
+        assertTrue(GithubUpdateManager.compareVersions("1.48.5.40M", "1.48.5.35M") > 0)
+    }
 }

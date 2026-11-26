@@ -301,13 +301,28 @@ object GithubUpdateManager {
             Regex("""^(?:v)?1\.(?:[4-9]\d|\d{3,})\.\d{3}(?:$|-).*""").containsMatchIn(version)
     }
 
-    internal fun matchesChannel(tag: String, channel: UpdateChannel): Boolean {
+    internal fun isMobileTag(tag: String): Boolean {
         val version = tag.removePrefix("v")
         val base = version.substringBefore("-")
         val suffix = version.substringAfter("-", "").lowercase()
-        if (BuildConfig.IS_MOBILE) {
-            return suffix == "mobile" || suffix.startsWith("mobile-")
+        return base.endsWith("M") || suffix == "mobile" || suffix.startsWith("mobile-")
+    }
+
+    internal fun matchesChannel(
+        tag: String,
+        channel: UpdateChannel,
+        isMobileBuild: Boolean = BuildConfig.IS_MOBILE
+    ): Boolean {
+        val mobileTag = isMobileTag(tag)
+        if (isMobileBuild) {
+            return mobileTag
         }
+        if (mobileTag) {
+            return false
+        }
+        val version = tag.removePrefix("v")
+        val base = version.substringBefore("-")
+        val suffix = version.substringAfter("-", "").lowercase()
         val stable = suffix.isEmpty()
         return when (channel) {
             // Production: stable tags from new era or floor onward

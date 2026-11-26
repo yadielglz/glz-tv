@@ -91,6 +91,19 @@ fun FirstRunSetupScreen(
     modifier: Modifier = Modifier
 ) {
     val viewport = LocalTvViewport.current
+    if (BuildConfig.IS_MOBILE || !viewport.isTvLayout) {
+        com.glztv.app.ui.mobile.MobileFirstRunScreen(
+            appLanguage = appLanguage,
+            isAlreadyEnrolled = isAlreadyEnrolled,
+            onLanguageSelected = onLanguageSelected,
+            onBeginEnrollment = onBeginEnrollment,
+            onPollEnrollment = onPollEnrollment,
+            onInitialSync = onInitialSync,
+            onComplete = onComplete,
+            modifier = modifier
+        )
+        return
+    }
     val scope = rememberCoroutineScope()
     val accent = GoogleTvTokens.BlueAccent
 

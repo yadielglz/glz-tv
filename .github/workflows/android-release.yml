@@ -62,21 +62,23 @@ jobs:
           set -euo pipefail
           ref_version="${GITHUB_REF_NAME##*/}"
           version="${MANUAL_VERSION:-${ref_version#v}}"
-          if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+          if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)(M)?(-[0-9A-Za-z.-]+)?$ ]]; then
             p1="${BASH_REMATCH[1]}"
             p2="${BASH_REMATCH[2]}"
             p3="${BASH_REMATCH[3]}"
             p4="${BASH_REMATCH[4]}"
-            suffix="${BASH_REMATCH[5]:-}"
+            mobile_flag="${BASH_REMATCH[5]:-}"
+            suffix="${BASH_REMATCH[6]:-}"
             version_code=$((10#$p1 * 100000 + 10#$p2 * 1000 + 10#$p3 * 100 + 10#$p4))
             roku_major=$((10#$p1))
             roku_minor=$((10#$p2))
             roku_build=$((10#$p3 * 100 + 10#$p4))
-          elif [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+          elif [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(M)?(-[0-9A-Za-z.-]+)?$ ]]; then
             major="${BASH_REMATCH[1]}"
             minor="${BASH_REMATCH[2]}"
             patch="${BASH_REMATCH[3]}"
-            suffix="${BASH_REMATCH[4]:-}"
+            mobile_flag="${BASH_REMATCH[4]:-}"
+            suffix="${BASH_REMATCH[5]:-}"
             subpatch=0
             if [[ "$suffix" =~ ^-([0-9]+)$ ]]; then
               subpatch="${BASH_REMATCH[1]}"
@@ -86,11 +88,11 @@ jobs:
             roku_minor=$((10#$minor))
             roku_build=$((10#$patch))
           else
-            echo "Version must use major.minor.patch[-suffix] format." >&2
+            echo "Version must use major.minor.patch[M][-suffix] format." >&2
             exit 1
           fi
           is_mobile="false"
-          if [[ "$suffix" == "-mobile" || "$suffix" == -mobile-* ]]; then
+          if [[ "$mobile_flag" == "M" || "$suffix" == "-mobile" || "$suffix" == -mobile-* ]]; then
             is_mobile="true"
           fi
           echo "name=$version" >> "$GITHUB_OUTPUT"
@@ -288,7 +290,7 @@ jobs:
             title="GLZ TV Mobile ${{ steps.version.outputs.name }}"
           fi
           release_args=(--title "$title" --notes-file release-notes.md)
-          if [[ "${{ steps.version.outputs.name }}" == *-testing* || "${{ steps.version.outputs.name }}" == *-weekly* || "${{ steps.version.outputs.name }}" == *-biweekly* || "${{ steps.version.outputs.name }}" == *-monthly* || "${{ steps.version.outputs.name }}" == *-beta* || "${{ steps.version.outputs.name }}" == *-family* || "${{ steps.version.outputs.name }}" == *-rc* || "${{ steps.version.outputs.name }}" == *-mobile* ]]; then
+          if [[ "${{ steps.version.outputs.is_mobile }}" == "true" || "${{ steps.version.outputs.name }}" == *-testing* || "${{ steps.version.outputs.name }}" == *-weekly* || "${{ steps.version.outputs.name }}" == *-biweekly* || "${{ steps.version.outputs.name }}" == *-monthly* || "${{ steps.version.outputs.name }}" == *-beta* || "${{ steps.version.outputs.name }}" == *-family* || "${{ steps.version.outputs.name }}" == *-rc* || "${{ steps.version.outputs.name }}" == *-mobile* ]]; then
             release_args+=(--prerelease --latest=false)
           fi
 

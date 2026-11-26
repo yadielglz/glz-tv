@@ -11,8 +11,8 @@ android {
         applicationId "glz.tv.app"
         minSdk 24
         targetSdk 36
-        versionCode providers.gradleProperty("releaseVersionCode").map { it.toInteger() }.getOrElse(148530)
-        versionName providers.gradleProperty("releaseVersionName").getOrElse("1.48.5.30")
+        versionCode providers.gradleProperty("releaseVersionCode").map { it.toInteger() }.getOrElse(148535)
+        versionName providers.gradleProperty("releaseVersionName").getOrElse("1.48.5.35")
         def isMobileBuild = providers.gradleProperty("mobileBuild").map { it.toBoolean() }.getOrElse(false)
         buildConfigField "boolean", "IS_MOBILE", isMobileBuild.toString()
     }
