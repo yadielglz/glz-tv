@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -129,35 +130,43 @@ fun MobileLivePlayerScreen(
     var surfRevision by remember { mutableStateOf(0) }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
 
-    val currentProgramme = remember(channel.id, guide, now) {
+    val currentProgramme = remember(channel, guide, now) {
         guide.nowProgrammeForChannel(channel, now)
     }
-    val nextProgramme = remember(channel.id, guide, currentProgramme, now) {
+    val nextProgramme = remember(channel, guide, currentProgramme, now) {
         guide.nextProgrammeForChannel(channel, currentProgramme?.endMillis ?: now)
     }
 
     // Orientation & immersive system bars management (always restores portrait on dispose)
     DisposableEffect(activity, isFullscreen) {
         if (activity != null) {
-            activity.requestedOrientation = if (isFullscreen) {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            } else {
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            runCatching {
+                activity.requestedOrientation = if (isFullscreen) {
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                } else {
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
             }
-            val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-            if (isFullscreen) {
-                controller.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsetsCompat.Type.systemBars())
-            } else {
-                controller.show(WindowInsetsCompat.Type.systemBars())
+            runCatching {
+                val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                if (isFullscreen) {
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
             }
         }
         onDispose {
             if (activity != null) {
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-                    .show(WindowInsetsCompat.Type.systemBars())
+                runCatching {
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
+                runCatching {
+                    WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                        .show(WindowInsetsCompat.Type.systemBars())
+                }
             }
         }
     }
@@ -174,28 +183,28 @@ fun MobileLivePlayerScreen(
             showControls = false
         }
     }
-    LaunchedEffect(channel.id) {
+    LaunchedEffect(channel.id, channel.streamUrl) {
         surfChannel = null
         showControls = true
         controlsRevision++
     }
-    LaunchedEffect(surfChannel?.id, surfRevision) {
+    LaunchedEffect(surfChannel?.id, surfChannel?.streamUrl, surfRevision) {
         val target = surfChannel ?: return@LaunchedEffect
         delay(2_000L)
         surfChannel = null
-        if (target.id != channel.id) onTune(target)
+        if (target != channel) onTune(target)
     }
 
     fun stepChannel(direction: Int) {
         if (channels.isEmpty()) return
-        val idx = channels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
+        val idx = channels.indexOfChannel(channel).coerceAtLeast(0)
         onTune(channels[(idx + direction + channels.size) % channels.size])
     }
 
     fun stepSurf(direction: Int) {
         if (channels.isEmpty()) return
         val base = surfChannel ?: channel
-        val idx = channels.indexOfFirst { it.id == base.id }.coerceAtLeast(0)
+        val idx = channels.indexOfChannel(base).coerceAtLeast(0)
         now = System.currentTimeMillis()
         surfChannel = channels[(idx + direction + channels.size) % channels.size]
         surfRevision++
@@ -591,13 +600,13 @@ fun MobileLivePlayerScreen(
             ) {
                 val preview = surfChannel
                 if (preview != null) {
-                    val surfProg = remember(preview.id, guide, now) {
+                    val surfProg = remember(preview, guide, now) {
                         guide.nowProgrammeForChannel(preview, now)
                     }
                     Box(
                         modifier = Modifier.clickable {
                             surfChannel = null
-                            if (preview.id != channel.id) onTune(preview)
+                            if (preview != channel) onTune(preview)
                         }
                     ) {
                         DtvChannelSurfBar(
@@ -605,7 +614,7 @@ fun MobileLivePlayerScreen(
                             currentProgramme = surfProg,
                             guide = guide,
                             nowMillis = now,
-                            isCurrentChannel = preview.id == channel.id
+                            isCurrentChannel = preview == channel
                         )
                     }
                 }
@@ -723,9 +732,9 @@ fun MobileLivePlayerScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(filteredChannels, key = { it.id }) { ch ->
-                        val chProg = remember(ch.id, guide, now) { guide.nowProgrammeForChannel(ch, now) }
-                        val isCurrent = ch.id == channel.id
+                    itemsIndexed(filteredChannels, key = { index, ch -> "m-player-$index-${ch.id}-${ch.streamUrl}" }) { _, ch ->
+                        val chProg = remember(ch, guide, now) { guide.nowProgrammeForChannel(ch, now) }
+                        val isCurrent = ch == channel
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -832,25 +841,33 @@ fun MobileMoviePlayerScreen(
 
     DisposableEffect(activity, isFullscreen) {
         if (activity != null) {
-            activity.requestedOrientation = if (isFullscreen) {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            } else {
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            runCatching {
+                activity.requestedOrientation = if (isFullscreen) {
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                } else {
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
             }
-            val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-            if (isFullscreen) {
-                controller.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsetsCompat.Type.systemBars())
-            } else {
-                controller.show(WindowInsetsCompat.Type.systemBars())
+            runCatching {
+                val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                if (isFullscreen) {
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
             }
         }
         onDispose {
             if (activity != null) {
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-                    .show(WindowInsetsCompat.Type.systemBars())
+                runCatching {
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
+                runCatching {
+                    WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                        .show(WindowInsetsCompat.Type.systemBars())
+                }
             }
         }
     }
@@ -1249,6 +1266,16 @@ private fun MobileTrackPickerOverlay(
             }
         }
     }
+}
+
+private fun List<Channel>.indexOfChannel(target: Channel): Int {
+    val exact = indexOfFirst {
+        it === target || (it.id == target.id && it.streamUrl == target.streamUrl && it.number == target.number && it.name == target.name)
+    }
+    if (exact >= 0) return exact
+    return indexOfFirst { it.id == target.id && it.streamUrl == target.streamUrl }
+        .takeIf { it >= 0 }
+        ?: indexOfFirst { it.id == target.id }
 }
 
 private fun formatElapsedMs(ms: Long): String {

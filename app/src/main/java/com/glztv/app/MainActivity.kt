@@ -57,9 +57,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -75,6 +77,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
@@ -310,7 +313,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (BuildConfig.IS_MOBILE) {
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            runCatching { requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
         }
         GlzBackgroundSync.schedule(applicationContext)
         deepLinkChannelId.value = intent?.data?.takeIf { it.host == "channel" }?.lastPathSegment
@@ -760,6 +763,7 @@ internal fun TvScreen(
         keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
         homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, null)
         sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
+        managedMovies = Movie.fromPreferences(prefs)
         osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
         if (!alreadyRefreshedSources) {
             loadSources(forceRefresh = true) { percent, message -> report(percent, message) }
@@ -6974,7 +6978,7 @@ private fun VideoPlayer(
     DisposableEffect(player) { onDispose { player.release() } }
     DisposableEffect(mediaSession) { onDispose { mediaSession?.release() } }
     val showEmbeddedSubtitles = captionsEnabled && sidecarCues.isEmpty()
-    Box(modifier.background(Color.Black, if (useTextureView) androidx.compose.ui.graphics.RectangleShape else RoundedCornerShape(24.dp))) {
+    Box(modifier.background(Color.Black, if (useTextureView || BuildConfig.IS_MOBILE) androidx.compose.ui.graphics.RectangleShape else RoundedCornerShape(24.dp))) {
         if (useTextureView) {
             AndroidView(
                 factory = { ctx ->
@@ -7015,7 +7019,9 @@ private fun VideoPlayer(
                         isFocusable = showControls
                         isFocusableInTouchMode = showControls
                         subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
-                        (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+                        if (!BuildConfig.IS_MOBILE) {
+                            (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+                        }
                     }
                 },
                 update = {
@@ -7027,7 +7033,6 @@ private fun VideoPlayer(
                     it.controllerAutoShow = false
                     it.controllerShowTimeoutMs = 4500
                     it.subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
-                    (it.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
                 },
                 onRelease = { it.player = null },
                 modifier = Modifier.fillMaxSize()
@@ -7422,9 +7427,10 @@ private fun SettingsDialog(
     }
 
     val viewport = LocalTvViewport.current
+    val isMobileSettings = BuildConfig.IS_MOBILE || !viewport.isTvLayout
     BackHandler(onBack = onDismiss)
     BackHandler(enabled = showAdvanced) { showAdvanced = false }
-    // DirecTV HD Right-Side Settings Pane over dimmed scrim
+    // DirecTV HD Right-Side Settings Pane over dimmed scrim (full-width on portrait mobile)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -7434,17 +7440,29 @@ private fun SettingsDialog(
         Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .widthIn(min = 420.dp, max = 600.dp)
-                .fillMaxWidth(if (viewport.isTvLayout) 0.52f else 0.96f)
+                .then(
+                    if (isMobileSettings) {
+                        Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                    } else {
+                        Modifier
+                            .widthIn(min = 420.dp, max = 600.dp)
+                            .fillMaxWidth(0.52f)
+                    }
+                )
                 .background(DtvChrome.PanelBgGradient)
         ) {
-            Box(
-                Modifier
-                    .width(1.dp)
-                    .fillMaxHeight()
-                    .align(Alignment.CenterStart)
-                    .background(DtvChrome.Divider)
-            )
+            if (!isMobileSettings) {
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterStart)
+                        .background(DtvChrome.Divider)
+                )
+            }
         Column(Modifier.fillMaxSize()) {
             // DirecTV Glossy Dark Header Bar
             Column(
@@ -7455,8 +7473,9 @@ private fun SettingsDialog(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = if (isMobileSettings) 16.dp else 24.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -7474,8 +7493,11 @@ private fun SettingsDialog(
                             color = Color.White
                         )
                         Text(
-                            if (showAdvanced) "Playlist, EPG, headers & network labels"
-                            else "◀ / ▶ to adjust  ·  OK to select",
+                            when {
+                                showAdvanced -> "Playlist, EPG, headers & network labels"
+                                isMobileSettings -> "Tap options to adjust settings"
+                                else -> "◀ / ▶ to adjust  ·  OK to select"
+                            },
                             color = DtvChrome.SecondaryText,
                             fontSize = 12.sp
                         )
@@ -7493,6 +7515,16 @@ private fun SettingsDialog(
                             fontSize = 11.sp,
                             color = DtvChrome.ElectricBlueSoft
                         )
+                    }
+                    if (isMobileSettings) {
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(34.dp)) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Close Settings",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(DtvChrome.Divider))

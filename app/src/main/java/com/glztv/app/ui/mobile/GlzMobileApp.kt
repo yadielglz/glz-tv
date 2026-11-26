@@ -29,7 +29,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -634,8 +636,8 @@ private fun MobileChannelRail(
             letterSpacing = 0.9.sp
         )
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(channels, key = { it.id }) { ch ->
-                val prog = remember(ch.id, guide, now) { guide.nowProgrammeForChannel(ch, now) }
+            itemsIndexed(channels, key = { index, ch -> "m-rail-$index-${ch.id}-${ch.streamUrl}" }) { _, ch ->
+                val prog = remember(ch, guide, now) { guide.nowProgrammeForChannel(ch, now) }
                 Column(
                     modifier = Modifier
                         .width(156.dp)
@@ -800,8 +802,8 @@ private fun MobileGuideTab(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(filtered, key = { it.id }) { ch ->
-                val prog = remember(ch.id, guide, now) { guide.nowProgrammeForChannel(ch, now) }
+            itemsIndexed(filtered, key = { index, ch -> "m-guide-$index-${ch.id}-${ch.streamUrl}" }) { _, ch ->
+                val prog = remember(ch, guide, now) { guide.nowProgrammeForChannel(ch, now) }
                 val progress = prog?.let {
                     ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
                         .coerceIn(0f, 1f)
@@ -950,7 +952,7 @@ private fun MobileMoviesTab(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(filtered, key = { it.id }) { movie ->
+            itemsIndexed(filtered, key = { index, movie -> "m-movie-$index-${movie.id}" }) { _, movie ->
                 Column(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
@@ -1010,7 +1012,7 @@ private fun MobileRadioTab(
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(stations, key = { it.code }) { station ->
+        itemsIndexed(stations, key = { index, station -> "m-radio-$index-${station.code}-${station.streamUrl}" }) { _, station ->
             val isActive = activeStation?.code == station.code
             Row(
                 modifier = Modifier

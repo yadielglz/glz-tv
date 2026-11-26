@@ -70,9 +70,13 @@ fun DtvChannelSurfBar(
         "${formatDtvCompactTime(it.startMillis)} - ${formatDtvCompactTime(it.endMillis)}"
     } ?: surfChannel.group.ifBlank { "Live" }
 
+    val isCompact = !com.glztv.app.ui.theme.LocalTvViewport.current.isTvLayout || com.glztv.app.BuildConfig.IS_MOBILE
     Column(
         modifier = modifier
-            .widthIn(min = 460.dp, max = 680.dp)
+            .then(
+                if (isCompact) Modifier.fillMaxWidth().widthIn(max = 680.dp)
+                else Modifier.widthIn(min = 460.dp, max = 680.dp)
+            )
             .clip(RoundedCornerShape(4.dp))
             .background(SurfBarGradient)
             .border(1.dp, DtvChrome.Divider, RoundedCornerShape(4.dp))

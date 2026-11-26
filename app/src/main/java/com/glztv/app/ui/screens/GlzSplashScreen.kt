@@ -143,6 +143,9 @@ fun GlzSplashScreen(
             letterSpacing = 0.6.sp,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
+                .then(
+                    if (BuildConfig.IS_MOBILE) Modifier.padding(bottom = 12.dp) else Modifier
+                )
                 .padding(horizontal = 32.dp, vertical = 22.dp)
         )
     }
