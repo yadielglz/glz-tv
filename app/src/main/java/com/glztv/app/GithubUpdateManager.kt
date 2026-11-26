@@ -305,6 +305,9 @@ object GithubUpdateManager {
         val version = tag.removePrefix("v")
         val base = version.substringBefore("-")
         val suffix = version.substringAfter("-", "").lowercase()
+        if (BuildConfig.IS_MOBILE) {
+            return suffix == "mobile" || suffix.startsWith("mobile-")
+        }
         val stable = suffix.isEmpty()
         return when (channel) {
             // Production: stable tags from new era or floor onward

@@ -200,6 +200,8 @@ import com.glztv.app.ui.components.GoogleTvMiniGuide
 import com.glztv.app.ui.components.GoogleTvChannelLogo
 import com.glztv.app.ui.components.DtvChannelSurfBar
 import com.glztv.app.ui.components.DtvChannelNumberHud
+import com.glztv.app.ui.mobile.GlzMobileRoot
+import android.content.pm.ActivityInfo
 import com.glztv.app.ui.theme.GoogleTvTokens
 import com.glztv.app.ui.theme.googleTvFocusable
 import com.glztv.app.launcher.LauncherAppsManager
@@ -307,6 +309,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.IS_MOBILE) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
         GlzBackgroundSync.schedule(applicationContext)
         deepLinkChannelId.value = intent?.data?.takeIf { it.host == "channel" }?.lastPathSegment
         setContent {
@@ -1067,6 +1072,94 @@ internal fun TvScreen(
                 false
             }
     ) {
+        if (BuildConfig.IS_MOBILE) {
+            GlzMobileRoot(
+                channels = ordered,
+                guide = guide,
+                movies = managedMovies,
+                radioStations = radioStations,
+                activeRadioStation = radioState.station,
+                radioPlaying = radioPlaying,
+                favorites = favorites,
+                recentChannels = remember(recentRevision, channels.size) {
+                    recentChannelManager.recentIds().mapNotNull { id ->
+                        channels.firstOrNull { it.id == id }
+                    }
+                },
+                weather = weather,
+                loading = loading,
+                hasUpdate = availableUpdate != null,
+                captionsEnabled = captionsEnabled,
+                sleepTimerRemainingMinutes = sleepTimerRemainingMin,
+                activeChannel = selected,
+                playerActive = playerActive,
+                selectedMovie = selectedMovie,
+                onWatchChannel = { ch ->
+                    stopRadio()
+                    tuneChannel(ch)
+                    playerActive = true
+                },
+                onPreviousChannel = {
+                    val currentId = selected?.id
+                    if (currentId != null) {
+                        recentChannelManager.previousId(currentId)
+                            ?.let { id -> channels.firstOrNull { it.id == id } }
+                            ?.let { prev ->
+                                tuneChannel(prev)
+                                playerActive = true
+                            }
+                    }
+                },
+                onExitLivePlayer = {
+                    playerActive = false
+                    GlzHubManager.reportActivity(prefs, "idle")
+                },
+                onSelectMovie = { movie ->
+                    stopRadio()
+                    playerActive = false
+                    selectedMovie = movie
+                },
+                onExitMoviePlayer = {
+                    selectedMovie = null
+                    GlzHubManager.reportActivity(prefs, "idle")
+                },
+                onPlayRadio = ::playRadioStation,
+                onToggleRadioPlayPause = ::toggleRadioPlayPause,
+                onStopRadio = ::stopRadio,
+                onToggleFavorite = { favId ->
+                    favorites = if (favId in favorites) favorites - favId else favorites + favId
+                    prefs.edit().putStringSet(FAVORITES, favorites).apply()
+                },
+                onToggleCaptions = {
+                    val next = !captionsEnabled
+                    captionsEnabled = next
+                    prefs.edit().putBoolean(CAPTIONS_ENABLED, next).apply()
+                },
+                onCycleSleepTimer = { cycleSleepTimer() },
+                onRefreshSources = { scope.launch { loadSources(forceRefresh = true) } },
+                onOpenSettings = { showSettings = true },
+                onOpenUpdate = { showUpdateModal = true },
+                videoPlayerSlot = { ch, controlState, mod ->
+                    VideoPlayer(
+                        channel = ch,
+                        captionsEnabled = captionsEnabled,
+                        captionLanguage = captionLanguage,
+                        modifier = mod,
+                        controlState = controlState
+                    )
+                },
+                moviePlayerSlot = { movie, controlState, mod ->
+                    VideoPlayer(
+                        channel = movie.asChannel(),
+                        captionsEnabled = captionsEnabled,
+                        captionLanguage = captionLanguage,
+                        modifier = mod,
+                        controlState = controlState,
+                        extraSubtitles = movie.subtitles
+                    )
+                }
+            )
+        } else {
         Scaffold(
             containerColor = Color.Transparent,
         topBar = {
@@ -1522,6 +1615,7 @@ internal fun TvScreen(
                     }
                 }
             }
+        }
         }
     }
 
@@ -6786,7 +6880,38 @@ private fun VideoPlayer(
     }
     LaunchedEffect(player, channel.id, controlState, sourceIndex) {
         if (controlState == null) return@LaunchedEffect
+        controlState.togglePlayPauseAction = {
+            if (player.isPlaying) {
+                player.pause()
+                controlState.isPlaying = false
+            } else {
+                player.play()
+                controlState.isPlaying = true
+            }
+        }
+        controlState.toggleMuteAction = {
+            val nextMuted = player.volume > 0f
+            player.volume = if (nextMuted) 0f else 1f
+            controlState.isMuted = nextMuted
+        }
+        controlState.seekToAction = { posMs ->
+            val target = posMs.coerceAtLeast(0L)
+            player.seekTo(target)
+            controlState.currentPositionMs = target
+        }
+        controlState.seekByAction = { deltaMs ->
+            val dur = player.duration.takeIf { it > 0L }
+            val next = (player.currentPosition + deltaMs)
+                .coerceAtLeast(0L)
+                .let { if (dur != null) it.coerceAtMost(dur) else it }
+            player.seekTo(next)
+            controlState.currentPositionMs = next
+        }
         while (true) {
+            controlState.isPlaying = player.playWhenReady && player.playbackState != Player.STATE_ENDED
+            controlState.isMuted = player.volume <= 0f
+            controlState.currentPositionMs = player.currentPosition.coerceAtLeast(0L)
+            controlState.durationMs = player.duration.takeIf { it > 0L && it != C.TIME_UNSET } ?: 0L
             val video = player.videoFormat
             val audio = player.audioFormat
             controlState.diagnostics = PlaybackDiagnostics(
@@ -6806,7 +6931,7 @@ private fun VideoPlayer(
                 frameRate = video?.frameRate?.takeIf { it > 0f },
                 audioChannels = audio?.channelCount?.takeIf { it > 0 }
             )
-            delay(1_000)
+            delay(500)
         }
     }
     // Detects a frozen / endlessly-buffering feed (connection loss with no hard error)

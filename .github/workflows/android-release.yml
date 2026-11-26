@@ -89,11 +89,16 @@ jobs:
             echo "Version must use major.minor.patch[-suffix] format." >&2
             exit 1
           fi
+          is_mobile="false"
+          if [[ "$suffix" == "-mobile" || "$suffix" == -mobile-* ]]; then
+            is_mobile="true"
+          fi
           echo "name=$version" >> "$GITHUB_OUTPUT"
           echo "code=$version_code" >> "$GITHUB_OUTPUT"
           echo "major=$roku_major" >> "$GITHUB_OUTPUT"
           echo "minor=$roku_minor" >> "$GITHUB_OUTPUT"
           echo "build=$roku_build" >> "$GITHUB_OUTPUT"
+          echo "is_mobile=$is_mobile" >> "$GITHUB_OUTPUT"
 
       - name: Restore signing keystore
         shell: bash
@@ -114,7 +119,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease \
             -PreleaseVersionName=${{ steps.version.outputs.name }} \
-            -PreleaseVersionCode=${{ steps.version.outputs.code }}
+            -PreleaseVersionCode=${{ steps.version.outputs.code }} \
+            -PmobileBuild=${{ steps.version.outputs.is_mobile }}
 
       - name: Verify APK signature
         shell: bash
@@ -127,6 +133,7 @@ jobs:
           sha256sum "GLZ-TV-${{ steps.version.outputs.name }}.apk" > "GLZ-TV-${{ steps.version.outputs.name }}.apk.sha256"
 
       - name: Inject version into Roku manifest
+        if: steps.version.outputs.is_mobile != 'true'
         shell: bash
         env:
           ROKU_MAJOR: ${{ steps.version.outputs.major }}
@@ -144,6 +151,7 @@ jobs:
           grep -E '^(major_version|minor_version|build_version|glz_version)=' roku/manifest
 
       - name: Build and test Roku package
+        if: steps.version.outputs.is_mobile != 'true'
         shell: bash
         working-directory: roku
         run: |
@@ -153,6 +161,7 @@ jobs:
           npm run build
 
       - name: Package Roku release artifact
+        if: steps.version.outputs.is_mobile != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -169,7 +178,7 @@ jobs:
             GLZ-TV-${{ steps.version.outputs.name }}.apk.sha256
             Glz-TV-Roku-${{ steps.version.outputs.name }}.zip
             Glz-TV-Roku-${{ steps.version.outputs.name }}.zip.sha256
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Generate release notes
         if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
@@ -270,16 +279,24 @@ jobs:
           checksum="$apk.sha256"
           roku_zip="Glz-TV-Roku-${{ steps.version.outputs.name }}.zip"
           roku_checksum="$roku_zip.sha256"
-          release_args=(--title "GLZ TV ${{ steps.version.outputs.name }}" --notes-file release-notes.md)
-          if [[ "${{ steps.version.outputs.name }}" == *-testing* || "${{ steps.version.outputs.name }}" == *-weekly* || "${{ steps.version.outputs.name }}" == *-biweekly* || "${{ steps.version.outputs.name }}" == *-monthly* || "${{ steps.version.outputs.name }}" == *-beta* || "${{ steps.version.outputs.name }}" == *-family* || "${{ steps.version.outputs.name }}" == *-rc* ]]; then
+          assets=("$apk" "$checksum")
+          if [[ "${{ steps.version.outputs.is_mobile }}" != "true" ]]; then
+            assets+=("$roku_zip" "$roku_checksum")
+          fi
+          title="GLZ TV ${{ steps.version.outputs.name }}"
+          if [[ "${{ steps.version.outputs.is_mobile }}" == "true" ]]; then
+            title="GLZ TV Mobile ${{ steps.version.outputs.name }}"
+          fi
+          release_args=(--title "$title" --notes-file release-notes.md)
+          if [[ "${{ steps.version.outputs.name }}" == *-testing* || "${{ steps.version.outputs.name }}" == *-weekly* || "${{ steps.version.outputs.name }}" == *-biweekly* || "${{ steps.version.outputs.name }}" == *-monthly* || "${{ steps.version.outputs.name }}" == *-beta* || "${{ steps.version.outputs.name }}" == *-family* || "${{ steps.version.outputs.name }}" == *-rc* || "${{ steps.version.outputs.name }}" == *-mobile* ]]; then
             release_args+=(--prerelease --latest=false)
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$apk" "$checksum" "$roku_zip" "$roku_checksum" --clobber
+            gh release upload "$tag" "${assets[@]}" --clobber
             gh release edit "$tag" "${release_args[@]}"
           else
-            create_args=("$tag" "$apk" "$checksum" "$roku_zip" "$roku_checksum" "${release_args[@]}")
+            create_args=("$tag" "${assets[@]}" "${release_args[@]}")
             if [[ "$GITHUB_REF" == refs/tags/* ]]; then
               gh release create "${create_args[@]}" --verify-tag
             else

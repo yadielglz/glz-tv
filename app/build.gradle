@@ -13,6 +13,8 @@ android {
         targetSdk 36
         versionCode providers.gradleProperty("releaseVersionCode").map { it.toInteger() }.getOrElse(148530)
         versionName providers.gradleProperty("releaseVersionName").getOrElse("1.48.5.30")
+        def isMobileBuild = providers.gradleProperty("mobileBuild").map { it.toBoolean() }.getOrElse(false)
+        buildConfigField "boolean", "IS_MOBILE", isMobileBuild.toString()
     }
 
     signingConfigs {
