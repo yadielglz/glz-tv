@@ -90,8 +90,9 @@ fun FirstRunSetupScreen(
     onComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val viewport = LocalTvViewport.current
-    if (BuildConfig.IS_MOBILE || !viewport.isTvLayout) {
+    if (com.glztv.app.DeviceFormFactor.isMobileExperience(context) || !viewport.isTvLayout) {
         com.glztv.app.ui.mobile.MobileFirstRunScreen(
             appLanguage = appLanguage,
             isAlreadyEnrolled = isAlreadyEnrolled,

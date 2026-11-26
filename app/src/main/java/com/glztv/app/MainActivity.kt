@@ -312,7 +312,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (BuildConfig.IS_MOBILE) {
+        if (DeviceFormFactor.isMobileExperience(this)) {
             runCatching { requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
         }
         GlzBackgroundSync.schedule(applicationContext)
@@ -698,8 +698,9 @@ internal fun TvScreen(
 
     suspend fun checkForAppUpdate(): String {
         val channel = GithubUpdateManager.UpdateChannel.from(prefs.getString(UPDATE_CHANNEL, null))
+        val isMobileRuntime = DeviceFormFactor.isMobileExperience(context)
         return runCatching {
-            withContext(Dispatchers.IO) { GithubUpdateManager.check(client, channel) }
+            withContext(Dispatchers.IO) { GithubUpdateManager.check(client, channel, isMobileBuild = isMobileRuntime) }
         }.fold(
             onSuccess = { update ->
                 availableUpdate = update
@@ -1076,7 +1077,7 @@ internal fun TvScreen(
                 false
             }
     ) {
-        if (BuildConfig.IS_MOBILE) {
+        if (DeviceFormFactor.isMobileExperience(context)) {
             GlzMobileRoot(
                 channels = ordered,
                 guide = guide,
@@ -6977,8 +6978,9 @@ private fun VideoPlayer(
     // Register player first so Compose disposes mediaSession before releasing player.
     DisposableEffect(player) { onDispose { player.release() } }
     DisposableEffect(mediaSession) { onDispose { mediaSession?.release() } }
+    val isMobilePlayer = remember(context) { DeviceFormFactor.isMobileExperience(context) }
     val showEmbeddedSubtitles = captionsEnabled && sidecarCues.isEmpty()
-    Box(modifier.background(Color.Black, if (useTextureView || BuildConfig.IS_MOBILE) androidx.compose.ui.graphics.RectangleShape else RoundedCornerShape(24.dp))) {
+    Box(modifier.background(Color.Black, if (useTextureView || isMobilePlayer) androidx.compose.ui.graphics.RectangleShape else RoundedCornerShape(24.dp))) {
         if (useTextureView) {
             AndroidView(
                 factory = { ctx ->
@@ -7019,7 +7021,7 @@ private fun VideoPlayer(
                         isFocusable = showControls
                         isFocusableInTouchMode = showControls
                         subtitleView?.visibility = if (showEmbeddedSubtitles) android.view.View.VISIBLE else android.view.View.GONE
-                        if (!BuildConfig.IS_MOBILE) {
+                        if (!isMobilePlayer) {
                             (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
                         }
                     }
@@ -7427,7 +7429,7 @@ private fun SettingsDialog(
     }
 
     val viewport = LocalTvViewport.current
-    val isMobileSettings = BuildConfig.IS_MOBILE || !viewport.isTvLayout
+    val isMobileSettings = DeviceFormFactor.isMobileExperience(context) || !viewport.isTvLayout
     BackHandler(onBack = onDismiss)
     BackHandler(enabled = showAdvanced) { showAdvanced = false }
     // DirecTV HD Right-Side Settings Pane over dimmed scrim (full-width on portrait mobile)

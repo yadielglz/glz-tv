@@ -218,7 +218,11 @@ object GithubUpdateManager {
         )
     }
 
-    fun check(client: OkHttpClient, channel: UpdateChannel = UpdateChannel.PRODUCTION): UpdateInfo? {
+    fun check(
+        client: OkHttpClient,
+        channel: UpdateChannel = UpdateChannel.PRODUCTION,
+        isMobileBuild: Boolean = BuildConfig.IS_MOBILE
+    ): UpdateInfo? {
         val response = client.newCall(
             Request.Builder()
                 .url(RELEASES)
@@ -237,7 +241,7 @@ object GithubUpdateManager {
         val newest = (0 until releases.length())
             .map { releases.getJSONObject(it) }
             .filterNot { it.optBoolean("draft", false) }
-            .filter { matchesChannel(it.getString("tag_name"), channel) }
+            .filter { matchesChannel(it.getString("tag_name"), channel, isMobileBuild) }
             .maxByOrNull { it.optString("published_at") }
             ?: return null
 
@@ -305,7 +309,11 @@ object GithubUpdateManager {
         val version = tag.removePrefix("v")
         val base = version.substringBefore("-")
         val suffix = version.substringAfter("-", "").lowercase()
-        return base.endsWith("M") || suffix == "mobile" || suffix.startsWith("mobile-")
+        return base.endsWith("M") ||
+            suffix == "m" ||
+            suffix.startsWith("m-") ||
+            suffix == "mobile" ||
+            suffix.startsWith("mobile-")
     }
 
     internal fun matchesChannel(
@@ -323,16 +331,17 @@ object GithubUpdateManager {
         val version = tag.removePrefix("v")
         val base = version.substringBefore("-")
         val suffix = version.substringAfter("-", "").lowercase()
-        val stable = suffix.isEmpty()
+        val numericBase = base.isNotEmpty() && base.all { it.isDigit() || it == '.' }
+        val stable = suffix.isEmpty() && numericBase
         return when (channel) {
             // Production: stable tags from new era or floor onward
             UpdateChannel.PRODUCTION -> stable && (isNewEra(base) || compareVersions(base, PRODUCTION_FLOOR) >= 0)
             // Monthly: tags with -monthly, or stable tags from new era or floor onward
-            UpdateChannel.MONTHLY -> suffix.startsWith("monthly") || (stable && (isNewEra(base) || compareVersions(base, PRODUCTION_FLOOR) >= 0))
+            UpdateChannel.MONTHLY -> (numericBase && suffix.startsWith("monthly")) || (stable && (isNewEra(base) || compareVersions(base, PRODUCTION_FLOOR) >= 0))
             // Pre-release and cadence rings: accept their own markers (and legacy markers) OR any newer stable release
             UpdateChannel.WEEKLY,
             UpdateChannel.BIWEEKLY,
-            UpdateChannel.TESTING -> stable || channel.markers.any { suffix.startsWith(it) }
+            UpdateChannel.TESTING -> stable || (numericBase && channel.markers.any { suffix.startsWith(it) })
         }
     }
 

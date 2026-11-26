@@ -70,7 +70,9 @@ fun DtvChannelSurfBar(
         "${formatDtvCompactTime(it.startMillis)} - ${formatDtvCompactTime(it.endMillis)}"
     } ?: surfChannel.group.ifBlank { "Live" }
 
-    val isCompact = !com.glztv.app.ui.theme.LocalTvViewport.current.isTvLayout || com.glztv.app.BuildConfig.IS_MOBILE
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isCompact = !com.glztv.app.ui.theme.LocalTvViewport.current.isTvLayout ||
+        com.glztv.app.DeviceFormFactor.isMobileExperience(context)
     Column(
         modifier = modifier
             .then(

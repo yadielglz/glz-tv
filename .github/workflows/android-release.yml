@@ -92,7 +92,7 @@ jobs:
             exit 1
           fi
           is_mobile="false"
-          if [[ "$mobile_flag" == "M" || "$suffix" == "-mobile" || "$suffix" == -mobile-* ]]; then
+          if [[ "$mobile_flag" == "M" || "$suffix" == "-M" || "$suffix" == -M-* || "$suffix" == "-m" || "$suffix" == -m-* || "$suffix" == "-mobile" || "$suffix" == -mobile-* ]]; then
             is_mobile="true"
           fi
           echo "name=$version" >> "$GITHUB_OUTPUT"
