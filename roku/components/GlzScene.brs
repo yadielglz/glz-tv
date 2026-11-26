@@ -381,63 +381,104 @@ sub updateHomeHero()
     welcome = GuestWelcomeSummary(m.config, m.weather)
     backdrop = m.top.findNode("homeHeroBackdrop")
     scrim = m.top.findNode("homeHeroScrim")
-    if IsWebUrl(welcome.heroImage)
-        backdrop.uri = welcome.heroImage
-        backdrop.visible = true
-        scrim.visible = true
-    else
-        backdrop.uri = ""
-        backdrop.visible = false
-        scrim.visible = false
-    end if
-    logo = welcome.logo
     heroLogo = m.top.findNode("homeHeroLogo")
     heroTitle = m.top.findNode("homeHeroTitle")
     heroSub = m.top.findNode("homeHeroSub")
     heroBody = m.top.findNode("homeHeroBody")
-    if IsWebUrl(logo)
-        heroLogo.uri = logo
-    else
-        heroLogo.uri = "pkg:/images/glztv_logo_emblem.png"
-    end if
-    heroLogo.visible = true
-    heroTitle.text = welcome.headline
-    pill = welcome.weatherPill
-    if pill = "" then pill = m.channels.Count().ToStr() + " Live  •  " + m.movies.Count().ToStr() + " Movies"
-    heroSub.text = pill
-    body = welcome.body
-    if body = "Select a destination on the left or choose a quick action to start watching."
-        body = "Stream live channels, on-demand movies, PPV sports events, and local radio below. Press D-Pad Right during live playback to open the Channel Guide."
-    end if
-    heroBody.text = body
-    ' Update electric-blue progress bar using current EPG programme on last-watched or featured channel
+    badgeBg = m.top.findNode("homeHeroBadgeBg")
+    badgeText = m.top.findNode("homeHeroBadgeText")
+    progressTrack = m.top.findNode("homeHeroProgressTrack")
     progressFill = m.top.findNode("homeHeroProgressFill")
-    if progressFill <> invalid
-        now = CreateObject("roDateTime").AsSeconds()
-        pct = 0.0
+
+    ' Check if GlzHub explicitly configured a Home Preview channel
+    previewId = Text(m.config.homePreviewChannelId)
+    previewCh = invalid
+    if previewId <> ""
+        previewLower = LCase(previewId)
         for each ch in m.channels
-            if m.lastChannelUrl = "" or ch.url = m.lastChannelUrl
-                prog = CurrentProgramme(ChannelSummary(m.summaries, ch.id), now)
-                if prog <> invalid
-                    pct = ProgrammeProgress(prog, now)
-                    exit for
-                end if
+            if LCase(Text(ch.id)) = previewLower or LCase(Text(ch.number)) = previewLower or LCase(Text(ch.name)) = previewLower
+                previewCh = ch
+                exit for
             end if
         end for
-        if pct <= 0.0
-            for each ch in m.channels
-                prog = CurrentProgramme(ChannelSummary(m.summaries, ch.id), now)
-                if prog <> invalid
-                    pct = ProgrammeProgress(prog, now)
-                    exit for
-                end if
-            end for
+    end if
+
+    pill = welcome.weatherPill
+    if pill = "" then pill = m.channels.Count().ToStr() + " Live  •  " + m.movies.Count().ToStr() + " Movies"
+
+    if previewCh <> invalid
+        ' GlzHub Preview Channel mode
+        if IsWebUrl(welcome.heroImage)
+            backdrop.uri = welcome.heroImage
+            backdrop.visible = true
+            scrim.visible = true
+        else
+            backdrop.uri = "pkg:/images/splash_hd.jpg"
+            backdrop.visible = true
+            scrim.visible = true
         end if
-        if pct <= 0.0 then pct = 0.30
-        barWidth = Int(pct * 1048)
-        if barWidth < 24 then barWidth = 24
-        if barWidth > 1048 then barWidth = 1048
-        progressFill.width = barWidth
+        if IsWebUrl(Text(previewCh.logo))
+            heroLogo.uri = Text(previewCh.logo)
+        else
+            heroLogo.uri = "pkg:/images/glztv_logo_emblem.png"
+        end if
+        heroLogo.visible = true
+        if badgeBg <> invalid then badgeBg.color = "0xEF4444FF"
+        if badgeText <> invalid then badgeText.text = "ON NOW"
+
+        now = CreateObject("roDateTime").AsSeconds()
+        prog = CurrentProgramme(ChannelSummary(m.summaries, previewCh.id), now)
+        chNum = Text(previewCh.number)
+        chLabel = Text(previewCh.name, "Live Channel")
+        if chNum <> "" then chLabel = chNum + "  " + chLabel
+        if prog <> invalid and Text(prog.title) <> ""
+            heroTitle.text = Text(prog.title)
+            heroBody.text = chLabel + "  •  " + Text(prog.description, Text(previewCh.group, "Live Broadcast"))
+        else
+            heroTitle.text = chLabel
+            heroBody.text = Text(previewCh.group, "Live Broadcast")
+        end if
+        heroSub.text = pill
+
+        if progressTrack <> invalid then progressTrack.visible = true
+        if progressFill <> invalid
+            progressFill.visible = true
+            pct = 0.30
+            if prog <> invalid then pct = ProgrammeProgress(prog, now)
+            if pct <= 0.0 then pct = 0.30
+            barWidth = Int(pct * 1048)
+            if barWidth < 24 then barWidth = 24
+            if barWidth > 1048 then barWidth = 1048
+            progressFill.width = barWidth
+        end if
+    else
+        ' No GlzHub preview channel set: Property Image (or GlzTV orbital wallpaper) + Property Welcome
+        if IsWebUrl(welcome.heroImage)
+            backdrop.uri = welcome.heroImage
+        else
+            backdrop.uri = "pkg:/images/splash_hd.jpg"
+        end if
+        backdrop.visible = true
+        scrim.visible = true
+
+        logo = welcome.logo
+        if IsWebUrl(logo)
+            heroLogo.uri = logo
+        else
+            heroLogo.uri = "pkg:/images/glztv_logo_emblem.png"
+        end if
+        heroLogo.visible = true
+        if badgeBg <> invalid then badgeBg.color = "0x1990FFFF"
+        if badgeText <> invalid then badgeText.text = "WELCOME"
+        heroTitle.text = welcome.headline
+        heroSub.text = pill
+        body = welcome.body
+        if body = "Select a destination on the left or choose a quick action to start watching."
+            body = "Stream live channels, on-demand movies, PPV sports events, and local radio below. Press D-Pad Right during live playback to open the Channel Guide."
+        end if
+        heroBody.text = body
+        if progressTrack <> invalid then progressTrack.visible = false
+        if progressFill <> invalid then progressFill.visible = false
     end if
 end sub
 

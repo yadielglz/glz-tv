@@ -6,6 +6,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,6 +57,7 @@ import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 import com.glztv.app.GuestExperience
 import com.glztv.app.Movie
+import com.glztv.app.R
 import com.glztv.app.RadioStation
 import com.glztv.app.model.EntertainmentApp
 import com.glztv.app.model.NetworkInfo
@@ -149,7 +152,7 @@ fun GoogleTvHomeScreen(
         }
     }
 
-    val heroChannel = remember(channels, previewChannel, resumeChannel) {
+    val quickWatchChannel = remember(channels, previewChannel, resumeChannel) {
         previewChannel ?: resumeChannel ?: channels.firstOrNull()
     }
     val eventChannels = remember(channels) {
@@ -170,7 +173,8 @@ fun GoogleTvHomeScreen(
         runCatching { watchLiveFocus.requestFocus() }
     }
 
-    val showPreviewVideo = !radioPlaying && previewContent != null && heroChannel != null
+    val isRadioBannerMode = radioPlaying || currentRadioStation != null
+    val showPreviewVideo = !isRadioBannerMode && previewChannel != null && previewContent != null
     val heroHeight = if (viewport.isCompactHeight) 178.dp else 196.dp
 
     Column(
@@ -190,7 +194,7 @@ fun GoogleTvHomeScreen(
             onSelectTab = { tab ->
                 when (tab) {
                     DtvNavTab.Home -> runCatching { watchLiveFocus.requestFocus() }
-                    DtvNavTab.LiveTv -> (heroChannel ?: channels.firstOrNull())?.let(onWatchChannel) ?: onOpenGuide()
+                    DtvNavTab.LiveTv -> quickWatchChannel?.let(onWatchChannel) ?: onOpenGuide()
                     DtvNavTab.Guide -> onOpenGuide()
                     DtvNavTab.Movies -> onOpenMovies()
                     DtvNavTab.Radio -> onOpenRadio()
@@ -204,8 +208,7 @@ fun GoogleTvHomeScreen(
             onOpenSettings = onOpenSettings
         )
 
-        // ── 2. DirecTV HD Hero Bar (Right-Third Bleed Preview OR Property BG + Bled Weather when Radio Playing)
-        val isRadioBannerMode = radioPlaying || (currentRadioStation != null && !showPreviewVideo)
+        // ── 2. DirecTV HD Hero Bar (GlzHub Preview Video OR Property Image / GlzTV Wallpaper + Bled Weather)
         val propertyBgUrl = experience.heroImageUrl?.takeIf { it.isNotBlank() }
         Box(
             modifier = Modifier
@@ -214,14 +217,23 @@ fun GoogleTvHomeScreen(
                 .clipToBounds()
                 .background(DtvChrome.BannerGradient)
         ) {
-            // When Radio is playing, fill the Hero Banner with the property background image
-            if (isRadioBannerMode && propertyBgUrl != null) {
-                AsyncImage(
-                    model = propertyBgUrl,
-                    contentDescription = experience.propertyName.ifBlank { "Property" },
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+            // Whenever Radio is active OR no GlzHub preview channel is set, show Property Image (or GlzTV orbital wallpaper fallback)
+            if (!showPreviewVideo) {
+                if (propertyBgUrl != null) {
+                    AsyncImage(
+                        model = propertyBgUrl,
+                        contentDescription = experience.propertyName.ifBlank { "Property" },
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(id = R.drawable.glztv_splash_bg),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -238,9 +250,9 @@ fun GoogleTvHomeScreen(
                 )
             }
 
-            // Right Third: Live TV preview bleeding smoothly into Hero OR borderless Weather bled into Hero
+            // Right Third: GlzHub Live TV preview bleeding smoothly into Hero OR borderless Weather bled into Hero
             val activePreview = previewContent
-            if (!isRadioBannerMode && activePreview != null && heroChannel != null) {
+            if (showPreviewVideo && activePreview != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.42f)
@@ -263,8 +275,8 @@ fun GoogleTvHomeScreen(
                 )
             }
 
-            // Left Two-Thirds: Clean "Radio Playing" banner when Radio active, OR Live Broadcast details
-            val active = heroChannel
+            // Left Two-Thirds: Radio Playing OR GlzHub Preview Channel OR Property Welcome
+            val active = previewChannel
             val currentProg = remember(active?.id, guide, now) {
                 active?.let { guide.nowProgrammeForChannel(it, now) }
             }
@@ -334,12 +346,12 @@ fun GoogleTvHomeScreen(
                             modifier = Modifier.focusRequester(watchLiveFocus),
                             onClick = onOpenRadio
                         )
-                        if (active != null) {
+                        if (quickWatchChannel != null) {
                             DtvActionButton(
                                 label = "Watch Live",
                                 primary = false,
                                 showPlayIcon = true,
-                                onClick = { onWatchChannel(active) }
+                                onClick = { onWatchChannel(quickWatchChannel) }
                             )
                         }
                         DtvActionButton(
@@ -348,7 +360,7 @@ fun GoogleTvHomeScreen(
                             onClick = onOpenApps
                         )
                     }
-                } else if (active != null) {
+                } else if (showPreviewVideo && active != null) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -448,25 +460,51 @@ fun GoogleTvHomeScreen(
                         )
                     }
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // No GlzHub preview channel set: Property Welcome over Property Image / GlzTV Wallpaper
+                    val propertyEyebrow = experience.propertyName.ifBlank { "GlzTV" }.uppercase()
+                    val welcomeHeadline = if (guestName.isNotBlank() && !guestName.equals("Guest", ignoreCase = true)) {
+                        "Welcome, $guestName"
+                    } else if (experience.propertyName.isNotBlank()) {
+                        "Welcome to ${experience.propertyName}"
+                    } else {
+                        "Welcome to GlzTV"
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text(
-                            text = "Welcome to GlzTV",
-                            color = Color.White,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Normal
+                            text = propertyEyebrow,
+                            color = DtvChrome.ElectricBlueSoft,
+                            fontSize = 11.sp,
+                            fontFamily = BarlowCondensedFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.0.sp,
+                            maxLines = 1
                         )
                         Text(
-                            text = "Open Guide, Apps, or Radio to begin.",
+                            text = welcomeHeadline,
+                            color = Color.White,
+                            fontSize = if (viewport.isCompactHeight) 24.sp else 28.sp,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = experience.welcomeMessage.ifBlank { "Relax, explore, and enjoy live TV, Guide, Movies, Radio, and Apps." },
                             color = DtvChrome.SecondaryText,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         DtvActionButton(
-                            label = "Open Guide",
+                            label = "Watch Live",
                             primary = true,
+                            showPlayIcon = true,
                             modifier = Modifier.focusRequester(watchLiveFocus),
-                            onClick = onOpenGuide
+                            onClick = { quickWatchChannel?.let(onWatchChannel) ?: onOpenGuide() }
                         )
                         DtvActionButton(
                             label = "Apps",

@@ -708,7 +708,7 @@ internal fun TvScreen(
         captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
         captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
         keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
-        homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
+        homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, null)
         sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
         osdTimeoutSeconds = prefs.getInt(OSD_TIMEOUT_SECONDS, osdTimeoutSeconds)
         if (!alreadyRefreshedSources) {
@@ -881,7 +881,7 @@ internal fun TvScreen(
                     captionsEnabled = prefs.getBoolean(CAPTIONS_ENABLED, captionsEnabled)
                     captionLanguage = prefs.getString(CAPTION_LANGUAGE, captionLanguage) ?: captionLanguage
                     keepAwakeAtHome = prefs.getBoolean(KEEP_AWAKE_HOME, keepAwakeAtHome)
-                    homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, homePreviewChannelId)
+                    homePreviewChannelId = prefs.getString(HOME_PREVIEW_CHANNEL_ID, null)
                     sportsBarKioskEnabled = prefs.getBoolean(GlzHubManager.SPORTS_BAR_KIOSK_ENABLED, false)
                     managedMovies = Movie.fromPreferences(prefs)
                     reportHubSync(35, "Configuration received")
@@ -1281,13 +1281,15 @@ internal fun TvScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else if (section == AppSection.Home) {
-                val glzHubPreviewChannel = ordered.firstOrNull {
-                    !homePreviewChannelId.isNullOrBlank() && (
+                val glzHubPreviewChannel = if (homePreviewChannelId.isNullOrBlank()) {
+                    null
+                } else {
+                    ordered.firstOrNull {
                         it.id == homePreviewChannelId ||
-                        it.number == homePreviewChannelId ||
-                        it.name.equals(homePreviewChannelId, ignoreCase = true)
-                    )
-                } ?: ordered.firstOrNull()
+                            it.number == homePreviewChannelId ||
+                            it.name.equals(homePreviewChannelId, ignoreCase = true)
+                    }
+                }
 
                 GoogleTvHomeScreen(
                     channels = ordered,
@@ -1346,22 +1348,24 @@ internal fun TvScreen(
                     },
                     sportsBarKioskEnabled = sportsBarKioskEnabled,
                     onStartSportsBarKiosk = { section = AppSection.SportsBarKiosk },
-                    previewContent = {
-                        val overlayActive = showScreensaver || showSettings || showWeatherModal || showYouModal || showFirstRunSetup
-                        if (!radioPlaying && !overlayActive && glzHubPreviewChannel != null) {
-                            VideoPlayer(
-                                channel = glzHubPreviewChannel,
-                                captionsEnabled = false,
-                                captionLanguage = captionLanguage,
-                                modifier = Modifier.fillMaxSize(),
-                                muted = true,
-                                createMediaSession = false,
-                                keepScreenOn = false,
-                                cropVideo = true,
-                                useTextureView = true
-                            )
+                    previewContent = if (glzHubPreviewChannel != null) {
+                        {
+                            val overlayActive = showScreensaver || showSettings || showWeatherModal || showYouModal || showFirstRunSetup
+                            if (!radioPlaying && !overlayActive) {
+                                VideoPlayer(
+                                    channel = glzHubPreviewChannel,
+                                    captionsEnabled = false,
+                                    captionLanguage = captionLanguage,
+                                    modifier = Modifier.fillMaxSize(),
+                                    muted = true,
+                                    createMediaSession = false,
+                                    keepScreenOn = false,
+                                    cropVideo = true,
+                                    useTextureView = true
+                                )
+                            }
                         }
-                    },
+                    } else null,
                     isFamilyChannel = isFamilyChannel,
                     hasUpdate = availableUpdate != null,
                     onOpenUpdate = { showUpdateModal = true },
