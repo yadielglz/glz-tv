@@ -6,11 +6,15 @@
   </interface>
   <script type="text/brightscript" uri="pkg:/components/ChannelRow.brs" />
   <children>
-    <Rectangle id="rowBackground" width="586" height="72" color="0x101C30FF" />
-    <Rectangle id="focusBar" width="5" height="72" color="0x38BDF8FF" visible="false" />
-    <Label id="channelNumber" translation="[12,0]" width="66" height="72" color="0x65D5FFFF" vertAlign="center" font="font:SmallBoldSystemFont" />
-    <Poster id="channelIcon" translation="[82,8]" width="56" height="56" loadDisplayMode="scaleToFit" visible="false" />
-    <Label id="channelTitle" translation="[86,7]" width="484" height="30" font="font:SmallBoldSystemFont" />
-    <Label id="programmeTitle" translation="[86,39]" width="484" height="27" color="0xA5B9D2FF" font="font:SmallSystemFont" />
+    <Rectangle id="rowBackground" width="650" height="68" color="0x12161EFF" />
+    <Rectangle id="rowDivider" translation="[0,67]" width="650" height="1" color="0x2B3038FF" />
+    <Rectangle id="focusLeft" width="4" height="68" color="0x1990FFFF" visible="false" />
+    <Rectangle id="focusTop" width="650" height="2" color="0x1990FFFF" visible="false" />
+    <Rectangle id="focusBottom" translation="[0,66]" width="650" height="2" color="0x1990FFFF" visible="false" />
+    <Rectangle id="focusRight" translation="[648,0]" width="2" height="68" color="0x1990FFFF" visible="false" />
+    <Label id="channelNumber" translation="[14,0]" width="72" height="68" color="0x4DA8FFFF" vertAlign="center" font="font:SmallBoldSystemFont" />
+    <Poster id="channelIcon" translation="[90,10]" width="48" height="48" loadDisplayMode="scaleToFit" visible="false" />
+    <Label id="channelTitle" translation="[92,7]" width="542" height="28" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+    <Label id="programmeTitle" translation="[92,36]" width="542" height="26" color="0x94A3B8FF" font="font:SmallSystemFont" />
   </children>
 </component>

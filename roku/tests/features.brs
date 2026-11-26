@@ -121,6 +121,13 @@ sub Main()
     readyUnpaired = FirstRunReadySummary("", 0, 0, false)
     Assert(Instr(1, readyUnpaired.deviceLine, "Not yet paired") > 0, "FirstRunReadySummary handles unpaired state")
 
+    ' ProgrammeProgress helper for DirecTV HD progress bars
+    Assert(ProgrammeProgress(invalid, 1500) = 0.0, "ProgrammeProgress returns 0 for invalid programme")
+    Assert(ProgrammeProgress({ start: 1000, end: 1000 }, 1000) = 0.0, "ProgrammeProgress guards zero duration")
+    Assert(ProgrammeProgress({ start: 1000, end: 2000 }, 900) = 0.0, "ProgrammeProgress clamps before start to 0")
+    Assert(ProgrammeProgress({ start: 1000, end: 2000 }, 1500) = 0.5, "ProgrammeProgress computes midpoint accurately")
+    Assert(ProgrammeProgress({ start: 1000, end: 2000 }, 2500) = 1.0, "ProgrammeProgress clamps after end to 1")
+
     if m.failed > 0 then print "FAILURES: "; m.failed else print "ALL FEATURE TESTS PASSED"
 end sub
 sub Assert(condition as Boolean, label as String)

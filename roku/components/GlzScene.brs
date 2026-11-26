@@ -1,9 +1,20 @@
 sub init()
     m.top.backgroundURI = ""
-    m.top.backgroundColor = "0x080E1CFF"
+    m.top.backgroundColor = "0x06080BFF"
     m.browser = m.top.findNode("browser")
     m.list = m.top.findNode("channelList")
-    m.nav = m.top.findNode("sectionNav")
+    m.topNavGroup = m.top.findNode("topNavGroup")
+    m.topNavFocus = m.top.findNode("topNavFocus")
+    m.navTabBgs = []
+    m.navTabLabels = []
+    m.navTabLines = []
+    for i = 0 to 8
+        m.navTabBgs.Push(m.top.findNode("navTabBg" + i.ToStr()))
+        m.navTabLabels.Push(m.top.findNode("navTabLabel" + i.ToStr()))
+        m.navTabLines.Push(m.top.findNode("navTabLine" + i.ToStr()))
+    end for
+    m.navIndex = 0
+    m.navFocused = false
     m.video = m.top.findNode("player")
     m.video.enableUI = false : m.video.enableTrickPlay = false
     m.playerFocus = m.top.findNode("playerFocus")
@@ -17,6 +28,7 @@ sub init()
     m.miniGuide = m.top.findNode("miniGuide")
     m.miniList = m.top.findNode("miniList")
     m.miniTimer = m.top.findNode("miniTimer")
+    m.clockTimer = m.top.findNode("clockTimer")
     m.footer = m.top.findNode("footer")
     m.radioMiniBar = m.top.findNode("radioMiniBar")
     m.radioEqTimer = m.top.findNode("radioEqTimer")
@@ -79,12 +91,6 @@ sub init()
     m.lastError = "" : m.autoStarted = false : m.pending = true
     m.syncsSinceCatalog = 0 : m.queuedForce = false : m.queuedAction = "sync"
     m.views = ["home", "favorites", "live", "guide", "movies", "events", "radio", "weather", "settings"]
-    root = CreateObject("roSGNode", "ContentNode")
-    for each title in ["Home", "Favorites", "Live TV", "Guide", "Movies", "PPV Events", "Radio", "Weather", "Settings"]
-        item = root.CreateChild("ContentNode") : item.title = title
-    end for
-    m.nav.content = root
-    m.nav.ObserveField("itemSelected", "selectSection")
     m.task.ObserveField("result", "onHubResult")
     m.extra.ObserveField("result", "onExtraResult")
     m.extraTimer.ObserveField("fire", "runNextExtra")
@@ -96,14 +102,72 @@ sub init()
     m.osdTimer.ObserveField("fire", "hideOsd")
     m.miniTimer.ObserveField("fire", "hideMiniGuide")
     m.radioEqTimer.ObserveField("fire", "tickRadioEq")
+    m.clockTimer.ObserveField("fire", "onClockTick")
+    m.clockTimer.control = "start"
     m.video.ObserveField("state", "videoStateChanged")
     m.audio.ObserveField("state", "audioStateChanged")
+    updateHeaderBar()
+    renderTopNav()
     if ShouldShowFirstRun(m.firstRunDone, m.token)
         openWelcomeFlow(false)
     else
         m.top.SetFocus(true)
     end if
     startSync(true)
+end sub
+
+function activeSectionIndex() as Integer
+    target = m.view
+    if target = "schedule" then target = "guide"
+    for i = 0 to m.views.Count() - 1
+        if m.views[i] = target then return i
+    end for
+    return 0
+end function
+
+sub renderTopNav()
+    activeIdx = activeSectionIndex()
+    for i = 0 to m.views.Count() - 1
+        isFocused = (m.navFocused and i = m.navIndex)
+        isActive = (i = activeIdx)
+        bg = m.navTabBgs[i]
+        lbl = m.navTabLabels[i]
+        line = m.navTabLines[i]
+        if bg <> invalid
+            if isFocused
+                bg.color = "0x000000FF"
+            else
+                bg.color = "0x0D111800"
+            end if
+        end if
+        if lbl <> invalid
+            if isFocused or isActive
+                lbl.color = "0xFFFFFFFF"
+            else
+                lbl.color = "0x94A3B8FF"
+            end if
+        end if
+        if line <> invalid
+            line.visible = (isFocused or isActive)
+        end if
+    end for
+end sub
+
+sub focusTopNav()
+    m.navFocused = true
+    m.navIndex = activeSectionIndex()
+    renderTopNav()
+    m.topNavFocus.SetFocus(true)
+end sub
+
+sub onClockTick()
+    updateHeaderBar()
+    if m.osd.visible then refreshOsdContent()
+    if m.miniGuide.visible
+        now = CreateObject("roDateTime").AsSeconds()
+        miniClock = m.top.findNode("miniClock")
+        if miniClock <> invalid then miniClock.text = ClockLabel(now)
+    end if
 end sub
 
 sub openWelcomeFlow(fromSettings = false as Boolean)
@@ -127,7 +191,7 @@ sub showWelcomeStep(stepIndex as Integer)
         lbl = m.welcomeStepLabels[i]
         if lbl <> invalid
             if i + 1 = stepIndex
-                lbl.color = "0x38BDF8FF"
+                lbl.color = "0x1990FFFF"
             else if i + 1 < stepIndex
                 lbl.color = "0xCBD5E1FF"
             else
@@ -158,11 +222,11 @@ sub setWelcomeButtonStyle(bgId as String, labelId as String, focused as Boolean)
     lbl = m.top.findNode(labelId)
     if bg = invalid or lbl = invalid then return
     if focused
-        bg.color = "0x38BDF8FF"
-        lbl.color = "0x080E1CFF"
+        bg.color = "0x1990FFFF"
+        lbl.color = "0xFFFFFFFF"
     else
-        bg.color = "0x1E293BFF"
-        lbl.color = "0xE2E8F0FF"
+        bg.color = "0x2B3038FF"
+        lbl.color = "0xCBD5E1FF"
     end if
 end sub
 
@@ -333,28 +397,48 @@ sub updateHomeHero()
     heroBody = m.top.findNode("homeHeroBody")
     if IsWebUrl(logo)
         heroLogo.uri = logo
-        heroLogo.visible = true
-        heroTitle.translation = [152, 14]
-        heroTitle.width = 510
-        heroBody.translation = [152, 52]
-        heroBody.width = 804
     else
-        heroLogo.uri = ""
-        heroLogo.visible = false
-        heroTitle.translation = [24, 14]
-        heroTitle.width = 640
-        heroBody.translation = [24, 52]
-        heroBody.width = 932
+        heroLogo.uri = "pkg:/images/glztv_logo_emblem.png"
     end if
+    heroLogo.visible = true
     heroTitle.text = welcome.headline
     pill = welcome.weatherPill
     if pill = "" then pill = m.channels.Count().ToStr() + " Live  •  " + m.movies.Count().ToStr() + " Movies"
     heroSub.text = pill
     body = welcome.body
     if body = "Select a destination on the left or choose a quick action to start watching."
-        body = "Stream live channels, on-demand movies, PPV sports events, and local radio below. Press D-Pad Right during live playback to open the Mini-Guide."
+        body = "Stream live channels, on-demand movies, PPV sports events, and local radio below. Press D-Pad Right during live playback to open the Channel Guide."
     end if
     heroBody.text = body
+    ' Update electric-blue progress bar using current EPG programme on last-watched or featured channel
+    progressFill = m.top.findNode("homeHeroProgressFill")
+    if progressFill <> invalid
+        now = CreateObject("roDateTime").AsSeconds()
+        pct = 0.0
+        for each ch in m.channels
+            if m.lastChannelUrl = "" or ch.url = m.lastChannelUrl
+                prog = CurrentProgramme(ChannelSummary(m.summaries, ch.id), now)
+                if prog <> invalid
+                    pct = ProgrammeProgress(prog, now)
+                    exit for
+                end if
+            end if
+        end for
+        if pct <= 0.0
+            for each ch in m.channels
+                prog = CurrentProgramme(ChannelSummary(m.summaries, ch.id), now)
+                if prog <> invalid
+                    pct = ProgrammeProgress(prog, now)
+                    exit for
+                end if
+            end for
+        end if
+        if pct <= 0.0 then pct = 0.30
+        barWidth = Int(pct * 1048)
+        if barWidth < 24 then barWidth = 24
+        if barWidth > 1048 then barWidth = 1048
+        progressFill.width = barWidth
+    end if
 end sub
 
 sub onHubResult()
@@ -365,7 +449,7 @@ sub onHubResult()
         m.token = "" : m.pairingCodeValue = Text(result.code) : m.pairingErrorMessage = ""
         m.pending = true : m.channels = [] : m.movies = [] : m.rows = [] : m.stations = [] : m.summaries = {} : m.schedule = [] : m.weather = invalid
         m.extraQueue = [] : m.extraBusy = false : m.extraId++ : m.extra.control = "STOP"
-        m.catalog.visible = false : m.pairing.visible = true
+        m.catalog.visible = false : m.topNavGroup.visible = false : m.pairing.visible = true
         m.top.findNode("pairingCode").text = result.code
         m.status.text = "Ready to pair. Each Roku gets its own channel assignment in GlzHub."
         if m.welcomeVisible
@@ -379,7 +463,7 @@ sub onHubResult()
         m.token = Text(m.registry.Read("token")).Trim()
         if m.token = "" then m.token = "paired"
         m.pairingCodeValue = "" : m.pairingErrorMessage = ""
-        m.pending = false : m.pairing.visible = false : m.catalog.visible = true
+        m.pending = false : m.pairing.visible = false : m.catalog.visible = true : m.topNavGroup.visible = true
         config = result.config
         m.config = config
         m.lastChannelUrl = Text(result.lastChannel)
@@ -418,6 +502,7 @@ sub onHubResult()
         end if
         updateHeaderBar()
         updateRadioMiniBar()
+        renderTopNav()
         renderRows()
         if m.welcomeVisible
             if m.welcomeStep < 3
@@ -431,6 +516,8 @@ sub onHubResult()
             if m.registry.Read("startView") = "" and LCase(Text(config.startDestination)) = "live_tv"
                 openSectionByName("live")
             else
+                m.navFocused = false
+                renderTopNav()
                 m.list.SetFocus(true)
             end if
             shouldResume = config.resumeLastChannel = true
@@ -533,19 +620,22 @@ sub onExtraResult()
     if m.extraQueue.Count() > 0 then m.extraTimer.control = "start"
 end sub
 
-sub selectSection()
-    openSection(m.nav.itemSelected)
-end sub
-
 sub openSection(index as Integer)
     if index < 0 or index >= m.views.Count() then return
+    m.navIndex = index
     m.view = m.views[index] : m.guideChannel = invalid : m.focusedIndex = 0
-    m.nav.jumpToItem = index
     renderRows()
     if m.view = "radio" or (m.view = "home" and m.stations.Count() = 0) then queueExtra("radio")
     if m.view = "guide" or m.view = "home" or m.view = "favorites" then queueExtra("summary")
     if m.view = "weather" and m.weather = invalid then queueExtra("weather")
-    if m.view <> "weather" and m.rows.Count() > 0 then m.list.SetFocus(true)
+    if m.view <> "weather" and m.rows.Count() > 0
+        m.navFocused = false
+        m.list.SetFocus(true)
+    else
+        m.navFocused = true
+        m.topNavFocus.SetFocus(true)
+    end if
+    renderTopNav()
 end sub
 
 sub openSectionByName(name as String)
@@ -730,26 +820,41 @@ sub applyViewLayout()
     m.top.findNode("homeHero").visible = isHome
     m.list.visible = not isWeather
     m.top.findNode("detailPanel").visible = not isWeather
-    m.top.findNode("weatherText").visible = isWeather
+    m.top.findNode("weatherCard").visible = isWeather
     titleNode = m.top.findNode("sectionTitle")
+    divNode = m.top.findNode("sectionDivider")
+    divAccent = m.top.findNode("sectionDividerAccent")
     detailPanel = m.top.findNode("detailPanel")
+    detailBorder = m.top.findNode("detailBorder")
     detailBg = m.top.findNode("detailBg")
     detailGroup = m.top.findNode("detailGroup")
     if isHome
         updateHomeHero()
-        titleNode.translation = [264, 260]
-        m.list.translation = [264, 300]
+        titleNode.translation = [36, 276]
+        titleNode.width = 650
+        divNode.translation = [36, 310]
+        divNode.width = 650
+        divAccent.translation = [36, 310]
+        divAccent.width = 140
+        m.list.translation = [36, 318]
         m.list.numRows = 4
-        detailPanel.translation = [870, 260]
-        detailBg.height = 392
-        detailGroup.height = 122
+        detailPanel.translation = [706, 276]
+        detailBorder.height = 364
+        detailBg.height = 362
+        detailGroup.height = 102
     else
-        titleNode.translation = [264, 108]
-        m.list.translation = [264, 152]
+        titleNode.translation = [36, 110]
+        if isWeather then titleNode.width = 1208 else titleNode.width = 650
+        divNode.translation = [36, 146]
+        if isWeather then divNode.width = 1208 else divNode.width = 650
+        divAccent.translation = [36, 146]
+        if isWeather then divAccent.width = 220 else divAccent.width = 140
+        m.list.translation = [36, 154]
         m.list.numRows = 6
-        detailPanel.translation = [870, 106]
-        detailBg.height = 546
-        detailGroup.height = 274
+        detailPanel.translation = [706, 110]
+        detailBorder.height = 530
+        detailBg.height = 528
+        detailGroup.height = 264
     end if
 end sub
 
@@ -1097,9 +1202,33 @@ sub refreshOsdContent()
     m.top.findNode("osdTitle").text = channelTitleWithStar(m.playingChannel, info.title)
     m.top.findNode("osdNow").text = info.nowLine
     m.top.findNode("osdNext").text = info.nextLine
-    hint = "OK: Info  •  Right: Guide  •  Up/Down: Zap"
-    if m.playingChannel.isMovie = true then hint = "OK: Movie Info  •  Back: Exit to Movies"
-    m.top.findNode("osdHint").text = hint
+    m.top.findNode("osdClock").text = ClockLabel(now)
+    pillBg = m.top.findNode("osdLivePillBg")
+    pillTxt = m.top.findNode("osdLivePillText")
+    progressFill = m.top.findNode("osdProgressFill")
+    if m.playingChannel.isMovie = true
+        if pillBg <> invalid then pillBg.color = "0x1990FFFF"
+        if pillTxt <> invalid then pillTxt.text = "VOD"
+        if progressFill <> invalid then progressFill.width = 0
+        m.top.findNode("osdHint").text = "OK: Movie Info  •  Back: Exit to Movies"
+    else
+        if pillBg <> invalid then pillBg.color = "0xEF4444FF"
+        if pillTxt <> invalid then pillTxt.text = "LIVE"
+        pct = 0.0
+        if Text(m.playingChannel.eventTitle) <> "" and m.playingChannel.eventStart <> invalid and m.playingChannel.eventEnd <> invalid
+            pct = ProgrammeProgress({ start: m.playingChannel.eventStart, end: m.playingChannel.eventEnd }, now)
+        else
+            current = CurrentProgramme(ChannelSummary(m.summaries, Text(m.playingChannel.id)), now)
+            pct = ProgrammeProgress(current, now)
+        end if
+        if progressFill <> invalid
+            barW = Int(pct * 740)
+            if barW < 0 then barW = 0
+            if barW > 740 then barW = 740
+            progressFill.width = barW
+        end if
+        m.top.findNode("osdHint").text = "OK: Info  •  Right: Guide  •  Up/Down: Zap"
+    end if
 end sub
 
 sub showOsd()
@@ -1171,6 +1300,8 @@ sub onMiniFocused()
     if index < 0 or index >= m.channels.Count() then return
     channel = m.channels[index]
     now = CreateObject("roDateTime").AsSeconds()
+    miniClock = m.top.findNode("miniClock")
+    if miniClock <> invalid then miniClock.text = ClockLabel(now)
     info = OsdDetails(channel, m.summaries, m.guideError, now)
     header = channelTitleWithStar(channel, info.title)
     if info.number <> "" then header = info.number + " · " + header
@@ -1178,25 +1309,46 @@ sub onMiniFocused()
     miniLogo = m.top.findNode("miniDetailLogo")
     miniTitle = m.top.findNode("miniDetailTitle")
     miniInfo = m.top.findNode("miniDetailInfo")
+    miniTrack = m.top.findNode("miniProgressTrack")
+    miniFill = m.top.findNode("miniProgressFill")
+    trackWidth = 618
     if IsWebUrl(logo)
         miniLogo.uri = logo
         miniLogo.visible = true
-        miniTitle.translation = [106, 10]
-        miniTitle.width = 464
-        miniInfo.translation = [106, 42]
-        miniInfo.width = 464
+        miniTitle.translation = [102, 10]
+        miniTitle.width = 532
+        miniInfo.translation = [102, 40]
+        miniInfo.width = 532
+        miniTrack.translation = [102, 92]
+        miniTrack.width = 532
+        miniFill.translation = [102, 92]
+        trackWidth = 532
     else
         miniLogo.uri = ""
         miniLogo.visible = false
         miniTitle.translation = [16, 10]
-        miniTitle.width = 554
-        miniInfo.translation = [16, 42]
-        miniInfo.width = 554
+        miniTitle.width = 618
+        miniInfo.translation = [16, 40]
+        miniInfo.width = 618
+        miniTrack.translation = [16, 92]
+        miniTrack.width = 618
+        miniFill.translation = [16, 92]
+        trackWidth = 618
     end if
     miniTitle.text = header
     details = info.nowLine
     if info.nextLine <> "" then details += Chr(10) + info.nextLine
     miniInfo.text = details
+    pct = 0.0
+    if Text(channel.eventTitle) <> "" and channel.eventStart <> invalid and channel.eventEnd <> invalid
+        pct = ProgrammeProgress({ start: channel.eventStart, end: channel.eventEnd }, now)
+    else
+        pct = ProgrammeProgress(CurrentProgramme(ChannelSummary(m.summaries, Text(channel.id)), now), now)
+    end if
+    fillW = Int(pct * trackWidth)
+    if fillW < 0 then fillW = 0
+    if fillW > trackWidth then fillW = trackWidth
+    miniFill.width = fillW
 end sub
 
 sub onMiniSelected()
@@ -1217,7 +1369,7 @@ sub startRadioAttempt()
 end sub
 
 sub setRadioEqBars(heights as Object, active as Boolean)
-    barColor = "0x38BDF8FF"
+    barColor = "0x1990FFFF"
     if not active then barColor = "0x64748BFF"
     for i = 0 to m.radioEqBars.Count() - 1
         bar = m.radioEqBars[i]
@@ -1263,7 +1415,7 @@ sub updateRadioMiniBar()
     m.radioMiniGenre.text = genre
     if m.radioState = "playing"
         m.radioPillText.text = "LIVE"
-        m.radioPillBg.color = "0x059669FF"
+        m.radioPillBg.color = "0xEF4444FF"
         if not m.radioEqRunning
             setRadioEqBars([14, 22, 10, 18], true)
             m.radioEqTimer.control = "start"
@@ -1341,7 +1493,7 @@ sub stopRadio(sync = true as Boolean)
 end sub
 
 sub updateFooter()
-    footerText = "Left / Back  Menu   •   OK  Select   •   *  Quick Options / Favorites"
+    footerText = "Up / Back  Menu   •   OK  Select   •   *  Quick Options / Favorites"
     if m.radioTitle <> ""
         stateTag = "Radio"
         if m.radioState = "playing" then stateTag = "LIVE Radio"
@@ -1502,8 +1654,10 @@ sub restoreFocus()
     else if m.video.visible
         if m.miniGuide.visible then m.miniList.SetFocus(true) else m.playerFocus.SetFocus(true)
     else if m.view = "weather" or m.rows.Count() = 0
-        m.nav.SetFocus(true)
+        focusTopNav()
     else
+        m.navFocused = false
+        renderTopNav()
         if m.focusedIndex >= 0 and m.focusedIndex < m.rows.Count() then m.list.jumpToItem = m.focusedIndex
         m.list.SetFocus(true)
     end if
@@ -1567,19 +1721,33 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
     if m.pending then return false
-    if key = "right" and m.nav.IsInFocusChain()
-        openSection(m.nav.itemFocused) : return true
+    if m.topNavFocus.HasFocus()
+        if key = "left"
+            m.navIndex = (m.navIndex - 1 + m.views.Count()) mod m.views.Count()
+            m.navFocused = true
+            renderTopNav()
+            return true
+        else if key = "right"
+            m.navIndex = (m.navIndex + 1) mod m.views.Count()
+            m.navFocused = true
+            renderTopNav()
+            return true
+        else if LCase(key) = "ok" or key = "down"
+            openSection(m.navIndex)
+            return true
+        else if key = "back"
+            return false
+        end if
+        return true
     end if
-    if key = "left"
-        m.nav.SetFocus(true) : return true
+    if key = "up" or key = "left"
+        focusTopNav() : return true
     end if
     if key = "back"
         if m.view = "schedule"
             m.view = "guide" : m.guideChannel = invalid : renderRows() : restoreFocus() : return true
         end if
-        if not m.nav.IsInFocusChain()
-            m.nav.SetFocus(true) : return true
-        end if
+        focusTopNav() : return true
     end if
     return false
 end function

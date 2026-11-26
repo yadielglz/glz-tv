@@ -43,6 +43,17 @@ function NextProgramme(summary as Dynamic, now as Integer) as Dynamic
     return invalid
 end function
 
+function ProgrammeProgress(programme as Dynamic, now as Integer) as Float
+    if type(programme) <> "roAssociativeArray" then return 0.0
+    startTime = programme.start
+    endTime = programme.end
+    if (type(startTime) <> "Integer" and type(startTime) <> "roInt") or (type(endTime) <> "Integer" and type(endTime) <> "roInt") then return 0.0
+    if endTime <= startTime then return 0.0
+    if now <= startTime then return 0.0
+    if now >= endTime then return 1.0
+    return (now - startTime) * 1.0 / (endTime - startTime)
+end function
+
 function ChannelSummary(summaries as Dynamic, id as String) as Dynamic
     if type(summaries) <> "roAssociativeArray" or id = "" then return invalid
     if summaries.DoesExist(id) then return summaries[id]

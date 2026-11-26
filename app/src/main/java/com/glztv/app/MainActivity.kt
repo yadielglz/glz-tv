@@ -218,6 +218,7 @@ import com.glztv.app.player.RadioPlayerController
 import com.glztv.app.ui.GlzTvApp
 import com.glztv.app.ui.i18n.GlzStrings
 import com.glztv.app.ui.i18n.LocalGlzStrings
+import com.glztv.app.ui.screens.GlzSplashScreen
 import com.glztv.app.ui.screens.GuestProfileScreen
 import com.glztv.app.ui.screens.RadioScreen
 import com.glztv.app.ui.screens.WeatherScreen
@@ -450,6 +451,15 @@ internal fun TvScreen(
     var showYouModal by remember { mutableStateOf(false) }
     var showFirstRunSetup by remember {
         mutableStateOf(!prefs.getBoolean("first_run_completed", false) && !GlzHubManager.isEnrolled(prefs))
+    }
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        val startMs = System.currentTimeMillis()
+        delay(1400L)
+        while (System.currentTimeMillis() - startMs < 3000L && channels.isEmpty()) {
+            delay(100L)
+        }
+        showSplash = false
     }
 
     fun refreshRadioStations() {
@@ -1602,6 +1612,16 @@ internal fun TvScreen(
                 lastUserInteractionTime = System.currentTimeMillis()
                 showScreensaver = false
             }
+        )
+    }
+
+    AnimatedVisibility(
+        visible = showSplash,
+        enter = fadeIn(tween(120)),
+        exit = fadeOut(tween(380))
+    ) {
+        GlzSplashScreen(
+            statusText = status.ifBlank { "Loading live channels & guide…" }
         )
     }
 
@@ -4813,6 +4833,26 @@ private fun ImmersivePlayerScreen(
                                     fontSize = 14.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                androidx.compose.foundation.Image(
+                                    painter = androidx.compose.ui.res.painterResource(id = R.drawable.glztv_logo_bug),
+                                    contentDescription = "GlzTV",
+                                    contentScale = ContentScale.Fit,
+                                    alpha = 0.78f,
+                                    modifier = Modifier.height(14.dp)
+                                )
+                                Text(
+                                    text = com.glztv.app.ui.theme.formatDtvCompactTime(now),
+                                    color = DtvPanelPrimaryText,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1
                                 )
                             }
                         }
