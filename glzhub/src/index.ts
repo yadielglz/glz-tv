@@ -2847,6 +2847,7 @@ async function updateEventChannelRangesHandler(request: Request, env: Env): Prom
 
 export interface ScheduledSportsGame {
   league: "NFL" | "NBA" | "MLB" | "NHL" | "NCAA";
+  gameId: string;
   shortName: string;
   name: string;
   awayTokens: string[];
@@ -2855,6 +2856,11 @@ export interface ScheduledSportsGame {
   endTime: string;
   state: "in" | "pre" | "post";
   broadcasts: string[];
+}
+
+export interface EspnScheduleSnapshot {
+  games: ScheduledSportsGame[];
+  verifiedLeagues: Set<ScheduledSportsGame["league"]>;
 }
 
 const ESPN_SCOREBOARD_FEEDS: Array<{ league: ScheduledSportsGame["league"]; url: string; durationMs: number }> = [
@@ -2882,7 +2888,8 @@ function extractTeamTokens(team: Record<string, unknown> | undefined): string[] 
   return Array.from(tokens);
 }
 
-export async function fetchEspnSportsSchedules(): Promise<ScheduledSportsGame[]> {
+export async function fetchEspnSportsSchedules(): Promise<EspnScheduleSnapshot> {
+  const verifiedLeagues = new Set<ScheduledSportsGame["league"]>();
   const results = await Promise.allSettled(
     ESPN_SCOREBOARD_FEEDS.map(async (feed) => {
       const controller = new AbortController();
@@ -2892,7 +2899,7 @@ export async function fetchEspnSportsSchedules(): Promise<ScheduledSportsGame[]>
           signal: controller.signal,
           headers: { "user-agent": "GlzHub/2.2" }
         });
-        if (!res.ok) return [] as ScheduledSportsGame[];
+        if (!res.ok) return { league: feed.league, ok: false, games: [] as ScheduledSportsGame[] };
         const data = await res.json() as { events?: Array<Record<string, unknown>> };
         const games: ScheduledSportsGame[] = [];
         for (const ev of data.events || []) {
@@ -2917,6 +2924,7 @@ export async function fetchEspnSportsSchedules(): Promise<ScheduledSportsGame[]>
           }
           games.push({
             league: feed.league,
+            gameId: `${feed.league}:${String(ev.id || ev.shortName || startMs)}`,
             shortName: String(ev.shortName || ""),
             name: String(ev.name || ev.shortName || ""),
             awayTokens,
@@ -2927,24 +2935,39 @@ export async function fetchEspnSportsSchedules(): Promise<ScheduledSportsGame[]>
             broadcasts
           });
         }
-        return games;
+        return { league: feed.league, ok: true, games };
       } catch {
-        return [] as ScheduledSportsGame[];
+        return { league: feed.league, ok: false, games: [] as ScheduledSportsGame[] };
       } finally {
         clearTimeout(timer);
       }
     })
   );
 
-  const all: ScheduledSportsGame[] = [];
+  const games: ScheduledSportsGame[] = [];
   for (const r of results) {
-    if (r.status === "fulfilled") all.push(...r.value);
+    if (r.status === "fulfilled" && r.value.ok) {
+      verifiedLeagues.add(r.value.league);
+      games.push(...r.value.games);
+    }
   }
-  return all;
+  return { games, verifiedLeagues };
 }
 
 export function isGenericNumberedPlaceholder(title: string): boolean {
-  return /^(MLB|NBA|NFL|NHL|MLS|NCAA|NCAAF|ESPN|UFC|PPV)\s*#?\d{1,4}$/i.test(title.trim());
+  const t = title.trim();
+  if (/^\(?((?:MLB|NBA|NFL|NHL|MLS|NCAA|NCAAF|ESPN|UFC|PPV)\s*#?\d{1,4})\)?(\s*\|.*)?$/i.test(t) &&
+      !/\b(vs\.?|@)\b/i.test(t)) {
+    return true;
+  }
+  // Reject far-future dummy placeholder timestamps (e.g. "(NBA 13) | (2098-12-31 08:00:01)")
+  if (/\b209\d-\d{2}-\d{2}\b/.test(t)) return true;
+  // Reject 24/7 linear channels and studio/pregame/highlight shows
+  if (/\b24\/7\b/i.test(t)) return true;
+  if (/\b(COUNTDOWN|SCOREBOARD|GAMEDAY|GAME\s+DAY|BIG\s+NOON\s+KICKOFF|PREGAME|POSTGAME|STUDIO\s+SHOW|REPLAY|ENCORE)\b/i.test(t)) {
+    return true;
+  }
+  return false;
 }
 
 function tokenMatchesText(textUpper: string, token: string): boolean {
@@ -2956,7 +2979,9 @@ function tokenMatchesText(textUpper: string, token: string): boolean {
 
 function matchEventToSchedule(event: ParsedEventChannel, schedules: ScheduledSportsGame[]): ScheduledSportsGame | null {
   if (schedules.length === 0) return null;
-  const textUpper = `${event.title} ${event.tvgName}`.toUpperCase();
+  // For multi-game bulletin titles like "NHL: PIT vs. DAL • CHI vs. VAN", evaluate the primary matchup only
+  const primaryTitle = event.title.split("•")[0].trim();
+  const textUpper = `${primaryTitle} ${event.tvgName}`.toUpperCase();
   const league = event.sportLeague.toUpperCase();
   for (const game of schedules) {
     if (league !== "SPORTS" && league !== game.league) continue;
@@ -2968,45 +2993,67 @@ function matchEventToSchedule(event: ParsedEventChannel, schedules: ScheduledSpo
 }
 
 /**
- * Enriches provider live event channels with official ESPN game schedules,
- * filters out empty numbered placeholders and completed games, and sorts
- * LIVE NOW games first, followed by upcoming games chronologically.
+ * Strictly verifies provider live event channels against official ESPN game schedules:
+ * - Drops empty numbered/2098 placeholders, 24/7 linear feeds, and studio shows.
+ * - For leagues with a live ESPN scoreboard (NFL, NBA, MLB, NHL, NCAA), rejects any
+ *   stale or mismatched provider channel that does NOT match an active/upcoming real game.
+ * - Drops completed ("post") games and games more than 24h in the future.
+ * - Deduplicates alternate arena feeds for the same verified game (keeping one clean entry).
+ * - Sorts LIVE NOW ("in") games first, then upcoming ("pre") games chronologically.
  */
 export function applyLiveSchedulesToEvents(
   events: ParsedEventChannel[],
-  schedules: ScheduledSportsGame[],
+  snapshot: EspnScheduleSnapshot | ScheduledSportsGame[],
   nowMs = Date.now()
 ): ParsedEventChannel[] {
-  const enriched: Array<{ item: ParsedEventChannel; priority: number; startMs: number }> = [];
+  const schedules = Array.isArray(snapshot) ? snapshot : snapshot.games;
+  const verifiedLeagues = Array.isArray(snapshot)
+    ? new Set(snapshot.map((g) => g.league))
+    : snapshot.verifiedLeagues;
+
+  const enriched: Array<{ item: ParsedEventChannel; priority: number; startMs: number; gameKey: string | null }> = [];
   const staleCutoffMs = nowMs - 6 * 60 * 60 * 1000;
+  const futureCutoffMs = nowMs + 24 * 60 * 60 * 1000;
 
   for (const item of events) {
     if (isGenericNumberedPlaceholder(item.title)) continue;
 
+    const leagueUpper = item.sportLeague.toUpperCase() as ScheduledSportsGame["league"];
     const matched = matchEventToSchedule(item, schedules);
+
     if (matched) {
-      // Drop games ESPN already marked final once past a 30-min post-game grace period
+      // Drop games ESPN already marked final
       if (matched.state === "post") continue;
       const startMs = Date.parse(matched.startTime);
+      // Drop games scheduled more than 24h out so Live Events stays focused on today/tonight
+      if (matched.state === "pre" && Number.isFinite(startMs) && startMs > futureCutoffMs) continue;
+
       enriched.push({
         item: {
           ...item,
           sportLeague: matched.league,
+          title: `${matched.league}: ${matched.name}`,
           startTime: matched.startTime,
           endTime: matched.endTime,
           hasInlineTime: true
         },
         priority: matched.state === "in" ? 0 : 1,
-        startMs: Number.isFinite(startMs) ? startMs : nowMs
+        startMs: Number.isFinite(startMs) ? startMs : nowMs,
+        gameKey: matched.gameId
       });
     } else {
+      // STRICT VERIFICATION: If ESPN gave us a live schedule for this league, reject any
+      // unverified/stale provider matchup (e.g. yesterday's game still stuck on nba.011.us)
+      if (verifiedLeagues.has(leagueUpper)) continue;
+
       const startMs = Date.parse(item.startTime);
       // Drop stale dated events from previous days (e.g. Nov 22 leftovers)
       if (item.hasInlineTime && Number.isFinite(startMs) && startMs < staleCutoffMs) continue;
       enriched.push({
         item,
         priority: 2,
-        startMs: Number.isFinite(startMs) ? startMs : nowMs
+        startMs: Number.isFinite(startMs) ? startMs : nowMs,
+        gameKey: null
       });
     }
   }
@@ -3016,7 +3063,18 @@ export function applyLiveSchedulesToEvents(
     return a.startMs - b.startMs;
   });
 
-  return enriched.map((e) => e.item);
+  // Deduplicate multiple provider feeds pointing to the exact same verified ESPN game
+  const seenGames = new Set<string>();
+  const deduped: ParsedEventChannel[] = [];
+  for (const entry of enriched) {
+    if (entry.gameKey) {
+      if (seenGames.has(entry.gameKey)) continue;
+      seenGames.add(entry.gameKey);
+    }
+    deduped.push(entry.item);
+  }
+
+  return deduped;
 }
 
 async function listEventChannels(request: Request, env: Env): Promise<Response> {
@@ -3196,13 +3254,13 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
     if (!response.ok) throw new Error(`Provider feed returned HTTP status ${response.status}`);
     const text = await response.text();
     const parsed = parseConMeM3u(text);
-    const schedules = await fetchEspnSportsSchedules().catch(() => []);
-    const scheduled = applyLiveSchedulesToEvents(parsed, schedules);
+    const scheduleSnapshot = await fetchEspnSportsSchedules().catch(() => ({ games: [], verifiedLeagues: new Set<ScheduledSportsGame["league"]>() }));
+    const scheduled = applyLiveSchedulesToEvents(parsed, scheduleSnapshot);
 
     if (scheduled.length === 0) {
       await pruneAutoIngestedEventChannels(env, new Set());
       await pushConfigUpdateToAllDevices(env);
-      return json({ ok: true, ingestedCount: 0, scheduleGamesFound: schedules.length, events: [] });
+      return json({ ok: true, ingestedCount: 0, scheduleGamesFound: scheduleSnapshot.games.length, events: [] });
     }
 
     // Deduplicate by tvgId in memory to prevent Postgres payload conflict errors
@@ -3219,7 +3277,7 @@ async function ingestEventChannels(request: Request, env: Env): Promise<Response
     const result = await saveIngestedEventChannels(env, renumbered, defaultPreBufferHours, defaultPostBufferHours);
     await pruneAutoIngestedEventChannels(env, new Set(renumbered.map((item) => item.tvgId)));
     await pushConfigUpdateToAllDevices(env);
-    return json({ ok: true, ingestedCount: deduplicated.length, scheduleGamesFound: schedules.length, events: result });
+    return json({ ok: true, ingestedCount: deduplicated.length, scheduleGamesFound: scheduleSnapshot.games.length, events: result });
   } catch (err) {
     return json({ ok: false, error: (err as Error).message }, 400);
   }
@@ -3990,8 +4048,8 @@ export async function performAutoIngestAndHealthCheck(
     if (response.ok) {
       const text = await response.text();
       const parsed = parseConMeM3u(text);
-      const schedules = await fetchEspnSportsSchedules().catch(() => []);
-      const scheduled = applyLiveSchedulesToEvents(parsed, schedules);
+      const scheduleSnapshot = await fetchEspnSportsSchedules().catch(() => ({ games: [], verifiedLeagues: new Set<ScheduledSportsGame["league"]>() }));
+      const scheduled = applyLiveSchedulesToEvents(parsed, scheduleSnapshot);
       if (scheduled.length > 0) {
         const uniqueMap = new Map<string, typeof scheduled[0]>();
         for (const item of scheduled) {
