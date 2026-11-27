@@ -170,7 +170,7 @@ export function createLiveTV({ api, stopPreview }) {
     const query = $("liveSearch").value.trim().toLowerCase();
     const group = $("liveGroup").value;
     const shown = channels.filter(c => (!group || c.group === group) &&
-      `${c.title} ${c.metadata?.tvg_chno || ""} ${c.group} ${c.sportLeague || ""} ${c.metadata?.original_group || ""}`.toLowerCase().includes(query));
+      `${c.title} ${c.metadata?.callsign || ""} ${c.metadata?.tvg_chno || ""} ${c.group} ${c.sportLeague || ""} ${c.metadata?.original_group || ""}`.toLowerCase().includes(query));
     const list = $("liveChannels"); list.replaceChildren();
     $("liveCount").textContent = `${shown.length} channels`;
     $("liveEmpty").hidden = shown.length > 0;
@@ -179,7 +179,7 @@ export function createLiveTV({ api, stopPreview }) {
       button.type = "button"; button.className = channel.isLiveEvent ? "live-channel live-event-channel" : "live-channel";
       button.setAttribute("aria-pressed", String(selected?.key === channel.key));
       const artwork = document.createElement("span"); artwork.className = "live-artwork";
-      artwork.textContent = String(channel.title || "TV").slice(0, 2).toUpperCase();
+      artwork.textContent = String(channel.metadata?.callsign || channel.title || "TV").slice(0, 2).toUpperCase();
       try {
         if (channel.logo && new URL(channel.logo).protocol === "https:") {
           const img = document.createElement("img"); img.src = channel.logo; img.alt = ""; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
@@ -187,7 +187,8 @@ export function createLiveTV({ api, stopPreview }) {
         }
       } catch { /* Keep initials for invalid artwork URLs. */ }
       const text = document.createElement("span"); text.className = "live-channel-label";
-      const title = document.createElement("strong"); title.textContent = `${channel.metadata?.tvg_chno ? `${channel.metadata.tvg_chno} · ` : ""}${channel.title || "Untitled channel"}`;
+      const displayName = channel.metadata?.callsign ? `${channel.metadata.callsign}${channel.title && channel.title.toLowerCase() !== channel.metadata.callsign.toLowerCase() ? ` · ${channel.title}` : ""}` : (channel.title || "Untitled channel");
+      const title = document.createElement("strong"); title.textContent = `${channel.metadata?.tvg_chno ? `${channel.metadata.tvg_chno} · ` : ""}${displayName}`;
       const detail = document.createElement("small");
       if (channel.isLiveEvent) {
         const badge = document.createElement("span");

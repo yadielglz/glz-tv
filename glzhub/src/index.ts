@@ -1640,6 +1640,7 @@ async function addPlaylistItem(request: Request, env: Env, playlistId: string): 
   if (input.tvgId || input.tvg_id) metadata.tvg_id = input.tvgId || input.tvg_id;
   if (input.tvgChno || input.tvg_chno) metadata.tvg_chno = input.tvgChno || input.tvg_chno;
   if (input.tvgLogo || input.tvg_logo) metadata.tvg_logo = input.tvgLogo || input.tvg_logo;
+  if (input.callsign || input.x_callsign) metadata.callsign = input.callsign || input.x_callsign;
   if (input.isRadio || input.radio) metadata.radio = true;
 
   const mediaUrl = requiredString(input.media_url || input.mediaUrl, "media URL", 2048);
@@ -3602,11 +3603,13 @@ function buildM3uDocument(options: {
 
       const tvgId = metadata.tvg_id || metadata.tvgId ? ` tvg-id="${cleanAttribute(metadata.tvg_id || metadata.tvgId)}"` : "";
       const tvgChno = metadata.tvg_chno || metadata.tvgChno ? ` tvg-chno="${cleanAttribute(metadata.tvg_chno || metadata.tvgChno)}"` : "";
+      const callsignVal = cleanAttribute(metadata.callsign || metadata.callSign || metadata.x_callsign || "");
+      const xCallsign = callsignVal ? ` x-callsign="${callsignVal}"` : "";
       const tvgLogo = metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url ? ` tvg-logo="${cleanAttribute(metadata.tvg_logo || metadata.tvgLogo || pl.artwork_url)}"` : "";
       const isRadio = metadata.radio === true || metadata.radio === "true" ? ' radio="true"' : "";
 
       const channelGroup = cleanAttribute(metadata.group || groupTitle);
-      m3uContent += `#EXTINF:${duration}${tvgId}${tvgChno}${tvgLogo}${isRadio} group-title="${channelGroup}",${title}\n${mediaUrl}\n\n`;
+      m3uContent += `#EXTINF:${duration}${tvgId}${tvgChno}${xCallsign}${tvgLogo}${isRadio} group-title="${channelGroup}",${title}\n${mediaUrl}\n\n`;
       channelCount++;
     }
   }

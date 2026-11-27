@@ -19,11 +19,12 @@ public final class Channel {
     public final String eventLeague;
     public final long eventStartMillis;
     public final long eventEndMillis;
+    public final String callSign;
 
     public Channel(String id, String name, String group, String number, String logoUrl,
                    String streamUrl,
                    Map<String, String> headers) {
-        this(id, name, group, number, logoUrl, streamUrl, headers, "", "", 0L, 0L);
+        this(id, name, group, number, logoUrl, streamUrl, headers, "", "", 0L, 0L, "");
     }
 
     public Channel(String id, String name, String group, String number, String logoUrl,
@@ -31,6 +32,15 @@ public final class Channel {
                    Map<String, String> headers,
                    String eventTitle, String eventLeague,
                    long eventStartMillis, long eventEndMillis) {
+        this(id, name, group, number, logoUrl, streamUrl, headers, eventTitle, eventLeague, eventStartMillis, eventEndMillis, "");
+    }
+
+    public Channel(String id, String name, String group, String number, String logoUrl,
+                   String streamUrl,
+                   Map<String, String> headers,
+                   String eventTitle, String eventLeague,
+                   long eventStartMillis, long eventEndMillis,
+                   String callSign) {
         this.id = id != null ? id : "";
         this.name = name != null ? name : "";
         this.group = group != null ? group : "";
@@ -43,6 +53,7 @@ public final class Channel {
         this.eventLeague = eventLeague != null ? eventLeague.trim() : "";
         this.eventStartMillis = Math.max(0L, eventStartMillis);
         this.eventEndMillis = Math.max(0L, eventEndMillis);
+        this.callSign = callSign != null ? callSign.trim() : "";
     }
 
     public boolean isLiveEvent() {
@@ -94,12 +105,13 @@ public final class Channel {
                Objects.equals(logoUrl, channel.logoUrl) &&
                Objects.equals(streamUrl, channel.streamUrl) &&
                Objects.equals(eventTitle, channel.eventTitle) &&
-               Objects.equals(eventLeague, channel.eventLeague);
+               Objects.equals(eventLeague, channel.eventLeague) &&
+               Objects.equals(callSign, channel.callSign);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, group, number, logoUrl, streamUrl, eventTitle, eventLeague, eventStartMillis, eventEndMillis);
+        return Objects.hash(id, name, group, number, logoUrl, streamUrl, eventTitle, eventLeague, eventStartMillis, eventEndMillis, callSign);
     }
 }
 

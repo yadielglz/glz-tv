@@ -720,6 +720,7 @@ private fun MobileGuideTab(
             if (q.isEmpty()) return@filter true
             val progTitle = guide.nowProgrammeForChannel(ch, now)?.title.orEmpty().lowercase()
             ch.name.lowercase().contains(q) ||
+                ch.callSign.lowercase().contains(q) ||
                 ch.number.lowercase().contains(q) ||
                 ch.eventTitle.orEmpty().lowercase().contains(q) ||
                 progTitle.contains(q)
@@ -843,7 +844,7 @@ private fun MobileGuideTab(
                                 )
                             }
                             Text(
-                                text = ch.name,
+                                text = ch.callSign.ifBlank { ch.name },
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,

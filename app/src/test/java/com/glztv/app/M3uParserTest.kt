@@ -106,4 +106,21 @@ class M3uParserTest {
         assertEquals(1760760000000L, channel.eventEndMillis)
         assertTrue(channel.isLiveEvent)
     }
+
+    @Test
+    fun parsesCustomCallSignAttribute() {
+        val channels = M3uParser.parse(
+            """
+                #EXTM3U
+                #EXTINF:-1 tvg-id="wkaq.pr" tvg-chno="2" x-callsign="WKAQ" group-title="Local",Telemundo Puerto Rico
+                https://example.com/wkaq.m3u8
+            """.trimIndent(),
+            "https://example.com/list.m3u",
+            emptyMap()
+        )
+
+        val channel = channels.single()
+        assertEquals("WKAQ", channel.callSign)
+        assertEquals("Telemundo Puerto Rico", channel.name)
+    }
 }

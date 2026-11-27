@@ -104,6 +104,9 @@ function ParseCatalog(data as String, defaultHeaders as Dynamic) as Object
                         channel = { title: title, url: line, group: Attribute(info, "group-title"), number: Attribute(info, "tvg-chno"), logo: Attribute(info, "tvg-logo"), headers: CopyHeaders(headers) }
                         channel["id"] = Attribute(info, "tvg-id")
                         if channel.id = "" then channel["id"] = title
+                        cs = Attribute(info, "x-callsign")
+                        if cs = "" then cs = Attribute(info, "callsign")
+                        channel["callsign"] = cs
                         channel["eventTitle"] = Attribute(info, "x-event-title")
                         channel["league"] = Attribute(info, "x-event-league")
                         channel["eventStart"] = EventSeconds(Attribute(info, "x-event-start"))

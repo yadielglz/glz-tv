@@ -2606,15 +2606,16 @@ function renderPlaylists() {
           <div class="studio-table-wrap">
             <table class="studio-table">
               <thead>
-                <tr><th>Order</th><th>CH #</th><th>Channel name</th><th>Group</th><th>EPG ID</th><th>Stream URL</th><th>Status</th><th>Actions</th></tr>
+                <tr><th>Order</th><th>CH #</th><th>Callsign (EPG)</th><th>Channel name</th><th>Group</th><th>EPG ID</th><th>Stream URL</th><th>Status</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 ${items.map((item) => {
                   const meta = item.metadata || {};
-                  const searchable = [item.title, item.media_url, meta.group, meta.tvg_id, meta.tvg_chno].filter(Boolean).join(" ").toLowerCase();
+                  const searchable = [item.title, item.media_url, meta.group, meta.tvg_id, meta.tvg_chno, meta.callsign].filter(Boolean).join(" ").toLowerCase();
                   return `<tr class="studio-channel-row" draggable="true" data-playlist-id="${pl.id}" data-item-id="${item.id}" data-search="${escapeHtml(searchable)}">
                     <td style="color:var(--text-muted);font-weight:600;font-variant-numeric:tabular-nums;text-align:center;">#${item.position || 0}</td>
                     <td><input class="studio-inline-field inline-channel-number" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.tvg_chno || "")}" aria-label="Channel number" placeholder="—" maxlength="20"></td>
+                    <td><input class="studio-inline-field inline-channel-callsign" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.callsign || "")}" aria-label="EPG Callsign" placeholder="Auto" maxlength="32"></td>
                     <td><div class="studio-channel-title">${meta.tvg_logo ? `<img class="channel-logo-thumb" src="${escapeHtml(meta.tvg_logo)}" alt="">` : `<span class="channel-logo-thumb" style="display:inline-grid;place-items:center;"><svg class="icon" style="width:14px;height:14px;color:var(--text-muted);"><use href="#icon-screens"/></svg></span>`}<input class="studio-inline-field inline-channel-name" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(item.title)}" aria-label="Channel name" maxlength="120"></div></td>
                     <td><input class="studio-inline-field inline-channel-group" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.group || "")}" aria-label="Channel group" placeholder="—" maxlength="100"></td>
                     <td><input class="studio-inline-field inline-channel-epg" data-playlist-id="${pl.id}" data-item-id="${item.id}" value="${escapeHtml(meta.tvg_id || "")}" aria-label="EPG ID" placeholder="—" maxlength="120"></td>
@@ -2759,6 +2760,7 @@ async function saveInlineChannelField(input) {
     else if (input.classList.contains("inline-channel-url")) payload = { mediaUrl: value };
     else {
       const key = isChannelNumber ? "tvg_chno"
+        : input.classList.contains("inline-channel-callsign") ? "callsign"
         : input.classList.contains("inline-channel-epg") ? "tvg_id" : "group";
       payload = { metadata: { ...(item.metadata || {}), [key]: value || null } };
     }
@@ -2769,7 +2771,7 @@ async function saveInlineChannelField(input) {
     const row = input.closest(".studio-channel-row");
     if (row) {
       const meta = item.metadata || {};
-      row.dataset.search = [item.title, item.media_url, meta.group, meta.tvg_id, meta.tvg_chno].filter(Boolean).join(" ").toLowerCase();
+      row.dataset.search = [item.title, item.media_url, meta.group, meta.tvg_id, meta.tvg_chno, meta.callsign].filter(Boolean).join(" ").toLowerCase();
     }
     if (isChannelNumber) {
       const reordered = await sortAndPersistPlaylistByChannelNumber(playlist.id, { silent: true });
@@ -2886,6 +2888,7 @@ function parseM3u(text) {
         const key = match[1].toLowerCase();
         if (key === "tvg-id") metadata.tvg_id = match[2];
         if (key === "tvg-chno") metadata.tvg_chno = match[2];
+        if (key === "x-callsign" || key === "callsign" || key === "tvg-callsign") metadata.callsign = match[2];
         if (key === "tvg-logo") metadata.tvg_logo = match[2];
         if (key === "group-title") metadata.group = match[2];
         if (key === "playlist-studio-hidden") metadata.hidden = match[2] === "true";
@@ -2915,6 +2918,7 @@ function playlistM3u(playlist) {
       const attributes = [
         meta.tvg_id && `tvg-id="${quote(meta.tvg_id)}"`,
         meta.tvg_chno && `tvg-chno="${quote(meta.tvg_chno)}"`,
+        meta.callsign && `x-callsign="${quote(meta.callsign)}"`,
         meta.tvg_logo && `tvg-logo="${quote(meta.tvg_logo)}"`,
         meta.group && `group-title="${quote(meta.group)}"`,
         meta.hidden && 'playlist-studio-hidden="true"'
@@ -3098,7 +3102,7 @@ function renderPlaylistItems(playlist) {
 
   const items = query ? allItems.filter((it) => {
     const meta = it.metadata || {};
-    return [it.title, it.media_url, meta.group, meta.tvg_id, meta.tvg_chno].filter(Boolean).join(" ").toLowerCase().includes(query);
+    return [it.title, it.media_url, meta.group, meta.tvg_id, meta.tvg_chno, meta.callsign].filter(Boolean).join(" ").toLowerCase().includes(query);
   }) : allItems;
 
   if (!items.length) {
@@ -3113,7 +3117,7 @@ function renderPlaylistItems(playlist) {
     <div class="channel-item-row">
       ${meta.tvg_logo ? `<img class="channel-logo-thumb" src="${escapeHtml(meta.tvg_logo)}" alt="">` : `<span class="channel-logo-thumb" style="display:inline-grid;place-items:center;"><svg class="icon" style="width:14px;height:14px;color:var(--text-muted);"><use href="#icon-screens"/></svg></span>`}
       <div class="channel-info-meta">
-        <strong>${chLabel} ${escapeHtml(item.title)}</strong>
+        <strong>${chLabel}${meta.callsign ? ` · ${escapeHtml(meta.callsign)}` : ""} ${escapeHtml(item.title)}</strong>
         <small><span>${escapeHtml(meta.group || "Ungrouped")}</span>${meta.tvg_id ? `<span>EPG: ${escapeHtml(meta.tvg_id)}</span>` : ""}</small>
       </div>
       <button type="button" class="secondary preview-item-stream small-btn" data-url="${escapeHtml(item.media_url)}" data-title="${escapeHtml(item.title)}">Test</button>
@@ -3204,6 +3208,7 @@ function openPlaylistItemDialog(playlistId = $("#playlistId").value, itemId = nu
   $("#itemPlaylistId").value = playlistId;
   $("#itemId").value = item?.id || "";
   $("#itemTitle").value = item?.title || "";
+  if ($("#itemCallsign")) $("#itemCallsign").value = metadata.callsign || "";
   $("#itemTvgId").value = metadata.tvg_id || "";
   $("#itemTvgChno").value = metadata.tvg_chno || "";
   $("#itemGroup").value = metadata.group || "";
@@ -3230,6 +3235,7 @@ $("#playlistItemForm")?.addEventListener("submit", async (event) => {
   $("#itemError").textContent = "";
   const playlistId = $("#itemPlaylistId").value;
   const itemId = $("#itemId").value;
+  const callsignVal = $("#itemCallsign")?.value?.trim() || null;
   const payload = {
     title: $("#itemTitle").value,
     mediaUrl: $("#itemMediaUrl").value,
@@ -3237,6 +3243,7 @@ $("#playlistItemForm")?.addEventListener("submit", async (event) => {
     metadata: {
       tvg_id: $("#itemTvgId").value || null,
       tvg_chno: $("#itemTvgChno").value || null,
+      callsign: callsignVal,
       tvg_logo: $("#itemTvgLogo").value || null,
       group: $("#itemGroup").value || null,
       hidden: $("#itemHidden").checked

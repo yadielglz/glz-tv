@@ -880,6 +880,7 @@ private val CallSignExcludedWords = setOf(
  * channel names completely untouched when no explicit broadcast call sign exists.
  */
 internal fun epgDisplayLabel(channel: Channel): String {
+    if (channel.callSign.isNotBlank()) return channel.callSign.trim()
     val name = channel.name.trim()
     val padded = " $name "
 
@@ -929,7 +930,7 @@ private fun DtvGuideChannelIdentityCell(
         }
     }
     var remoteLoaded by remember(logoModel) { mutableStateOf(false) }
-    val displayLabel = remember(channel.id, channel.name) { epgDisplayLabel(channel) }
+    val displayLabel = remember(channel.id, channel.name, channel.callSign) { epgDisplayLabel(channel) }
 
     Box(
         modifier = Modifier

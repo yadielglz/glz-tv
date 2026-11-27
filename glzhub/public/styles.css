@@ -1906,6 +1906,13 @@ input::placeholder, textarea::placeholder {
   font-weight: 600;
   color: var(--accent) !important;
 }
+.inline-channel-callsign {
+  max-width: 112px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-main) !important;
+}
 .inline-channel-name {
   font-weight: 600;
 }

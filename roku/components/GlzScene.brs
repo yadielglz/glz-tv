@@ -709,7 +709,10 @@ end sub
 
 function channelTitleWithStar(channel as Dynamic, baseTitle = "" as String) as String
     label = baseTitle
-    if label = "" and type(channel) = "roAssociativeArray" then label = Text(channel.title)
+    if label = "" and type(channel) = "roAssociativeArray"
+        label = Text(channel.callsign)
+        if label = "" then label = Text(channel.title)
+    end if
     if type(channel) = "roAssociativeArray" and channel.isMovie <> true
         if IsFavoriteChannel(m.favoriteIds, ChannelKey(channel)) then return "★ " + label
     end if

@@ -50,10 +50,11 @@ public final class M3uParser {
             String eventLeague = first(attributes, "x-event-league", "event-league");
             long eventStartMillis = parseEventTimeMillis(first(attributes, "x-event-start", "event-start"));
             long eventEndMillis = parseEventTimeMillis(first(attributes, "x-event-end", "event-end"));
+            String callSign = first(attributes, "x-callsign", "callsign", "tvg-callsign");
 
             channels.add(new Channel(id, name, group, number, logoUrl,
                     resolveUrl(playlistUrl, line), new HashMap<>(pendingHeaders),
-                    eventTitle, eventLeague, eventStartMillis, eventEndMillis));
+                    eventTitle, eventLeague, eventStartMillis, eventEndMillis, callSign));
             pendingInfo = null;
             pendingHeaders = new HashMap<>();
         }

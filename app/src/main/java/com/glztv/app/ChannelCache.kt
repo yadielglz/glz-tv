@@ -34,7 +34,8 @@ object ChannelCache {
                         item.optString("eventTitle", ""),
                         item.optString("eventLeague", ""),
                         item.optLong("eventStartMillis", 0L),
-                        item.optLong("eventEndMillis", 0L)
+                        item.optLong("eventEndMillis", 0L),
+                        item.optString("callSign", "")
                     )
                 )
             }
@@ -60,6 +61,7 @@ object ChannelCache {
                         .put("eventLeague", channel.eventLeague)
                         .put("eventStartMillis", channel.eventStartMillis)
                         .put("eventEndMillis", channel.eventEndMillis)
+                        .put("callSign", channel.callSign)
                 )
             }
             val root = JSONObject()

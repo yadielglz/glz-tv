@@ -257,12 +257,12 @@ test('external M3U export with includeEvents=false omits Live Events and rejects
   assert.equal(badRes.status, 404);
 });
 
-test('M3U export sorts playlist channels numerically by channel number including sub-channels', async () => {
+test('M3U export sorts playlist channels numerically by channel number including sub-channels and emits x-callsign', async () => {
   state.playlists[0].playlist_items = [
     { id: 'c-unnum', title: 'Unnumbered Feed', media_url: 'https://streams.example/u.m3u8', duration_seconds: -1, position: 1, metadata: {} },
-    { id: 'c-10', title: 'Ch Ten', media_url: 'https://streams.example/10.m3u8', duration_seconds: -1, position: 2, metadata: { tvg_chno: '10' } },
-    { id: 'c-2-1', title: 'Ch Two Sub', media_url: 'https://streams.example/2-1.m3u8', duration_seconds: -1, position: 3, metadata: { tvg_chno: '2-1' } },
-    { id: 'c-2', title: 'Ch Two', media_url: 'https://streams.example/2.m3u8', duration_seconds: -1, position: 4, metadata: { tvg_chno: '2' } }
+    { id: 'c-10', title: 'Ch Ten', media_url: 'https://streams.example/10.m3u8', duration_seconds: -1, position: 2, metadata: { tvg_chno: '10', callsign: 'ESPN' } },
+    { id: 'c-2-1', title: 'Ch Two Sub', media_url: 'https://streams.example/2-1.m3u8', duration_seconds: -1, position: 3, metadata: { tvg_chno: '2-1', callsign: 'WKAQ2' } },
+    { id: 'c-2', title: 'Ch Two', media_url: 'https://streams.example/2.m3u8', duration_seconds: -1, position: 4, metadata: { tvg_chno: '2', callsign: 'WKAQ' } }
   ];
 
   const createRes = await worker.fetch(new Request('https://hub.example/api/v1/admin/export-m3u-url', {
@@ -286,4 +286,7 @@ test('M3U export sorts playlist channels numerically by channel number including
   const idx10 = text.indexOf(',Ch Ten\n');
   const idxUnnum = text.indexOf(',Unnumbered Feed\n');
   assert.ok(idx2 > 0 && idx21 > idx2 && idx10 > idx21 && idxUnnum > idx10, `Unexpected order in M3U:\n${text}`);
+  assert.ok(text.includes('x-callsign="WKAQ"'));
+  assert.ok(text.includes('x-callsign="WKAQ2"'));
+  assert.ok(text.includes('x-callsign="ESPN"'));
 });
