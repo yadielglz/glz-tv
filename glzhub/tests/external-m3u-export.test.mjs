@@ -256,3 +256,34 @@ test('external M3U export with includeEvents=false omits Live Events and rejects
   const badRes = await worker.fetch(new Request('https://hub.example/api/v1/export/m3u/invalid.token.m3u'), env, { waitUntil() {} });
   assert.equal(badRes.status, 404);
 });
+
+test('M3U export sorts playlist channels numerically by channel number including sub-channels', async () => {
+  state.playlists[0].playlist_items = [
+    { id: 'c-unnum', title: 'Unnumbered Feed', media_url: 'https://streams.example/u.m3u8', duration_seconds: -1, position: 1, metadata: {} },
+    { id: 'c-10', title: 'Ch Ten', media_url: 'https://streams.example/10.m3u8', duration_seconds: -1, position: 2, metadata: { tvg_chno: '10' } },
+    { id: 'c-2-1', title: 'Ch Two Sub', media_url: 'https://streams.example/2-1.m3u8', duration_seconds: -1, position: 3, metadata: { tvg_chno: '2-1' } },
+    { id: 'c-2', title: 'Ch Two', media_url: 'https://streams.example/2.m3u8', duration_seconds: -1, position: 4, metadata: { tvg_chno: '2' } }
+  ];
+
+  const createRes = await worker.fetch(new Request('https://hub.example/api/v1/admin/export-m3u-url', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer admin-jwt',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      playlistId: '11111111-1111-1111-1111-111111111111',
+      includeEvents: false
+    })
+  }), env, { waitUntil() {} });
+  assert.equal(createRes.status, 200);
+  const meta = await createRes.json();
+  const m3uRes = await worker.fetch(new Request(meta.url), env, { waitUntil() {} });
+  const text = await m3uRes.text();
+
+  const idx2 = text.indexOf(',Ch Two\n');
+  const idx21 = text.indexOf(',Ch Two Sub\n');
+  const idx10 = text.indexOf(',Ch Ten\n');
+  const idxUnnum = text.indexOf(',Unnumbered Feed\n');
+  assert.ok(idx2 > 0 && idx21 > idx2 && idx10 > idx21 && idxUnnum > idx10, `Unexpected order in M3U:\n${text}`);
+});

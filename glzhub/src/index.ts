@@ -3560,10 +3560,37 @@ function buildM3uDocument(options: {
   let m3uContent = `#EXTM3U x-tvg-url="${headerEpgUrl}"\n\n`;
   let channelCount = 0;
 
+  const parsePlaylistChannelNumber = (raw: unknown): [number, number] | null => {
+    const str = String(raw ?? "").trim();
+    if (!str) return null;
+    const match = str.match(/^(\d+)(?:\s*[-._:]\s*(\d+))?/);
+    if (!match) return null;
+    const major = parseInt(match[1], 10);
+    const minor = match[2] !== undefined ? parseInt(match[2], 10) : -1;
+    return [major, minor];
+  };
+  const comparePlaylistItemsByChannelNumber = (a: Record<string, unknown>, b: Record<string, unknown>): number => {
+    const metaA = (a.metadata && typeof a.metadata === "object") ? a.metadata as Record<string, unknown> : {};
+    const metaB = (b.metadata && typeof b.metadata === "object") ? b.metadata as Record<string, unknown> : {};
+    const keyA = parsePlaylistChannelNumber(metaA.tvg_chno ?? metaA.tvgChno);
+    const keyB = parsePlaylistChannelNumber(metaB.tvg_chno ?? metaB.tvgChno);
+    if (keyA && keyB) {
+      if (keyA[0] !== keyB[0]) return keyA[0] - keyB[0];
+      if (keyA[1] !== keyB[1]) return keyA[1] - keyB[1];
+    } else if (keyA) {
+      return -1;
+    } else if (keyB) {
+      return 1;
+    }
+    const posDiff = Number(a.position || 0) - Number(b.position || 0);
+    if (posDiff !== 0) return posDiff;
+    return String(a.title || "").localeCompare(String(b.title || ""), undefined, { numeric: true, sensitivity: "base" });
+  };
+
   for (const pl of playlists) {
     const groupTitle = cleanAttribute(pl.title || "TV");
     const items = [...((pl.playlist_items as Record<string, unknown>[]) || [])];
-    items.sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+    items.sort(comparePlaylistItemsByChannelNumber);
 
     for (const item of items) {
       const title = cleanText(item.title || "Untitled Channel");

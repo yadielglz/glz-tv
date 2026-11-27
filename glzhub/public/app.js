@@ -2491,6 +2491,65 @@ async function loadPlaylists() {
   }
 }
 
+function parseChannelNumberSortKey(raw) {
+  const str = String(raw ?? "").trim();
+  if (!str) return null;
+  const match = str.match(/^(\d+)(?:\s*[-._:]\s*(\d+))?/);
+  if (!match) return null;
+  const major = parseInt(match[1], 10);
+  const minor = match[2] !== undefined ? parseInt(match[2], 10) : -1;
+  return [major, minor];
+}
+
+function comparePlaylistItemsByChannelNumber(a, b) {
+  const metaA = a?.metadata || {};
+  const metaB = b?.metadata || {};
+  const keyA = parseChannelNumberSortKey(metaA.tvg_chno ?? metaA.tvgChno);
+  const keyB = parseChannelNumberSortKey(metaB.tvg_chno ?? metaB.tvgChno);
+  if (keyA && keyB) {
+    if (keyA[0] !== keyB[0]) return keyA[0] - keyB[0];
+    if (keyA[1] !== keyB[1]) return keyA[1] - keyB[1];
+  } else if (keyA) {
+    return -1;
+  } else if (keyB) {
+    return 1;
+  }
+  const posDiff = Number(a?.position || 0) - Number(b?.position || 0);
+  if (posDiff !== 0) return posDiff;
+  return String(a?.title || "").localeCompare(String(b?.title || ""), undefined, { numeric: true, sensitivity: "base" });
+}
+
+function sortPlaylistItemsByChannelNumber(items) {
+  return [...(items || [])].sort(comparePlaylistItemsByChannelNumber);
+}
+
+async function sortAndPersistPlaylistByChannelNumber(playlistId, { silent = false } = {}) {
+  const playlist = state.playlists.find((entry) => entry.id === playlistId);
+  if (!playlist || !Array.isArray(playlist.playlist_items) || playlist.playlist_items.length <= 1) return false;
+  const currentByPos = [...playlist.playlist_items].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+  const sorted = sortPlaylistItemsByChannelNumber(playlist.playlist_items);
+  const orderChanged = sorted.some((item, idx) =>
+    currentByPos[idx]?.id !== item.id || Number(item.position || 0) !== idx + 1
+  );
+  if (!orderChanged) {
+    if (!silent) toast("Already sorted by channel number.");
+    return false;
+  }
+  await api(`/api/v1/admin/playlists/${playlist.id}/reorder`, {
+    method: "PATCH",
+    body: JSON.stringify({ itemIds: sorted.map((item) => item.id) })
+  });
+  sorted.forEach((item, idx) => { item.position = idx + 1; });
+  playlist.playlist_items = sorted;
+  renderPlaylists();
+  const openPlId = $("#playlistId")?.value;
+  if (openPlId === playlist.id && $("#playlistDialog")?.open) {
+    renderPlaylistItems(playlist);
+  }
+  if (!silent) toast("Playlist sorted by channel number.");
+  return true;
+}
+
 function renderPlaylists() {
   const container = $("#playlistList");
   const empty = $("#studioEmpty");
@@ -2510,7 +2569,7 @@ function renderPlaylists() {
     const card = document.createElement("article");
     card.className = "studio-playlist-card";
     card.dataset.playlistId = pl.id;
-    const items = [...(pl.playlist_items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+    const items = sortPlaylistItemsByChannelNumber(pl.playlist_items);
     card.innerHTML = `
       <div class="studio-card-head">
         <div style="display: flex; align-items: center; gap: 14px;">
@@ -2525,6 +2584,7 @@ function renderPlaylists() {
           </div>
         </div>
         <div class="studio-card-actions">
+          <button type="button" class="secondary sort-playlist-chno" data-id="${pl.id}" title="Sort and save channel order by CH #">Sort by CH #</button>
           <button type="button" class="secondary import-playlist" data-id="${pl.id}">Import M3U</button>
           <button type="button" class="secondary live-export-playlist" data-id="${pl.id}">Live URL</button>
           <button type="button" class="secondary export-playlist" data-id="${pl.id}">Download M3U</button>
@@ -2631,6 +2691,16 @@ function renderPlaylists() {
       toast(error.message);
     }
   }));
+  $$(".sort-playlist-chno").forEach((btn) => btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      await sortAndPersistPlaylistByChannelNumber(btn.dataset.id, { silent: false });
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }));
   $$(".import-playlist").forEach((btn) => btn.addEventListener("click", () => {
     state.importPlaylistId = btn.dataset.id;
     $("#m3uFileInput").click();
@@ -2681,13 +2751,14 @@ async function saveInlineChannelField(input) {
     toast("Channel name cannot be empty.");
     return;
   }
+  const isChannelNumber = input.classList.contains("inline-channel-number");
   input.disabled = true;
   try {
     let payload;
     if (input.classList.contains("inline-channel-name")) payload = { title: value };
     else if (input.classList.contains("inline-channel-url")) payload = { mediaUrl: value };
     else {
-      const key = input.classList.contains("inline-channel-number") ? "tvg_chno"
+      const key = isChannelNumber ? "tvg_chno"
         : input.classList.contains("inline-channel-epg") ? "tvg_id" : "group";
       payload = { metadata: { ...(item.metadata || {}), [key]: value || null } };
     }
@@ -2700,7 +2771,12 @@ async function saveInlineChannelField(input) {
       const meta = item.metadata || {};
       row.dataset.search = [item.title, item.media_url, meta.group, meta.tvg_id, meta.tvg_chno].filter(Boolean).join(" ").toLowerCase();
     }
-    toast("Channel field saved.");
+    if (isChannelNumber) {
+      const reordered = await sortAndPersistPlaylistByChannelNumber(playlist.id, { silent: true });
+      toast(reordered ? "Channel number saved & sorted." : "Channel number saved.");
+    } else {
+      toast("Channel field saved.");
+    }
   } catch (error) {
     input.value = input.dataset.original;
     input.disabled = false;
@@ -2833,8 +2909,7 @@ function playlistM3u(playlist) {
   const epgUrl = playlist.epg_url || "https://play.glztech.com/epg.xml.gz";
   const quote = (value) => String(value || "").replace(/[\r\n]+/g, " ").replace(/"/g, "'");
   const lines = [`#EXTM3U x-tvg-url="${quote(epgUrl)}"`, ""];
-  [...(playlist.playlist_items || [])]
-    .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
+  sortPlaylistItemsByChannelNumber(playlist.playlist_items)
     .forEach((item) => {
       const meta = item.metadata || {};
       const attributes = [
@@ -2958,7 +3033,7 @@ $("#m3uFileInput")?.addEventListener("change", async (event) => {
   event.target.value = "";
   if (!file || !playlistId) return;
   try {
-    const items = parseM3u(await file.text());
+    const items = sortPlaylistItemsByChannelNumber(parseM3u(await file.text()));
     const playlist = state.playlists.find((item) => item.id === playlistId);
     if (!confirm(`Replace the ${playlist?.playlist_items?.length || 0} existing channels in “${playlist?.title || "this playlist"}” with ${items.length} imported channels?`)) return;
     const result = await api(`/api/v1/admin/playlists/${playlistId}/import`, {
@@ -2993,7 +3068,7 @@ function wirePlaylistDragging() {
       event.preventDefault();
       if (!draggedChannel || draggedChannel.playlistId !== row.dataset.playlistId || draggedChannel.itemId === row.dataset.itemId) return;
       const playlist = state.playlists.find((item) => item.id === row.dataset.playlistId);
-      const ordered = [...(playlist?.playlist_items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+      const ordered = sortPlaylistItemsByChannelNumber(playlist?.playlist_items);
       const from = ordered.findIndex((item) => item.id === draggedChannel.itemId);
       const to = ordered.findIndex((item) => item.id === row.dataset.itemId);
       const [moved] = ordered.splice(from, 1);
@@ -3018,7 +3093,7 @@ function renderPlaylistItems(playlist) {
     return;
   }
   const query = $("#playlistItemFilter")?.value.trim().toLowerCase() || "";
-  const allItems = [...playlist.playlist_items].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+  const allItems = sortPlaylistItemsByChannelNumber(playlist.playlist_items);
   if (countEl) countEl.textContent = String(allItems.length);
 
   const items = query ? allItems.filter((it) => {
@@ -3033,11 +3108,12 @@ function renderPlaylistItems(playlist) {
 
   container.innerHTML = items.map((item) => {
     const meta = item.metadata || {};
+    const chLabel = meta.tvg_chno ? `CH ${escapeHtml(meta.tvg_chno)}` : `#${item.position || 0}`;
     return `
     <div class="channel-item-row">
       ${meta.tvg_logo ? `<img class="channel-logo-thumb" src="${escapeHtml(meta.tvg_logo)}" alt="">` : `<span class="channel-logo-thumb" style="display:inline-grid;place-items:center;"><svg class="icon" style="width:14px;height:14px;color:var(--text-muted);"><use href="#icon-screens"/></svg></span>`}
       <div class="channel-info-meta">
-        <strong>#${item.position || 0} ${escapeHtml(item.title)}</strong>
+        <strong>${chLabel} ${escapeHtml(item.title)}</strong>
         <small><span>${escapeHtml(meta.group || "Ungrouped")}</span>${meta.tvg_id ? `<span>EPG: ${escapeHtml(meta.tvg_id)}</span>` : ""}</small>
       </div>
       <button type="button" class="secondary preview-item-stream small-btn" data-url="${escapeHtml(item.media_url)}" data-title="${escapeHtml(item.title)}">Test</button>
@@ -3173,8 +3249,13 @@ $("#playlistItemForm")?.addEventListener("submit", async (event) => {
       : `/api/v1/admin/playlists/${playlistId}/items`;
     await api(path, { method: itemId ? "PATCH" : "POST", body: JSON.stringify(payload) });
     $("#playlistItemDialog").close();
-    toast(itemId ? "Channel updated." : "Channel added to playlist.");
     await loadPlaylists();
+    const reordered = await sortAndPersistPlaylistByChannelNumber(playlistId, { silent: true });
+    toast(
+      itemId
+        ? (reordered ? "Channel updated & sorted by CH #." : "Channel updated.")
+        : (reordered ? "Channel added & sorted by CH #." : "Channel added to playlist.")
+    );
     const updatedPl = state.playlists?.find((p) => p.id === playlistId);
     if (updatedPl) renderPlaylistItems(updatedPl);
   } catch (error) {
