@@ -2217,6 +2217,37 @@
   </dialog>
 
   <!-- EPG Channel Dialog -->
+  <dialog id="epgAssignDialog" style="max-width: 640px; width: 92vw;">
+    <form id="epgAssignForm">
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">ASSIGN EPG GUIDE (TVG-ID)</div>
+          <h3 id="epgAssignTitle">Assign EPG Channel</h3>
+        </div>
+        <button class="icon-button" type="button" data-close-epg-assign>
+          <svg class="icon"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <input id="epgAssignItemId" type="hidden">
+      <div class="form-grid">
+        <label class="wide">Search loaded epg.best / XMLTV channels
+          <input id="epgAssignSearch" type="search" placeholder="Type e.g. CBS, HBO, WANF, ESPN…" autocomplete="off">
+        </label>
+        <label class="wide">Pick guide channel
+          <select id="epgAssignSelect" size="7" style="width:100%;min-height:170px;background:#0d121c;color:#f4f7fb;border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:6px;"></select>
+        </label>
+        <label class="wide">Or enter tvg-id manually
+          <input id="epgAssignTvgId" maxlength="120" placeholder="e.g. CBSAtlanta.us or HBOEast.us">
+        </label>
+      </div>
+      <p id="epgAssignError" class="error"></p>
+      <div class="form-actions">
+        <button type="button" class="secondary" data-close-epg-assign>Cancel</button>
+        <button type="submit" class="primary" id="epgAssignSave">Save tvg-id</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="epgChannelDialog" style="max-width: 600px; width: 92vw;">
     <form id="epgChannelForm">
       <div class="dialog-head">

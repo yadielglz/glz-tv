@@ -3782,11 +3782,12 @@ async function autoMatchPlaylistEpgIds() {
     for (let i = 0; i < updates.length; i += 10) {
       const batch = updates.slice(i, i + 10);
       await Promise.all(batch.map(async ({ item, matchedId }) => {
+        const nextMeta = { ...(item.metadata || {}), tvg_id: matchedId };
         await api(`/api/v1/admin/playlists/${playlist.id}/items/${item.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ tvg_id: matchedId })
+          body: JSON.stringify({ metadata: nextMeta })
         });
-        item.metadata = { ...(item.metadata || {}), tvg_id: matchedId };
+        item.metadata = nextMeta;
         saved++;
       }));
     }
@@ -3794,14 +3795,55 @@ async function autoMatchPlaylistEpgIds() {
     renderEpgTimeline();
     const msg = saved > 0
       ? `Auto-matched & saved ${saved} channel${saved === 1 ? "" : "s"} (${alreadyMatched} already matched, ${unmatched} not found in this epg.best file).`
-      : `0 new matches (${alreadyMatched} already matched, ${unmatched} missing from this epg.best file — add those channels in your epg.best account & re-fetch).`;
+      : `0 new matches (${alreadyMatched} already matched, ${unmatched} missing from this epg.best file — click any unmatched channel below to assign its tvg-id manually, or add it in epg.best & re-fetch).`;
     epgNotice(msg);
-    toast(saved > 0 ? `Auto-matched ${saved} channels!` : "No new epg.best matches found.");
+    toast(saved > 0 ? `Auto-matched ${saved} channels!` : "No new automatic matches found.");
   } catch (error) {
     epgNotice(error.message || "Auto-match failed.", true);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Auto-Match tvg-id"; }
   }
+}
+
+function openEpgAssignDialog(itemId) {
+  const playlist = state.playlists.find((p) => p.id === epgState.playlistId);
+  const item = playlist?.playlist_items?.find((entry) => entry.id === itemId);
+  if (!item || !epgState.doc) return;
+  const guideChannels = [...epgState.doc.querySelectorAll("channel")].map((node) => {
+    const id = node.getAttribute("id") || "";
+    const names = [...node.querySelectorAll("display-name")].map((d) => (d.textContent || "").trim()).filter(Boolean);
+    const label = names.length ? `${names[0]} (${id})` : id;
+    return { id, label, search: `${id} ${names.join(" ")}`.toLowerCase() };
+  }).filter((c) => c.id).sort((a, b) => a.label.localeCompare(b.label));
+
+  const chNo = item.metadata?.tvg_chno || item.position || "—";
+  $("#epgAssignTitle").textContent = `CH ${chNo} · ${item.title}`;
+  $("#epgAssignItemId").value = item.id;
+  $("#epgAssignTvgId").value = item.metadata?.tvg_id || "";
+  $("#epgAssignError").textContent = "";
+
+  const selectEl = $("#epgAssignSelect");
+  const searchEl = $("#epgAssignSearch");
+  const renderOptions = (q) => {
+    const needle = String(q || "").trim().toLowerCase();
+    const list = needle ? guideChannels.filter((c) => c.search.includes(needle)) : guideChannels;
+    selectEl.innerHTML = list.length
+      ? list.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join("")
+      : `<option disabled value="">No matching channels in loaded epg.best XMLTV</option>`;
+  };
+  searchEl.value = item.title.split(/[–\-|(]/)[0].trim();
+  renderOptions(searchEl.value);
+  searchEl.oninput = () => renderOptions(searchEl.value);
+  selectEl.onchange = () => {
+    if (selectEl.value) $("#epgAssignTvgId").value = selectEl.value;
+  };
+  selectEl.ondblclick = () => {
+    if (selectEl.value) {
+      $("#epgAssignTvgId").value = selectEl.value;
+      $("#epgAssignForm").requestSubmit();
+    }
+  };
+  $("#epgAssignDialog").showModal();
 }
 
 function renderEpgTimeline() {
@@ -3837,8 +3879,9 @@ function renderEpgTimeline() {
       const progChannel = String(node.getAttribute("channel") || "");
       return (progChannel === id || (idLower && progChannel.toLowerCase() === idLower)) && start && stop && start < dayEnd && stop > dayStart;
     });
+    const canAssign = Boolean(item && !channel);
     return `<div class="epg-channel-line">
-      <button class="epg-channel-label" data-channel-id="${escapeHtml(channel ? id : "")}" ${channel ? "" : "disabled"}>${icon ? `<img src="${escapeHtml(icon)}" alt="">` : "<span>▣</span>"}<span><strong>CH ${escapeHtml(number)} · ${escapeHtml(name)}</strong><small>${channel ? escapeHtml(id) : `No guide match · set tvg-id`}</small></span></button>
+      <button class="epg-channel-label" data-channel-id="${escapeHtml(channel ? id : "")}" data-assign-item-id="${escapeHtml(canAssign ? item.id : "")}" ${channel || canAssign ? "" : "disabled"}>${icon ? `<img src="${escapeHtml(icon)}" alt="">` : "<span>▣</span>"}<span><strong>CH ${escapeHtml(number)} · ${escapeHtml(name)}</strong><small>${channel ? escapeHtml(id) : `No guide match · click to assign tvg-id`}</small></span></button>
       <div class="epg-programmes">${programmes.map(({ node, index }) => {
         const start = xmlTvDate(node.getAttribute("start")); const stop = xmlTvDate(node.getAttribute("stop"));
         const clippedStart = Math.max(start.getTime(), dayStart.getTime()); const clippedStop = Math.min(stop.getTime(), dayEnd.getTime());
@@ -3851,7 +3894,10 @@ function renderEpgTimeline() {
   const now = new Date();
   const nowLine = now >= dayStart && now < dayEnd ? `<div class="epg-now-line" style="left:${240 + (now - dayStart) / 36_000}px"></div>` : "";
   $("#epgTimeline").innerHTML = channels.length ? `<div class="epg-grid">${nowLine}<div class="epg-hours"><div class="epg-corner">${playlist ? "ASSIGNED CH" : "CHANNEL"}</div><div class="epg-hour-scale">${hours}</div></div>${rows}</div>` : `<div class="epg-empty">No channels match this filter.</div>`;
-  $$(".epg-channel-label[data-channel-id]:not([disabled])").forEach((button) => button.addEventListener("click", () => openEpgChannelEditor(button.dataset.channelId)));
+  $$(".epg-channel-label:not([disabled])").forEach((button) => button.addEventListener("click", () => {
+    if (button.dataset.assignItemId) openEpgAssignDialog(button.dataset.assignItemId);
+    else if (button.dataset.channelId) openEpgChannelEditor(button.dataset.channelId);
+  }));
   $$(".epg-programme").forEach((button) => button.addEventListener("click", () => openEpgProgrammeEditor(Number(button.dataset.programmeIndex))));
 }
 
@@ -3937,6 +3983,37 @@ $("#epgExportGz")?.addEventListener("click", () => downloadEpgDocument(true));
 $("#epgAutoMatch")?.addEventListener("click", () => autoMatchPlaylistEpgIds());
 $("#epgAddChannel")?.addEventListener("click", () => openEpgChannelEditor());
 $("#epgAddProgramme")?.addEventListener("click", () => openEpgProgrammeEditor());
+$$('[data-close-epg-assign]').forEach((button) => button.addEventListener("click", () => $("#epgAssignDialog").close()));
+$("#epgAssignForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const itemId = $("#epgAssignItemId").value;
+  const tvgId = $("#epgAssignTvgId").value.trim();
+  const playlist = state.playlists.find((p) => p.id === epgState.playlistId);
+  const item = playlist?.playlist_items?.find((entry) => entry.id === itemId);
+  if (!playlist || !item) return;
+  if (!tvgId) {
+    $("#epgAssignError").textContent = "Pick a guide channel or enter a tvg-id.";
+    return;
+  }
+  const saveBtn = $("#epgAssignSave");
+  if (saveBtn) saveBtn.disabled = true;
+  $("#epgAssignError").textContent = "";
+  try {
+    const nextMeta = { ...(item.metadata || {}), tvg_id: tvgId };
+    await api(`/api/v1/admin/playlists/${playlist.id}/items/${item.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ metadata: nextMeta })
+    });
+    item.metadata = nextMeta;
+    $("#epgAssignDialog").close();
+    renderEpgTimeline();
+    toast(`Saved tvg-id "${tvgId}" for ${item.title}.`);
+  } catch (error) {
+    $("#epgAssignError").textContent = error.message || "Could not save tvg-id.";
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+});
 $$('[data-close-epg-channel]').forEach((button) => button.addEventListener("click", () => $("#epgChannelDialog").close()));
 $$('[data-close-epg-programme]').forEach((button) => button.addEventListener("click", () => $("#epgProgrammeDialog").close()));
 
