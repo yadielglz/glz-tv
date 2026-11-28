@@ -85,6 +85,9 @@ import com.glztv.app.EpgGuide
 import com.glztv.app.Movie
 import com.glztv.app.R
 import com.glztv.app.RadioStation
+import com.glztv.app.data.SportsChannelMatcher
+import com.glztv.app.data.SportsGame
+import com.glztv.app.data.SportsTeam
 import com.glztv.app.model.WeatherInfo
 import com.glztv.app.player.PlaybackControlState
 import com.glztv.app.ui.components.DtvWeatherIcon
@@ -103,14 +106,15 @@ enum class MobileTab(val label: String, val icon: ImageVector) {
 }
 
 /**
- * Portrait-first Mobile Shell for GLZ TV Mobile (v1.48.5.30-mobile).
- * Keeps all essentials: Home (Live Events, Favorites, Recents), Live TV Guide + Search,
- * Movies, Radio (+ mini-player), Weather, Sleep Timer, Sync Refresh, and Settings.
+ * Portrait-first Mobile Shell for GLZ TV Mobile.
+ * Keeps all essentials: Home (Live Scoreboards, Verified Live Events, Favorites, Recents),
+ * Live TV Guide + Search, Movies, Radio (+ mini-player), Weather, Sleep Timer, Sync Refresh, and Settings.
  */
 @Composable
 fun GlzMobileRoot(
     channels: List<Channel>,
     guide: EpgGuide,
+    sportsGames: List<SportsGame> = emptyList(),
     movies: List<Movie>,
     radioStations: List<RadioStation>,
     activeRadioStation: RadioStation?,
@@ -161,6 +165,7 @@ fun GlzMobileRoot(
             channel = activeChannel,
             channels = channels,
             guide = guide,
+            sportsGames = sportsGames,
             favorites = favorites,
             captionsEnabled = captionsEnabled,
             sleepTimerRemainingMinutes = sleepTimerRemainingMinutes,
@@ -203,18 +208,22 @@ fun GlzMobileRoot(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0D12))
+            .background(Color(0xFF090C11))
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // Mobile Top Bar
+        // Polished Mobile Top Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF0D1118))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF101621), Color(0xFF0B0F16))
+                    )
+                )
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Image(
                 painter = painterResource(id = R.drawable.glztv_logo_horizontal),
@@ -224,9 +233,10 @@ fun GlzMobileRoot(
             )
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(4.dp))
                     .background(DtvChrome.ElectricBlue.copy(alpha = 0.2f))
-                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                    .border(1.dp, DtvChrome.ElectricBlue.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = "MOBILE",
@@ -234,20 +244,26 @@ fun GlzMobileRoot(
                     fontSize = 9.sp,
                     fontFamily = BarlowCondensedFontFamily,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp
+                    letterSpacing = 0.9.sp
                 )
             }
             Spacer(Modifier.weight(1f))
             if (weather != null) {
                 Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF141B27))
+                        .border(1.dp, Color(0xFF232D3F), RoundedCornerShape(14.dp))
+                        .clickable { currentTab = MobileTab.More }
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    DtvWeatherIcon(weatherCode = weather.weatherCode, size = 18.dp)
+                    DtvWeatherIcon(weatherCode = weather.weatherCode, size = 16.dp)
                     Text(
                         text = "${weather.temperature}°",
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -271,7 +287,7 @@ fun GlzMobileRoot(
                 )
             }
         }
-        HorizontalDivider(color = DtvChrome.Divider)
+        HorizontalDivider(color = Color(0xFF1D2636))
 
         // Main Portrait Tab Content
         Box(
@@ -283,6 +299,7 @@ fun GlzMobileRoot(
                 MobileTab.Home -> MobileHomeTab(
                     channels = channels,
                     guide = guide,
+                    sportsGames = sportsGames,
                     favorites = favorites,
                     recentChannels = recentChannels,
                     now = now,
@@ -299,6 +316,7 @@ fun GlzMobileRoot(
                 MobileTab.Guide -> MobileGuideTab(
                     channels = channels,
                     guide = guide,
+                    sportsGames = sportsGames,
                     favorites = favorites,
                     now = now,
                     initialCategory = guideCategoryFilter,
@@ -341,11 +359,11 @@ fun GlzMobileRoot(
 
         // Persistent Radio Mini-Player Bar
         if (activeRadioStation != null && radioPlaying) {
-            HorizontalDivider(color = DtvChrome.Divider)
+            HorizontalDivider(color = Color(0xFF1D2636))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF131B26))
+                    .background(Color(0xFF131B28))
                     .clickable { currentTab = MobileTab.Radio }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -390,13 +408,13 @@ fun GlzMobileRoot(
             }
         }
 
-        // Portrait Bottom Navigation Bar
-        HorizontalDivider(color = DtvChrome.Divider)
+        // Polished Portrait Bottom Navigation Bar with active pill highlight
+        HorizontalDivider(color = Color(0xFF1D2636))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF0D1118))
-                .padding(vertical = 6.dp),
+                .background(Color(0xFF0C1018))
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -404,23 +422,34 @@ fun GlzMobileRoot(
                 val selected = tab == currentTab
                 Column(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable { currentTab = tab }
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    Icon(
-                        imageVector = tab.icon,
-                        contentDescription = tab.label,
-                        tint = if (selected) DtvChrome.ElectricBlueSoft else DtvChrome.MutedText,
-                        modifier = Modifier.size(22.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (selected) DtvChrome.ElectricBlue.copy(alpha = 0.22f)
+                                else Color.Transparent
+                            )
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = tab.label,
+                            tint = if (selected) DtvChrome.ElectricBlueSoft else DtvChrome.MutedText,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                     Text(
                         text = tab.label,
-                        color = if (selected) DtvChrome.ElectricBlueSoft else DtvChrome.MutedText,
+                        color = if (selected) Color.White else DtvChrome.MutedText,
                         fontSize = 10.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     )
                 }
             }
@@ -432,6 +461,7 @@ fun GlzMobileRoot(
 private fun MobileHomeTab(
     channels: List<Channel>,
     guide: EpgGuide,
+    sportsGames: List<SportsGame>,
     favorites: Set<String>,
     recentChannels: List<Channel>,
     now: Long,
@@ -439,11 +469,8 @@ private fun MobileHomeTab(
     onWatchChannel: (Channel) -> Unit,
     onSelectCategory: (String) -> Unit
 ) {
-    val liveEvents = remember(channels) {
-        channels.filter { ch ->
-            ch.isLiveEvent || ch.group.contains("Live Event", ignoreCase = true) ||
-                ch.group.contains("PPV", ignoreCase = true)
-        }
+    val liveEvents = remember(channels, guide, sportsGames, now) {
+        SportsChannelMatcher.filterValidLiveEvents(channels, guide, sportsGames, now)
     }
     val favoriteChannels = remember(channels, favorites) {
         channels.filter { it.id in favorites }
@@ -461,20 +488,29 @@ private fun MobileHomeTab(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         if (heroChannel != null) {
-            item {
+            item(key = "home-hero") {
                 val heroProg = remember(heroChannel.id, guide, now) {
                     guide.nowProgrammeForChannel(heroChannel, now)
                 }
+                val heroShowTitle = remember(heroChannel, guide, sportsGames, now) {
+                    SportsChannelMatcher.resolveChannelShowTitle(heroChannel, guide, sportsGames, now)
+                        .ifBlank { "Tap to watch live" }
+                }
+                val heroProgress = heroProg?.let {
+                    ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
+                        .coerceIn(0f, 1f)
+                } ?: 0f
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(
                             Brush.linearGradient(
-                                listOf(Color(0xFF15263B), Color(0xFF0E141E))
+                                listOf(Color(0xFF162941), Color(0xFF0E1522), Color(0xFF0C1018))
                             )
                         )
-                        .border(1.dp, DtvChrome.ElectricBlue.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .border(1.dp, DtvChrome.ElectricBlue.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
                         .clickable { onWatchChannel(heroChannel) }
                         .padding(16.dp)
                 ) {
@@ -485,19 +521,39 @@ private fun MobileHomeTab(
                         ) {
                             GoogleTvChannelLogo(
                                 channel = heroChannel,
-                                size = 46.dp,
+                                size = 48.dp,
                                 guide = guide,
-                                shape = RoundedCornerShape(6.dp)
+                                shape = RoundedCornerShape(8.dp)
                             )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (recentChannels.isNotEmpty()) "CONTINUE WATCHING" else "FEATURED LIVE",
-                                    color = DtvChrome.ElectricBlueSoft,
-                                    fontSize = 10.sp,
-                                    fontFamily = BarlowCondensedFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp
-                                )
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = if (recentChannels.isNotEmpty()) "CONTINUE WATCHING" else "FEATURED LIVE",
+                                        color = DtvChrome.ElectricBlueSoft,
+                                        fontSize = 10.sp,
+                                        fontFamily = BarlowCondensedFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color(0x2EEF4444))
+                                            .border(1.dp, Color(0x66EF4444), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(
+                                            text = "● ON AIR",
+                                            color = Color(0xFFFCA5A5),
+                                            fontSize = 9.sp,
+                                            fontFamily = BarlowCondensedFontFamily,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                                 Text(
                                     text = "${heroChannel.number.ifBlank { "" }} ${heroChannel.name}".trim(),
                                     color = Color.White,
@@ -509,35 +565,63 @@ private fun MobileHomeTab(
                             }
                         }
                         Text(
-                            text = heroProg?.title?.takeIf { it.isNotBlank() }
-                                ?: heroChannel.eventTitle?.takeIf { it.isNotBlank() }
-                                ?: "Tap to watch live",
+                            text = heroShowTitle,
                             color = DtvChrome.PrimaryText,
                             fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
+                        if (heroProg != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Color.White.copy(alpha = 0.14f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(heroProgress)
+                                        .fillMaxHeight()
+                                        .background(DtvChrome.ElectricBlue)
+                                )
+                            }
+                        }
                         Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(DtvChrome.ElectricBlue)
-                                .padding(horizontal = 16.dp, vertical = 9.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Text(
-                                text = "Watch Live",
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .background(DtvChrome.ElectricBlue)
+                                    .padding(horizontal = 16.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Text(
+                                    text = "Watch Live",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            if (heroProg != null) {
+                                Text(
+                                    text = "${formatDtvCompactTime(heroProg.startMillis)} – ${formatDtvCompactTime(heroProg.endMillis)}",
+                                    color = DtvChrome.SecondaryText,
+                                    fontSize = 11.sp
+                                )
+                            }
                         }
                     }
                 }
             }
         } else if (loading) {
-            item {
+            item(key = "home-loading") {
                 Text(
                     text = "Syncing channels & guide…",
                     color = DtvChrome.SecondaryText,
@@ -546,12 +630,26 @@ private fun MobileHomeTab(
             }
         }
 
+        if (sportsGames.isNotEmpty()) {
+            item(key = "home-scoreboard") {
+                MobileScoreboardSection(
+                    games = sportsGames,
+                    channels = channels,
+                    guide = guide,
+                    now = now,
+                    onWatchChannel = onWatchChannel,
+                    onOpenGuide = { onSelectCategory("All") }
+                )
+            }
+        }
+
         if (liveEvents.isNotEmpty()) {
-            item {
+            item(key = "home-live-events") {
                 MobileChannelRail(
                     title = "Live Events",
                     channels = liveEvents.take(15),
                     guide = guide,
+                    sportsGames = sportsGames,
                     now = now,
                     onWatchChannel = onWatchChannel
                 )
@@ -559,11 +657,12 @@ private fun MobileHomeTab(
         }
 
         if (favoriteChannels.isNotEmpty()) {
-            item {
+            item(key = "home-favorites") {
                 MobileChannelRail(
                     title = "Favorites",
                     channels = favoriteChannels,
                     guide = guide,
+                    sportsGames = sportsGames,
                     now = now,
                     onWatchChannel = onWatchChannel
                 )
@@ -571,11 +670,12 @@ private fun MobileHomeTab(
         }
 
         if (recentChannels.size > 1) {
-            item {
+            item(key = "home-recent") {
                 MobileChannelRail(
                     title = "Recently Watched",
                     channels = recentChannels,
                     guide = guide,
+                    sportsGames = sportsGames,
                     now = now,
                     onWatchChannel = onWatchChannel
                 )
@@ -583,7 +683,7 @@ private fun MobileHomeTab(
         }
 
         if (categories.isNotEmpty()) {
-            item {
+            item(key = "home-categories") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         text = "BROWSE CATEGORIES",
@@ -594,12 +694,12 @@ private fun MobileHomeTab(
                         letterSpacing = 0.9.sp
                     )
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(categories) { cat ->
+                        itemsIndexed(categories, key = { idx, cat -> "m-cat-$idx-$cat" }) { _, cat ->
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF151B25))
-                                    .border(1.dp, DtvChrome.Divider, RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF141B27))
+                                    .border(1.dp, Color(0xFF232D3F), RoundedCornerShape(10.dp))
                                     .clickable { onSelectCategory(cat) }
                                     .padding(horizontal = 14.dp, vertical = 10.dp)
                             ) {
@@ -619,10 +719,311 @@ private fun MobileHomeTab(
 }
 
 @Composable
+private fun MobileScoreboardSection(
+    games: List<SportsGame>,
+    channels: List<Channel>,
+    guide: EpgGuide,
+    now: Long,
+    onWatchChannel: (Channel) -> Unit,
+    onOpenGuide: () -> Unit
+) {
+    val availableLeagues = remember(games) {
+        buildList {
+            add("All")
+            listOf("NBA", "NFL", "MLB", "NCAA").forEach { league ->
+                if (games.any { it.league == league }) add(league)
+            }
+        }
+    }
+    var selectedLeague by remember(availableLeagues) { mutableStateOf("All") }
+    val filteredGames = remember(games, selectedLeague) {
+        val base = if (selectedLeague == "All") games else games.filter { it.league == selectedLeague }
+        base.take(18)
+    }
+    val liveCount = remember(filteredGames) { filteredGames.count { it.isLive } }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(if (liveCount > 0) DtvChrome.LiveRed else DtvChrome.ElectricBlue)
+                )
+                Text(
+                    text = "LIVE SCOREBOARD",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontFamily = BarlowCondensedFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                if (liveCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0x29EF4444))
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "$liveCount LIVE",
+                            color = Color(0xFFFCA5A5),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            Text(
+                text = "NBA · NCAA · NFL · MLB",
+                color = DtvChrome.MutedText,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        if (availableLeagues.size > 2) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                availableLeagues.forEach { league ->
+                    val active = league == selectedLeague
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (active) DtvChrome.ElectricBlue else Color(0xFF141B27))
+                            .border(
+                                1.dp,
+                                if (active) DtvChrome.ElectricBlue else Color(0xFF232D3F),
+                                RoundedCornerShape(16.dp)
+                            )
+                            .clickable { selectedLeague = league }
+                            .padding(horizontal = 12.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = league,
+                            color = if (active) Color.White else DtvChrome.SecondaryText,
+                            fontSize = 11.sp,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            itemsIndexed(filteredGames, key = { idx, game -> "m-score-$idx-${game.id}" }) { _, game ->
+                val directChannel = remember(game.id, channels, guide, now) {
+                    SportsChannelMatcher.findDirectChannel(game, channels, guide, now)
+                }
+                MobileScoreboardCard(
+                    game = game,
+                    directChannel = directChannel,
+                    onClick = { directChannel?.let(onWatchChannel) ?: onOpenGuide() }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobileScoreboardCard(
+    game: SportsGame,
+    directChannel: Channel?,
+    onClick: () -> Unit
+) {
+    val awayScoreInt = game.awayTeam.score.toIntOrNull()
+    val homeScoreInt = game.homeTeam.score.toIntOrNull()
+    val awayLeading = awayScoreInt != null && homeScoreInt != null && awayScoreInt > homeScoreInt
+    val homeLeading = awayScoreInt != null && homeScoreInt != null && homeScoreInt > awayScoreInt
+
+    Column(
+        modifier = Modifier
+            .width(232.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF151C28), Color(0xFF10151F))
+                )
+            )
+            .border(
+                1.dp,
+                if (game.isLive) Color(0xFF2B3B54) else Color(0xFF1E2736),
+                RoundedCornerShape(12.dp)
+            )
+            .clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 11.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            // Card top row: SubLeague + Live/Clock + Network
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = game.subLeague,
+                        color = DtvChrome.ElectricBlueSoft,
+                        fontSize = 10.sp,
+                        fontFamily = BarlowCondensedFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.7.sp
+                    )
+                    Text(
+                        text = if (game.isLive) "● ${game.statusDetail.ifBlank { "LIVE" }}"
+                        else game.statusDetail.ifBlank { if (game.isFinal) "FINAL" else "UPCOMING" },
+                        color = if (game.isLive) Color(0xFFF87171) else DtvChrome.MutedText,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (game.primaryBroadcast.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF1D2636))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = game.primaryBroadcast,
+                            color = DtvChrome.SecondaryText,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            MobileScoreboardTeamRow(
+                team = game.awayTeam,
+                showScore = !game.isUpcoming,
+                isLeader = awayLeading || game.awayTeam.winner
+            )
+            MobileScoreboardTeamRow(
+                team = game.homeTeam,
+                showScore = !game.isUpcoming,
+                isLeader = homeLeading || game.homeTeam.winner
+            )
+        }
+
+        // Bottom Direct Channel Watch Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (directChannel != null) DtvChrome.ElectricBlue.copy(alpha = 0.18f)
+                    else Color(0xFF0C1018)
+                )
+                .padding(horizontal = 11.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            if (directChannel != null) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = DtvChrome.ElectricBlueSoft,
+                    modifier = Modifier.size(14.dp)
+                )
+                val chLabel = buildString {
+                    append("Watch")
+                    if (directChannel.number.isNotBlank()) append(" CH ").append(directChannel.number)
+                    val net = directChannel.callSign.ifBlank { directChannel.name }
+                    if (net.isNotBlank()) append(" · ").append(net)
+                }
+                Text(
+                    text = chLabel,
+                    color = DtvChrome.ElectricBlueSoft,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                Text(
+                    text = if (game.primaryBroadcast.isNotBlank()) "${game.primaryBroadcast} · Open Guide" else "Open Guide",
+                    color = DtvChrome.MutedText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobileScoreboardTeamRow(
+    team: SportsTeam,
+    showScore: Boolean,
+    isLeader: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (team.logoUrl.isNotBlank()) {
+            AsyncImage(
+                model = team.logoUrl,
+                contentDescription = team.shortName,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Text(
+            text = team.rankedShortName,
+            color = if (isLeader) Color.White else DtvChrome.SecondaryText,
+            fontSize = 13.sp,
+            fontWeight = if (isLeader) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = if (showScore) team.score.ifBlank { "0" } else "—",
+            color = when {
+                !showScore -> DtvChrome.MutedText
+                isLeader -> Color.White
+                else -> DtvChrome.SecondaryText
+            },
+            fontSize = 15.sp,
+            fontFamily = BarlowCondensedFontFamily,
+            fontWeight = if (isLeader) FontWeight.Bold else FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
 private fun MobileChannelRail(
     title: String,
     channels: List<Channel>,
     guide: EpgGuide,
+    sportsGames: List<SportsGame>,
     now: Long,
     onWatchChannel: (Channel) -> Unit
 ) {
@@ -638,15 +1039,22 @@ private fun MobileChannelRail(
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(channels, key = { index, ch -> "m-rail-$index-${ch.id}-${ch.streamUrl}" }) { _, ch ->
                 val prog = remember(ch, guide, now) { guide.nowProgrammeForChannel(ch, now) }
+                val showTitle = remember(ch, guide, sportsGames, now) {
+                    SportsChannelMatcher.resolveChannelShowTitle(ch, guide, sportsGames, now)
+                }
+                val progress = prog?.let {
+                    ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
+                        .coerceIn(0f, 1f)
+                } ?: 0f
                 Column(
                     modifier = Modifier
-                        .width(156.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF131923))
-                        .border(1.dp, DtvChrome.Divider, RoundedCornerShape(10.dp))
+                        .width(164.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(Color(0xFF131924))
+                        .border(1.dp, Color(0xFF202A3A), RoundedCornerShape(11.dp))
                         .clickable { onWatchChannel(ch) }
                         .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -656,7 +1064,7 @@ private fun MobileChannelRail(
                             channel = ch,
                             size = 34.dp,
                             guide = guide,
-                            shape = RoundedCornerShape(4.dp)
+                            shape = RoundedCornerShape(6.dp)
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             if (ch.number.isNotBlank()) {
@@ -679,14 +1087,28 @@ private fun MobileChannelRail(
                         }
                     }
                     Text(
-                        text = prog?.title?.takeIf { it.isNotBlank() }
-                            ?: ch.eventTitle?.takeIf { it.isNotBlank() }
-                            ?: ch.group.ifBlank { "Live" },
+                        text = showTitle,
                         color = DtvChrome.SecondaryText,
                         fontSize = 11.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (prog != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(2.5.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.12f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(progress)
+                                    .fillMaxHeight()
+                                    .background(DtvChrome.ElectricBlue)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -697,6 +1119,7 @@ private fun MobileChannelRail(
 private fun MobileGuideTab(
     channels: List<Channel>,
     guide: EpgGuide,
+    sportsGames: List<SportsGame>,
     favorites: Set<String>,
     now: Long,
     initialCategory: String,
@@ -705,25 +1128,49 @@ private fun MobileGuideTab(
     onWatchChannel: (Channel) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
-    val categories = remember(channels) {
-        listOf("All", "Favorites") + channels.map { it.group.ifBlank { "Live" } }.distinct()
+    val validLiveEvents = remember(channels, guide, sportsGames, now) {
+        SportsChannelMatcher.filterValidLiveEvents(channels, guide, sportsGames, now)
     }
-    val filtered = remember(channels, initialCategory, query, favorites, guide, now) {
+    val validLiveEventKeys = remember(validLiveEvents) {
+        validLiveEvents.map { "${it.id}|${it.streamUrl}" }.toSet()
+    }
+    val categories = remember(channels, validLiveEvents) {
+        val rawGroups = channels.map { it.group.ifBlank { "Live" } }.distinct().filterNot { grp ->
+            val u = grp.uppercase()
+            (u.contains("EVENT") || u.contains("PPV")) && validLiveEvents.isEmpty()
+        }
+        buildList {
+            add("All")
+            add("Favorites")
+            if (validLiveEvents.isNotEmpty() && rawGroups.none { it.equals("Live Events", ignoreCase = true) }) {
+                add("Live Events")
+            }
+            addAll(rawGroups)
+        }
+    }
+    val filtered = remember(channels, validLiveEventKeys, initialCategory, query, favorites, guide, sportsGames, now) {
         val q = query.trim().lowercase()
         channels.filter { ch ->
+            // Automatically hide empty/placeholder/expired live event feeds across guide views
+            if (ch.isLiveEvent() && "${ch.id}|${ch.streamUrl}" !in validLiveEventKeys) {
+                return@filter false
+            }
             val catOk = when (initialCategory) {
                 "All" -> true
                 "Favorites" -> ch.id in favorites
+                "Live Events" -> ch.isLiveEvent()
                 else -> ch.group.ifBlank { "Live" } == initialCategory
             }
             if (!catOk) return@filter false
             if (q.isEmpty()) return@filter true
+            val resolvedShow = SportsChannelMatcher.resolveChannelShowTitle(ch, guide, sportsGames, now).lowercase()
             val progTitle = guide.nowProgrammeForChannel(ch, now)?.title.orEmpty().lowercase()
             ch.name.lowercase().contains(q) ||
                 ch.callSign.lowercase().contains(q) ||
                 ch.number.lowercase().contains(q) ||
                 ch.eventTitle.orEmpty().lowercase().contains(q) ||
-                progTitle.contains(q)
+                progTitle.contains(q) ||
+                resolvedShow.contains(q)
         }
     }
 
@@ -733,9 +1180,9 @@ private fun MobileGuideTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF141A24))
-                .border(1.dp, DtvChrome.Divider, RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF131924))
+                .border(1.dp, Color(0xFF222C3E), RoundedCornerShape(10.dp))
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -743,7 +1190,7 @@ private fun MobileGuideTab(
             Icon(Icons.Default.Search, contentDescription = null, tint = DtvChrome.MutedText, modifier = Modifier.size(18.dp))
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
-                    Text("Search channels, numbers, or shows…", color = DtvChrome.MutedText, fontSize = 13.sp)
+                    Text("Search channels, teams, or shows…", color = DtvChrome.MutedText, fontSize = 13.sp)
                 }
                 BasicTextField(
                     value = query,
@@ -779,10 +1226,10 @@ private fun MobileGuideTab(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (active) DtvChrome.ElectricBlue else Color(0xFF151B25))
+                        .background(if (active) DtvChrome.ElectricBlue else Color(0xFF141B27))
                         .border(
                             1.dp,
-                            if (active) DtvChrome.ElectricBlue else DtvChrome.Divider,
+                            if (active) DtvChrome.ElectricBlue else Color(0xFF232D3F),
                             RoundedCornerShape(16.dp)
                         )
                         .clickable { onCategoryChanged(cat) }
@@ -805,6 +1252,9 @@ private fun MobileGuideTab(
         ) {
             itemsIndexed(filtered, key = { index, ch -> "m-guide-$index-${ch.id}-${ch.streamUrl}" }) { _, ch ->
                 val prog = remember(ch, guide, now) { guide.nowProgrammeForChannel(ch, now) }
+                val showTitle = remember(ch, guide, sportsGames, now) {
+                    SportsChannelMatcher.resolveChannelShowTitle(ch, guide, sportsGames, now)
+                }
                 val progress = prog?.let {
                     ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
                         .coerceIn(0f, 1f)
@@ -812,9 +1262,9 @@ private fun MobileGuideTab(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF121720))
-                        .border(1.dp, DtvChrome.Divider, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(Color(0xFF121822))
+                        .border(1.dp, Color(0xFF1F2939), RoundedCornerShape(11.dp))
                         .clickable { onWatchChannel(ch) }
                         .padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -824,24 +1274,31 @@ private fun MobileGuideTab(
                         channel = ch,
                         size = 44.dp,
                         guide = guide,
-                        shape = RoundedCornerShape(5.dp)
+                        shape = RoundedCornerShape(6.dp)
                     )
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (ch.number.isNotBlank()) {
-                                Text(
-                                    text = ch.number,
-                                    color = DtvChrome.ElectricBlueSoft,
-                                    fontSize = 14.sp,
-                                    fontFamily = BarlowCondensedFontFamily,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(DtvChrome.ElectricBlue.copy(alpha = 0.16f))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = ch.number,
+                                        color = DtvChrome.ElectricBlueSoft,
+                                        fontSize = 12.sp,
+                                        fontFamily = BarlowCondensedFontFamily,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                             Text(
                                 text = ch.callSign.ifBlank { ch.name },
@@ -853,9 +1310,7 @@ private fun MobileGuideTab(
                             )
                         }
                         Text(
-                            text = prog?.title?.takeIf { it.isNotBlank() }
-                                ?: ch.eventTitle?.takeIf { it.isNotBlank() }
-                                ?: ch.group.ifBlank { "Live Broadcast" },
+                            text = showTitle,
                             color = DtvChrome.PrimaryText,
                             fontSize = 12.sp,
                             maxLines = 1,

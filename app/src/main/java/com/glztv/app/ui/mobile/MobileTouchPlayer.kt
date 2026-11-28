@@ -87,6 +87,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.glztv.app.Channel
 import com.glztv.app.EpgGuide
 import com.glztv.app.Movie
+import com.glztv.app.data.SportsChannelMatcher
+import com.glztv.app.data.SportsGame
 import com.glztv.app.player.PlaybackControlState
 import com.glztv.app.ui.components.DtvChannelSurfBar
 import com.glztv.app.ui.components.GoogleTvChannelLogo
@@ -96,7 +98,7 @@ import com.glztv.app.ui.theme.formatDtvCompactTime
 import kotlinx.coroutines.delay
 
 /**
- * Mobile-only touch Live TV player (v1.48.5.30-mobile).
+ * Mobile-only touch Live TV player.
  *
  * - Portrait mode: 16:9 live player on top with full touch controls + Now/Next EPG & quick
  *   scrollable channel switcher below.
@@ -108,6 +110,7 @@ fun MobileLivePlayerScreen(
     channel: Channel,
     channels: List<Channel>,
     guide: EpgGuide,
+    sportsGames: List<SportsGame> = emptyList(),
     favorites: Set<String>,
     captionsEnabled: Boolean,
     sleepTimerRemainingMinutes: Int?,
@@ -220,9 +223,9 @@ fun MobileLivePlayerScreen(
     }
 
     val isFav = channel.id in favorites
-    val showTitle = currentProgramme?.title?.takeIf { it.isNotBlank() }
-        ?: channel.eventTitle?.takeIf { it.isNotBlank() }
-        ?: "Live Broadcast"
+    val showTitle = remember(channel, guide, sportsGames, now) {
+        SportsChannelMatcher.resolveChannelShowTitle(channel, guide, sportsGames, now)
+    }
     val progress = currentProgramme?.let {
         ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
             .coerceIn(0f, 1f)
@@ -624,14 +627,37 @@ fun MobileLivePlayerScreen(
         // Portrait Companion Panel (Now & Next EPG + Quick Channel List)
         if (!isFullscreen) {
             var selectedGroup by remember { mutableStateOf("All") }
-            val groups = remember(channels) {
-                listOf("All", "Favorites") + channels.map { it.group.ifBlank { "Live" } }.distinct()
+            val validLiveEvents = remember(channels, guide, sportsGames, now) {
+                SportsChannelMatcher.filterValidLiveEvents(channels, guide, sportsGames, now)
             }
-            val filteredChannels = remember(channels, selectedGroup, favorites) {
-                when (selectedGroup) {
-                    "All" -> channels
-                    "Favorites" -> channels.filter { it.id in favorites }
-                    else -> channels.filter { it.group.ifBlank { "Live" } == selectedGroup }
+            val validLiveEventKeys = remember(validLiveEvents) {
+                validLiveEvents.map { "${it.id}|${it.streamUrl}" }.toSet()
+            }
+            val groups = remember(channels, validLiveEvents) {
+                val raw = channels.map { it.group.ifBlank { "Live" } }.distinct().filterNot { grp ->
+                    val u = grp.uppercase()
+                    (u.contains("EVENT") || u.contains("PPV")) && validLiveEvents.isEmpty()
+                }
+                buildList {
+                    add("All")
+                    add("Favorites")
+                    if (validLiveEvents.isNotEmpty() && raw.none { it.equals("Live Events", ignoreCase = true) }) {
+                        add("Live Events")
+                    }
+                    addAll(raw)
+                }
+            }
+            val filteredChannels = remember(channels, validLiveEventKeys, selectedGroup, favorites, channel) {
+                channels.filter { ch ->
+                    if (ch != channel && ch.isLiveEvent() && "${ch.id}|${ch.streamUrl}" !in validLiveEventKeys) {
+                        return@filter false
+                    }
+                    when (selectedGroup) {
+                        "All" -> true
+                        "Favorites" -> ch.id in favorites
+                        "Live Events" -> ch.isLiveEvent()
+                        else -> ch.group.ifBlank { "Live" } == selectedGroup
+                    }
                 }
             }
 
@@ -640,48 +666,76 @@ fun MobileLivePlayerScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                // Now Playing & Up Next summary card
+                // Polished Now Playing & Up Next summary card
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF11161F))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFF131B28), Color(0xFF0E131D))
+                            )
+                        )
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        Text(
-                            text = "ON NOW",
-                            color = DtvChrome.ElectricBlueSoft,
-                            fontSize = 11.sp,
-                            fontFamily = BarlowCondensedFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp
-                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0x2EEF4444))
+                                .border(1.dp, Color(0x66EF4444), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = "● ON NOW",
+                                color = Color(0xFFFCA5A5),
+                                fontSize = 10.sp,
+                                fontFamily = BarlowCondensedFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.7.sp
+                            )
+                        }
                         if (currentProgramme != null) {
                             Text(
                                 text = "${formatDtvCompactTime(currentProgramme.startMillis)} – ${formatDtvCompactTime(currentProgramme.endMillis)}",
-                                color = DtvChrome.MutedText,
+                                color = DtvChrome.SecondaryText,
                                 fontSize = 11.sp
                             )
                         }
                         Spacer(Modifier.weight(1f))
                         Text(
-                            text = "Swipe video ▲▼ to surf",
+                            text = "Swipe ▲▼ to surf",
                             color = DtvChrome.MutedText,
-                            fontSize = 11.sp
+                            fontSize = 10.sp
                         )
                     }
                     Text(
                         text = showTitle,
                         color = Color.White,
                         fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (currentProgramme != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.14f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(progress)
+                                    .fillMaxHeight()
+                                    .background(DtvChrome.ElectricBlue)
+                            )
+                        }
+                    }
                     if (nextProgramme != null) {
                         Text(
                             text = "Up Next (${formatDtvCompactTime(nextProgramme.startMillis)}): ${nextProgramme.title}",
@@ -692,7 +746,7 @@ fun MobileLivePlayerScreen(
                         )
                     }
                 }
-                HorizontalDivider(color = DtvChrome.Divider)
+                HorizontalDivider(color = Color(0xFF1E2838))
 
                 // Category filter chips
                 Row(
@@ -707,10 +761,10 @@ fun MobileLivePlayerScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(if (active) DtvChrome.ElectricBlue else Color(0xFF171D28))
+                                .background(if (active) DtvChrome.ElectricBlue else Color(0xFF141B27))
                                 .border(
                                     1.dp,
-                                    if (active) DtvChrome.ElectricBlue else DtvChrome.Divider,
+                                    if (active) DtvChrome.ElectricBlue else Color(0xFF232D3F),
                                     RoundedCornerShape(16.dp)
                                 )
                                 .clickable { selectedGroup = grp }
@@ -730,64 +784,116 @@ fun MobileLivePlayerScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     itemsIndexed(filteredChannels, key = { index, ch -> "m-player-$index-${ch.id}-${ch.streamUrl}" }) { _, ch ->
                         val chProg = remember(ch, guide, now) { guide.nowProgrammeForChannel(ch, now) }
+                        val chShowTitle = remember(ch, guide, sportsGames, now) {
+                            SportsChannelMatcher.resolveChannelShowTitle(ch, guide, sportsGames, now)
+                        }
+                        val chProgress = chProg?.let {
+                            ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
+                                .coerceIn(0f, 1f)
+                        } ?: 0f
                         val isCurrent = ch == channel
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isCurrent) Color(0xFF15263B) else Color(0xFF121720))
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isCurrent) Color(0xFF15273E) else Color(0xFF121822))
                                 .border(
                                     1.dp,
-                                    if (isCurrent) DtvChrome.ElectricBlue else DtvChrome.Divider,
-                                    RoundedCornerShape(8.dp)
+                                    if (isCurrent) DtvChrome.ElectricBlue else Color(0xFF1F2939),
+                                    RoundedCornerShape(10.dp)
                                 )
                                 .clickable { onTune(ch) }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .padding(horizontal = 10.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             GoogleTvChannelLogo(
                                 channel = ch,
-                                size = 38.dp,
+                                size = 40.dp,
                                 guide = guide,
-                                shape = RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(6.dp)
                             )
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     if (ch.number.isNotBlank()) {
-                                        Text(
-                                            text = ch.number,
-                                            color = DtvChrome.ElectricBlueSoft,
-                                            fontSize = 13.sp,
-                                            fontFamily = BarlowCondensedFontFamily,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(
+                                                    if (isCurrent) DtvChrome.ElectricBlue
+                                                    else DtvChrome.ElectricBlue.copy(alpha = 0.16f)
+                                                )
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = ch.number,
+                                                color = if (isCurrent) Color.White else DtvChrome.ElectricBlueSoft,
+                                                fontSize = 11.sp,
+                                                fontFamily = BarlowCondensedFontFamily,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                     Text(
-                                        text = ch.name,
+                                        text = ch.callSign.ifBlank { ch.name },
                                         color = Color.White,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
+                                    if (isCurrent) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(DtvChrome.ElectricBlue.copy(alpha = 0.25f))
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = "PLAYING",
+                                                color = DtvChrome.ElectricBlueSoft,
+                                                fontSize = 9.sp,
+                                                fontFamily = BarlowCondensedFontFamily,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.6.sp
+                                            )
+                                        }
+                                    }
                                 }
                                 Text(
-                                    text = chProg?.title?.takeIf { it.isNotBlank() }
-                                        ?: ch.eventTitle?.takeIf { it.isNotBlank() }
-                                        ?: ch.group.ifBlank { "Live Broadcast" },
-                                    color = DtvChrome.SecondaryText,
+                                    text = chShowTitle,
+                                    color = if (isCurrent) DtvChrome.PrimaryText else DtvChrome.SecondaryText,
                                     fontSize = 12.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                if (chProg != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(2.5.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(Color.White.copy(alpha = 0.12f))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(chProgress)
+                                                .fillMaxHeight()
+                                                .background(DtvChrome.ElectricBlue)
+                                        )
+                                    }
+                                }
                             }
                             IconButton(
                                 onClick = { onToggleFavorite(ch.id) },
