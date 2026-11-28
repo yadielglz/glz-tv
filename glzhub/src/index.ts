@@ -176,6 +176,98 @@ async function xmlTextFromResponse(response: Response): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
+function parseEpgSourceUrls(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  for (const part of String(raw).split(/[\r\n]+/)) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    if (!isHttpsUrl(trimmed)) throw new Error(`Invalid EPG source URL: ${trimmed.slice(0, 80)}`);
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      urls.push(trimmed);
+    }
+  }
+  if (urls.length > 6) throw new Error("Maximum of 6 EPG source URLs per playlist.");
+  return urls;
+}
+
+function extractXmlAttr(tag: string, attrName: string): string {
+  const match = tag.match(new RegExp(`\\b${attrName}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i"));
+  return (match?.[1] ?? match?.[2] ?? "").trim();
+}
+
+async function fetchAndMergeXmlTvSources(urls: string[]): Promise<{ xml: string; channelCount: number; programmeCount: number; succeeded: number; failed: string[] }> {
+  if (!urls.length) throw new Error("At least one HTTPS EPG source URL is required.");
+  const fetched: { url: string; xml: string }[] = [];
+  const failed: string[] = [];
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "user-agent": "GLZ-Hub-EPG/1.0",
+          accept: "application/xml,text/xml,application/gzip,*/*"
+        }
+      });
+      if (!response.ok) {
+        failed.push(`${new URL(url).hostname} (${response.status})`);
+        continue;
+      }
+      const xml = await xmlTextFromResponse(response);
+      validateXmlTv(xml);
+      fetched.push({ url, xml });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failed.push(`${url.slice(0, 48)}: ${msg}`);
+    }
+  }
+
+  if (!fetched.length) {
+    throw new Error(`Could not fetch any EPG source (${failed.join("; ")})`);
+  }
+
+  // Fast path: single source returns directly without re-serialization overhead
+  if (fetched.length === 1) {
+    const validated = validateXmlTv(fetched[0].xml);
+    return { ...validated, succeeded: 1, failed };
+  }
+
+  // Priority merge: Source #1 wins for any channel ID already present; later sources fill in missing channels
+  const seenChannelIds = new Set<string>();
+  const mergedChannels: string[] = [];
+  const mergedProgrammes: string[] = [];
+  const channelRegex = /<channel\b[^>]*>(?:[\s\S]*?<\/channel>)|\s*<channel\b[^>]*\/>/gi;
+  const programmeRegex = /<programme\b[^>]*>[\s\S]*?<\/programme>/gi;
+
+  for (const { xml } of fetched) {
+    const acceptedForSource = new Set<string>();
+    for (const match of xml.matchAll(channelRegex)) {
+      const block = match[0].trim();
+      const id = extractXmlAttr(block, "id");
+      const key = id.toLowerCase();
+      if (!key || seenChannelIds.has(key)) continue;
+      seenChannelIds.add(key);
+      acceptedForSource.add(key);
+      mergedChannels.push(block);
+    }
+    if (acceptedForSource.size > 0) {
+      for (const match of xml.matchAll(programmeRegex)) {
+        const block = match[0].trim();
+        const chId = extractXmlAttr(block, "channel").toLowerCase();
+        if (chId && acceptedForSource.has(chId)) {
+          mergedProgrammes.push(block);
+        }
+      }
+    }
+  }
+
+  const mergedXml = `<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="GLZ Hub Master EPG">\n${mergedChannels.join("\n")}\n${mergedProgrammes.join("\n")}\n</tv>\n`;
+  const validated = validateXmlTv(mergedXml);
+  return { ...validated, succeeded: fetched.length, failed };
+}
+
 function guestServices(value: unknown): Record<string, string | null>[] {
   if (!Array.isArray(value) || value.length > 12) throw new Error("Invalid services");
   return value.map((item, index) => {
@@ -1813,13 +1905,13 @@ async function getManagedGuide(request: Request, env: Env, playlistId: string): 
 async function saveManagedGuide(request: Request, env: Env, playlistId: string): Promise<Response> {
   const { user, playlist } = await ownedPlaylist(request, env, playlistId);
   const input = await body(request);
-  let sourceUrl = optionalString(input.sourceUrl || input.source_url, "EPG source URL");
+  const rawSourceUrl = optionalString(input.sourceUrl || input.source_url, "EPG source URL", 4096);
+  const sourceUrls = parseEpgSourceUrls(rawSourceUrl);
+  const sourceUrl = sourceUrls.length ? sourceUrls.join("\n") : null;
   let rawXml = input.xml;
-  if (sourceUrl && typeof rawXml !== "string") {
-    if (!isHttpsUrl(sourceUrl)) throw new Error("Invalid EPG source URL");
-    const source = await fetch(sourceUrl, { headers: { "user-agent": "GLZ-Hub-EPG/1.0", accept: "application/xml,text/xml,application/gzip,*/*" } });
-    if (!source.ok) throw new Error(`Invalid EPG source response (${source.status})`);
-    rawXml = await xmlTextFromResponse(source);
+  if (sourceUrls.length && typeof rawXml !== "string") {
+    const merged = await fetchAndMergeXmlTvSources(sourceUrls);
+    rawXml = merged.xml;
   }
   const guide = validateXmlTv(rawXml);
   const name = optionalString(input.name, "guide name", 120) || `${String(playlist.title)} Guide`;
@@ -1853,11 +1945,10 @@ async function saveManagedGuide(request: Request, env: Env, playlistId: string):
 
 async function fetchGuidePreview(request: Request, env: Env): Promise<Response> {
   await adminUser(request, env);
-  const sourceUrl = new URL(request.url).searchParams.get("url");
-  if (!sourceUrl || !isHttpsUrl(sourceUrl)) throw new Error("Invalid EPG source URL");
-  const source = await fetch(sourceUrl, { headers: { "user-agent": "GLZ-Hub-EPG/1.0", accept: "application/xml,text/xml,application/gzip,*/*" } });
-  if (!source.ok) throw new Error(`Invalid EPG source response (${source.status})`);
-  const guide = validateXmlTv(await xmlTextFromResponse(source));
+  const rawUrl = new URL(request.url).searchParams.get("url");
+  const urls = parseEpgSourceUrls(rawUrl);
+  if (!urls.length) throw new Error("Invalid EPG source URL");
+  const guide = await fetchAndMergeXmlTvSources(urls);
   return new Response(guide.xml, { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" } });
 }
 
@@ -1883,14 +1974,9 @@ async function refreshManagedGuideSource(env: Env, row: Record<string, unknown>,
     ) as Record<string, unknown>[];
     if (!claimed[0]) return;
 
-    const source = await fetch(String(row.source_url), {
-      headers: {
-        "user-agent": "GLZ-Hub-EPG/1.0",
-        accept: "application/xml,text/xml,application/gzip,*/*"
-      }
-    });
-    if (!source.ok) throw new Error(`EPG source returned ${source.status}`);
-    const refreshed = validateXmlTv(await xmlTextFromResponse(source));
+    const urls = parseEpgSourceUrls(String(row.source_url || ""));
+    if (!urls.length) throw new Error("No valid EPG source URLs configured");
+    const refreshed = await fetchAndMergeXmlTvSources(urls);
     const objectKey = managedGuideObjectKey(String(row.playlist_id));
     await env.EPG_BUCKET.put(objectKey, refreshed.xml, {
       httpMetadata: { contentType: "application/xml; charset=utf-8" }
@@ -1904,7 +1990,7 @@ async function refreshManagedGuideSource(env: Env, row: Record<string, unknown>,
         programme_count: refreshed.programmeCount,
         updated_at: new Date().toISOString(),
         refresh_started_at: null,
-        refresh_error: null
+        refresh_error: refreshed.failed.length ? `Partial refresh warning: ${refreshed.failed.join("; ")}`.slice(0, 500) : null
       })
     });
     await invalidateManagedGuideCache(origin, String(row.playlist_id));

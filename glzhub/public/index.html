@@ -777,8 +777,8 @@
           </div>
           <div class="epg-source-bar">
             <select id="epgPlaylistSelect" aria-label="TV playlist"><option value="">Select a TV playlist…</option></select>
-            <input id="epgFetchUrl" type="url" placeholder="https://epg.best/.../guide.xml.gz" aria-label="Guide URL">
-            <button id="epgFetchButton" class="secondary">Fetch URL</button>
+            <textarea id="epgFetchUrl" rows="2" placeholder="One HTTPS XMLTV URL per line (primary first, e.g. epg.best on line 1 + backup sources on lines 2+)…" aria-label="Guide URLs" style="flex:1;min-width:260px;resize:vertical;font-family:monospace;font-size:12px;line-height:1.4;padding:8px 10px;"></textarea>
+            <button id="epgFetchButton" class="secondary">Fetch &amp; Merge</button>
             <button id="epgOpenButton" class="secondary">Open XMLTV</button>
             <input id="epgOpenInput" class="hidden" type="file" accept=".xml,.gz,.xml.gz,application/xml,text/xml,application/gzip">
           </div>

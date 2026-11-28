@@ -3956,9 +3956,22 @@ $("#epgChannelFilter")?.addEventListener("input", renderEpgTimeline);
 $("#epgOpenButton")?.addEventListener("click", () => $("#epgOpenInput").click());
 $("#epgOpenInput")?.addEventListener("change", async (event) => { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; try { epgState.sourceUrl = ""; setEpgDocument(parseXmlTv(await readGuideFile(file)), `Loaded ${file.name} · review and publish when ready.`); } catch (error) { epgNotice(error.message, true); } });
 $("#epgFetchButton")?.addEventListener("click", async () => {
-  const url = $("#epgFetchUrl").value.trim(); if (!url) return epgNotice("Enter an HTTPS XMLTV URL.", true);
-  epgNotice("Fetching and validating guide…");
-  try { const response = await fetch(`/api/v1/admin/epg/fetch?url=${encodeURIComponent(url)}`, { headers: { authorization: `Bearer ${state.session.access_token}` } }); if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(result.error || "Could not fetch guide."); } epgState.sourceUrl = url; setEpgDocument(parseXmlTv(await response.text()), `Guide loaded from ${new URL(url).hostname} · review and publish when ready. GLZ Hub will refresh this source when accessed after six hours.`); } catch (error) { epgNotice(error.message, true); }
+  const raw = $("#epgFetchUrl").value.trim();
+  const urls = raw.split(/[\r\n]+/).map((u) => u.trim()).filter(Boolean);
+  if (!urls.length) return epgNotice("Enter one or more HTTPS XMLTV URLs (one per line).", true);
+  epgNotice(urls.length > 1 ? `Fetching & merging ${urls.length} EPG sources…` : "Fetching and validating guide…");
+  const normalizedMulti = urls.join("\n");
+  try {
+    const response = await fetch(`/api/v1/admin/epg/fetch?url=${encodeURIComponent(normalizedMulti)}`, { headers: { authorization: `Bearer ${state.session.access_token}` } });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || "Could not fetch guide.");
+    }
+    epgState.sourceUrl = normalizedMulti;
+    $("#epgFetchUrl").value = normalizedMulti;
+    const hosts = [...new Set(urls.map((u) => { try { return new URL(u).hostname; } catch { return u; } }))].join(" + ");
+    setEpgDocument(parseXmlTv(await response.text()), `Merged ${urls.length} source${urls.length === 1 ? "" : "s"} (${hosts}) · review, click Auto-Match tvg-id, and Publish EPG. GLZ Hub will auto-refresh all sources every 6 hours.`);
+  } catch (error) { epgNotice(error.message, true); }
 });
 $("#epgPublish")?.addEventListener("click", async () => {
   if (!epgState.playlistId || !epgState.doc) return epgNotice("Select a playlist and load a guide first.", true);
