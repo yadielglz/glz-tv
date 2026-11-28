@@ -4388,9 +4388,19 @@ private fun ChannelPane(
 }
 
 private fun ppvChannelPrefix(channel: Channel): String? {
-    val number = channel.number.trim()
-    return listOf("29", "30", "31").firstOrNull { prefix ->
-        number == prefix || number.startsWith("$prefix-")
+    // Only collapse true Live Event / PPV channels — never regular linear networks (e.g., NBATV, NFL Network)
+    if (!channel.isLiveEvent()) return null
+    val group = channel.group.trim()
+    val groupUpper = group.uppercase(Locale.ROOT)
+    val leagueUpper = channel.eventLeague.trim().uppercase(Locale.ROOT)
+    val nameUpper = channel.name.uppercase(Locale.ROOT)
+    return when {
+        groupUpper.contains("PPV") || groupUpper.contains("COMBAT") ||
+            leagueUpper in setOf("UFC", "BOXING", "MMA", "WWE") ||
+            nameUpper.contains("PPV") || nameUpper.contains("UFC") -> "PPV & COMBAT EVENTS"
+        groupUpper.contains("MLB") || leagueUpper == "MLB" || nameUpper.contains("MLB") -> "MLB EVENTS"
+        group.isNotBlank() && (groupUpper.contains("EVENT") || groupUpper.contains("LIVE")) -> groupUpper
+        else -> "MAJOR SPORTS EVENTS"
     }
 }
 
@@ -4689,8 +4699,10 @@ private fun ImmersivePlayerScreen(
     var showOsd by remember { mutableStateOf(false) }
     var selectingMultiViewChannel by remember { mutableStateOf(false) }
     var showDiagnostics by remember { mutableStateOf(false) }
-    var collapsedPpvPrefixes by remember {
-        mutableStateOf(setOf("29", "30", "31") - setOfNotNull(ppvChannelPrefix(channel)))
+    var collapsedPpvPrefixes by remember(channels.size) {
+        mutableStateOf(
+            channels.mapNotNull { ppvChannelPrefix(it) }.toSet() - setOfNotNull(ppvChannelPrefix(channel))
+        )
     }
     val playerFocus = remember { FocusRequester() }
     val selectedChannelFocus = remember { FocusRequester() }
@@ -4741,6 +4753,7 @@ private fun ImmersivePlayerScreen(
         }
     }
     var surfChannel by remember { mutableStateOf<Channel?>(null) }
+    var surfIndex by remember { mutableStateOf<Int?>(null) }
     var surfRevision by remember { mutableStateOf(0) }
     var digitBuffer by remember { mutableStateOf("") }
     var digitRevision by remember { mutableStateOf(0) }
@@ -4755,24 +4768,41 @@ private fun ImmersivePlayerScreen(
         }
     }
 
-    LaunchedEffect(channel.id) {
+    fun isSameChannel(a: Channel, b: Channel): Boolean =
+        a === b || (a.id == b.id && a.number == b.number && a.streamUrl == b.streamUrl)
+
+    fun currentChannelIndex(): Int {
+        if (channels.isEmpty()) return 0
+        val exactRef = channels.indexOfFirst { it === channel }
+        if (exactRef >= 0) return exactRef
+        val exactMatch = channels.indexOfFirst {
+            it.id == channel.id && it.number == channel.number && it.streamUrl == channel.streamUrl
+        }
+        if (exactMatch >= 0) return exactMatch
+        return channels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
+    }
+
+    LaunchedEffect(channel.id, channel.number, channel.streamUrl) {
         // The ready callback below turns this on at the exact point playback starts.
         showOsd = false
         surfChannel = null
+        surfIndex = null
         digitBuffer = ""
     }
     LaunchedEffect(showOsd, drawer) {
         if (showOsd || drawer != PlayerDrawer.None) {
             surfChannel = null
+            surfIndex = null
             digitBuffer = ""
         }
     }
     // Channel Surfer auto-tune: dwelling 2.0s on a surfed channel tunes to it automatically
-    LaunchedEffect(surfChannel?.id, surfRevision) {
+    LaunchedEffect(surfIndex, surfRevision) {
         val target = surfChannel ?: return@LaunchedEffect
         delay(2_000L)
         surfChannel = null
-        if (target.id != channel.id) {
+        surfIndex = null
+        if (!isSameChannel(target, channel)) {
             onTune(target)
         }
     }
@@ -4782,18 +4812,18 @@ private fun ImmersivePlayerScreen(
         delay(1_600L)
         val target = matchedDigitChannel
         digitBuffer = ""
-        if (target != null && target.id != channel.id) {
+        if (target != null && !isSameChannel(target, channel)) {
             onTune(target)
         }
     }
 
     fun stepSurfChannel(direction: Int) {
         if (channels.isEmpty()) return
-        val base = surfChannel ?: channel
-        val baseIndex = channels.indexOfFirst { it.id == base.id }.coerceAtLeast(0)
-        val nextIndex = (baseIndex + direction + channels.size) % channels.size
+        val baseIndex = surfIndex?.takeIf { it in channels.indices } ?: currentChannelIndex()
+        val nextIndex = ((baseIndex + direction) % channels.size + channels.size) % channels.size
         digitBuffer = ""
         now = System.currentTimeMillis()
+        surfIndex = nextIndex
         surfChannel = channels[nextIndex]
         surfRevision++
     }
@@ -4906,6 +4936,18 @@ private fun ImmersivePlayerScreen(
                             playerFocus.requestFocus()
                             return@onPreviewKeyEvent true
                         }
+                        KeyEvent.KEYCODE_CHANNEL_UP -> {
+                            showOsd = false
+                            playerFocus.requestFocus()
+                            stepSurfChannel(1)
+                            return@onPreviewKeyEvent true
+                        }
+                        KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                            showOsd = false
+                            playerFocus.requestFocus()
+                            stepSurfChannel(-1)
+                            return@onPreviewKeyEvent true
+                        }
                         // Allow D-Pad navigation and click into OSD action buttons:
                         KeyEvent.KEYCODE_DPAD_LEFT,
                         KeyEvent.KEYCODE_DPAD_RIGHT,
@@ -4926,6 +4968,7 @@ private fun ImmersivePlayerScreen(
                         if (drawer == PlayerDrawer.None) {
                             now = System.currentTimeMillis()
                             surfChannel = null
+                            surfIndex = null
                             digitBuffer = ""
                             showOsd = false
                             drawer = PlayerDrawer.Channels
@@ -4936,6 +4979,7 @@ private fun ImmersivePlayerScreen(
                         if (drawer == PlayerDrawer.None) {
                             now = System.currentTimeMillis()
                             surfChannel = null
+                            surfIndex = null
                             digitBuffer = ""
                             showOsd = false
                             drawer = PlayerDrawer.Services
@@ -4949,11 +4993,12 @@ private fun ImmersivePlayerScreen(
                             if (digitBuffer.isNotEmpty()) {
                                 val target = matchedDigitChannel
                                 digitBuffer = ""
-                                if (target != null && target.id != channel.id) onTune(target)
+                                if (target != null && !isSameChannel(target, channel)) onTune(target)
                             } else if (surfChannel != null) {
                                 val target = surfChannel
                                 surfChannel = null
-                                if (target != null && target.id != channel.id) onTune(target)
+                                surfIndex = null
+                                if (target != null && !isSameChannel(target, channel)) onTune(target)
                             } else {
                                 now = System.currentTimeMillis()
                                 showOsd = true
@@ -5093,7 +5138,7 @@ private fun ImmersivePlayerScreen(
                     currentProgramme = surfProg,
                     guide = guide,
                     nowMillis = now,
-                    isCurrentChannel = previewCh.id == channel.id
+                    isCurrentChannel = isSameChannel(previewCh, channel)
                 )
             }
         }
@@ -5288,11 +5333,7 @@ private fun ImmersivePlayerScreen(
                                 val collapsed = prefix in collapsedPpvPrefixes
                                 var headerFocused by remember(prefix) { mutableStateOf(false) }
                                 val headerInteraction = remember(prefix) { MutableInteractionSource() }
-                                val label = when (prefix) {
-                                    "29" -> "PPV & COMBAT EVENTS"
-                                    "30" -> "MAJOR SPORTS EVENTS"
-                                    else -> "MLB EVENTS"
-                                }
+                                val label = prefix
                                 val toggleGroup = {
                                     collapsedPpvPrefixes = if (collapsed) {
                                         collapsedPpvPrefixes - prefix

@@ -3638,7 +3638,7 @@ function setEpgDocument(doc, message) {
   const initialDate = programmeDates.length && (now < programmeDates[0] || now > programmeDates.at(-1)) ? programmeDates[0] : now;
   const localInitialDate = new Date(initialDate.getTime() - initialDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
   $("#epgScheduleDate").value = localInitialDate;
-  ["#epgPublish", "#epgExportXml", "#epgExportGz", "#epgAddChannel", "#epgAddProgramme"].forEach((id) => $(id).disabled = false);
+  ["#epgPublish", "#epgExportXml", "#epgExportGz", "#epgAutoMatch", "#epgAddChannel", "#epgAddProgramme"].forEach((id) => { const el = $(id); if (el) el.disabled = false; });
   renderEpgTimeline();
   const dates = [...doc.querySelectorAll("programme")].flatMap((node) => [xmlTvDate(node.getAttribute("start")), xmlTvDate(node.getAttribute("stop"))]).filter(Boolean).sort((a, b) => a - b);
   const coverage = dates.length ? ` Coverage: ${dates[0].toLocaleString()} through ${dates.at(-1).toLocaleString()}.` : " This guide contains no programmes.";
@@ -3674,6 +3674,136 @@ function normalizeEpgKey(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function stripEpgCountryAndFeed(value) {
+  const cleaned = String(value || "")
+    .trim()
+    .replace(/\.[a-z]{2,3}$/i, "") // strip epg.best country suffix like .us, .pr, .uk, .ca, .mx, .es
+    .replace(/^(?:us|usa|uk|ca|pr|mx|es|latam)\s*[:|\-]\s*/i, "")
+    .replace(/\((?:east|west|hd|fhd|uhd|4k|sd|us|usa|pr|latino|spanish|english)\)/gi, " ")
+    .replace(/\b(?:east|west|fhd|uhd|hd|4k|sd|us|usa|feed)\b/gi, " ");
+  return normalizeEpgKey(cleaned);
+}
+
+function buildEpgChannelMatcher(guideChannels) {
+  const guideById = new Map();
+  const guideByIdLower = new Map();
+  const guideByNormName = new Map();
+  const guideByStripped = new Map();
+
+  const scoreFeedPreference = (chId, displayName) => {
+    const combined = `${chId} ${displayName}`.toLowerCase();
+    let score = 0;
+    if (combined.includes(".us") || /\bus\b/.test(combined)) score += 4;
+    if (combined.includes("east")) score += 3;
+    if (combined.includes("hd") || combined.includes("fhd")) score += 1;
+    if (combined.includes("west") || combined.includes("pacific")) score -= 2;
+    return score;
+  };
+
+  for (const channel of guideChannels) {
+    const chId = channel.getAttribute("id") || "";
+    if (!chId) continue;
+    guideById.set(chId, channel);
+    if (!guideByIdLower.has(chId.toLowerCase())) guideByIdLower.set(chId.toLowerCase(), channel);
+    const displayNames = [...channel.querySelectorAll("display-name")].map((dn) => dn.textContent || "");
+    const pref = scoreFeedPreference(chId, displayNames.join(" "));
+
+    const registerNorm = (map, key) => {
+      if (!key) return;
+      const existing = map.get(key);
+      if (!existing || pref > existing.pref) {
+        map.set(key, { channel, pref });
+      }
+    };
+
+    registerNorm(guideByNormName, normalizeEpgKey(chId));
+    registerNorm(guideByStripped, stripEpgCountryAndFeed(chId));
+    for (const dn of displayNames) {
+      registerNorm(guideByNormName, normalizeEpgKey(dn));
+      registerNorm(guideByStripped, stripEpgCountryAndFeed(dn));
+    }
+  }
+
+  return (item) => {
+    const tvgId = String(item.metadata?.tvg_id || "").trim();
+    if (tvgId) {
+      const exact = guideById.get(tvgId) || guideByIdLower.get(tvgId.toLowerCase());
+      if (exact) return exact;
+      const normId = normalizeEpgKey(tvgId);
+      if (normId && guideByNormName.has(normId)) return guideByNormName.get(normId).channel;
+      const strippedId = stripEpgCountryAndFeed(tvgId);
+      if (strippedId && guideByStripped.has(strippedId)) return guideByStripped.get(strippedId).channel;
+    }
+    const title = String(item.title || "").replace(/^(?:ch\s*)?\d+\s*[·.\-:|\s]\s*/i, "").trim();
+    const normTitle = normalizeEpgKey(title);
+    if (normTitle && guideByNormName.has(normTitle)) return guideByNormName.get(normTitle).channel;
+    const strippedTitle = stripEpgCountryAndFeed(title);
+    if (strippedTitle && guideByStripped.has(strippedTitle)) return guideByStripped.get(strippedTitle).channel;
+    return undefined;
+  };
+}
+
+async function autoMatchPlaylistEpgIds() {
+  if (!epgState.doc || !epgState.playlistId) {
+    toast("Load an XMLTV / epg.best guide for a playlist first.");
+    return;
+  }
+  const playlist = state.playlists.find((item) => item.id === epgState.playlistId);
+  if (!playlist) { toast("Select a playlist first."); return; }
+  const guideChannels = [...epgState.doc.querySelectorAll("channel")];
+  if (!guideChannels.length) { toast("No channels in loaded XMLTV guide."); return; }
+
+  const btn = $("#epgAutoMatch");
+  if (btn) { btn.disabled = true; btn.textContent = "Matching…"; }
+  try {
+    const matchGuideChannel = buildEpgChannelMatcher(guideChannels);
+    const guideIdSet = new Set(guideChannels.map((c) => (c.getAttribute("id") || "").toLowerCase()).filter(Boolean));
+    const items = playlist.playlist_items || [];
+    const updates = [];
+    let alreadyMatched = 0;
+    let unmatched = 0;
+
+    for (const item of items) {
+      const currentTvgId = String(item.metadata?.tvg_id || "").trim();
+      if (currentTvgId && guideIdSet.has(currentTvgId.toLowerCase())) {
+        alreadyMatched++;
+        continue;
+      }
+      const matchedNode = matchGuideChannel(item);
+      const matchedId = matchedNode?.getAttribute("id") || "";
+      if (matchedId) {
+        updates.push({ item, matchedId });
+      } else {
+        unmatched++;
+      }
+    }
+
+    let saved = 0;
+    for (let i = 0; i < updates.length; i += 10) {
+      const batch = updates.slice(i, i + 10);
+      await Promise.all(batch.map(async ({ item, matchedId }) => {
+        await api(`/api/v1/admin/playlists/${playlist.id}/items/${item.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ tvg_id: matchedId })
+        });
+        item.metadata = { ...(item.metadata || {}), tvg_id: matchedId };
+        saved++;
+      }));
+    }
+
+    renderEpgTimeline();
+    const msg = saved > 0
+      ? `Auto-matched & saved ${saved} channel${saved === 1 ? "" : "s"} (${alreadyMatched} already matched, ${unmatched} not found in this epg.best file).`
+      : `0 new matches (${alreadyMatched} already matched, ${unmatched} missing from this epg.best file — add those channels in your epg.best account & re-fetch).`;
+    epgNotice(msg);
+    toast(saved > 0 ? `Auto-matched ${saved} channels!` : "No new epg.best matches found.");
+  } catch (error) {
+    epgNotice(error.message || "Auto-match failed.", true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Auto-Match tvg-id"; }
+  }
+}
+
 function renderEpgTimeline() {
   if (!epgState.doc) return;
   const dateText = $("#epgScheduleDate").value || new Date().toISOString().slice(0, 10);
@@ -3682,33 +3812,7 @@ function renderEpgTimeline() {
   const query = $("#epgChannelFilter").value.trim().toLowerCase();
   const allProgrammes = [...epgState.doc.querySelectorAll("programme")];
   const guideChannels = [...epgState.doc.querySelectorAll("channel")];
-  const guideById = new Map();
-  const guideByIdLower = new Map();
-  const guideByNormName = new Map();
-  for (const channel of guideChannels) {
-    const chId = channel.getAttribute("id") || "";
-    if (!chId) continue;
-    guideById.set(chId, channel);
-    if (!guideByIdLower.has(chId.toLowerCase())) guideByIdLower.set(chId.toLowerCase(), channel);
-    const idNorm = normalizeEpgKey(chId);
-    if (idNorm && !guideByNormName.has(idNorm)) guideByNormName.set(idNorm, channel);
-    for (const dn of channel.querySelectorAll("display-name")) {
-      const nameNorm = normalizeEpgKey(dn.textContent);
-      if (nameNorm && !guideByNormName.has(nameNorm)) guideByNormName.set(nameNorm, channel);
-    }
-  }
-  const matchGuideChannel = (item) => {
-    const tvgId = String(item.metadata?.tvg_id || "").trim();
-    if (tvgId) {
-      const exact = guideById.get(tvgId) || guideByIdLower.get(tvgId.toLowerCase());
-      if (exact) return exact;
-      const normId = normalizeEpgKey(tvgId);
-      if (normId && guideByNormName.has(normId)) return guideByNormName.get(normId);
-    }
-    const normTitle = normalizeEpgKey(item.title);
-    if (normTitle && guideByNormName.has(normTitle)) return guideByNormName.get(normTitle);
-    return undefined;
-  };
+  const matchGuideChannel = buildEpgChannelMatcher(guideChannels);
   const playlist = state.playlists.find((item) => item.id === epgState.playlistId);
   const channelRows = playlist ? [...(playlist.playlist_items || [])]
     .sort((a, b) => String(a.metadata?.tvg_chno || a.position || "").localeCompare(String(b.metadata?.tvg_chno || b.position || ""), undefined, { numeric: true }))
@@ -3830,6 +3934,7 @@ $("#epgPublish")?.addEventListener("click", async () => {
 });
 $("#epgExportXml")?.addEventListener("click", () => downloadEpgDocument(false));
 $("#epgExportGz")?.addEventListener("click", () => downloadEpgDocument(true));
+$("#epgAutoMatch")?.addEventListener("click", () => autoMatchPlaylistEpgIds());
 $("#epgAddChannel")?.addEventListener("click", () => openEpgChannelEditor());
 $("#epgAddProgramme")?.addEventListener("click", () => openEpgProgrammeEditor());
 $$('[data-close-epg-channel]').forEach((button) => button.addEventListener("click", () => $("#epgChannelDialog").close()));

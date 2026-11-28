@@ -42,7 +42,8 @@ public final class M3uParser {
             int comma = findUnquotedComma(pendingInfo);
             String name = comma >= 0 ? pendingInfo.substring(comma + 1).trim() : "Channel";
             if (name.isEmpty()) name = attributes.getOrDefault("tvg-name", "Channel");
-            String id = attributes.getOrDefault("tvg-id", name);
+            String rawId = attributes.getOrDefault("tvg-id", "").trim();
+            String id = rawId.isEmpty() ? name : rawId;
             String group = attributes.getOrDefault("group-title", "Other");
             String number = first(attributes, "tvg-chno", "ch-number", "channel-number", "tvg-num");
             String logoUrl = attributes.getOrDefault("tvg-logo", "");

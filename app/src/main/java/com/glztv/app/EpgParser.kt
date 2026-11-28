@@ -34,13 +34,21 @@ data class EpgGuide(
                 if (norm.isNotBlank() && norm !in GENERIC_EVENT_NAMES) putIfAbsent(norm, id)
                 val cleanNorm = normalize(cleanChannelName(name))
                 if (cleanNorm.isNotBlank() && cleanNorm !in GENERIC_EVENT_NAMES) putIfAbsent(cleanNorm, id)
+                val strippedId = normalizeEpgFeed(id)
+                if (strippedId.isNotBlank() && strippedId !in GENERIC_EVENT_NAMES) putIfAbsent(strippedId, id)
+                val strippedName = normalizeEpgFeed(name)
+                if (strippedName.isNotBlank() && strippedName !in GENERIC_EVENT_NAMES) putIfAbsent(strippedName, id)
             }
             allChannelNames.forEach { (id, names) ->
+                val strippedId = normalizeEpgFeed(id)
+                if (strippedId.isNotBlank() && strippedId !in GENERIC_EVENT_NAMES) putIfAbsent(strippedId, id)
                 names.forEach { name ->
                     val norm = normalize(name)
                     if (norm.isNotBlank() && norm !in GENERIC_EVENT_NAMES) putIfAbsent(norm, id)
                     val cleanNorm = normalize(cleanChannelName(name))
                     if (cleanNorm.isNotBlank() && cleanNorm !in GENERIC_EVENT_NAMES) putIfAbsent(cleanNorm, id)
+                    val strippedName = normalizeEpgFeed(name)
+                    if (strippedName.isNotBlank() && strippedName !in GENERIC_EVENT_NAMES) putIfAbsent(strippedName, id)
                 }
             }
         }
@@ -524,9 +532,18 @@ object EpgParser {
 private val CLEAN_CHANNEL_PREFIX_REGEX =
     Regex("^(?:ch\\s*)?\\d+\\s*[·\\.\\-\\:\\|\\s]\\s*", RegexOption.IGNORE_CASE)
 private val NORMALIZE_NON_ALNUM_REGEX = Regex("[^a-z0-9]")
+private val EPG_COUNTRY_TLD_REGEX = Regex("\\.[a-z]{2,3}$", RegexOption.IGNORE_CASE)
+private val EPG_FEED_QUALIFIERS_REGEX =
+    Regex("\\b(?:east|west|fhd|uhd|hd|4k|sd|us|usa|feed)\\b", RegexOption.IGNORE_CASE)
 
 private fun cleanChannelName(value: String): String =
     value.replace(CLEAN_CHANNEL_PREFIX_REGEX, "").trim()
 
 private fun normalize(value: String) =
     value.lowercase(Locale.ROOT).replace(NORMALIZE_NON_ALNUM_REGEX, "")
+
+private fun normalizeEpgFeed(value: String): String =
+    cleanChannelName(value)
+        .replace(EPG_COUNTRY_TLD_REGEX, "")
+        .replace(EPG_FEED_QUALIFIERS_REGEX, " ")
+        .let(::normalize)
