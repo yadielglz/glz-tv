@@ -402,3 +402,102 @@ function FirstRunReadySummary(deviceName as Dynamic, channelCount as Integer, ra
         countsLine: channelCount.ToStr() + " " + chLabel + "  ·  " + radioCount.ToStr() + " " + radioLabel + " loaded"
     }
 end function
+
+function OsdButtonOrder() as Object
+    return ["Guide", "Info", "CC", "Audio", "Apps", "Multi-View", "Favorite", "Sleep"]
+end function
+
+function ChannelSurfDwellSeconds() as Float
+    return 7.0
+end function
+
+function WrapChannelIndex(currentIndex as Integer, delta as Integer, total as Integer) as Integer
+    if total <= 0 then return -1
+    if currentIndex < 0 or currentIndex >= total then currentIndex = 0
+    target = (currentIndex + delta) mod total
+    if target < 0 then target += total
+    return target
+end function
+
+function NextSleepTimerMinutes(currentMinutes as Integer) as Integer
+    if currentMinutes < 15 then return 15
+    if currentMinutes < 30 then return 30
+    if currentMinutes < 60 then return 60
+    if currentMinutes < 90 then return 90
+    return 0
+end function
+
+function SleepTimerLabel(minutes as Integer) as String
+    if minutes <= 0 then return "Sleep"
+    return "Sleep " + minutes.ToStr() + "m"
+end function
+
+function NormalizeRokuHexColor(raw as Dynamic, fallback as String) as String
+    val = Text(raw).Trim()
+    if val = "" then return fallback
+    if Left(val, 1) = "#" then val = Mid(val, 2)
+    if Left(LCase(val), 2) = "0x" then val = Mid(val, 3)
+    if Len(val) = 6 then return "0x" + UCase(val) + "FF"
+    if Len(val) = 8 then return "0x" + UCase(val)
+    return fallback
+end function
+
+function DefaultEntertainmentApps() as Object
+    return [
+        { id: "netflix", name: "Netflix", subtitle: "Movies & Series", badge: "STREAMING", accent: "0xE50914FF", artwork: "", channelId: "12" }
+        { id: "youtube", name: "YouTube", subtitle: "Videos & Live", badge: "VIDEO", accent: "0xCC0000FF", artwork: "", channelId: "837" }
+        { id: "disney", name: "Disney+", subtitle: "Disney · Pixar · Marvel", badge: "STREAMING", accent: "0x113CCFFF", artwork: "", channelId: "291097" }
+        { id: "prime", name: "Prime Video", subtitle: "Amazon Originals", badge: "STREAMING", accent: "0x00A8E1FF", artwork: "", channelId: "13" }
+        { id: "max", name: "Max", subtitle: "HBO · Warner Bros.", badge: "STREAMING", accent: "0x002BE7FF", artwork: "", channelId: "61322" }
+        { id: "hulu", name: "Hulu", subtitle: "TV & Originals", badge: "STREAMING", accent: "0x1CE783FF", artwork: "", channelId: "2285" }
+        { id: "appletv", name: "Apple TV", subtitle: "Apple Originals", badge: "STREAMING", accent: "0x1E293BFF", artwork: "", channelId: "551012" }
+        { id: "paramount", name: "Paramount+", subtitle: "Live Sports & Movies", badge: "STREAMING", accent: "0x0064FFFF", artwork: "", channelId: "31440" }
+        { id: "peacock", name: "Peacock", subtitle: "NBC · Live Sports", badge: "STREAMING", accent: "0x1E1B4BFF", artwork: "", channelId: "593099" }
+        { id: "spotify", name: "Spotify", subtitle: "Music & Podcasts", badge: "MUSIC", accent: "0x1DB954FF", artwork: "", channelId: "22297" }
+    ]
+end function
+
+function ResolveEntertainmentApps(config as Dynamic) as Object
+    defaults = DefaultEntertainmentApps()
+    if type(config) <> "roAssociativeArray" then return defaults
+    rawApps = config.entertainmentApps
+    if type(rawApps) <> "roArray" or rawApps.Count() = 0 then return defaults
+    palette = ["0xE50914FF", "0x113CCFFF", "0x00A8E1FF", "0x002BE7FF", "0x1CE783FF", "0x0064FFFF", "0x1DB954FF", "0x7C3AEDFF"]
+    resolved = []
+    idx = 0
+    for each entry in rawApps
+        if type(entry) = "roAssociativeArray"
+            name = Text(entry.name).Trim()
+            if name = "" then name = Text(entry.title).Trim()
+            if name <> ""
+                artwork = Text(entry.bannerUrl).Trim()
+                if not IsWebUrl(artwork) then artwork = Text(entry.artworkUrl).Trim()
+                if not IsWebUrl(artwork) then artwork = Text(entry.posterUrl).Trim()
+                if not IsWebUrl(artwork) then artwork = Text(entry.logoUrl).Trim()
+                if not IsWebUrl(artwork) then artwork = Text(entry.iconUrl).Trim()
+                if not IsWebUrl(artwork) then artwork = ""
+                subtitle = Text(entry.subtitle).Trim()
+                if subtitle = "" then subtitle = Text(entry.category, "Entertainment App").Trim()
+                badge = UCase(Text(entry.badge, "APP").Trim())
+                fallbackAccent = palette[idx mod palette.Count()]
+                accent = NormalizeRokuHexColor(entry.accentColor, NormalizeRokuHexColor(entry.accent, NormalizeRokuHexColor(entry.color, fallbackAccent)))
+                chId = Text(entry.rokuChannelId).Trim()
+                if chId = "" then chId = Text(entry.channelId).Trim()
+                resolved.Push({
+                    id: LCase(Text(entry.id, name))
+                    name: name
+                    subtitle: subtitle
+                    badge: badge
+                    accent: accent
+                    artwork: artwork
+                    channelId: chId
+                    streamUrl: Text(entry.streamUrl).Trim()
+                })
+                idx++
+            end if
+        end if
+    end for
+    if resolved.Count() = 0 then return defaults
+    return resolved
+end function
+

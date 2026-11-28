@@ -106,6 +106,7 @@ fun GoogleTvPlayerOsd(
     onToggleFavorite: () -> Unit = {},
     onToggleCaptions: () -> Unit = {},
     onOpenAudioSelector: () -> Unit = {},
+    onOpenApps: () -> Unit = {},
     onOpenGuide: () -> Unit = {},
     onOpenChannels: () -> Unit = {},
     onOpenMultiView: () -> Unit = {},
@@ -166,6 +167,7 @@ fun GoogleTvPlayerOsd(
         ?: channel.eventTitle?.takeIf { it.isNotBlank() }
         ?: channel.name
 
+    // Exact v1.48.7.15 OSD button order: Guide, Info, CC, Audio, Apps, Multi-View, Favorite, Sleep
     val tabs = listOf(
         DtvOsdTab(
             id = "guide",
@@ -185,15 +187,6 @@ fun GoogleTvPlayerOsd(
             }
         ),
         DtvOsdTab(
-            id = "favorites",
-            label = "Favorites",
-            indicatorColor = if (isFavorite) GoogleTvTokens.StarGold else null,
-            onClick = {
-                onInteraction()
-                onToggleFavorite()
-            }
-        ),
-        DtvOsdTab(
             id = "cc",
             label = "CC",
             indicatorColor = if (captionsEnabled) DtvElectricBlue else null,
@@ -203,19 +196,19 @@ fun GoogleTvPlayerOsd(
             }
         ),
         DtvOsdTab(
-            id = "av",
-            label = "Audio/Video",
+            id = "audio",
+            label = "Audio",
             onClick = {
                 onInteraction()
                 onOpenAudioSelector()
             }
         ),
         DtvOsdTab(
-            id = "channels",
-            label = "Channels",
+            id = "apps",
+            label = "Apps",
             onClick = {
                 onInteraction()
-                onOpenChannels()
+                onOpenApps()
             }
         ),
         DtvOsdTab(
@@ -224,6 +217,15 @@ fun GoogleTvPlayerOsd(
             onClick = {
                 onInteraction()
                 onOpenMultiView()
+            }
+        ),
+        DtvOsdTab(
+            id = "favorite",
+            label = "Favorite",
+            indicatorColor = if (isFavorite) GoogleTvTokens.StarGold else null,
+            onClick = {
+                onInteraction()
+                onToggleFavorite()
             }
         ),
         DtvOsdTab(

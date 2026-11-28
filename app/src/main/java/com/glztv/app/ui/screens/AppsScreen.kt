@@ -238,21 +238,22 @@ private fun DtvAppsInstalledCard(
     val scope = rememberCoroutineScope()
     var longPressJob by remember { mutableStateOf<Job?>(null) }
     var longPressTriggered by remember { mutableStateOf(false) }
-    val iconBitmap = remember(app.packageName, app.banner, app.icon) {
-        (app.banner ?: app.icon)?.toSafeImageBitmap(128, 128)
+    val hasBanner = app.banner != null
+    val artworkBitmap = remember(app.packageName, app.banner, app.icon) {
+        if (app.banner != null) app.banner.toSafeImageBitmap(320, 180)
+        else app.icon?.toSafeImageBitmap(192, 192)
     }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(98.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (isFocused) Color.Black else Color.Transparent)
-            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
+            .height(104.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color(0xFF141A24))
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
+                width = if (isFocused) 2.5.dp else 1.dp,
                 color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
-                shape = RoundedCornerShape(4.dp)
+                shape = RoundedCornerShape(6.dp)
             )
             .onFocusChanged {
                 isFocused = it.isFocused
@@ -285,48 +286,60 @@ private fun DtvAppsInstalledCard(
                 false
             }
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(10.dp)
     ) {
+        if (artworkBitmap != null) {
+            // Full-bleed edge-to-edge fill of the entire button
+            Image(
+                bitmap = artworkBitmap,
+                contentDescription = app.label,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(DtvChrome.CardGradient),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Apps,
+                    contentDescription = app.label,
+                    tint = DtvChrome.PrimaryText,
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+        }
+        // Subtle bottom scrim + crisp app label
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        listOf(Color.Transparent, Color(0xCC06090F), Color(0xEE06090F))
+                    )
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            Text(
+                text = app.label,
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = if (isFocused || !hasBanner) FontWeight.Bold else FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         if (app.isFavorite) {
             Icon(
                 Icons.Default.Star,
                 contentDescription = null,
                 tint = DtvChrome.Gold,
                 modifier = Modifier
-                    .size(12.dp)
+                    .padding(6.dp)
+                    .size(14.dp)
                     .align(Alignment.TopEnd)
-            )
-        }
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            if (iconBitmap != null) {
-                Image(
-                    bitmap = iconBitmap,
-                    contentDescription = app.label,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                )
-            } else {
-                Icon(
-                    Icons.Default.Apps,
-                    contentDescription = app.label,
-                    tint = DtvChrome.PrimaryText,
-                    modifier = Modifier.size(34.dp)
-                )
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = app.label,
-                color = if (isFocused) Color.White else DtvChrome.PrimaryText,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -343,11 +356,15 @@ private fun DtvAppsManagedCard(
     val interactionSource = remember { MutableInteractionSource() }
 
     // Tier 1: Real installed Android TV app banner/icon from PackageManager
-    val installedBitmap = remember(app.packageName) {
+    val installedBanner = remember(app.packageName) {
         val pm = context.packageManager
-        val drawable = runCatching { pm.getApplicationBanner(app.packageName) }.getOrNull()
-            ?: runCatching { pm.getApplicationIcon(app.packageName) }.getOrNull()
-        drawable?.toSafeImageBitmap(160, 160)
+        runCatching { pm.getApplicationBanner(app.packageName) }.getOrNull()
+            ?.toSafeImageBitmap(320, 180)
+    }
+    val installedIcon = remember(app.packageName, installedBanner) {
+        if (installedBanner != null) null
+        else runCatching { context.packageManager.getApplicationIcon(app.packageName) }.getOrNull()
+            ?.toSafeImageBitmap(192, 192)
     }
 
     // Tier 2: Official high-res brand logo URL when app is not yet installed
@@ -356,17 +373,24 @@ private fun DtvAppsManagedCard(
     }
     var remoteLogoFailed by remember(brandLogoUrl) { mutableStateOf(false) }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(104.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (isFocused) Color.Black else Color.Transparent)
-            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
+            .clip(RoundedCornerShape(6.dp))
+            .background(
+                androidx.compose.ui.graphics.Brush.linearGradient(
+                    listOf(
+                        app.accent.copy(alpha = 0.92f),
+                        app.accent.copy(alpha = 0.52f),
+                        Color(0xFF0E131D)
+                    )
+                )
+            )
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
+                width = if (isFocused) 2.5.dp else 1.dp,
                 color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
-                shape = RoundedCornerShape(4.dp)
+                shape = RoundedCornerShape(6.dp)
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { keyEvent ->
@@ -383,69 +407,70 @@ private fun DtvAppsManagedCard(
                 false
             }
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
     ) {
         when {
-            installedBitmap != null -> {
+            installedBanner != null -> {
                 Image(
-                    bitmap = installedBitmap,
+                    bitmap = installedBanner,
                     contentDescription = app.name,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            installedIcon != null -> {
+                Image(
+                    bitmap = installedIcon,
+                    contentDescription = app.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
             brandLogoUrl != null && !remoteLogoFailed -> {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(app.accent.copy(alpha = 0.22f))
-                        .padding(4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = brandLogoUrl,
-                        contentDescription = app.name,
-                        contentScale = ContentScale.Fit,
-                        onError = { remoteLogoFailed = true },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(6.dp))
-                    )
-                }
+                AsyncImage(
+                    model = brandLogoUrl,
+                    contentDescription = app.name,
+                    contentScale = ContentScale.Crop,
+                    onError = { remoteLogoFailed = true },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
             else -> {
-                Box(
+                Text(
+                    text = app.name.uppercase(Locale.getDefault()),
+                    color = Color.White,
+                    fontSize = 19.sp,
+                    fontFamily = BarlowCondensedFontFamily,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(app.accent.copy(alpha = 0.88f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = app.name.take(3).uppercase(Locale.getDefault()),
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontFamily = BarlowCondensedFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.6.sp
-                    )
-                }
+                        .align(Alignment.Center)
+                        .padding(horizontal = 12.dp)
+                )
             }
         }
-        Spacer(Modifier.height(7.dp))
-        Text(
-            text = app.name,
-            color = if (isFocused) Color.White else DtvChrome.PrimaryText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        // Bottom scrim with crisp app title
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        listOf(Color.Transparent, Color(0xCC06090F), Color(0xEE06090F))
+                    )
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            Text(
+                text = app.name,
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = if (isFocused) FontWeight.Bold else FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

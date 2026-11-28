@@ -3,12 +3,14 @@ sub init()
     m.top.backgroundColor = "0x06080BFF"
     m.browser = m.top.findNode("browser")
     m.list = m.top.findNode("channelList")
+    m.appsView = m.top.findNode("appsView")
+    m.appsGrid = m.top.findNode("appsGrid")
     m.topNavGroup = m.top.findNode("topNavGroup")
     m.topNavFocus = m.top.findNode("topNavFocus")
     m.navTabBgs = []
     m.navTabLabels = []
     m.navTabLines = []
-    for i = 0 to 8
+    for i = 0 to 9
         m.navTabBgs.Push(m.top.findNode("navTabBg" + i.ToStr()))
         m.navTabLabels.Push(m.top.findNode("navTabLabel" + i.ToStr()))
         m.navTabLines.Push(m.top.findNode("navTabLine" + i.ToStr()))
@@ -25,9 +27,44 @@ sub init()
     m.extraTimer = m.top.findNode("extrasTimer")
     m.osd = m.top.findNode("osd")
     m.osdTimer = m.top.findNode("osdTimer")
+    m.osdButtons = OsdButtonOrder()
+    m.osdBtnBgs = []
+    m.osdBtnLabels = []
+    m.osdBtnLines = []
+    for i = 0 to 7
+        m.osdBtnBgs.Push(m.top.findNode("osdBtnBg" + i.ToStr()))
+        m.osdBtnLabels.Push(m.top.findNode("osdBtnLabel" + i.ToStr()))
+        m.osdBtnLines.Push(m.top.findNode("osdBtnLine" + i.ToStr()))
+    end for
+    m.osdInfoBox = m.top.findNode("osdInfoBox")
+    m.osdInfoText = m.top.findNode("osdInfoText")
+    m.osdFocusIndex = 0
+    m.osdInfoExpanded = false
+    m.ccEnabled = false
+    m.sleepMinutes = 0
     m.miniGuide = m.top.findNode("miniGuide")
     m.miniList = m.top.findNode("miniList")
     m.miniTimer = m.top.findNode("miniTimer")
+    m.audioPanel = m.top.findNode("audioPanel")
+    m.audioPanelFocus = m.top.findNode("audioPanelFocus")
+    m.audioRowIndex = 0
+    m.audioTrackIndex = 0
+    m.appDrawer = m.top.findNode("appDrawer")
+    m.appDrawerGrid = m.top.findNode("appDrawerGrid")
+    m.appDrawerStatus = m.top.findNode("appDrawerStatus")
+    m.multiViewOverlay = m.top.findNode("multiViewOverlay")
+    m.multiViewFocus = m.top.findNode("multiViewFocus")
+    m.mvRightIndex = 0
+    m.surfBar = m.top.findNode("surfBar")
+    m.surfTimer = m.top.findNode("surfTimer")
+    m.surfTimer.duration = ChannelSurfDwellSeconds()
+    m.surfActive = false
+    m.surfIndex = 0
+    m.sleepTimer = m.top.findNode("sleepTimer")
+    m.osdSlideIn = m.top.findNode("osdSlideIn")
+    m.audioPanelSlideIn = m.top.findNode("audioPanelSlideIn")
+    m.appDrawerSlideIn = m.top.findNode("appDrawerSlideIn")
+    m.surfBarSlideIn = m.top.findNode("surfBarSlideIn")
     m.clockTimer = m.top.findNode("clockTimer")
     m.footer = m.top.findNode("footer")
     m.radioMiniBar = m.top.findNode("radioMiniBar")
@@ -80,6 +117,7 @@ sub init()
     if m.startView <> "live" and m.startView <> "home" then m.startView = "home"
     m.autoResumePref = m.registry.Read("autoResume")
     m.channels = [] : m.movies = [] : m.rows = [] : m.stations = [] : m.summaries = {} : m.schedule = []
+    m.apps = DefaultEntertainmentApps()
     m.config = {} : m.lastChannelUrl = ""
     m.weatherError = "" : m.weather = invalid : m.weatherLocation = "" : m.weatherAge = 15
     m.extraQueue = [] : m.extraId = 0 : m.extraBusy = false : m.guideChannel = invalid : m.focusedIndex = 0
@@ -90,17 +128,21 @@ sub init()
     m.optionActions = [] : m.optionFavoriteChannel = invalid
     m.lastError = "" : m.autoStarted = false : m.pending = true
     m.syncsSinceCatalog = 0 : m.queuedForce = false : m.queuedAction = "sync"
-    m.views = ["home", "favorites", "live", "guide", "movies", "events", "radio", "weather", "settings"]
+    m.views = ["home", "favorites", "live", "guide", "movies", "apps", "events", "radio", "weather", "settings"]
     m.task.ObserveField("result", "onHubResult")
     m.extra.ObserveField("result", "onExtraResult")
     m.extraTimer.ObserveField("fire", "runNextExtra")
     m.timer.ObserveField("fire", "syncTick")
     m.list.ObserveField("itemSelected", "selectRow")
     m.list.ObserveField("itemFocused", "showDetails")
+    m.appsGrid.ObserveField("itemSelected", "onHomeAppSelected")
+    m.appDrawerGrid.ObserveField("itemSelected", "onDrawerAppSelected")
     m.miniList.ObserveField("itemSelected", "onMiniSelected")
     m.miniList.ObserveField("itemFocused", "onMiniFocused")
     m.osdTimer.ObserveField("fire", "hideOsd")
     m.miniTimer.ObserveField("fire", "hideMiniGuide")
+    m.surfTimer.ObserveField("fire", "onSurfTimerFired")
+    m.sleepTimer.ObserveField("fire", "onSleepTimerFired")
     m.radioEqTimer.ObserveField("fire", "tickRadioEq")
     m.clockTimer.ObserveField("fire", "onClockTick")
     m.clockTimer.control = "start"
@@ -162,11 +204,19 @@ end sub
 
 sub onClockTick()
     updateHeaderBar()
+    now = CreateObject("roDateTime").AsSeconds()
     if m.osd.visible then refreshOsdContent()
     if m.miniGuide.visible
-        now = CreateObject("roDateTime").AsSeconds()
         miniClock = m.top.findNode("miniClock")
         if miniClock <> invalid then miniClock.text = ClockLabel(now)
+    end if
+    if m.surfActive
+        surfClock = m.top.findNode("surfClock")
+        if surfClock <> invalid then surfClock.text = ClockLabel(now)
+    end if
+    if m.multiViewOverlay.visible
+        mvClock = m.top.findNode("mvClock")
+        if mvClock <> invalid then mvClock.text = ClockLabel(now)
     end if
 end sub
 
@@ -517,6 +567,7 @@ sub onHubResult()
             end if
         end if
         m.movies = ParseMovies(config.movies, config.requestHeaders)
+        m.apps = ResolveEntertainmentApps(config)
         m.version = result.version : m.refresh = result.refresh
         if result.channels <> invalid
             m.channels = result.channels : m.syncsSinceCatalog = 0
@@ -671,7 +722,10 @@ sub openSection(index as Integer)
     if m.view = "radio" or (m.view = "home" and m.stations.Count() = 0) then queueExtra("radio")
     if m.view = "guide" or m.view = "home" or m.view = "favorites" then queueExtra("summary")
     if m.view = "weather" and m.weather = invalid then queueExtra("weather")
-    if m.view <> "weather" and m.rows.Count() > 0
+    if m.view = "apps"
+        m.navFocused = false
+        m.appsGrid.SetFocus(true)
+    else if m.view <> "weather" and m.rows.Count() > 0
         m.navFocused = false
         m.list.SetFocus(true)
     else
@@ -722,7 +776,7 @@ end function
 function focusedLiveChannel() as Dynamic
     if m.pending or m.video.visible then return invalid
     if m.view = "schedule" then return m.guideChannel
-    if m.view = "movies" or m.view = "radio" or m.view = "weather" or m.view = "settings" then return invalid
+    if m.view = "movies" or m.view = "apps" or m.view = "radio" or m.view = "weather" or m.view = "settings" then return invalid
     index = m.list.itemFocused
     if index < 0 then index = m.focusedIndex
     if index < 0 or index >= m.rows.Count() then return invalid
@@ -750,7 +804,8 @@ sub toggleFavoriteForChannel(channel as Dynamic)
     else
         m.status.text = "Added ★ " + Text(channel.title, "channel") + " to Favorites"
     end if
-    renderRows()
+    if not m.video.visible then renderRows()
+    if m.osd.visible then refreshOsdContent()
     if m.miniGuide.visible then renderMiniGuide()
     restoreFocus()
 end sub
@@ -860,13 +915,79 @@ function buildSettingsRows() as Object
     ]
 end function
 
+function buildAppsContent(apps as Object, mode = "grid" as String) as Object
+    root = CreateObject("roSGNode", "ContentNode")
+    if type(apps) <> "roArray" then return root
+    for each entry in apps
+        if type(entry) = "roAssociativeArray"
+            item = root.CreateChild("ContentNode")
+            item.title = Text(entry.name, "App")
+            item.description = Text(entry.subtitle, "Entertainment")
+            item.shortDescriptionLine1 = Text(entry.badge, "APP")
+            item.shortDescriptionLine2 = Text(entry.accent, "0x1E293BFF")
+            art = Text(entry.artwork).Trim()
+            if IsWebUrl(art) then item.hdPosterUrl = art
+            item.rating = mode
+        end if
+    end for
+    return root
+end function
+
+sub launchEntertainmentApp(app as Dynamic, fromPlayer = false as Boolean)
+    if type(app) <> "roAssociativeArray" then return
+    streamUrl = Text(app.streamUrl).Trim()
+    if IsWebUrl(streamUrl) and Instr(1, streamUrl, "|") = 0
+        if fromPlayer then hideAppDrawer()
+        playItem({
+            id: "app:" + Text(app.id)
+            title: Text(app.name, "App")
+            url: streamUrl
+            logo: Text(app.artwork)
+            group: Text(app.subtitle, "Entertainment App")
+            number: Text(app.badge, "APP")
+            headers: {}
+            isMovie: false
+            eventTitle: ""
+            league: ""
+            eventStart: 0
+            eventEnd: 0
+        })
+        return
+    end if
+    chId = Text(app.channelId).Trim()
+    msg = Text(app.name, "App") + " — Press Home on your Roku remote to launch"
+    if chId <> "" then msg = Text(app.name, "App") + " (Roku Channel " + chId + ") — Press Home to launch"
+    if fromPlayer
+        if m.appDrawerStatus <> invalid then m.appDrawerStatus.text = msg
+    else
+        m.status.text = msg
+    end if
+end sub
+
+sub onHomeAppSelected()
+    if m.apps = invalid or m.apps.Count() = 0 then return
+    idx = m.appsGrid.itemSelected
+    if idx < 0 or idx >= m.apps.Count() then return
+    launchEntertainmentApp(m.apps[idx], false)
+end sub
+
+sub onDrawerAppSelected()
+    if m.apps = invalid or m.apps.Count() = 0 then return
+    idx = m.appDrawerGrid.itemSelected
+    if idx < 0 or idx >= m.apps.Count() then return
+    launchEntertainmentApp(m.apps[idx], true)
+end sub
+
 sub applyViewLayout()
     isHome = m.view = "home"
     isWeather = m.view = "weather"
+    isApps = m.view = "apps"
+    isFullWidth = isWeather or isApps
     m.top.findNode("homeHero").visible = isHome
-    m.list.visible = not isWeather
-    m.top.findNode("detailPanel").visible = not isWeather
+    m.list.visible = not isFullWidth
+    m.top.findNode("detailPanel").visible = not isFullWidth
     m.top.findNode("weatherCard").visible = isWeather
+    m.appsView.visible = isApps
     titleNode = m.top.findNode("sectionTitle")
     divNode = m.top.findNode("sectionDivider")
     divAccent = m.top.findNode("sectionDividerAccent")
@@ -890,11 +1011,11 @@ sub applyViewLayout()
         detailGroup.height = 102
     else
         titleNode.translation = [36, 110]
-        if isWeather then titleNode.width = 1208 else titleNode.width = 650
+        if isFullWidth then titleNode.width = 1208 else titleNode.width = 650
         divNode.translation = [36, 146]
-        if isWeather then divNode.width = 1208 else divNode.width = 650
+        if isFullWidth then divNode.width = 1208 else divNode.width = 650
         divAccent.translation = [36, 146]
-        if isWeather then divAccent.width = 220 else divAccent.width = 140
+        if isFullWidth then divAccent.width = 220 else divAccent.width = 140
         m.list.translation = [36, 154]
         m.list.numRows = 6
         detailPanel.translation = [706, 110]
@@ -913,12 +1034,14 @@ sub renderRows()
     m.rows = []
     applyViewLayout()
     isWeather = m.view = "weather"
+    isApps = m.view = "apps"
     titles = {
         home: "On Now & Featured · OK Plays Immediately"
         favorites: "Favorites · Press * to add or remove channels"
-        live: "Live TV · Up/Down or FF/RW zaps while playing"
+        live: "Live TV · Up/Down surfs channels · OK opens OSD"
         guide: "Programme Guide · OK opens 24-hour channel schedule"
         movies: "Movies On Demand · Instant Cinema"
+        apps: "Entertainment Apps · Full-Bleed Quick Launch"
         events: "PPV / Live Sports Events"
         radio: "Live Radio · Audio continues while browsing"
         weather: "Weather · Forecast location from GlzHub"
@@ -930,6 +1053,11 @@ sub renderRows()
         m.top.findNode("weatherText").text = WeatherLines(m.weather)
         if m.weather = invalid and m.weatherError <> "" then m.top.findNode("weatherText").text = m.weatherError
         m.top.findNode("channelCount").text = "Forecast updates every 15 minutes · Open-Meteo.com"
+        updateFooter() : return
+    end if
+    if isApps
+        m.appsGrid.content = buildAppsContent(m.apps, "grid")
+        m.top.findNode("channelCount").text = m.apps.Count().ToStr() + " apps · OK Open"
         updateFooter() : return
     end if
     now = CreateObject("roDateTime").AsSeconds()
@@ -1204,9 +1332,18 @@ function PlayerContent(row as Object, format as String) as Object
     return content
 end function
 
+sub dismissAllPlayerOverlays()
+    hideOsd()
+    hideMiniGuide()
+    hideAudioPanel()
+    hideAppDrawer()
+    hideMultiView()
+    cancelChannelSurf()
+end sub
+
 sub playItem(row as Object)
     stopRadio(false)
-    hideMiniGuide()
+    dismissAllPlayerOverlays()
     for i = 0 to m.rows.Count() - 1
         if Text(m.rows[i].url) = Text(row.url)
             m.focusedIndex = i : exit for
@@ -1237,6 +1374,182 @@ sub stepChannel(delta as Integer)
     playItem(m.channels[nextIndex])
 end sub
 
+function currentPlayingChannelIndex() as Integer
+    if m.channels.Count() = 0 then return -1
+    for i = 0 to m.channels.Count() - 1
+        if Text(m.channels[i].url) = m.playingUrl then return i
+    end for
+    return 0
+end function
+
+sub stepChannelSurf(delta as Integer)
+    if not m.video.visible or m.playingChannel = invalid or m.playingChannel.isMovie = true then return
+    total = m.channels.Count()
+    if total <= 1
+        showOsd() : return
+    end if
+    wasActive = m.surfActive
+    if not wasActive
+        hideOsd()
+        hideAudioPanel()
+        hideAppDrawer()
+        hideMultiView()
+        hideMiniGuide()
+        baseIdx = currentPlayingChannelIndex()
+        if baseIdx < 0 then baseIdx = 0
+        m.surfIndex = WrapChannelIndex(baseIdx, delta, total)
+        m.surfActive = true
+        m.surfBar.visible = true
+        if m.surfBarSlideIn <> invalid then m.surfBarSlideIn.control = "start"
+    else
+        m.surfIndex = WrapChannelIndex(m.surfIndex, delta, total)
+    end if
+    renderSurfBar()
+    m.surfTimer.duration = ChannelSurfDwellSeconds()
+    m.surfTimer.control = "stop"
+    m.surfTimer.control = "start"
+end sub
+
+sub renderSurfBar()
+    total = m.channels.Count()
+    if not m.surfActive or total = 0 or m.surfIndex < 0 or m.surfIndex >= total then return
+    ch = m.channels[m.surfIndex]
+    prevIdx = WrapChannelIndex(m.surfIndex, -1, total)
+    nextIdx = WrapChannelIndex(m.surfIndex, 1, total)
+    prevCh = m.channels[prevIdx]
+    nextCh = m.channels[nextIdx]
+    now = CreateObject("roDateTime").AsSeconds()
+    info = OsdDetails(ch, m.summaries, m.guideError, now)
+
+    prevHint = m.top.findNode("surfPrevHint")
+    nextHint = m.top.findNode("surfNextHint")
+    if prevHint <> invalid
+        pNum = Text(prevCh.number)
+        if pNum <> "" then pNum = pNum + " "
+        prevHint.text = "▲ " + pNum + Text(prevCh.title)
+    end if
+    if nextHint <> invalid
+        nNum = Text(nextCh.number)
+        if nNum <> "" then nNum = nNum + " "
+        nextHint.text = "▼ " + nNum + Text(nextCh.title)
+    end if
+
+    logo = Text(ch.logo)
+    if not IsWebUrl(logo) then logo = ""
+    m.top.findNode("surfLogo").uri = logo
+    m.top.findNode("surfNumber").text = info.number
+    m.top.findNode("surfTitle").text = channelTitleWithStar(ch, info.title)
+    m.top.findNode("surfNow").text = info.nowLine
+    m.top.findNode("surfNext").text = info.nextLine
+    m.top.findNode("surfClock").text = ClockLabel(now)
+
+    pct = 0.0
+    if Text(ch.eventTitle) <> "" and ch.eventStart <> invalid and ch.eventEnd <> invalid
+        pct = ProgrammeProgress({ start: ch.eventStart, end: ch.eventEnd }, now)
+    else
+        pct = ProgrammeProgress(CurrentProgramme(ChannelSummary(m.summaries, Text(ch.id)), now), now)
+    end if
+    fill = m.top.findNode("surfProgressFill")
+    if fill <> invalid
+        barW = Int(pct * 740)
+        if barW < 0 then barW = 0
+        if barW > 740 then barW = 740
+        fill.width = barW
+    end if
+end sub
+
+sub commitChannelSurf()
+    if not m.surfActive then return
+    targetIdx = m.surfIndex
+    cancelChannelSurf()
+    if targetIdx >= 0 and targetIdx < m.channels.Count()
+        target = m.channels[targetIdx]
+        if Text(target.url) <> m.playingUrl
+            playItem(target)
+        end if
+    end if
+end sub
+
+sub cancelChannelSurf()
+    m.surfTimer.control = "stop"
+    m.surfActive = false
+    if m.surfBar <> invalid then m.surfBar.visible = false
+end sub
+
+sub onSurfTimerFired()
+    commitChannelSurf()
+end sub
+
+sub renderOsdButtons()
+    if m.osdButtons = invalid then return
+    isFav = false
+    if m.playingChannel <> invalid and m.playingChannel.isMovie <> true
+        isFav = IsFavoriteChannel(m.favoriteIds, ChannelKey(m.playingChannel))
+    end if
+    for i = 0 to m.osdButtons.Count() - 1
+        bg = m.osdBtnBgs[i]
+        lbl = m.osdBtnLabels[i]
+        line = m.osdBtnLines[i]
+        label = m.osdButtons[i]
+        isActive = false
+        if i = 1 and m.osdInfoExpanded then isActive = true
+        if i = 2 and m.ccEnabled
+            label = "CC: On"
+            isActive = true
+        end if
+        if i = 6 and isFav
+            label = "★ Favorite"
+            isActive = true
+        end if
+        if i = 7
+            label = SleepTimerLabel(m.sleepMinutes)
+            if m.sleepMinutes > 0 then isActive = true
+        end if
+        isFocused = (i = m.osdFocusIndex)
+        if bg <> invalid
+            if isFocused
+                bg.color = "0x1990FFFF"
+            else if isActive
+                bg.color = "0x1A2638FF"
+            else
+                bg.color = "0x12161EFF"
+            end if
+        end if
+        if lbl <> invalid
+            lbl.text = label
+            if isFocused or isActive
+                lbl.color = "0xFFFFFFFF"
+            else
+                lbl.color = "0xCBD5E1FF"
+            end if
+        end if
+        if line <> invalid
+            line.visible = (isFocused or isActive)
+        end if
+    end for
+end sub
+
+sub refreshOsdInfoBox()
+    if m.osdInfoBox = invalid then return
+    m.osdInfoBox.visible = m.osdInfoExpanded
+    if not m.osdInfoExpanded or m.playingChannel = invalid then return
+    now = CreateObject("roDateTime").AsSeconds()
+    info = OsdDetails(m.playingChannel, m.summaries, m.guideError, now)
+    details = info.title
+    if info.number <> "" then details = info.number + " · " + details
+    grp = Text(m.playingChannel.group).Trim()
+    if grp <> "" then details += "  •  " + grp
+    details += "  •  Stream: " + UCase(StreamFormat(Text(m.playingChannel.url)))
+    if m.ccEnabled then details += "  •  CC: On" else details += "  •  CC: Off"
+    if m.sleepMinutes > 0 then details += "  •  Sleep: " + m.sleepMinutes.ToStr() + "m"
+    prog = CurrentProgramme(ChannelSummary(m.summaries, Text(m.playingChannel.id)), now)
+    desc = ""
+    if prog <> invalid then desc = Text(prog.description).Trim()
+    if desc = "" then desc = Text(m.playingChannel.description).Trim()
+    if desc <> "" then details += Chr(10) + desc
+    m.osdInfoText.text = details
+end sub
+
 sub refreshOsdContent()
     if m.playingChannel = invalid then return
     now = CreateObject("roDateTime").AsSeconds()
@@ -1256,7 +1569,7 @@ sub refreshOsdContent()
         if pillBg <> invalid then pillBg.color = "0x1990FFFF"
         if pillTxt <> invalid then pillTxt.text = "VOD"
         if progressFill <> invalid then progressFill.width = 0
-        m.top.findNode("osdHint").text = "OK: Movie Info  •  Back: Exit to Movies"
+        m.top.findNode("osdHint").text = "Left/Right: OSD  •  OK: Select  •  Back: Close"
     else
         if pillBg <> invalid then pillBg.color = "0xEF4444FF"
         if pillTxt <> invalid then pillTxt.text = "LIVE"
@@ -1273,22 +1586,307 @@ sub refreshOsdContent()
             if barW > 740 then barW = 740
             progressFill.width = barW
         end if
-        m.top.findNode("osdHint").text = "OK: Info  •  Right: Guide  •  Up/Down: Zap"
+        m.top.findNode("osdHint").text = "Left/Right: OSD  •  OK: Select  •  Up/Down: Surf"
     end if
+    renderOsdButtons()
+    refreshOsdInfoBox()
 end sub
 
 sub showOsd()
-    if not m.video.visible or m.miniGuide.visible or m.playingChannel = invalid then return
+    if not m.video.visible or m.miniGuide.visible or m.audioPanel.visible or m.appDrawer.visible or m.multiViewOverlay.visible or m.playingChannel = invalid then return
+    cancelChannelSurf()
+    wasVisible = m.osd.visible
     refreshOsdContent()
     m.osdTimer.duration = m.osdTimeout
     m.osd.visible = true
+    if not wasVisible and m.osdSlideIn <> invalid then m.osdSlideIn.control = "start"
     m.osdTimer.control = "stop" : m.osdTimer.control = "start"
 end sub
 
 sub hideOsd()
     m.osdTimer.control = "stop"
+    m.osdInfoExpanded = false
+    if m.osdInfoBox <> invalid then m.osdInfoBox.visible = false
     m.osd.visible = false
 end sub
+
+sub toggleClosedCaptions()
+    m.ccEnabled = not m.ccEnabled
+    if m.ccEnabled
+        m.video.globalCaptionMode = "On"
+    else
+        m.video.globalCaptionMode = "Off"
+    end if
+end sub
+
+sub cycleSleepTimer()
+    m.sleepMinutes = NextSleepTimerMinutes(m.sleepMinutes)
+    m.sleepTimer.control = "stop"
+    if m.sleepMinutes > 0
+        m.sleepTimer.duration = m.sleepMinutes * 60
+        m.sleepTimer.control = "start"
+    end if
+end sub
+
+sub onSleepTimerFired()
+    m.sleepMinutes = 0
+    m.sleepTimer.control = "stop"
+    if m.video.visible
+        closePlayer()
+        m.status.text = "Sleep timer finished · Playback stopped."
+        startSync(false)
+    else if m.radioRow <> invalid
+        stopRadio(true)
+        m.status.text = "Sleep timer finished · Radio stopped."
+    end if
+end sub
+
+sub activateOsdButton(index as Integer)
+    if index < 0 or index >= m.osdButtons.Count() then return
+    btn = m.osdButtons[index]
+    if btn = "Guide"
+        ' Smooth transition directly to EPG Guide
+        hideOsd()
+        closePlayer()
+        openSectionByName("guide")
+    else if btn = "Info"
+        m.osdInfoExpanded = not m.osdInfoExpanded
+        refreshOsdContent()
+        m.osdTimer.control = "stop" : m.osdTimer.control = "start"
+    else if btn = "CC"
+        toggleClosedCaptions()
+        refreshOsdContent()
+        m.osdTimer.control = "stop" : m.osdTimer.control = "start"
+    else if btn = "Audio"
+        ' Smooth transition to Right Panel (Audio / Subtitles / Playback ONLY)
+        hideOsd()
+        showAudioPanel()
+    else if btn = "Apps"
+        ' Smooth transition to Bottom App Drawer bar with full-bleed tiles
+        hideOsd()
+        showAppDrawer()
+    else if btn = "Multi-View"
+        ' Smooth transition to DirecTV-styled equal split Multi-View overlay
+        hideOsd()
+        showMultiView()
+    else if btn = "Favorite"
+        if m.playingChannel <> invalid and m.playingChannel.isMovie <> true
+            toggleFavoriteForChannel(m.playingChannel)
+        end if
+        refreshOsdContent()
+        m.osdTimer.control = "stop" : m.osdTimer.control = "start"
+    else if btn = "Sleep"
+        cycleSleepTimer()
+        refreshOsdContent()
+        m.osdTimer.control = "stop" : m.osdTimer.control = "start"
+    end if
+end sub
+
+sub showAudioPanel()
+    if not m.video.visible or m.playingChannel = invalid then return
+    cancelChannelSurf()
+    hideOsd()
+    hideMiniGuide()
+    hideAppDrawer()
+    hideMultiView()
+    m.audioRowIndex = 0
+    m.audioPanel.visible = true
+    renderAudioPanel()
+    if m.audioPanelSlideIn <> invalid then m.audioPanelSlideIn.control = "start"
+    m.audioPanelFocus.SetFocus(true)
+end sub
+
+sub hideAudioPanel()
+    if not m.audioPanel.visible then return
+    m.audioPanel.visible = false
+    if m.video.visible then m.playerFocus.SetFocus(true)
+end sub
+
+sub renderAudioPanel()
+    for i = 0 to 3
+        bg = m.top.findNode("audioRowBg" + i.ToStr())
+        accent = m.top.findNode("audioRowAccent" + i.ToStr())
+        focused = (i = m.audioRowIndex)
+        if bg <> invalid
+            if focused then bg.color = "0x1A2638FF" else bg.color = "0x12161EFF"
+        end if
+        if accent <> invalid then accent.visible = focused
+    end for
+    trackLabel = "Default Stereo"
+    tracks = m.video.availableAudioTracks
+    if type(tracks) = "roArray" and tracks.Count() > 0
+        if m.audioTrackIndex >= tracks.Count() then m.audioTrackIndex = 0
+        tr = tracks[m.audioTrackIndex]
+        if type(tr) = "roAssociativeArray"
+            trackName = Text(tr.Name, Text(tr.Language, "Track " + (m.audioTrackIndex + 1).ToStr()))
+            trackLabel = trackName + " (" + (m.audioTrackIndex + 1).ToStr() + "/" + tracks.Count().ToStr() + ")"
+        end if
+    end if
+    m.top.findNode("audioTrackValue").text = trackLabel
+    if m.ccEnabled
+        m.top.findNode("audioCcValue").text = "On · OK to turn Off"
+    else
+        m.top.findNode("audioCcValue").text = "Off · OK to turn On"
+    end if
+    if m.video.state = "paused"
+        m.top.findNode("audioPlayValue").text = "Paused · OK to Resume"
+    else
+        m.top.findNode("audioPlayValue").text = "Playing · OK to Pause"
+    end if
+    meta = "Channel: " + Text(m.playingTitle, "Live TV")
+    if m.playingChannel <> invalid
+        meta += Chr(10) + "Format: " + UCase(StreamFormat(Text(m.playingChannel.url)))
+    end if
+    meta += Chr(10) + "Sleep Timer: " + SleepTimerLabel(m.sleepMinutes)
+    m.top.findNode("audioPanelMeta").text = meta
+end sub
+
+function handleAudioPanelKey(key as String) as Boolean
+    if key = "up"
+        m.audioRowIndex = (m.audioRowIndex - 1 + 4) mod 4
+        renderAudioPanel()
+        return true
+    else if key = "down"
+        m.audioRowIndex = (m.audioRowIndex + 1) mod 4
+        renderAudioPanel()
+        return true
+    else if LCase(key) = "ok"
+        if m.audioRowIndex = 0
+            tracks = m.video.availableAudioTracks
+            if type(tracks) = "roArray" and tracks.Count() > 0
+                m.audioTrackIndex = (m.audioTrackIndex + 1) mod tracks.Count()
+                tr = tracks[m.audioTrackIndex]
+                if type(tr) = "roAssociativeArray" and Text(tr.Track) <> ""
+                    m.video.audioTrack = Text(tr.Track)
+                end if
+            end if
+            renderAudioPanel()
+        else if m.audioRowIndex = 1
+            toggleClosedCaptions()
+            renderAudioPanel()
+        else if m.audioRowIndex = 2
+            if m.video.state = "paused"
+                m.video.control = "resume"
+            else
+                m.video.control = "pause"
+            end if
+            renderAudioPanel()
+        else if m.audioRowIndex = 3
+            if m.playingChannel <> invalid
+                hideAudioPanel()
+                playItem(m.playingChannel)
+            end if
+        end if
+        return true
+    else if key = "left" or key = "back" or key = "right"
+        hideAudioPanel()
+        return true
+    end if
+    return true
+end function
+
+sub showAppDrawer()
+    if not m.video.visible then return
+    cancelChannelSurf()
+    hideOsd()
+    hideMiniGuide()
+    hideAudioPanel()
+    hideMultiView()
+    if m.apps = invalid or m.apps.Count() = 0 then m.apps = DefaultEntertainmentApps()
+    m.appDrawerGrid.content = buildAppsContent(m.apps, "compact")
+    if m.appDrawerStatus <> invalid then m.appDrawerStatus.text = ""
+    m.appDrawer.visible = true
+    if m.appDrawerSlideIn <> invalid then m.appDrawerSlideIn.control = "start"
+    m.appDrawerGrid.SetFocus(true)
+end sub
+
+sub hideAppDrawer()
+    if not m.appDrawer.visible then return
+    m.appDrawer.visible = false
+    if m.video.visible then m.playerFocus.SetFocus(true)
+end sub
+
+sub showMultiView()
+    if not m.video.visible or m.playingChannel = invalid then return
+    cancelChannelSurf()
+    hideOsd()
+    hideMiniGuide()
+    hideAudioPanel()
+    hideAppDrawer()
+    curIdx = currentPlayingChannelIndex()
+    if m.channels.Count() > 1
+        m.mvRightIndex = WrapChannelIndex(curIdx, 1, m.channels.Count())
+    else
+        m.mvRightIndex = 0
+    end if
+    m.multiViewOverlay.visible = true
+    renderMultiView()
+    m.multiViewFocus.SetFocus(true)
+end sub
+
+sub hideMultiView()
+    if not m.multiViewOverlay.visible then return
+    m.multiViewOverlay.visible = false
+    if m.video.visible then m.playerFocus.SetFocus(true)
+end sub
+
+sub renderMultiView()
+    if not m.multiViewOverlay.visible or m.playingChannel = invalid then return
+    now = CreateObject("roDateTime").AsSeconds()
+    m.top.findNode("mvClock").text = ClockLabel(now)
+    leftInfo = OsdDetails(m.playingChannel, m.summaries, m.guideError, now)
+    leftLogo = Text(m.playingChannel.logo)
+    if not IsWebUrl(leftLogo) then leftLogo = ""
+    m.top.findNode("mvLeftLogo").uri = leftLogo
+    m.top.findNode("mvLeftNumber").text = leftInfo.number
+    m.top.findNode("mvLeftTitle").text = channelTitleWithStar(m.playingChannel, leftInfo.title)
+    m.top.findNode("mvLeftNow").text = leftInfo.nowLine
+
+    if m.channels.Count() > 0 and m.mvRightIndex >= 0 and m.mvRightIndex < m.channels.Count()
+        rightCh = m.channels[m.mvRightIndex]
+        rightInfo = OsdDetails(rightCh, m.summaries, m.guideError, now)
+        rightLogo = Text(rightCh.logo)
+        if not IsWebUrl(rightLogo) then rightLogo = ""
+        m.top.findNode("mvRightLogo").uri = rightLogo
+        m.top.findNode("mvRightNumber").text = rightInfo.number
+        m.top.findNode("mvRightTitle").text = channelTitleWithStar(rightCh, rightInfo.title)
+        m.top.findNode("mvRightNow").text = rightInfo.nowLine
+    else
+        m.top.findNode("mvRightLogo").uri = ""
+        m.top.findNode("mvRightNumber").text = ""
+        m.top.findNode("mvRightTitle").text = "No Secondary Channel"
+        m.top.findNode("mvRightNow").text = "Assign more channels in GlzHub to swap feeds."
+    end if
+end sub
+
+function handleMultiViewKey(key as String) as Boolean
+    if key = "up" or key = "channelup"
+        if m.channels.Count() > 1
+            m.mvRightIndex = WrapChannelIndex(m.mvRightIndex, -1, m.channels.Count())
+            renderMultiView()
+        end if
+        return true
+    else if key = "down" or key = "channeldown"
+        if m.channels.Count() > 1
+            m.mvRightIndex = WrapChannelIndex(m.mvRightIndex, 1, m.channels.Count())
+            renderMultiView()
+        end if
+        return true
+    else if LCase(key) = "ok"
+        if m.channels.Count() > 0 and m.mvRightIndex >= 0 and m.mvRightIndex < m.channels.Count()
+            target = m.channels[m.mvRightIndex]
+            hideMultiView()
+            playItem(target)
+        else
+            hideMultiView()
+        end if
+        return true
+    else if key = "back"
+        hideMultiView()
+        return true
+    end if
+    return true
+end function
 
 sub renderMiniGuide()
     if m.channels.Count() = 0 then return
@@ -1324,7 +1922,11 @@ end sub
 
 sub showMiniGuide()
     if not m.video.visible or m.channels.Count() = 0 then return
+    cancelChannelSurf()
     hideOsd()
+    hideAudioPanel()
+    hideAppDrawer()
+    hideMultiView()
     if m.summaries.Count() = 0 then queueExtra("summary")
     m.miniGuide.visible = true
     renderMiniGuide()
@@ -1502,7 +2104,7 @@ sub playRadio(row as Object)
     end for
     if not hasUa
         ver = Text(m.appVersion)
-        if ver = "" then ver = "1.48.3.10"
+        if ver = "" then ver = "1.48.7.15"
         headers["User-Agent"] = "GlzTV-Roku/" + ver
     end if
     radioRow = {
@@ -1552,7 +2154,7 @@ end sub
 
 sub closePlayer()
     if not m.video.visible then return
-    hideOsd() : hideMiniGuide()
+    dismissAllPlayerOverlays()
     m.video.visible = false : m.video.control = "stop" : m.browser.visible = true
     m.playingUrl = "" : m.playingTitle = "" : m.playingChannel = invalid : m.retriedPlayback = false
     updateRadioMiniBar()
@@ -1698,7 +2300,21 @@ sub restoreFocus()
     else if m.pending
         m.top.SetFocus(true)
     else if m.video.visible
-        if m.miniGuide.visible then m.miniList.SetFocus(true) else m.playerFocus.SetFocus(true)
+        if m.multiViewOverlay.visible
+            m.multiViewFocus.SetFocus(true)
+        else if m.appDrawer.visible
+            m.appDrawerGrid.SetFocus(true)
+        else if m.audioPanel.visible
+            m.audioPanelFocus.SetFocus(true)
+        else if m.miniGuide.visible
+            m.miniList.SetFocus(true)
+        else
+            m.playerFocus.SetFocus(true)
+        end if
+    else if m.view = "apps"
+        m.navFocused = false
+        renderTopNav()
+        m.appsGrid.SetFocus(true)
     else if m.view = "weather" or m.rows.Count() = 0
         focusTopNav()
     else
@@ -1713,6 +2329,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
     if m.welcomeVisible then return handleWelcomeKey(key)
     if m.video.visible
+        if m.multiViewOverlay.visible
+            return handleMultiViewKey(key)
+        end if
+        if m.appDrawer.visible
+            if key = "back" or key = "up"
+                hideAppDrawer() : return true
+            end if
+            return false
+        end if
+        if m.audioPanel.visible
+            return handleAudioPanelKey(key)
+        end if
         if m.miniGuide.visible
             if key = "left" or key = "back" or key = "right"
                 hideMiniGuide() : return true
@@ -1722,20 +2350,65 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             end if
             return false
         end if
-        if key = "back"
-            if m.osd.visible
-                hideOsd() : return true
+        if m.surfActive
+            if key = "back"
+                ' Cancel surf cleanly without switching channels or exiting the player
+                cancelChannelSurf() : return true
+            else if LCase(key) = "ok"
+                commitChannelSurf() : return true
+            else if key = "channelup" or key = "up" or key = "rewind"
+                stepChannelSurf(-1) : return true
+            else if key = "channeldown" or key = "down" or key = "fastforward"
+                stepChannelSurf(1) : return true
+            else if key = "right"
+                cancelChannelSurf() : showMiniGuide() : return true
+            else if key = "left"
+                cancelChannelSurf() : showAudioPanel() : return true
             end if
+            return true
+        end if
+        if m.osd.visible
+            if key = "left"
+                m.osdFocusIndex = (m.osdFocusIndex - 1 + m.osdButtons.Count()) mod m.osdButtons.Count()
+                renderOsdButtons()
+                m.osdTimer.control = "stop" : m.osdTimer.control = "start"
+                return true
+            else if key = "right"
+                m.osdFocusIndex = (m.osdFocusIndex + 1) mod m.osdButtons.Count()
+                renderOsdButtons()
+                m.osdTimer.control = "stop" : m.osdTimer.control = "start"
+                return true
+            else if LCase(key) = "ok"
+                activateOsdButton(m.osdFocusIndex) : return true
+            else if key = "back"
+                hideOsd() : return true
+            else if key = "channelup" or key = "up" or key = "rewind"
+                stepChannelSurf(-1) : return true
+            else if key = "channeldown" or key = "down" or key = "fastforward"
+                stepChannelSurf(1) : return true
+            else if key = "play"
+                if m.video.state = "paused"
+                    m.video.control = "resume"
+                else
+                    m.video.control = "pause"
+                end if
+                m.osdTimer.control = "stop" : m.osdTimer.control = "start"
+                return true
+            end if
+            return true
+        end if
+        if key = "back"
             closePlayer() : startSync(false) : return true
         else if key = "right"
             showMiniGuide() : return true
+        else if key = "left"
+            showAudioPanel() : return true
         else if LCase(key) = "ok"
-            if m.osd.visible then hideOsd() else showOsd()
-            return true
+            showOsd() : return true
         else if key = "channelup" or key = "up" or key = "rewind"
-            stepChannel(-1) : return true
+            stepChannelSurf(-1) : return true
         else if key = "channeldown" or key = "down" or key = "fastforward"
-            stepChannel(1) : return true
+            stepChannelSurf(1) : return true
         else if key = "play"
             if m.video.state = "paused"
                 m.video.control = "resume"
@@ -1743,8 +2416,6 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
                 m.video.control = "pause"
             end if
             showOsd()
-            return true
-        else if key = "left"
             return true
         end if
         return false
@@ -1785,6 +2456,14 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return false
         end if
         return true
+    end if
+    if m.view = "apps" and m.appsGrid.HasFocus()
+        if key = "back"
+            focusTopNav() : return true
+        else if key = "up" and m.appsGrid.itemFocused < 5
+            focusTopNav() : return true
+        end if
+        return false
     end if
     if key = "up" or key = "left"
         focusTopNav() : return true

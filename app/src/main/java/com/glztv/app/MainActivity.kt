@@ -291,7 +291,7 @@ private fun panelExit(fromLeft: Boolean) =
     fadeOut(tween(PANEL_ANIM_OUT)) +
         slideOutHorizontally(tween(PANEL_ANIM_OUT)) { width -> if (fromLeft) -width else width }
 
-private enum class PlayerDrawer { None, Channels, Services, Recent, MiniGuide }
+private enum class PlayerDrawer { None, Channels, Services, Apps, Recent, MiniGuide }
 
 private val EntertainmentApps = listOf(
     EntertainmentApp("YouTube", "com.google.android.youtube.tv", Color(0xFFFF2020)),
@@ -4707,6 +4707,7 @@ private fun ImmersivePlayerScreen(
     val playerFocus = remember { FocusRequester() }
     val selectedChannelFocus = remember { FocusRequester() }
     val firstServiceFocus = remember { FocusRequester() }
+    val firstAppDrawerFocus = remember { FocusRequester() }
     val osdActionFocus = remember { FocusRequester() }
     val drawerRows = remember(channels, collapsedPpvPrefixes) {
         ppvDrawerRows(channels, collapsedPpvPrefixes)
@@ -4796,10 +4797,10 @@ private fun ImmersivePlayerScreen(
             digitBuffer = ""
         }
     }
-    // Channel Surfer auto-tune: dwelling 2.0s on a surfed channel tunes to it automatically
+    // Channel Surfer auto-tune: dwelling 7.0s on a surfed channel tunes to it automatically
     LaunchedEffect(surfIndex, surfRevision) {
         val target = surfChannel ?: return@LaunchedEffect
-        delay(2_000L)
+        delay(7_000L)
         surfChannel = null
         surfIndex = null
         if (!isSameChannel(target, channel)) {
@@ -4839,6 +4840,7 @@ private fun ImmersivePlayerScreen(
             digitBuffer = ""
         } else if (surfChannel != null) {
             surfChannel = null
+            surfIndex = null
         } else if (drawer != PlayerDrawer.None) {
             drawer = PlayerDrawer.None
         } else if (showOsd) {
@@ -4867,6 +4869,10 @@ private fun ImmersivePlayerScreen(
                 delay(PANEL_ANIM_IN.toLong())
                 runCatching { firstServiceFocus.requestFocus() }
             }
+            PlayerDrawer.Apps -> {
+                delay(PANEL_ANIM_IN.toLong())
+                runCatching { firstAppDrawerFocus.requestFocus() }
+            }
             PlayerDrawer.Recent -> Unit
             PlayerDrawer.MiniGuide -> Unit
         }
@@ -4888,6 +4894,7 @@ private fun ImmersivePlayerScreen(
                         return@onPreviewKeyEvent true
                     } else if (surfChannel != null) {
                         surfChannel = null
+                        surfIndex = null
                         return@onPreviewKeyEvent true
                     } else if (drawer != PlayerDrawer.None) {
                         drawer = PlayerDrawer.None
@@ -5091,9 +5098,13 @@ private fun ImmersivePlayerScreen(
                     showOsd = false
                     drawer = PlayerDrawer.Services
                 },
+                onOpenApps = {
+                    showOsd = false
+                    drawer = PlayerDrawer.Apps
+                },
                 onOpenGuide = {
                     showOsd = false
-                    drawer = PlayerDrawer.MiniGuide
+                    onExit()
                 },
                 onOpenChannels = {
                     showOsd = false
@@ -5177,6 +5188,175 @@ private fun ImmersivePlayerScreen(
                 },
                 onDismiss = { drawer = PlayerDrawer.None }
             )
+        }
+
+        // Smooth Bottom App Drawer (triggered from OSD "Apps" button)
+        AnimatedVisibility(
+            visible = drawer == PlayerDrawer.Apps,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(animationSpec = tween(220)) + slideInVertically(animationSpec = tween(220)) { it },
+            exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(animationSpec = tween(200)) { it }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color(0xF5151A22), Color(0xFA090C11))
+                        )
+                    )
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(DtvChrome.ElectricBlue)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "ENTERTAINMENT APPS",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "OK TO LAUNCH  ·  BACK TO CLOSE",
+                        color = DtvChrome.MutedText,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.6.sp
+                    )
+                }
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 18.dp),
+                    contentPadding = PaddingValues(horizontal = 32.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    itemsIndexed(entertainmentApps, key = { _, app -> "bottom-app-${app.packageName}" }) { index, app ->
+                        val launchIntent = remember(app.packageName) {
+                            findAppLaunchIntent(context, app.packageName)
+                        }
+                        val bannerBitmap = remember(app.packageName) {
+                            val pm = context.packageManager
+                            (runCatching { pm.getApplicationBanner(app.packageName) }.getOrNull()
+                                ?: runCatching { pm.getApplicationIcon(app.packageName) }.getOrNull())
+                                ?.let { drawable ->
+                                    runCatching {
+                                        val w = drawable.intrinsicWidth.coerceIn(128, 320)
+                                        val h = drawable.intrinsicHeight.coerceIn(128, 180)
+                                        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+                                        val canvas = android.graphics.Canvas(bmp)
+                                        drawable.setBounds(0, 0, w, h)
+                                        drawable.draw(canvas)
+                                        bmp.asImageBitmap()
+                                    }.getOrNull()
+                                }
+                        }
+                        var isFocused by remember(app.packageName) { mutableStateOf(false) }
+                        val appInteraction = remember(app.packageName) { MutableInteractionSource() }
+                        val openApp = {
+                            drawer = PlayerDrawer.None
+                            GlzHubManager.reportLaunchedApp(prefs, app.name, app.packageName)
+                            scope.launch(Dispatchers.IO) {
+                                GlzHubManager.heartbeat(prefs, client)
+                            }
+                            launchEntertainmentApp(context, app.packageName, launchIntent)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .then(if (index == 0) Modifier.focusRequester(firstAppDrawerFocus) else Modifier)
+                                .width(164.dp)
+                                .height(92.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            app.accent.copy(alpha = 0.92f),
+                                            app.accent.copy(alpha = 0.50f),
+                                            Color(0xFF0E131D)
+                                        )
+                                    )
+                                )
+                                .border(
+                                    width = if (isFocused) 2.5.dp else 1.dp,
+                                    color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.Divider,
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .onFocusChanged { isFocused = it.isFocused }
+                                .onKeyEvent { keyEvent ->
+                                    if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                                        when (keyEvent.nativeKeyEvent.keyCode) {
+                                            KeyEvent.KEYCODE_DPAD_CENTER,
+                                            KeyEvent.KEYCODE_ENTER,
+                                            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                                openApp()
+                                                return@onKeyEvent true
+                                            }
+                                            KeyEvent.KEYCODE_DPAD_UP -> {
+                                                drawer = PlayerDrawer.None
+                                                playerFocus.requestFocus()
+                                                return@onKeyEvent true
+                                            }
+                                        }
+                                    }
+                                    false
+                                }
+                                .clickable(interactionSource = appInteraction, indication = null, onClick = openApp)
+                        ) {
+                            if (bannerBitmap != null) {
+                                Image(
+                                    bitmap = bannerBitmap,
+                                    contentDescription = app.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text(
+                                    text = app.name.uppercase(Locale.getDefault()),
+                                    color = Color.White,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.8.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .padding(horizontal = 10.dp)
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color(0xCC06090F), Color(0xEE06090F))
+                                        )
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = app.name,
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         AnimatedVisibility(
@@ -5675,101 +5855,6 @@ private fun ImmersivePlayerScreen(
                                 }
                             }
                         }
-
-                        // --- OTHER APPS ---
-                        item { DrawerSectionLabel("ENTERTAINMENT APPS") }
-                        items(entertainmentApps, key = { "service-${it.packageName}" }) { app ->
-                            val launchIntent = remember(app.packageName) {
-                                findAppLaunchIntent(context, app.packageName)
-                            }
-                            val icon = remember(app.packageName, launchIntent) {
-                                if (launchIntent == null) null else runCatching {
-                                    context.packageManager.getApplicationIcon(app.packageName)
-                                }.getOrNull()
-                            }
-                            var isFocused by remember(app.packageName) { mutableStateOf(false) }
-                            val appInteraction = remember(app.packageName) { MutableInteractionSource() }
-                            val openApp = {
-                                GlzHubManager.reportLaunchedApp(prefs, app.name, app.packageName)
-                                scope.launch(Dispatchers.IO) {
-                                    GlzHubManager.heartbeat(prefs, client)
-                                }
-                                launchEntertainmentApp(context, app.packageName, launchIntent)
-                            }
-                            Column(Modifier.fillMaxWidth()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(if (isFocused) Color.Black else Color.Transparent)
-                                        .onFocusChanged { isFocused = it.isFocused }
-                                        .onKeyEvent { keyEvent ->
-                                            if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                                                when (keyEvent.nativeKeyEvent.keyCode) {
-                                                    KeyEvent.KEYCODE_DPAD_CENTER,
-                                                    KeyEvent.KEYCODE_ENTER,
-                                                    KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                                                        openApp()
-                                                        return@onKeyEvent true
-                                                    }
-                                                }
-                                            }
-                                            false
-                                        }
-                                        .clickable(
-                                            interactionSource = appInteraction,
-                                            indication = null,
-                                            onClick = openApp
-                                        )
-                                ) {
-                                    if (isFocused) {
-                                        Box(
-                                            Modifier
-                                                .width(4.dp)
-                                                .height(60.dp)
-                                                .align(Alignment.CenterStart)
-                                                .background(DtvPanelBlue)
-                                        )
-                                    }
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        AdaptiveAppIcon(
-                                            icon = icon,
-                                            appName = app.name,
-                                            accent = app.accent,
-                                            size = 38.dp
-                                        )
-                                        Spacer(Modifier.width(14.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                app.name,
-                                                color = if (isFocused) Color.White else DtvPanelPrimaryText,
-                                                fontSize = 14.sp,
-                                                fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Medium,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                if (launchIntent == null) "Install from store" else "Launch app",
-                                                color = if (isFocused) DtvPanelPrimaryText.copy(alpha = 0.72f) else DtvPanelSecondaryText,
-                                                fontSize = 12.sp
-                                            )
-                                        }
-                                        Text(
-                                            if (launchIntent == null) "INSTALL" else "OPEN",
-                                            color = if (isFocused) DtvPanelBlue else DtvPanelSecondaryText,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.6.sp
-                                        )
-                                    }
-                                }
-                                Box(Modifier.fillMaxWidth().height(1.dp).background(DtvPanelRowDivider))
-                            }
-                        }
                     }
                 }
             }
@@ -5883,6 +5968,8 @@ private fun MultiViewScreen(
     var activePane by remember { mutableStateOf(0) }
     val focusRequester = remember { FocusRequester() }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    val clockFmt = remember { java.text.SimpleDateFormat("h:mm a", Locale.getDefault()) }
+
     LaunchedEffect(Unit) {
         while (true) {
             delay(10_000L)
@@ -5892,11 +5979,17 @@ private fun MultiViewScreen(
     BackHandler(onBack = onExit)
     LaunchedEffect(Unit) {
         delay(60)
-        focusRequester.requestFocus()
+        runCatching { focusRequester.requestFocus() }
     }
 
-    Row(
-        Modifier.fillMaxSize().background(Color.Black).focusRequester(focusRequester).focusable()
+    val panes = remember(primary, secondary) { listOf(primary, secondary) }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF07090D))
+            .focusRequester(focusRequester)
+            .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
                 when (event.nativeKeyEvent.keyCode) {
@@ -5915,65 +6008,217 @@ private fun MultiViewScreen(
                 }
             }
     ) {
-        listOf(primary, secondary).forEachIndexed { index, paneChannel ->
-            val isFocused = activePane == index
-            val programme = remember(paneChannel.id, guide, now) {
-                guide.nowProgrammeForChannel(paneChannel, now)
-            }
-            Box(
-                Modifier.weight(1f).fillMaxHeight().padding(6.dp)
-                    .clickable {
-                        if (activePane == index) {
-                            onExpand(paneChannel)
-                        } else {
-                            activePane = index
+        // Equal 50/50 DirecTV Multi-View Split
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            panes.forEachIndexed { index, paneChannel ->
+                val isFocused = activePane == index
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Black)
+                        .border(
+                            width = if (isFocused) 2.5.dp else 1.dp,
+                            color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.Divider,
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .clickable {
+                            if (activePane == index) onExpand(paneChannel) else activePane = index
                         }
-                    }
-                    .border(
-                        if (isFocused) 4.5.dp else 1.dp,
-                        if (isFocused) Color(0xFFC4FF4D)
-                        else Color.White.copy(alpha = .18f),
-                        RoundedCornerShape(18.dp)
-                    ).clip(RoundedCornerShape(18.dp))
-            ) {
-                VideoPlayer(
-                    channel = paneChannel,
-                    captionsEnabled = captionsEnabled,
-                    captionLanguage = captionLanguage,
-                    modifier = Modifier.fillMaxSize(),
-                    muted = !isFocused,
-                    createMediaSession = isFocused
-                )
-                Surface(
-                    Modifier.align(Alignment.BottomStart).fillMaxWidth(),
-                    color = Color.Black.copy(alpha = .78f)
                 ) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ChannelLogo(paneChannel, 42.dp, guide)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(paneChannel.name, color = Color.White,
-                                fontWeight = FontWeight.Black, maxLines = 1,
-                                overflow = TextOverflow.Ellipsis)
-                            Text(programme?.title ?: "Live programming",
-                                color = Color.White.copy(alpha = .7f), maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodySmall)
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isFocused) Color(0xFFC4FF4D) else Color.White.copy(alpha = .15f)
-                        ) {
+                    VideoPlayer(
+                        channel = paneChannel,
+                        captionsEnabled = captionsEnabled,
+                        captionLanguage = captionLanguage,
+                        modifier = Modifier.fillMaxSize(),
+                        muted = !isFocused,
+                        createMediaSession = isFocused
+                    )
+                    // Compact top-left DirecTV audio badge (keeps lower-third scores unobstructed)
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(10.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color(0xCC0A0D13))
+                            .border(
+                                1.dp,
+                                if (isFocused) DtvChrome.ElectricBlue.copy(alpha = 0.85f) else DtvChrome.Divider,
+                                RoundedCornerShape(3.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (isFocused) DtvChrome.ElectricBlue else DtvChrome.MutedText)
+                        )
+                        if (paneChannel.number.isNotBlank()) {
                             Text(
-                                if (isFocused) "AUDIO ACTIVE" else "MUTED",
-                                Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                color = if (isFocused) Color.Black else Color.White.copy(alpha = .6f),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Black
+                                text = paneChannel.number,
+                                color = DtvChrome.ElectricBlueSoft,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = paneChannel.name,
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (isFocused) "AUDIO" else "MUTED",
+                            color = if (isFocused) DtvChrome.ElectricBlueSoft else DtvChrome.MutedText,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // GLZ TV DirecTV-style Bottom Bar
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .background(DtvChrome.ElectricBlue)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(66.dp)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF151A22), Color(0xFF0A0D12))
+                    )
+                )
+                .padding(horizontal = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            // Left: GLZ TV Brand + MULTI-VIEW pill
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.glztv_logo_horizontal),
+                    contentDescription = "GLZ TV",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.height(24.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(DtvChrome.ElectricBlue.copy(alpha = 0.22f))
+                        .border(1.dp, DtvChrome.ElectricBlue.copy(alpha = 0.65f), RoundedCornerShape(3.dp))
+                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "MULTI-VIEW",
+                        color = DtvChrome.ElectricBlueSoft,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    )
+                }
+            }
+
+            // Center: Both active channel summaries
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                panes.forEachIndexed { index, paneChannel ->
+                    val isFocused = activePane == index
+                    val prog = remember(paneChannel.id, guide, now) {
+                        guide.nowProgrammeForChannel(paneChannel, now)
+                    }
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (isFocused) Color(0xFF142132) else Color(0xFF11151C))
+                            .border(
+                                1.dp,
+                                if (isFocused) DtvChrome.ElectricBlue else DtvChrome.Divider,
+                                RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        GoogleTvChannelLogo(
+                            channel = paneChannel,
+                            size = 30.dp,
+                            guide = guide,
+                            shape = RoundedCornerShape(3.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                if (paneChannel.number.isNotBlank()) {
+                                    Text(
+                                        text = paneChannel.number,
+                                        color = DtvChrome.ElectricBlueSoft,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Text(
+                                    text = paneChannel.name,
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Text(
+                                text = prog?.title?.takeIf { it.isNotBlank() }
+                                    ?: paneChannel.eventTitle?.takeIf { it.isNotBlank() }
+                                    ?: "Live Broadcast",
+                                color = DtvChrome.SecondaryText,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 }
+            }
+
+            // Right: Hints + live clock
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = clockFmt.format(Date(now)),
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "◀▶ Audio  ·  OK Fullscreen  ·  BACK Exit",
+                    color = DtvChrome.MutedText,
+                    fontSize = 10.sp
+                )
             }
         }
     }

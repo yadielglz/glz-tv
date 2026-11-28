@@ -128,6 +128,20 @@ sub Main()
     Assert(ProgrammeProgress({ start: 1000, end: 2000 }, 1500) = 0.5, "ProgrammeProgress computes midpoint accurately")
     Assert(ProgrammeProgress({ start: 1000, end: 2000 }, 2500) = 1.0, "ProgrammeProgress clamps after end to 1")
 
+    ' v1.48.7.15 OSD button order, Sleep timer, Channel Surfer dwell & cyclical wrap, and Entertainment Apps
+    osdOrder = OsdButtonOrder()
+    Assert(osdOrder.Count() = 8 and osdOrder[0] = "Guide" and osdOrder[1] = "Info" and osdOrder[2] = "CC" and osdOrder[3] = "Audio" and osdOrder[4] = "Apps" and osdOrder[5] = "Multi-View" and osdOrder[6] = "Favorite" and osdOrder[7] = "Sleep", "OsdButtonOrder matches exact v1.48.7.15 strip order without Channels")
+    Assert(ChannelSurfDwellSeconds() = 7.0, "ChannelSurfDwellSeconds is 7.0s")
+    Assert(WrapChannelIndex(0, -1, 5) = 4, "WrapChannelIndex wraps upward from first to last")
+    Assert(WrapChannelIndex(4, 1, 5) = 0, "WrapChannelIndex wraps downward from last to first")
+    Assert(WrapChannelIndex(2, 1, 5) = 3 and WrapChannelIndex(0, 1, 0) = -1, "WrapChannelIndex steps normally and guards empty lineup")
+    Assert(NextSleepTimerMinutes(0) = 15 and NextSleepTimerMinutes(15) = 30 and NextSleepTimerMinutes(30) = 60 and NextSleepTimerMinutes(60) = 90 and NextSleepTimerMinutes(90) = 0, "NextSleepTimerMinutes cycles Off->15m->30m->60m->90m->Off")
+    Assert(SleepTimerLabel(0) = "Sleep" and SleepTimerLabel(30) = "Sleep 30m", "SleepTimerLabel formats Off and active durations")
+    defaultApps = ResolveEntertainmentApps({})
+    Assert(defaultApps.Count() = 10 and defaultApps[0].name = "Netflix" and defaultApps[0].accent = "0xE50914FF", "ResolveEntertainmentApps falls back to curated Roku apps with full-bleed brand fills")
+    customApps = ResolveEntertainmentApps({ entertainmentApps: [{ name: "Glz Cinema", subtitle: "Featured", bannerUrl: "https://cdn.example/banner.jpg", accentColor: "#1990FF", rokuChannelId: "999" }] })
+    Assert(customApps.Count() = 1 and customApps[0].name = "Glz Cinema" and customApps[0].artwork = "https://cdn.example/banner.jpg" and customApps[0].accent = "0x1990FFFF", "ResolveEntertainmentApps parses GlzHub apps with banner artwork and normalized hex fill")
+
     if m.failed > 0 then print "FAILURES: "; m.failed else print "ALL FEATURE TESTS PASSED"
 end sub
 sub Assert(condition as Boolean, label as String)

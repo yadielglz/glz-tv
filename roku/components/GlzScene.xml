@@ -11,41 +11,45 @@
       <Rectangle translation="[0,76]" width="1280" height="2" color="0x2B3038FF" />
       <Poster id="headerLogo" translation="[28,16]" width="126" height="44" uri="pkg:/images/glztv_logo_horizontal.png" loadDisplayMode="scaleToFit" />
       <Group id="topNavGroup" visible="false">
-        <Rectangle id="navTabBg0" translation="[176,0]" width="76" height="76" color="0x0D111800" />
-        <Label id="navTabLabel0" translation="[176,0]" width="76" height="73" horizAlign="center" vertAlign="center" text="Home" color="0xFFFFFFFF" font="font:SmallestBoldSystemFont" />
-        <Rectangle id="navTabLine0" translation="[176,73]" width="76" height="3" color="0x1990FFFF" visible="true" />
+        <Rectangle id="navTabBg0" translation="[166,0]" width="70" height="76" color="0x0D111800" />
+        <Label id="navTabLabel0" translation="[166,0]" width="70" height="73" horizAlign="center" vertAlign="center" text="Home" color="0xFFFFFFFF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine0" translation="[166,73]" width="70" height="3" color="0x1990FFFF" visible="true" />
 
-        <Rectangle id="navTabBg1" translation="[256,0]" width="70" height="76" color="0x0D111800" />
-        <Label id="navTabLabel1" translation="[256,0]" width="70" height="73" horizAlign="center" vertAlign="center" text="Favs" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
-        <Rectangle id="navTabLine1" translation="[256,73]" width="70" height="3" color="0x1990FFFF" visible="false" />
+        <Rectangle id="navTabBg1" translation="[238,0]" width="62" height="76" color="0x0D111800" />
+        <Label id="navTabLabel1" translation="[238,0]" width="62" height="73" horizAlign="center" vertAlign="center" text="Favs" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine1" translation="[238,73]" width="62" height="3" color="0x1990FFFF" visible="false" />
 
-        <Rectangle id="navTabBg2" translation="[330,0]" width="92" height="76" color="0x0D111800" />
-        <Label id="navTabLabel2" translation="[330,0]" width="92" height="73" horizAlign="center" vertAlign="center" text="Live TV" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
-        <Rectangle id="navTabLine2" translation="[330,73]" width="92" height="3" color="0x1990FFFF" visible="false" />
+        <Rectangle id="navTabBg2" translation="[302,0]" width="82" height="76" color="0x0D111800" />
+        <Label id="navTabLabel2" translation="[302,0]" width="82" height="73" horizAlign="center" vertAlign="center" text="Live TV" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine2" translation="[302,73]" width="82" height="3" color="0x1990FFFF" visible="false" />
 
-        <Rectangle id="navTabBg3" translation="[426,0]" width="78" height="76" color="0x0D111800" />
-        <Label id="navTabLabel3" translation="[426,0]" width="78" height="73" horizAlign="center" vertAlign="center" text="Guide" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
-        <Rectangle id="navTabLine3" translation="[426,73]" width="78" height="3" color="0x1990FFFF" visible="false" />
+        <Rectangle id="navTabBg3" translation="[386,0]" width="68" height="76" color="0x0D111800" />
+        <Label id="navTabLabel3" translation="[386,0]" width="68" height="73" horizAlign="center" vertAlign="center" text="Guide" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine3" translation="[386,73]" width="68" height="3" color="0x1990FFFF" visible="false" />
 
-        <Rectangle id="navTabBg4" translation="[508,0]" width="86" height="76" color="0x0D111800" />
-        <Label id="navTabLabel4" translation="[508,0]" width="86" height="73" horizAlign="center" vertAlign="center" text="Movies" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
-        <Rectangle id="navTabLine4" translation="[508,73]" width="86" height="3" color="0x1990FFFF" visible="false" />
+        <Rectangle id="navTabBg4" translation="[456,0]" width="76" height="76" color="0x0D111800" />
+        <Label id="navTabLabel4" translation="[456,0]" width="76" height="73" horizAlign="center" vertAlign="center" text="Movies" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine4" translation="[456,73]" width="76" height="3" color="0x1990FFFF" visible="false" />
 
-        <Rectangle id="navTabBg5" translation="[598,0]" width="64" height="76" color="0x0D111800" />
-        <Label id="navTabLabel5" translation="[598,0]" width="64" height="73" horizAlign="center" vertAlign="center" text="PPV" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
-        <Rectangle id="navTabLine5" translation="[598,73]" width="64" height="3" color="0x1990FFFF" visible="false" />
+        <Rectangle id="navTabBg5" translation="[534,0]" width="66" height="76" color="0x0D111800" />
+        <Label id="navTabLabel5" translation="[534,0]" width="66" height="73" horizAlign="center" vertAlign="center" text="Apps" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine5" translation="[534,73]" width="66" height="3" color="0x1990FFFF" visible="false" />
 
-        <Rectangle id="navTabBg6" translation="[666,0]" width="76" height="76" color="0x0D111800" />
-        <Label id="navTabLabel6" translation="[666,0]" width="76" height="73" horizAlign="center" vertAlign="center" text="Radio" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
-        <Rectangle id="navTabLine6" translation="[666,73]" width="76" height="3" color="0x1990FFFF" visible="false" />
+        <Rectangle id="navTabBg6" translation="[602,0]" width="56" height="76" color="0x0D111800" />
+        <Label id="navTabLabel6" translation="[602,0]" width="56" height="73" horizAlign="center" vertAlign="center" text="PPV" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine6" translation="[602,73]" width="56" height="3" color="0x1990FFFF" visible="false" />
 
-        <Rectangle id="navTabBg7" translation="[746,0]" width="96" height="76" color="0x0D111800" />
-        <Label id="navTabLabel7" translation="[746,0]" width="96" height="73" horizAlign="center" vertAlign="center" text="Weather" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
-        <Rectangle id="navTabLine7" translation="[746,73]" width="96" height="3" color="0x1990FFFF" visible="false" />
+        <Rectangle id="navTabBg7" translation="[660,0]" width="68" height="76" color="0x0D111800" />
+        <Label id="navTabLabel7" translation="[660,0]" width="68" height="73" horizAlign="center" vertAlign="center" text="Radio" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine7" translation="[660,73]" width="68" height="3" color="0x1990FFFF" visible="false" />
 
-        <Rectangle id="navTabBg8" translation="[846,0]" width="96" height="76" color="0x0D111800" />
-        <Label id="navTabLabel8" translation="[846,0]" width="96" height="73" horizAlign="center" vertAlign="center" text="Settings" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
-        <Rectangle id="navTabLine8" translation="[846,73]" width="96" height="3" color="0x1990FFFF" visible="false" />
+        <Rectangle id="navTabBg8" translation="[730,0]" width="86" height="76" color="0x0D111800" />
+        <Label id="navTabLabel8" translation="[730,0]" width="86" height="73" horizAlign="center" vertAlign="center" text="Weather" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine8" translation="[730,73]" width="86" height="3" color="0x1990FFFF" visible="false" />
+
+        <Rectangle id="navTabBg9" translation="[818,0]" width="86" height="76" color="0x0D111800" />
+        <Label id="navTabLabel9" translation="[818,0]" width="86" height="73" horizAlign="center" vertAlign="center" text="Settings" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="navTabLine9" translation="[818,73]" width="86" height="3" color="0x1990FFFF" visible="false" />
       </Group>
       <Group id="topNavFocus" focusable="true" />
       <!-- Borderless Weather / Clock / Guest Status -->
@@ -109,6 +113,11 @@
           <Rectangle translation="[1,1]" width="1206" height="484" color="0x12161EFF" />
           <Rectangle width="1208" height="3" color="0x1990FFFF" />
           <Label id="weatherText" translation="[32,26]" width="1144" height="434" wrap="true" color="0xFFFFFFFF" font="font:SmallSystemFont" />
+        </Group>
+
+        <!-- Full-Bleed Entertainment Apps Screen Grid -->
+        <Group id="appsView" translation="[36,158]" visible="false">
+          <MarkupGrid id="appsGrid" itemComponentName="AppTile" itemSize="[228,150]" itemSpacing="[16,16]" numColumns="5" numRows="3" drawFocusFeedback="false" vertFocusAnimationStyle="floatingFocus" />
         </Group>
       </Group>
 
@@ -224,9 +233,9 @@
     <Video id="player" width="1280" height="720" visible="false" enableUI="false" enableTrickPlay="false" />
     <Group id="playerFocus" focusable="true" />
 
-    <!-- DirecTV HD Top Channel Banner OSD -->
+    <!-- DirecTV HD Top Channel Banner OSD + 8-Button Action Strip -->
     <Group id="osd" translation="[0,0]" visible="false">
-      <Rectangle width="1280" height="144" color="0x0D1118EB" />
+      <Rectangle width="1280" height="144" color="0x0D1118F0" />
       <Rectangle translation="[0,142]" width="1280" height="2" color="0x2B3038FF" />
       <Poster id="osdLogo" translation="[32,22]" width="96" height="96" loadDisplayMode="scaleToFit" />
       <Rectangle id="osdLivePillBg" translation="[146,20]" width="64" height="26" color="0xEF4444FF" />
@@ -239,10 +248,55 @@
       <Label id="osdNext" translation="[146,102]" width="740" height="26" color="0x94A3B8FF" font="font:SmallSystemFont" />
       <Poster id="osdLogoBug" translation="[1106,18]" width="142" height="40" uri="pkg:/images/glztv_logo_bug.png" loadDisplayMode="scaleToFit" />
       <Label id="osdClock" translation="[1020,64]" width="228" height="28" horizAlign="right" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
-      <Label id="osdHint" translation="[894,104]" width="354" height="24" horizAlign="right" color="0x94A3B8FF" text="OK: Info  •  Right: Guide  •  Up/Down: Zap" font="font:SmallestSystemFont" />
+      <Label id="osdHint" translation="[840,104]" width="408" height="24" horizAlign="right" color="0x94A3B8FF" text="Left/Right: OSD  •  OK: Select  •  Up/Down: Surf" font="font:SmallestSystemFont" />
+
+      <!-- Exact OSD Button Order: Guide, Info, CC, Audio, Apps, Multi-View, Favorite, Sleep -->
+      <Group id="osdStrip" translation="[0,144]">
+        <Rectangle width="1280" height="54" color="0x0A0E14F5" />
+        <Rectangle translation="[0,52]" width="1280" height="2" color="0x2B3038FF" />
+
+        <Rectangle id="osdBtnBg0" translation="[37,8]" width="142" height="38" color="0x1990FFFF" />
+        <Label id="osdBtnLabel0" translation="[37,8]" width="142" height="38" horizAlign="center" vertAlign="center" text="Guide" color="0xFFFFFFFF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="osdBtnLine0" translation="[37,43]" width="142" height="3" color="0x1990FFFF" visible="true" />
+
+        <Rectangle id="osdBtnBg1" translation="[189,8]" width="142" height="38" color="0x12161EFF" />
+        <Label id="osdBtnLabel1" translation="[189,8]" width="142" height="38" horizAlign="center" vertAlign="center" text="Info" color="0xCBD5E1FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="osdBtnLine1" translation="[189,43]" width="142" height="3" color="0x1990FFFF" visible="false" />
+
+        <Rectangle id="osdBtnBg2" translation="[341,8]" width="142" height="38" color="0x12161EFF" />
+        <Label id="osdBtnLabel2" translation="[341,8]" width="142" height="38" horizAlign="center" vertAlign="center" text="CC" color="0xCBD5E1FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="osdBtnLine2" translation="[341,43]" width="142" height="3" color="0x1990FFFF" visible="false" />
+
+        <Rectangle id="osdBtnBg3" translation="[493,8]" width="142" height="38" color="0x12161EFF" />
+        <Label id="osdBtnLabel3" translation="[493,8]" width="142" height="38" horizAlign="center" vertAlign="center" text="Audio" color="0xCBD5E1FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="osdBtnLine3" translation="[493,43]" width="142" height="3" color="0x1990FFFF" visible="false" />
+
+        <Rectangle id="osdBtnBg4" translation="[645,8]" width="142" height="38" color="0x12161EFF" />
+        <Label id="osdBtnLabel4" translation="[645,8]" width="142" height="38" horizAlign="center" vertAlign="center" text="Apps" color="0xCBD5E1FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="osdBtnLine4" translation="[645,43]" width="142" height="3" color="0x1990FFFF" visible="false" />
+
+        <Rectangle id="osdBtnBg5" translation="[797,8]" width="142" height="38" color="0x12161EFF" />
+        <Label id="osdBtnLabel5" translation="[797,8]" width="142" height="38" horizAlign="center" vertAlign="center" text="Multi-View" color="0xCBD5E1FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="osdBtnLine5" translation="[797,43]" width="142" height="3" color="0x1990FFFF" visible="false" />
+
+        <Rectangle id="osdBtnBg6" translation="[949,8]" width="142" height="38" color="0x12161EFF" />
+        <Label id="osdBtnLabel6" translation="[949,8]" width="142" height="38" horizAlign="center" vertAlign="center" text="Favorite" color="0xCBD5E1FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="osdBtnLine6" translation="[949,43]" width="142" height="3" color="0x1990FFFF" visible="false" />
+
+        <Rectangle id="osdBtnBg7" translation="[1101,8]" width="142" height="38" color="0x12161EFF" />
+        <Label id="osdBtnLabel7" translation="[1101,8]" width="142" height="38" horizAlign="center" vertAlign="center" text="Sleep" color="0xCBD5E1FF" font="font:SmallestBoldSystemFont" />
+        <Rectangle id="osdBtnLine7" translation="[1101,43]" width="142" height="3" color="0x1990FFFF" visible="false" />
+      </Group>
+
+      <!-- Expandable Info Drawer (toggled by Info OSD button) -->
+      <Group id="osdInfoBox" translation="[0,198]" visible="false">
+        <Rectangle width="1280" height="78" color="0x06080BE8" />
+        <Rectangle translation="[0,76]" width="1280" height="2" color="0x1990FFFF" />
+        <Label id="osdInfoText" translation="[38,12]" width="1204" height="54" wrap="true" color="0xCBD5E1FF" font="font:SmallestSystemFont" />
+      </Group>
     </Group>
 
-    <!-- DirecTV HD Slide-In Channel Panel / Mini-Guide -->
+    <!-- DirecTV HD Slide-In Channel Panel / Mini-Guide (Right D-Pad shortcut) -->
     <Group id="miniGuide" translation="[580,0]" visible="false">
       <Rectangle width="700" height="720" color="0x06080BF2" />
       <Rectangle width="3" height="720" color="0x1990FFFF" />
@@ -264,6 +318,136 @@
       <Label translation="[25,672]" width="650" height="28" color="0x94A3B8FF" text="OK  Tune channel   •   Left / Back  Close Guide" font="font:SmallestSystemFont" />
     </Group>
 
+    <!-- Right Panel: Audio / Subtitles / Playback ONLY (Entertainment Apps moved to Bottom App Drawer) -->
+    <Group id="audioPanel" translation="[820,0]" visible="false">
+      <Rectangle width="460" height="720" color="0x06080BF5" />
+      <Rectangle width="3" height="720" color="0x1990FFFF" />
+      <Rectangle translation="[3,0]" width="457" height="70" color="0x0D1118FF" />
+      <Rectangle translation="[3,70]" width="457" height="2" color="0x2B3038FF" />
+      <Label translation="[24,14]" width="300" height="28" text="Audio &amp; Playback" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+      <Label translation="[24,44]" width="412" height="20" text="Audio Tracks · Subtitles · Playback Controls" color="0x4DA8FFFF" font="font:SmallestSystemFont" />
+
+      <Label translation="[24,92]" width="412" height="22" text="AUDIO &amp; SUBTITLES" color="0x64748BFF" font="font:SmallestBoldSystemFont" />
+      <Group translation="[24,120]">
+        <Rectangle id="audioRowBg0" width="412" height="68" color="0x12161EFF" />
+        <Rectangle id="audioRowAccent0" width="4" height="68" color="0x1990FFFF" visible="true" />
+        <Label translation="[18,10]" width="380" height="24" text="Audio Track" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Label id="audioTrackValue" translation="[18,36]" width="380" height="24" text="Default Stereo" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+      </Group>
+      <Group translation="[24,198]">
+        <Rectangle id="audioRowBg1" width="412" height="68" color="0x12161EFF" />
+        <Rectangle id="audioRowAccent1" width="4" height="68" color="0x1990FFFF" visible="false" />
+        <Label translation="[18,10]" width="380" height="24" text="Subtitles / Closed Captions" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Label id="audioCcValue" translation="[18,36]" width="380" height="24" text="Off" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+      </Group>
+
+      <Label translation="[24,292]" width="412" height="22" text="PLAYBACK" color="0x64748BFF" font="font:SmallestBoldSystemFont" />
+      <Group translation="[24,320]">
+        <Rectangle id="audioRowBg2" width="412" height="68" color="0x12161EFF" />
+        <Rectangle id="audioRowAccent2" width="4" height="68" color="0x1990FFFF" visible="false" />
+        <Label translation="[18,10]" width="380" height="24" text="Playback State" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Label id="audioPlayValue" translation="[18,36]" width="380" height="24" text="Playing · OK to Pause" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+      </Group>
+      <Group translation="[24,398]">
+        <Rectangle id="audioRowBg3" width="412" height="68" color="0x12161EFF" />
+        <Rectangle id="audioRowAccent3" width="4" height="68" color="0x1990FFFF" visible="false" />
+        <Label translation="[18,10]" width="380" height="24" text="Stream Recovery" color="0x94A3B8FF" font="font:SmallestBoldSystemFont" />
+        <Label id="audioRestartValue" translation="[18,36]" width="380" height="24" text="Restart / Reconnect Stream" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+      </Group>
+
+      <Rectangle translation="[24,496]" width="412" height="1" color="0x2B3038FF" />
+      <Label id="audioPanelMeta" translation="[24,512]" width="412" height="96" wrap="true" color="0x94A3B8FF" font="font:SmallestSystemFont" />
+      <Label translation="[24,672]" width="412" height="28" color="0x94A3B8FF" text="Up/Down: Choose  •  OK: Apply  •  Left/Back: Close" font="font:SmallestSystemFont" />
+    </Group>
+    <Group id="audioPanelFocus" focusable="true" />
+
+    <!-- New Bottom App Drawer Bar (Full-Bleed Entertainment App Tiles) -->
+    <Group id="appDrawer" translation="[0,504]" visible="false">
+      <Rectangle width="1280" height="216" color="0x06080BF5" />
+      <Rectangle width="1280" height="3" color="0x1990FFFF" />
+      <Label translation="[36,16]" width="380" height="28" text="Entertainment Apps" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+      <Label id="appDrawerStatus" translation="[420,18]" width="480" height="24" horizAlign="center" color="0x4DA8FFFF" font="font:SmallestBoldSystemFont" />
+      <Label translation="[910,18]" width="334" height="24" horizAlign="right" color="0x94A3B8FF" text="Left/Right: Browse  •  OK: Open  •  Back: Close" font="font:SmallestSystemFont" />
+      <MarkupGrid id="appDrawerGrid" translation="[36,56]" itemComponentName="AppTile" itemSize="[204,118]" itemSpacing="[14,0]" numColumns="10" numRows="1" drawFocusFeedback="false" />
+      <Label translation="[36,184]" width="1208" height="22" color="0x64748BFF" text="Live TV continues playing above while you browse Entertainment Apps" font="font:SmallestSystemFont" />
+    </Group>
+
+    <!-- DirecTV-Styled Multi-View Equal Split Overlay with GlzTV Bottom Bar -->
+    <Group id="multiViewOverlay" translation="[0,0]" visible="false">
+      <Rectangle width="1280" height="720" color="0x06080BE8" />
+      <!-- Equal Split Left Pane: Active Live Channel -->
+      <Group translation="[28,28]">
+        <Rectangle width="604" height="584" color="0x1990FFFF" />
+        <Rectangle translation="[2,2]" width="600" height="580" color="0x0D1118F0" />
+        <Rectangle translation="[18,18]" width="134" height="26" color="0xEF4444FF" />
+        <Label translation="[18,18]" width="134" height="26" horizAlign="center" vertAlign="center" text="PANE 1 · LIVE" color="0xFFFFFFFF" font="font:SmallestBoldSystemFont" />
+        <Poster id="mvLeftLogo" translation="[232,104]" width="140" height="140" loadDisplayMode="scaleToFit" />
+        <Label id="mvLeftNumber" translation="[24,264]" width="556" height="32" horizAlign="center" color="0x4DA8FFFF" font="font:MediumBoldSystemFont" />
+        <Label id="mvLeftTitle" translation="[24,300]" width="556" height="38" horizAlign="center" color="0xFFFFFFFF" font="font:LargeBoldSystemFont" />
+        <Label id="mvLeftNow" translation="[32,354]" width="540" height="56" horizAlign="center" wrap="true" color="0xCBD5E1FF" font="font:SmallSystemFont" />
+        <Label translation="[32,492]" width="540" height="44" horizAlign="center" wrap="true" color="0x64748BFF" text="Active hardware video decoder · Fullscreen audio playing" font="font:SmallestSystemFont" />
+      </Group>
+
+      <!-- Equal Split Right Pane: Secondary Quick-Swap Slot -->
+      <Group translation="[648,28]">
+        <Rectangle width="604" height="584" color="0x2B3038FF" />
+        <Rectangle translation="[2,2]" width="600" height="580" color="0x12161EF0" />
+        <Rectangle translation="[18,18]" width="168" height="26" color="0x1990FFFF" />
+        <Label translation="[18,18]" width="168" height="26" horizAlign="center" vertAlign="center" text="PANE 2 · STANDBY" color="0xFFFFFFFF" font="font:SmallestBoldSystemFont" />
+        <Poster id="mvRightLogo" translation="[232,104]" width="140" height="140" loadDisplayMode="scaleToFit" />
+        <Label id="mvRightNumber" translation="[24,264]" width="556" height="32" horizAlign="center" color="0x4DA8FFFF" font="font:MediumBoldSystemFont" />
+        <Label id="mvRightTitle" translation="[24,300]" width="556" height="38" horizAlign="center" color="0xFFFFFFFF" font="font:LargeBoldSystemFont" />
+        <Label id="mvRightNow" translation="[32,354]" width="540" height="56" horizAlign="center" wrap="true" color="0xCBD5E1FF" font="font:SmallSystemFont" />
+        <Label translation="[32,456]" width="540" height="84" horizAlign="center" wrap="true" color="0x94A3B8FF" text="Roku supports a single hardware video decoder.&#10;Use Up / Down to browse channels and press OK to instant-swap into Pane 1." font="font:SmallestSystemFont" />
+      </Group>
+
+      <!-- GlzTV Bottom Bar -->
+      <Group translation="[0,636]">
+        <Rectangle width="1280" height="84" color="0x0A0E14FF" />
+        <Rectangle width="1280" height="2" color="0x1990FFFF" />
+        <Poster translation="[32,20]" width="126" height="44" uri="pkg:/images/glztv_logo_horizontal.png" loadDisplayMode="scaleToFit" />
+        <Label translation="[182,28]" width="280" height="28" text="MULTI-VIEW · EQUAL SPLIT" color="0x4DA8FFFF" font="font:SmallestBoldSystemFont" />
+        <Label id="mvClock" translation="[470,28]" width="180" height="28" horizAlign="center" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+        <Label translation="[660,28]" width="588" height="28" horizAlign="right" color="0xCBD5E1FF" text="Up/Down: Change Pane 2  •  OK: Swap Live  •  Back: Exit" font="font:SmallestSystemFont" />
+      </Group>
+    </Group>
+    <Group id="multiViewFocus" focusable="true" />
+
+    <!-- Channel Surfer Bar (UP/DOWN in fullscreen Live TV, 7.0s dwell, BACK cancels cleanly) -->
+    <Group id="surfBar" translation="[0,544]" visible="false">
+      <Rectangle width="1280" height="176" color="0x0A0E14F5" />
+      <Rectangle width="1280" height="3" color="0x1990FFFF" />
+      <!-- Adjacent channel indicators -->
+      <Label id="surfPrevHint" translation="[32,16]" width="240" height="24" color="0x64748BFF" font="font:SmallestSystemFont" />
+      <Label id="surfNextHint" translation="[32,138]" width="240" height="24" color="0x64748BFF" font="font:SmallestSystemFont" />
+      <Poster id="surfLogo" translation="[32,44]" width="84" height="84" loadDisplayMode="scaleToFit" />
+      <Rectangle id="surfLivePillBg" translation="[136,42]" width="64" height="24" color="0xEF4444FF" />
+      <Label id="surfLivePillText" translation="[136,42]" width="64" height="24" horizAlign="center" vertAlign="center" text="SURF" color="0xFFFFFFFF" font="font:SmallestBoldSystemFont" />
+      <Label id="surfNumber" translation="[212,38]" width="130" height="34" color="0x4DA8FFFF" font="font:MediumBoldSystemFont" />
+      <Label id="surfTitle" translation="[346,38]" width="560" height="34" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+      <Label id="surfNow" translation="[136,78]" width="740" height="26" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+      <Rectangle id="surfProgressTrack" translation="[136,110]" width="740" height="5" color="0x2B3038FF" />
+      <Rectangle id="surfProgressFill" translation="[136,110]" width="0" height="5" color="0x1990FFFF" />
+      <Label id="surfNext" translation="[136,122]" width="740" height="24" color="0x94A3B8FF" font="font:SmallestSystemFont" />
+      <Poster translation="[1106,22]" width="142" height="40" uri="pkg:/images/glztv_logo_bug.png" loadDisplayMode="scaleToFit" />
+      <Label id="surfClock" translation="[1020,68]" width="228" height="28" horizAlign="right" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+      <Label id="surfHint" translation="[840,124]" width="408" height="24" horizAlign="right" color="0x4DA8FFFF" text="OK: Tune Now  •  Auto-tune 7s  •  Back: Cancel" font="font:SmallestBoldSystemFont" />
+    </Group>
+
+    <!-- Smooth Transition Animations -->
+    <Animation id="osdSlideIn" duration="0.18" easeFunction="outCubic">
+      <Vector2DFieldInterpolator key="[0.0, 1.0]" keyValue="[[0,-198], [0,0]]" fieldToInterp="osd.translation" />
+    </Animation>
+    <Animation id="audioPanelSlideIn" duration="0.2" easeFunction="outCubic">
+      <Vector2DFieldInterpolator key="[0.0, 1.0]" keyValue="[[1280,0], [820,0]]" fieldToInterp="audioPanel.translation" />
+    </Animation>
+    <Animation id="appDrawerSlideIn" duration="0.2" easeFunction="outCubic">
+      <Vector2DFieldInterpolator key="[0.0, 1.0]" keyValue="[[0,720], [0,504]]" fieldToInterp="appDrawer.translation" />
+    </Animation>
+    <Animation id="surfBarSlideIn" duration="0.16" easeFunction="outCubic">
+      <Vector2DFieldInterpolator key="[0.0, 1.0]" keyValue="[[0,720], [0,544]]" fieldToInterp="surfBar.translation" />
+    </Animation>
+
     <Audio id="radioPlayer" />
     <HubTask id="hubTask" />
     <ExtrasTask id="extrasTask" />
@@ -271,7 +455,10 @@
     <Timer id="extrasTimer" duration="0.2" repeat="false" />
     <Timer id="osdTimer" duration="5" repeat="false" />
     <Timer id="miniTimer" duration="12" repeat="false" />
+    <Timer id="surfTimer" duration="7" repeat="false" />
+    <Timer id="sleepTimer" duration="900" repeat="false" />
     <Timer id="radioEqTimer" duration="0.25" repeat="true" />
     <Timer id="clockTimer" duration="30" repeat="true" />
   </children>
 </component>
+

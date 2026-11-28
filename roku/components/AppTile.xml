@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="AppTile" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="showItem" />
+    <field id="focusPercent" type="float" onChange="showFocus" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/AppTile.brs" />
+  <children>
+    <!-- Full-bleed branded background fill covering 100% of tile -->
+    <Rectangle id="tileFill" width="228" height="150" color="0x1E293BFF" />
+    <!-- Subtle top sheen for depth -->
+    <Rectangle id="tileSheen" width="228" height="58" color="0xFFFFFF18" />
+    <!-- Full-bleed artwork/banner fill with scaleToZoom (scaleToFill/crop) -->
+    <Poster id="tileArtwork" width="228" height="150" loadDisplayMode="scaleToZoom" visible="false" />
+    <!-- Brand monogram fill when no remote artwork URL is supplied -->
+    <Label id="tileMonogram" translation="[14,14]" width="200" height="72" horizAlign="center" vertAlign="center" color="0xFFFFFFEE" font="font:LargeBoldSystemFont" />
+    <!-- Subtle bottom scrim for crisp legibility over full-bleed fill/artwork -->
+    <Rectangle id="tileScrim" translation="[0,82]" width="228" height="68" color="0x06080BC4" />
+    <Label id="tileBadge" translation="[12,86]" width="204" height="18" color="0x4DA8FFFF" font="font:SmallestBoldSystemFont" />
+    <Label id="tileTitle" translation="[12,102]" width="204" height="24" color="0xFFFFFFFF" font="font:SmallBoldSystemFont" />
+    <Label id="tileSubtitle" translation="[12,126]" width="204" height="18" color="0xCBD5E1FF" font="font:SmallestSystemFont" />
+    <!-- Subtle unfocused border -->
+    <Rectangle id="idleBorderTop" width="228" height="1" color="0xFFFFFF24" />
+    <Rectangle id="idleBorderBottom" translation="[0,149]" width="228" height="1" color="0xFFFFFF24" />
+    <!-- DirecTV Electric Blue Focus Ring -->
+    <Rectangle id="focusTop" width="228" height="4" color="0x1990FFFF" visible="false" />
+    <Rectangle id="focusBottom" translation="[0,146]" width="228" height="4" color="0x1990FFFF" visible="false" />
+    <Rectangle id="focusLeft" width="4" height="150" color="0x1990FFFF" visible="false" />
+    <Rectangle id="focusRight" translation="[224,0]" width="4" height="150" color="0x1990FFFF" visible="false" />
+  </children>
+</component>
