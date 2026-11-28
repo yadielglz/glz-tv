@@ -501,3 +501,370 @@ function ResolveEntertainmentApps(config as Dynamic) as Object
     return resolved
 end function
 
+function SportsTeamDisplay(rank as Integer, shortName as String) as String
+    if rank >= 1 and rank <= 25 then return "#" + rank.ToStr() + " " + shortName
+    return shortName
+end function
+
+function ScoreboardRowHeadline(game as Dynamic) as String
+    if type(game) <> "roAssociativeArray" then return ""
+    awayLabel = SportsTeamDisplay(game.awayRank, Text(game.awayName, Text(game.awayAbbr)))
+    homeLabel = SportsTeamDisplay(game.homeRank, Text(game.homeName, Text(game.homeAbbr)))
+    if Text(game.state) = "pre"
+        return awayLabel + " @ " + homeLabel
+    end if
+    return awayLabel + " " + Text(game.awayScore, "0") + " – " + homeLabel + " " + Text(game.homeScore, "0")
+end function
+
+function ParseEspnScoreboard(rawJson as String, league as String, subLeague as String) as Object
+    games = []
+    if rawJson = "" then return games
+    root = ParseJson(rawJson)
+    if type(root) <> "roAssociativeArray" then return games
+    events = root.events
+    if type(events) <> "roArray" then return games
+    for each ev in events
+        if type(ev) = "roAssociativeArray" and type(ev.competitions) = "roArray" and ev.competitions.Count() > 0
+            comp = ev.competitions[0]
+            if type(comp) = "roAssociativeArray" and type(comp.competitors) = "roArray" and comp.competitors.Count() >= 2
+                away = invalid
+                home = invalid
+                for each c in comp.competitors
+                    if type(c) = "roAssociativeArray"
+                        if Text(c.homeAway) = "away" then away = c
+                        if Text(c.homeAway) = "home" then home = c
+                    end if
+                end for
+                if away = invalid then away = comp.competitors[1]
+                if home = invalid then home = comp.competitors[0]
+                if type(away) = "roAssociativeArray" and type(home) = "roAssociativeArray"
+                    stState = "pre"
+                    stDetail = ""
+                    if type(ev.status) = "roAssociativeArray" and type(ev.status.type) = "roAssociativeArray"
+                        stState = LCase(Text(ev.status.type.state, "pre"))
+                        stDetail = Text(ev.status.type.shortDetail, Text(ev.status.type.detail))
+                    end if
+                    broadcasts = []
+                    seenNet = {}
+                    if type(comp.broadcasts) = "roArray"
+                        for each b in comp.broadcasts
+                            if type(b) = "roAssociativeArray" and type(b.names) = "roArray"
+                                for each bName in b.names
+                                    clean = Text(bName).Trim()
+                                    if clean <> "" and not seenNet.DoesExist(UCase(clean))
+                                        seenNet[UCase(clean)] = true
+                                        broadcasts.Push(clean)
+                                    end if
+                                end for
+                            end if
+                        end for
+                    end if
+                    if type(comp.geoBroadcasts) = "roArray"
+                        for each gb in comp.geoBroadcasts
+                            if type(gb) = "roAssociativeArray" and type(gb.media) = "roAssociativeArray"
+                                clean = Text(gb.media.shortName).Trim()
+                                if clean <> "" and not seenNet.DoesExist(UCase(clean))
+                                    seenNet[UCase(clean)] = true
+                                    broadcasts.Push(clean)
+                                end if
+                            end if
+                        end for
+                    end if
+                    awayTeam = away.team
+                    homeTeam = home.team
+                    if type(awayTeam) = "roAssociativeArray" and type(homeTeam) = "roAssociativeArray"
+                        awayRank = 0
+                        if type(away.curatedRank) = "roAssociativeArray" and away.curatedRank.current <> invalid
+                            rVal = away.curatedRank.current
+                            if rVal >= 1 and rVal <= 25 then awayRank = rVal
+                        end if
+                        homeRank = 0
+                        if type(home.curatedRank) = "roAssociativeArray" and home.curatedRank.current <> invalid
+                            rVal = home.curatedRank.current
+                            if rVal >= 1 and rVal <= 25 then homeRank = rVal
+                        end if
+                        primaryB = ""
+                        if broadcasts.Count() > 0 then primaryB = broadcasts[0]
+                        game = {
+                            id: subLeague + ":" + Text(ev.id)
+                            league: league
+                            subLeague: subLeague
+                            state: stState
+                            statusDetail: stDetail
+                            awayName: Text(awayTeam.shortDisplayName, Text(awayTeam.name, Text(awayTeam.abbreviation)))
+                            awayAbbr: Text(awayTeam.abbreviation)
+                            awayFull: Text(awayTeam.displayName, Text(awayTeam.location))
+                            awayScore: Text(away.score, "0")
+                            awayLogo: Text(awayTeam.logo)
+                            awayRank: awayRank
+                            homeName: Text(homeTeam.shortDisplayName, Text(homeTeam.name, Text(homeTeam.abbreviation)))
+                            homeAbbr: Text(homeTeam.abbreviation)
+                            homeFull: Text(homeTeam.displayName, Text(homeTeam.location))
+                            homeScore: Text(home.score, "0")
+                            homeLogo: Text(homeTeam.logo)
+                            homeRank: homeRank
+                            broadcasts: broadcasts
+                            primaryBroadcast: primaryB
+                        }
+                        game["headline"] = ScoreboardRowHeadline(game)
+                        games.Push(game)
+                    end if
+                end if
+            end if
+        end if
+    end for
+    return games
+end function
+
+function SportsGamePriority(game as Dynamic) as Integer
+    if type(game) <> "roAssociativeArray" then return 0
+    score = 0
+    st = Text(game.state)
+    if st = "in"
+        score += 1000
+    else if st = "pre"
+        score += 500
+    else
+        score += 100
+    end if
+    if Text(game.primaryBroadcast) <> "" then score += 50
+    if game.awayRank > 0 or game.homeRank > 0 then score += 30
+    return score
+end function
+
+function SortSportsGames(games as Object) as Object
+    if type(games) <> "roArray" then return []
+    sorted = []
+    for each g in games
+        sorted.Push(g)
+    end for
+    ' Simple insertion sort (small list, deterministic across Roku & brs)
+    for i = 1 to sorted.Count() - 1
+        cur = sorted[i]
+        curP = SportsGamePriority(cur)
+        j = i - 1
+        while j >= 0 and SportsGamePriority(sorted[j]) < curP
+            sorted[j + 1] = sorted[j]
+            j--
+        end while
+        sorted[j + 1] = cur
+    end for
+    return sorted
+end function
+
+function IsLiveEventChannel(channel as Dynamic) as Boolean
+    if type(channel) <> "roAssociativeArray" then return false
+    if Text(channel.eventTitle).Trim() <> "" then return true
+    grp = UCase(Text(channel.group))
+    if Instr(1, grp, "EVENT") > 0 or Instr(1, grp, "PPV") > 0 then return true
+    num = Text(channel.number)
+    if Left(num, 3) = "31-" or Left(num, 3) = "30-" or Left(num, 3) = "29-" then return true
+    return false
+end function
+
+function IsPlaceholderEventText(rawText as String) as Boolean
+    t = UCase(rawText.Trim())
+    if t = "" then return true
+    for each bad in ["NO EVENT", "OFFLINE", "NO SIGNAL", "COMING SOON", "STANDBY", "TEST FEED", "2098-12-31", "2099-12-31", "24/7", "TBD", "TBA"]
+        if Instr(1, t, bad) > 0 then return true
+    end for
+    for each exact in ["SPORTS PPV", "LIVE EVENT", "LIVE EVENTS", "PPV", "NBA", "NFL", "MLB", "NHL", "ESPN+", "UFC"]
+        if t = exact then return true
+    end for
+    ' Catch numbered placeholders like "NBA 13", "MLB 04", "SPORTS PPV 2"
+    for each prefix in ["NBA ", "NFL ", "MLB ", "NHL ", "MLS ", "NCAA ", "ESPN+ ", "PPV ", "EVENT ", "SPORTS PPV "]
+        if Left(t, Len(prefix)) = prefix
+            rest = Mid(t, Len(prefix) + 1).Trim()
+            if rest <> "" and Val(rest) > 0 and Instr(1, rest, "VS") = 0 and Instr(1, rest, "@") = 0 and Instr(1, rest, ":") = 0
+                return true
+            end if
+        end if
+    end for
+    return false
+end function
+
+function IsValidLiveEventChannel(channel as Dynamic, now as Integer) as Boolean
+    if not IsLiveEventChannel(channel) then return false
+    if Text(channel.url).Trim() = "" then return false
+    if channel.eventEnd <> invalid and channel.eventEnd > 0 and channel.eventEnd < now - 1800
+        return false
+    end if
+    evTitle = Text(channel.eventTitle).Trim()
+    chTitle = Text(channel.title).Trim()
+    if evTitle <> ""
+        if IsPlaceholderEventText(evTitle) then return false
+        return true
+    end if
+    if IsPlaceholderEventText(chTitle) then return false
+    return true
+end function
+
+function SportsWordContains(haystackUpper as String, tokenUpper as String) as Boolean
+    if tokenUpper = "" or Len(tokenUpper) < 2 then return false
+    hitIdx = Instr(1, haystackUpper, tokenUpper)
+    while hitIdx > 0
+        beforeOk = (hitIdx = 1)
+        if not beforeOk
+            bc = Mid(haystackUpper, hitIdx - 1, 1)
+            beforeOk = not ((bc >= "A" and bc <= "Z") or (bc >= "0" and bc <= "9"))
+        end if
+        afterIdx = hitIdx + Len(tokenUpper)
+        afterOk = (afterIdx > Len(haystackUpper))
+        if not afterOk
+            ac = Mid(haystackUpper, afterIdx, 1)
+            afterOk = not ((ac >= "A" and ac <= "Z") or (ac >= "0" and ac <= "9"))
+        end if
+        if beforeOk and afterOk then return true
+        hitIdx = Instr(hitIdx + 1, haystackUpper, tokenUpper)
+    end while
+    return false
+end function
+
+function SportsGameTeamsMatch(textUpper as String, game as Dynamic) as Boolean
+    if type(game) <> "roAssociativeArray" then return false
+    awayHit = SportsWordContains(textUpper, UCase(Text(game.awayName))) or SportsWordContains(textUpper, UCase(Text(game.awayFull)))
+    if not awayHit and Len(Text(game.awayAbbr)) >= 3 then awayHit = SportsWordContains(textUpper, UCase(Text(game.awayAbbr)))
+    homeHit = SportsWordContains(textUpper, UCase(Text(game.homeName))) or SportsWordContains(textUpper, UCase(Text(game.homeFull)))
+    if not homeHit and Len(Text(game.homeAbbr)) >= 3 then homeHit = SportsWordContains(textUpper, UCase(Text(game.homeAbbr)))
+    return awayHit and homeHit
+end function
+
+function SportsChannelMatchesNetwork(channel as Dynamic, broadcastName as String) as Boolean
+    if type(channel) <> "roAssociativeArray" then return false
+    b = UCase(broadcastName.Trim())
+    if b = "" then return false
+    chText = UCase(Text(channel.title) + " " + Text(channel.callSign) + " " + Text(channel.id))
+    if b = "ESPN2" or b = "ESPN 2"
+        return SportsWordContains(chText, "ESPN2") or SportsWordContains(chText, "ESPN 2")
+    else if b = "ESPNU" or b = "ESPN U"
+        return SportsWordContains(chText, "ESPNU") or SportsWordContains(chText, "ESPN U")
+    else if b = "ESPNEWS" or b = "ESPN NEWS"
+        return SportsWordContains(chText, "ESPNEWS") or SportsWordContains(chText, "ESPN NEWS")
+    else if b = "ESPN"
+        if Instr(1, chText, "ESPN2") > 0 or Instr(1, chText, "ESPN 2") > 0 or Instr(1, chText, "ESPNU") > 0 or Instr(1, chText, "ESPNEWS") > 0 or Instr(1, chText, "ESPN+") > 0 or Instr(1, chText, "DEPORTES") > 0 then return false
+        return SportsWordContains(chText, "ESPN")
+    else if b = "FS1" or b = "FOX SPORTS 1"
+        return SportsWordContains(chText, "FS1") or SportsWordContains(chText, "FOX SPORTS 1")
+    else if b = "FS2" or b = "FOX SPORTS 2"
+        return SportsWordContains(chText, "FS2") or SportsWordContains(chText, "FOX SPORTS 2")
+    else if b = "FOX"
+        if Instr(1, chText, "FOX NEWS") > 0 or Instr(1, chText, "FOX BUSINESS") > 0 or Instr(1, chText, "FOX WEATHER") > 0 or Instr(1, chText, "FS1") > 0 or Instr(1, chText, "FS2") > 0 or Instr(1, chText, "FOX SPORTS") > 0 or Instr(1, chText, "DEPORTES") > 0 then return false
+        return SportsWordContains(chText, "FOX") or SportsWordContains(chText, "WOFL") or SportsWordContains(chText, "WNYW") or SportsWordContains(chText, "KTTV")
+    else if b = "ABC"
+        if Instr(1, chText, "ABC NEWS") > 0 or Instr(1, chText, "SPARK") > 0 then return false
+        return SportsWordContains(chText, "ABC") or SportsWordContains(chText, "WFTV") or SportsWordContains(chText, "WABC") or SportsWordContains(chText, "KABC")
+    else if b = "CBSSN" or b = "CBS SPORTS NETWORK"
+        return SportsWordContains(chText, "CBSSN") or SportsWordContains(chText, "CBS SPORTS")
+    else if b = "CBS"
+        if Instr(1, chText, "CBS NEWS") > 0 or Instr(1, chText, "CBS SPORTS") > 0 or Instr(1, chText, "CBSSN") > 0 then return false
+        return SportsWordContains(chText, "CBS") or SportsWordContains(chText, "WKMG") or SportsWordContains(chText, "WCBS") or SportsWordContains(chText, "KCBS")
+    else if b = "NBC"
+        if Instr(1, chText, "CNBC") > 0 or Instr(1, chText, "MSNBC") > 0 or Instr(1, chText, "NBC NEWS") > 0 or Instr(1, chText, "NBCSN") > 0 then return false
+        return SportsWordContains(chText, "NBC") or SportsWordContains(chText, "WESH") or SportsWordContains(chText, "WNBC") or SportsWordContains(chText, "KNBC")
+    else if b = "TNT"
+        return SportsWordContains(chText, "TNT")
+    else if b = "TBS"
+        return SportsWordContains(chText, "TBS")
+    else if b = "NBA TV" or b = "NBATV"
+        return SportsWordContains(chText, "NBA TV") or SportsWordContains(chText, "NBATV")
+    else if b = "NFL NETWORK" or b = "NFLN"
+        return SportsWordContains(chText, "NFL NETWORK") or SportsWordContains(chText, "NFLN")
+    else if b = "MLB NETWORK" or b = "MLBN"
+        return SportsWordContains(chText, "MLB NETWORK") or SportsWordContains(chText, "MLBN")
+    else if b = "BTN" or b = "BIG TEN NETWORK"
+        return SportsWordContains(chText, "BTN") or SportsWordContains(chText, "BIG TEN")
+    else if b = "SEC NETWORK" or b = "SECN"
+        return SportsWordContains(chText, "SEC NETWORK") or SportsWordContains(chText, "SECN")
+    else if b = "ACC NETWORK" or b = "ACCN"
+        return SportsWordContains(chText, "ACC NETWORK") or SportsWordContains(chText, "ACCN")
+    else if b = "CW" or b = "THE CW"
+        return SportsWordContains(chText, "CW")
+    end if
+    return false
+end function
+
+function MatchScoreboardChannel(game as Dynamic, channels as Object, summaries as Dynamic, now as Integer) as Dynamic
+    if type(game) <> "roAssociativeArray" or type(channels) <> "roArray" then return invalid
+    ' Priority 1: Exact team matchup in live event channel or EPG title
+    for each ch in channels
+        if Text(ch.url).Trim() <> ""
+            if not IsLiveEventChannel(ch) or IsValidLiveEventChannel(ch, now)
+                prog = CurrentProgramme(ChannelSummary(summaries, Text(ch.id)), now)
+                progTitle = ""
+                if type(prog) = "roAssociativeArray" then progTitle = Text(prog.title)
+                combined = UCase(Text(ch.eventTitle) + " " + Text(ch.title) + " " + progTitle)
+                if SportsGameTeamsMatch(combined, game) then return ch
+            end if
+        end if
+    end for
+    ' Priority 2: Linear broadcast channel matching ESPN network + EPG confirmation bonus
+    if type(game.broadcasts) <> "roArray" or game.broadcasts.Count() = 0 then return invalid
+    bestCh = invalid
+    bestScore = -999
+    for bIdx = 0 to game.broadcasts.Count() - 1
+        net = Text(game.broadcasts[bIdx])
+        baseBonus = (10 - bIdx) * 10
+        if baseBonus < 10 then baseBonus = 10
+        for each ch in channels
+            if Text(ch.url).Trim() <> "" and not IsLiveEventChannel(ch)
+                if SportsChannelMatchesNetwork(ch, net)
+                    score = baseBonus
+                    prog = CurrentProgramme(ChannelSummary(summaries, Text(ch.id)), now)
+                    if type(prog) = "roAssociativeArray"
+                        pUpper = UCase(Text(prog.title))
+                        if SportsGameTeamsMatch(pUpper, game) then score += 120
+                        if Instr(1, pUpper, "FOOTBALL") > 0 or Instr(1, pUpper, "BASKETBALL") > 0 or Instr(1, pUpper, "BASEBALL") > 0 or Instr(1, pUpper, "NBA") > 0 or Instr(1, pUpper, "NFL") > 0 or Instr(1, pUpper, "MLB") > 0 or Instr(1, pUpper, "BIG NOON") > 0
+                            score += 50
+                        end if
+                        if Text(game.state) = "in" and (Instr(1, pUpper, "PAID PROGRAM") > 0 or Instr(1, pUpper, "LOCAL NEWS") > 0)
+                            score -= 60
+                        end if
+                    end if
+                    if score > bestScore
+                        bestScore = score
+                        bestCh = ch
+                    end if
+                end if
+            end if
+        end for
+    end for
+    return bestCh
+end function
+
+function ResolveChannelShowLine(channel as Dynamic, summaries as Dynamic, games as Object, now as Integer) as String
+    if type(channel) <> "roAssociativeArray" then return "No programme information"
+    current = CurrentProgramme(ChannelSummary(summaries, Text(channel.id)), now)
+    rawTitle = ""
+    if type(current) = "roAssociativeArray" then rawTitle = Text(current.title).Trim()
+    if rawTitle = "" then rawTitle = Text(channel.eventTitle).Trim()
+    if type(games) = "roArray" and games.Count() > 0
+        inspectUpper = UCase(Text(channel.eventTitle) + " " + Text(channel.title) + " " + rawTitle)
+        for each g in games
+            if Text(g.state) <> "post" and SportsGameTeamsMatch(inspectUpper, g)
+                detail = Text(g.statusDetail)
+                if detail <> "" then return g.headline + " · " + detail
+                return g.headline
+            end if
+        end for
+        rawUpper = UCase(rawTitle)
+        isGeneric = (rawTitle = "" or Instr(1, rawUpper, "COLLEGE FOOTBALL") > 0 or Instr(1, rawUpper, "COLLEGE BASKETBALL") > 0 or Instr(1, rawUpper, "NBA BASKETBALL") > 0 or Instr(1, rawUpper, "NFL FOOTBALL") > 0 or Instr(1, rawUpper, "MLB BASEBALL") > 0 or Instr(1, rawUpper, "BIG NOON") > 0 or IsPlaceholderEventText(rawTitle))
+        if isGeneric
+            for each g in games
+                if Text(g.state) = "in" and type(g.broadcasts) = "roArray"
+                    for each b in g.broadcasts
+                        if SportsChannelMatchesNetwork(channel, Text(b))
+                            detail = Text(g.statusDetail)
+                            if detail <> "" then return g.headline + " · " + detail
+                            return g.headline
+                        end if
+                    end for
+                end if
+            end for
+        end if
+    end if
+    if type(current) = "roAssociativeArray" then return ProgrammeLine(current)
+    if rawTitle <> "" then return rawTitle
+    return "No programme information"
+end function
+
+

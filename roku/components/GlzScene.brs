@@ -116,7 +116,7 @@ sub init()
     m.startView = m.registry.Read("startView")
     if m.startView <> "live" and m.startView <> "home" then m.startView = "home"
     m.autoResumePref = m.registry.Read("autoResume")
-    m.channels = [] : m.movies = [] : m.rows = [] : m.stations = [] : m.summaries = {} : m.schedule = []
+    m.channels = [] : m.movies = [] : m.rows = [] : m.stations = [] : m.summaries = {} : m.schedule = [] : m.sportsGames = []
     m.apps = DefaultEntertainmentApps()
     m.config = {} : m.lastChannelUrl = ""
     m.weatherError = "" : m.weather = invalid : m.weatherLocation = "" : m.weatherAge = 15
@@ -577,11 +577,12 @@ sub onHubResult()
                 if channel.url = m.playingUrl then foundPlaying = true
             end for
             if not foundPlaying and m.video.visible then closePlayer()
-            queueExtra("summary") : queueExtra("radio")
+            queueExtra("summary") : queueExtra("radio") : queueExtra("scores")
             if m.view = "schedule" and m.guideChannel <> invalid then queueExtra("guide", m.guideChannel.id)
         else
             if m.summaries.Count() = 0 or m.guideError <> "" then queueExtra("summary")
             if m.stations.Count() = 0 then queueExtra("radio")
+            if m.sportsGames.Count() = 0 then queueExtra("scores")
         end if
         location = Text(config.weatherLocation)
         if location <> m.weatherLocation or m.weatherAge >= 15
@@ -697,6 +698,10 @@ sub onExtraResult()
                 updateHeaderBar()
                 if m.view = "home" then updateHomeHero()
             end if
+        else if result.mode = "scores"
+            if type(data.games) = "roArray"
+                m.sportsGames = data.games
+            end if
         else
             if type(data.summaries) = "roAssociativeArray" then m.summaries = data.summaries
             m.guideError = Text(data.guideError)
@@ -721,6 +726,7 @@ sub openSection(index as Integer)
     renderRows()
     if m.view = "radio" or (m.view = "home" and m.stations.Count() = 0) then queueExtra("radio")
     if m.view = "guide" or m.view = "home" or m.view = "favorites" then queueExtra("summary")
+    if m.view = "home" or m.view = "events" then queueExtra("scores")
     if m.view = "weather" and m.weather = invalid then queueExtra("weather")
     if m.view = "apps"
         m.navFocused = false
@@ -817,7 +823,7 @@ function buildHomeRows(now as Integer) as Object
     if m.lastChannelUrl <> ""
         for each channel in m.channels
             if channel.url = m.lastChannelUrl
-                prog = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, channel.id), now))
+                prog = ResolveChannelShowLine(channel, m.summaries, m.sportsGames, now)
                 rows.Push({ kind: "play", target: channel, number: "LAST", title: "Continue · " + channelTitleWithStar(channel), description: prog, logo: Text(channel.logo) })
                 seenUrls[channel.url] = true
                 exit for
@@ -828,7 +834,7 @@ function buildHomeRows(now as Integer) as Object
     favChannels = ResolveChannelsByKeys(m.channels, m.favoriteIds, 6)
     for each channel in favChannels
         if not seenUrls.DoesExist(channel.url)
-            prog = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, channel.id), now))
+            prog = ResolveChannelShowLine(channel, m.summaries, m.sportsGames, now)
             rows.Push({ kind: "play", target: channel, number: "★ FAV", title: "★ " + channel.title, description: "Favorites · " + prog, logo: Text(channel.logo) })
             seenUrls[channel.url] = true
         end if
@@ -838,30 +844,61 @@ function buildHomeRows(now as Integer) as Object
     recentsAdded = 0
     for each channel in recentChannels
         if not seenUrls.DoesExist(channel.url) and recentsAdded < 5
-            prog = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, channel.id), now))
+            prog = ResolveChannelShowLine(channel, m.summaries, m.sportsGames, now)
             rows.Push({ kind: "play", target: channel, number: "RECENT", title: channelTitleWithStar(channel), description: "Recent Channels · " + prog, logo: Text(channel.logo) })
             seenUrls[channel.url] = true
             recentsAdded++
         end if
     end for
-    ' 4. Active Live Sports & PPV Events (up to 4)
-    eventsAdded = 0
-    for each channel in m.channels
-        if Text(channel.eventTitle) <> "" and eventsAdded < 4
-            window = channel.league + " · " + ClockLabel(channel.eventStart) + " – " + ClockLabel(channel.eventEnd)
-            rows.Push({ kind: "play", target: channel, number: "LIVE", title: channelTitleWithStar(channel, channel.eventTitle), description: window, logo: Text(channel.logo) })
-            seenUrls[channel.url] = true
-            eventsAdded++
-        end if
-    end for
+    ' 4. Live Sports Scoreboard (NBA, NFL, MLB, NCAA) with Direct Watchable Channel Tuning
+    scoresAdded = 0
+    if type(m.sportsGames) = "roArray" and m.sportsGames.Count() > 0
+        for each game in m.sportsGames
+            if scoresAdded >= 6 then exit for
+            directCh = MatchScoreboardChannel(game, m.channels, m.summaries, now)
+            badge = Text(game.subLeague, "SCORE")
+            if Text(game.state) = "in" then badge = "● " + badge
+            statusPart = Text(game.statusDetail)
+            if statusPart = ""
+                if Text(game.state) = "in" then statusPart = "LIVE" else if Text(game.state) = "post" then statusPart = "FINAL" else statusPart = "UPCOMING"
+            end if
+            if directCh <> invalid
+                chLabel = "▶ Watch"
+                if Text(directCh.number) <> "" then chLabel += " CH " + Text(directCh.number)
+                chLabel += " · " + Text(directCh.title)
+                desc = statusPart + " · " + chLabel
+                logoUrl = Text(directCh.logo)
+                if logoUrl = "" then logoUrl = Text(game.homeLogo, Text(game.awayLogo))
+                rows.Push({ kind: "play", target: directCh, number: badge, title: ScoreboardRowHeadline(game), description: desc, logo: logoUrl })
+            else
+                netLabel = Text(game.primaryBroadcast, "Scoreboard")
+                desc = statusPart + " · " + netLabel + " (OK for Guide)"
+                logoUrl = Text(game.homeLogo, Text(game.awayLogo))
+                rows.Push({ kind: "guide", target: invalid, number: badge, title: ScoreboardRowHeadline(game), description: desc, logo: logoUrl })
+            end if
+            scoresAdded++
+        end for
+    end if
+    ' Fallback to verified Live Events only when no scoreboard games are loaded
+    if scoresAdded = 0
+        eventsAdded = 0
+        for each channel in m.channels
+            if IsValidLiveEventChannel(channel, now) and eventsAdded < 4
+                window = Text(channel.league, "LIVE") + " · " + ClockLabel(channel.eventStart) + " – " + ClockLabel(channel.eventEnd)
+                rows.Push({ kind: "play", target: channel, number: "LIVE", title: channelTitleWithStar(channel, Text(channel.eventTitle, channel.title)), description: window, logo: Text(channel.logo) })
+                seenUrls[channel.url] = true
+                eventsAdded++
+            end if
+        end for
+    end if
     ' 5. On Now: Channels currently airing a live EPG programme (up to 6)
     onNowAdded = 0
     for each channel in m.channels
-        if not seenUrls.DoesExist(channel.url) and Text(channel.eventTitle) = "" and onNowAdded < 6
+        if not seenUrls.DoesExist(channel.url) and not IsLiveEventChannel(channel) and onNowAdded < 6
             current = CurrentProgramme(ChannelSummary(m.summaries, channel.id), now)
             if current <> invalid
                 badge = Text(channel.number, "ON")
-                rows.Push({ kind: "play", target: channel, number: badge, title: channelTitleWithStar(channel), description: ProgrammeLine(current), logo: Text(channel.logo) })
+                rows.Push({ kind: "play", target: channel, number: badge, title: channelTitleWithStar(channel), description: ResolveChannelShowLine(channel, m.summaries, m.sportsGames, now), logo: Text(channel.logo) })
                 seenUrls[channel.url] = true
                 onNowAdded++
             end if
@@ -876,9 +913,9 @@ function buildHomeRows(now as Integer) as Object
     end for
     ' 7. Top Live Channels fallback (if EPG hasn't populated 6 channels yet)
     for each channel in m.channels
-        if not seenUrls.DoesExist(channel.url) and Text(channel.eventTitle) = "" and onNowAdded < 6
+        if not seenUrls.DoesExist(channel.url) and not IsLiveEventChannel(channel) and onNowAdded < 6
             badge = Text(channel.number, "TV")
-            prog = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, channel.id), now))
+            prog = ResolveChannelShowLine(channel, m.summaries, m.sportsGames, now)
             rows.Push({ kind: "play", target: channel, number: badge, title: channelTitleWithStar(channel), description: prog, logo: Text(channel.logo) })
             seenUrls[channel.url] = true
             onNowAdded++
@@ -1075,7 +1112,11 @@ sub renderRows()
         m.rows = m.stations
     else
         for each channel in m.channels
-            if m.view <> "events" or Text(channel.eventTitle) <> "" then m.rows.Push(channel)
+            if m.view = "events"
+                if IsValidLiveEventChannel(channel, now) then m.rows.Push(channel)
+            else
+                if not IsLiveEventChannel(channel) or IsValidLiveEventChannel(channel, now) then m.rows.Push(channel)
+            end if
         end for
     end if
     root = CreateObject("roSGNode", "ContentNode")
@@ -1095,13 +1136,13 @@ sub renderRows()
             item.title = row.title : item.shortDescriptionLine1 = Text(row.number)
             if item.shortDescriptionLine1 = "" then item.shortDescriptionLine1 = (i + 1).ToStr()
             if m.view = "events"
-                item.title = channelTitleWithStar(row, row.eventTitle)
-                item.description = row.league + " · " + ClockLabel(row.eventStart) + " – " + ClockLabel(row.eventEnd)
+                item.title = channelTitleWithStar(row, Text(row.eventTitle, row.title))
+                item.description = Text(row.league, "LIVE") + " · " + ClockLabel(row.eventStart) + " – " + ClockLabel(row.eventEnd)
             else if m.view = "radio"
                 item.description = row.group
             else
                 item.title = channelTitleWithStar(row)
-                item.description = ProgrammeLine(CurrentProgramme(ChannelSummary(m.summaries, row.id), now))
+                item.description = ResolveChannelShowLine(row, m.summaries, m.sportsGames, now)
             end if
         end if
     end for
@@ -1258,7 +1299,7 @@ sub handleSettingSelection(row as Object)
     key = Text(row.setting)
     if key = "sync"
         m.status.text = "Refreshing all content from GlzHub…"
-        startSync(true) : queueExtra("summary") : queueExtra("radio") : queueExtra("weather")
+        startSync(true) : queueExtra("summary") : queueExtra("radio") : queueExtra("weather") : queueExtra("scores")
     else if key = "osd"
         if m.osdTimeout = 3 then m.osdTimeout = 5 else if m.osdTimeout = 5 then m.osdTimeout = 8 else if m.osdTimeout = 8 then m.osdTimeout = 12 else m.osdTimeout = 3
         m.osdTimer.duration = m.osdTimeout
@@ -1293,6 +1334,8 @@ sub selectRow()
     if m.view = "home"
         if row.kind = "radio" and row.target <> invalid
             playRadio(row.target)
+        else if row.kind = "guide"
+            openSectionByName("guide")
         else if row.target <> invalid
             playItem(row.target)
         end if

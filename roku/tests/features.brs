@@ -142,6 +142,32 @@ sub Main()
     customApps = ResolveEntertainmentApps({ entertainmentApps: [{ name: "Glz Cinema", subtitle: "Featured", bannerUrl: "https://cdn.example/banner.jpg", accentColor: "#1990FF", rokuChannelId: "999" }] })
     Assert(customApps.Count() = 1 and customApps[0].name = "Glz Cinema" and customApps[0].artwork = "https://cdn.example/banner.jpg" and customApps[0].accent = "0x1990FFFF", "ResolveEntertainmentApps parses GlzHub apps with banner artwork and normalized hex fill")
 
+    ' Live Sports Scoreboard parsing, sorting, smart live event validation, and channel matching
+    espnJson = "{" + q + "events" + q + ":[{" + q + "id" + q + ":" + q + "401" + q + "," + q + "status" + q + ":{" + q + "type" + q + ":{" + q + "state" + q + ":" + q + "in" + q + "," + q + "shortDetail" + q + ":" + q + "2nd - 8:31" + q + "}}," + q + "competitions" + q + ":[{" + q + "broadcasts" + q + ":[{" + q + "names" + q + ":[" + q + "FOX" + q + "]}]," + q + "competitors" + q + ":[{" + q + "homeAway" + q + ":" + q + "away" + q + "," + q + "score" + q + ":" + q + "0" + q + "," + q + "curatedRank" + q + ":{" + q + "current" + q + ":99}," + q + "team" + q + ":{" + q + "abbreviation" + q + ":" + q + "MICH" + q + "," + q + "shortDisplayName" + q + ":" + q + "Michigan" + q + "," + q + "displayName" + q + ":" + q + "Michigan Wolverines" + q + "," + q + "logo" + q + ":" + q + "https://cdn/mich.png" + q + "}},{" + q + "homeAway" + q + ":" + q + "home" + q + "," + q + "score" + q + ":" + q + "14" + q + "," + q + "curatedRank" + q + ":{" + q + "current" + q + ":2}," + q + "team" + q + ":{" + q + "abbreviation" + q + ":" + q + "OSU" + q + "," + q + "shortDisplayName" + q + ":" + q + "Ohio State" + q + "," + q + "displayName" + q + ":" + q + "Ohio State Buckeyes" + q + "," + q + "logo" + q + ":" + q + "https://cdn/osu.png" + q + "}}]}]}]}"
+    parsedGames = ParseEspnScoreboard(espnJson, "NCAA", "NCAAF")
+    Assert(parsedGames.Count() = 1 and parsedGames[0].awayName = "Michigan" and parsedGames[0].homeRank = 2 and parsedGames[0].primaryBroadcast = "FOX", "ParseEspnScoreboard extracts teams, scores, rankings, and broadcasts")
+    Assert(Instr(1, parsedGames[0].headline, "Michigan 0") > 0 and Instr(1, parsedGames[0].headline, "#2 Ohio State 14") > 0, "ScoreboardRowHeadline formats ranked live scoreline")
+
+    unsortedGames = [{ id: "1", state: "post", primaryBroadcast: "FOX", awayRank: 0, homeRank: 0 }, { id: "2", state: "pre", primaryBroadcast: "ESPN", awayRank: 0, homeRank: 0 }, { id: "3", state: "in", primaryBroadcast: "FOX", awayRank: 0, homeRank: 2 }]
+    sortedGames = SortSportsGames(unsortedGames)
+    Assert(sortedGames[0].id = "3" and sortedGames[1].id = "2" and sortedGames[2].id = "1", "SortSportsGames prioritizes LIVE over UPCOMING over FINAL")
+
+    Assert(IsValidLiveEventChannel({ url: "https://s/1.m3u8", title: "NBA 13", group: "Live Events", eventTitle: "NBA 13", eventEnd: 0 }, 1000) = false, "IsValidLiveEventChannel rejects numbered placeholder channels")
+    Assert(IsValidLiveEventChannel({ url: "https://s/2.m3u8", title: "SPORTS PPV", group: "Live Events", eventTitle: "No Event Scheduled 2098-12-31", eventEnd: 0 }, 1000) = false, "IsValidLiveEventChannel rejects No Event / 2098 placeholders")
+    Assert(IsValidLiveEventChannel({ url: "https://s/3.m3u8", title: "PPV 1", group: "Live Events", eventTitle: "Lakers vs Celtics", eventEnd: 100 }, 5000) = false, "IsValidLiveEventChannel rejects expired events")
+    Assert(IsValidLiveEventChannel({ url: "https://s/4.m3u8", title: "PPV 1", group: "Live Events", eventTitle: "Lakers vs Celtics", eventEnd: 9000 }, 5000) = true, "IsValidLiveEventChannel keeps active verified live events")
+
+    sportsLineup = [
+        { id: "foxnews.us", number: "36", title: "FOX News Channel", callSign: "FNC", group: "News", url: "https://s/fnc.m3u8", eventTitle: "" }
+        { id: "wofl.us", number: "4", title: "FOX Orlando", callSign: "WOFL", group: "Locals", url: "https://s/fox.m3u8", eventTitle: "" }
+        { id: "espn2.us", number: "12", title: "ESPN 2", callSign: "ESPN2", group: "Sports", url: "https://s/espn2.m3u8", eventTitle: "" }
+    ]
+    sportsSummaries = { "wofl.us": { "now": { title: "Live: College Football", start: 100, end: 5000 } } }
+    matchedCh = MatchScoreboardChannel(parsedGames[0], sportsLineup, sportsSummaries, 500)
+    Assert(matchedCh <> invalid and matchedCh.id = "wofl.us", "MatchScoreboardChannel maps FOX broadcast to FOX Orlando without matching FOX News")
+    enrichedLine = ResolveChannelShowLine(sportsLineup[1], sportsSummaries, parsedGames, 500)
+    Assert(Instr(1, enrichedLine, "Michigan 0") > 0 and Instr(1, enrichedLine, "#2 Ohio State 14") > 0, "ResolveChannelShowLine enriches generic College Football EPG with live matchup & score")
+
     if m.failed > 0 then print "FAILURES: "; m.failed else print "ALL FEATURE TESTS PASSED"
 end sub
 sub Assert(condition as Boolean, label as String)

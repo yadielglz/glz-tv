@@ -104,6 +104,7 @@ private val HeroPreviewLeftFade = Brush.horizontalGradient(
 fun GoogleTvHomeScreen(
     channels: List<Channel>,
     guide: EpgGuide,
+    sportsGames: List<com.glztv.app.data.SportsGame> = emptyList(),
     resumeChannel: Channel?,
     previewChannel: Channel?,
     favorites: Set<String>,
@@ -156,8 +157,17 @@ fun GoogleTvHomeScreen(
     val quickWatchChannel = remember(channels, previewChannel, resumeChannel) {
         previewChannel ?: resumeChannel ?: channels.firstOrNull()
     }
-    val eventChannels = remember(channels) {
-        channels.filter { it.isLiveEvent() }
+    val eventChannels = remember(channels, guide, sportsGames, now) {
+        com.glztv.app.data.SportsChannelMatcher.filterValidLiveEvents(channels, guide, sportsGames, now)
+    }
+    var selectedLeague by remember { mutableStateOf("ALL") }
+    val availableLeagues = remember(sportsGames) {
+        val leagues = listOf("NBA", "NFL", "MLB", "NCAA").filter { lg -> sportsGames.any { it.league == lg } }
+        listOf("ALL") + leagues
+    }
+    val filteredGames = remember(sportsGames, selectedLeague) {
+        val base = if (selectedLeague == "ALL") sportsGames else sportsGames.filter { it.league == selectedLeague }
+        base.filter { !it.isFinal }.ifEmpty { base }
     }
     val myChannels = remember(channels, favorites, recentChannels, resumeChannel) {
         buildList {
@@ -413,9 +423,11 @@ fun GoogleTvHomeScreen(
                             }
                         }
 
-                        val heroTitle = currentProg?.title?.takeIf { it.isNotBlank() }
-                            ?: active.eventTitle?.takeIf { it.isNotBlank() }
-                            ?: active.name
+                        val heroTitle = remember(active, guide, sportsGames, now) {
+                            com.glztv.app.data.SportsChannelMatcher.resolveChannelShowTitle(
+                                active, guide, sportsGames, now
+                            ).ifBlank { active.name }
+                        }
                         Text(
                             text = heroTitle,
                             color = Color.White,
@@ -538,15 +550,18 @@ fun GoogleTvHomeScreen(
                 .padding(horizontal = horizontalPad, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // LEFT COLUMN (44%): Live Sports & Events + Weather Widget (when < 3 events)
+            // LEFT COLUMN (44%): Live Scoreboard (NBA · NFL · MLB · NCAA) with Direct Channel Tuning
+            // Falls back to verified Live Events / Weather Widget when no scores are loaded.
             Column(
                 modifier = Modifier
                     .weight(0.44f)
                     .fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
+                val visibleGames = filteredGames.take(4)
                 val visibleEvents = eventChannels.take(3)
-                if (visibleEvents.isNotEmpty()) {
+                if (visibleGames.isNotEmpty()) {
+                    val liveCount = filteredGames.count { it.isLive }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -556,61 +571,136 @@ fun GoogleTvHomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
-                            Box(Modifier.size(6.dp).clip(CircleShape).background(DtvChrome.LiveRed))
+                            Box(
+                                Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(if (liveCount > 0) DtvChrome.LiveRed else DtvChrome.ElectricBlue)
+                            )
                             Text(
-                                text = "LIVE SPORTS & EVENTS",
+                                text = if (selectedLeague == "ALL") "LIVE SCOREBOARD" else "$selectedLeague SCOREBOARD",
                                 color = DtvChrome.PrimaryText,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.9.sp
                             )
+                            if (liveCount > 0) {
+                                Text(
+                                    text = "$liveCount LIVE",
+                                    color = DtvChrome.LiveRed,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                        if (eventChannels.size > 3) {
+                        if (availableLeagues.size > 1) {
                             DtvMoreLinkChip(
-                                label = "+${eventChannels.size - 3} more ▸",
-                                onClick = onOpenGuide
-                            )
-                        } else {
-                            Text(
-                                text = "${eventChannels.size} LIVE",
-                                color = DtvChrome.MutedText,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold
+                                label = "$selectedLeague ▾",
+                                onClick = {
+                                    val idx = availableLeagues.indexOf(selectedLeague).coerceAtLeast(0)
+                                    selectedLeague = availableLeagues[(idx + 1) % availableLeagues.size]
+                                }
                             )
                         }
                     }
 
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        visibleEvents.forEach { eventCh ->
-                            val prog = remember(eventCh.id, guide, now) {
-                                guide.nowProgrammeForChannel(eventCh, now)
+                        visibleGames.forEach { game ->
+                            val directChannel = remember(game.id, channels, guide, now) {
+                                com.glztv.app.data.SportsChannelMatcher.findDirectChannel(game, channels, guide, now)
                             }
-                            val pct = prog?.let {
-                                ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
-                                    .coerceIn(0f, 1f)
-                            } ?: 0.5f
-                            DtvCompactEventRow(
-                                channel = eventCh,
-                                progress = pct,
-                                onClick = { onWatchChannel(eventCh) }
+                            DtvScoreboardGameRow(
+                                game = game,
+                                directChannel = directChannel,
+                                onClick = { directChannel?.let(onWatchChannel) ?: onOpenGuide() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            )
+                        }
+                        if (visibleGames.size <= 2 && weather != null) {
+                            DtvHomeWeatherWidget(
+                                weather = weather,
+                                compact = true,
+                                onClick = onOpenWeather,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
                             )
                         }
                     }
-                }
+                } else {
+                    if (visibleEvents.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
+                                Box(Modifier.size(6.dp).clip(CircleShape).background(DtvChrome.LiveRed))
+                                Text(
+                                    text = "LIVE SPORTS & EVENTS",
+                                    color = DtvChrome.PrimaryText,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.9.sp
+                                )
+                            }
+                            if (eventChannels.size > 3) {
+                                DtvMoreLinkChip(
+                                    label = "+${eventChannels.size - 3} more ▸",
+                                    onClick = onOpenGuide
+                                )
+                            } else {
+                                Text(
+                                    text = "${eventChannels.size} LIVE",
+                                    color = DtvChrome.MutedText,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
 
-                // Weather Widget in Left Column whenever there are 0, 1, or 2 live events
-                if (visibleEvents.size < 3 && weather != null) {
-                    DtvHomeWeatherWidget(
-                        weather = weather,
-                        compact = visibleEvents.isNotEmpty(),
-                        onClick = onOpenWeather,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            visibleEvents.forEach { eventCh ->
+                                val prog = remember(eventCh.id, guide, now) {
+                                    guide.nowProgrammeForChannel(eventCh, now)
+                                }
+                                val pct = prog?.let {
+                                    ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
+                                        .coerceIn(0f, 1f)
+                                } ?: 0.5f
+                                DtvCompactEventRow(
+                                    channel = eventCh,
+                                    progress = pct,
+                                    onClick = { onWatchChannel(eventCh) }
+                                )
+                            }
+                        }
+                    }
+
+                    // Weather Widget in Left Column whenever there are 0, 1, or 2 live events
+                    if (visibleEvents.size < 3 && weather != null) {
+                        DtvHomeWeatherWidget(
+                            weather = weather,
+                            compact = visibleEvents.isNotEmpty(),
+                            onClick = onOpenWeather,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        )
+                    }
                 }
             }
 
@@ -672,6 +762,11 @@ fun GoogleTvHomeScreen(
                                 val prog = remember(ch.id, guide, now) {
                                     guide.nowProgrammeForChannel(ch, now)
                                 }
+                                val enrichedTitle = remember(ch, guide, sportsGames, now) {
+                                    com.glztv.app.data.SportsChannelMatcher.resolveChannelShowTitle(
+                                        ch, guide, sportsGames, now
+                                    )
+                                }
                                 val pct = prog?.let {
                                     ((now - it.startMillis).toFloat() / (it.endMillis - it.startMillis).coerceAtLeast(1L))
                                         .coerceIn(0f, 1f)
@@ -681,7 +776,7 @@ fun GoogleTvHomeScreen(
                                 } ?: "Live"
                                 DtvCompactChannelCard(
                                     channel = ch,
-                                    programmeTitle = prog?.title ?: ch.eventTitle ?: "Live Broadcast",
+                                    programmeTitle = enrichedTitle,
                                     timeRange = timeLabel,
                                     progress = pct,
                                     isFavorite = ch.id in favorites,
@@ -798,6 +893,190 @@ private fun HeroRightWeatherPanel(
                 maxLines = 1
             )
         }
+    }
+}
+
+@Composable
+private fun DtvScoreboardGameRow(
+    game: com.glztv.app.data.SportsGame,
+    directChannel: Channel?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val accentColor = when {
+        isFocused -> DtvChrome.ElectricBlue
+        game.isLive -> DtvChrome.LiveRed
+        game.isUpcoming -> DtvChrome.ElectricBlueSoft
+        else -> DtvChrome.MutedText
+    }
+    val awayScoreInt = game.awayTeam.score.toIntOrNull()
+    val homeScoreInt = game.homeTeam.score.toIntOrNull()
+    val awayLeading = awayScoreInt != null && homeScoreInt != null && awayScoreInt > homeScoreInt
+    val homeLeading = awayScoreInt != null && homeScoreInt != null && homeScoreInt > awayScoreInt
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (isFocused) Color.Black else Color.Transparent)
+            .then(if (!isFocused) Modifier.background(DtvChrome.CardGradient) else Modifier)
+            .border(
+                width = if (isFocused) 2.dp else 1.dp,
+                color = if (isFocused) DtvChrome.ElectricBlue else DtvChrome.CardBorder,
+                shape = RoundedCornerShape(3.dp)
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> { onClick(); true }
+                        else -> false
+                    }
+                } else false
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+    ) {
+        Box(
+            Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(accentColor)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 9.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Header: League + Live Status/Clock on left, Direct Watch Channel or Network on right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = game.subLeague,
+                        color = DtvChrome.ElectricBlueSoft,
+                        fontSize = 9.sp,
+                        fontFamily = BarlowCondensedFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.6.sp
+                    )
+                    Text(
+                        text = if (game.isLive) "● ${game.statusDetail.ifBlank { "LIVE" }}"
+                        else game.statusDetail.ifBlank { if (game.isFinal) "FINAL" else "UPCOMING" },
+                        color = if (game.isLive) Color(0xFFF87171) else DtvChrome.MutedText,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (directChannel != null) {
+                    val chLabel = buildString {
+                        append("▶ ")
+                        if (directChannel.number.isNotBlank()) {
+                            append("CH ").append(directChannel.number)
+                            val shortNet = directChannel.callSign.ifBlank { directChannel.name }
+                            if (shortNet.isNotBlank()) append(" · ").append(shortNet.take(10))
+                        } else {
+                            append(directChannel.callSign.ifBlank { directChannel.name }.take(12))
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(if (isFocused) DtvChrome.ElectricBlue else DtvChrome.ElectricBlue.copy(alpha = 0.22f))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = chLabel,
+                            color = if (isFocused) Color.White else DtvChrome.ElectricBlueSoft,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                } else if (game.primaryBroadcast.isNotBlank()) {
+                    Text(
+                        text = game.primaryBroadcast,
+                        color = DtvChrome.MutedText,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            // Two compact matchup rows (Away vs Home)
+            DtvScoreboardTeamLine(
+                team = game.awayTeam,
+                showScore = !game.isUpcoming,
+                isLeader = awayLeading || game.awayTeam.winner,
+                isFocused = isFocused
+            )
+            DtvScoreboardTeamLine(
+                team = game.homeTeam,
+                showScore = !game.isUpcoming,
+                isLeader = homeLeading || game.homeTeam.winner,
+                isFocused = isFocused
+            )
+        }
+    }
+}
+
+@Composable
+private fun DtvScoreboardTeamLine(
+    team: com.glztv.app.data.SportsTeam,
+    showScore: Boolean,
+    isLeader: Boolean,
+    isFocused: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (team.logoUrl.isNotBlank()) {
+            AsyncImage(
+                model = team.logoUrl,
+                contentDescription = team.shortName,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(15.dp)
+            )
+        }
+        Text(
+            text = team.rankedShortName,
+            color = when {
+                isFocused -> Color.White
+                isLeader -> Color.White
+                else -> DtvChrome.SecondaryText
+            },
+            fontSize = 11.sp,
+            fontWeight = if (isLeader || isFocused) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = if (showScore) team.score.ifBlank { "0" } else "—",
+            color = when {
+                !showScore -> DtvChrome.MutedText
+                isLeader || isFocused -> Color.White
+                else -> DtvChrome.SecondaryText
+            },
+            fontSize = 12.sp,
+            fontFamily = BarlowCondensedFontFamily,
+            fontWeight = if (isLeader) FontWeight.Bold else FontWeight.SemiBold
+        )
     }
 }
 

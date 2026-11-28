@@ -170,6 +170,8 @@ import com.glztv.app.data.PlaylistRepository
 import com.glztv.app.data.PreferencesRepository
 import com.glztv.app.data.WeatherRepository
 import com.glztv.app.data.OpenSubtitlesRepository
+import com.glztv.app.data.SportsGame
+import com.glztv.app.data.SportsScoreboardRepository
 import com.glztv.app.data.createPermissiveOkHttpClient
 import com.glztv.app.player.RecentChannelManager
 import com.glztv.app.player.PlaybackControlState
@@ -390,10 +392,12 @@ internal fun TvScreen(
     val playlistRepository = remember { PlaylistRepository(context, sourcePreferences, client) }
     val epgRepository = remember { EpgRepository(context, sourcePreferences, client) }
     val weatherRepository = remember { WeatherRepository(client) }
+    val scoreboardRepository = remember { SportsScoreboardRepository(client) }
     val openSubtitlesRepository = remember { OpenSubtitlesRepository(client, prefs) }
     val scope = rememberCoroutineScope()
     val channels = remember { mutableStateListOf<Channel>() }
     var guide by remember { mutableStateOf(EpgGuide.Empty) }
+    var sportsGames by remember { mutableStateOf<List<SportsGame>>(emptyList()) }
     var selected by remember { mutableStateOf<Channel?>(null) }
     var selectedMovie by remember { mutableStateOf<Movie?>(null) }
     var managedMovies by remember { mutableStateOf(Movie.fromPreferences(prefs)) }
@@ -964,6 +968,13 @@ internal fun TvScreen(
             delay(6 * 60 * 60 * 1000L)
         }
     }
+    LaunchedEffect(Unit) {
+        while (true) {
+            runCatching { scoreboardRepository.loadAllScores() }
+                .onSuccess { fetched -> if (fetched.isNotEmpty()) sportsGames = fetched }
+            delay(60_000L)
+        }
+    }
     LaunchedEffect(weatherLocation) {
         while (true) {
             weatherLoading = true
@@ -1081,6 +1092,7 @@ internal fun TvScreen(
             GlzMobileRoot(
                 channels = ordered,
                 guide = guide,
+                sportsGames = sportsGames,
                 movies = managedMovies,
                 radioStations = radioStations,
                 activeRadioStation = radioState.station,
@@ -1339,6 +1351,7 @@ internal fun TvScreen(
                 GoogleTvGuideScreen(
                     channels = ordered,
                     guide = guide,
+                    sportsGames = sportsGames,
                     activeTunedChannel = selected ?: ordered.firstOrNull(),
                     favorites = favorites,
                     onToggleFavorite = { favId ->
@@ -1452,6 +1465,7 @@ internal fun TvScreen(
                 GoogleTvHomeScreen(
                     channels = ordered,
                     guide = guide,
+                    sportsGames = sportsGames,
                     resumeChannel = resumeChannel,
                     previewChannel = glzHubPreviewChannel,
                     favorites = favorites,

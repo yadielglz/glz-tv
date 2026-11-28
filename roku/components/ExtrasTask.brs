@@ -48,6 +48,28 @@ sub runExtra()
         m.top.result = { mode: "weather", location: m.top.location, requestId: m.top.requestId, data: forecast }
         return
     end if
+    if m.top.mode = "scores"
+        feeds = [
+            { league: "NFL", subLeague: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" }
+            { league: "NBA", subLeague: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" }
+            { league: "MLB", subLeague: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" }
+            { league: "NCAA", subLeague: "NCAAF", url: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard" }
+            { league: "NCAA", subLeague: "NCAAB", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard" }
+        ]
+        allGames = []
+        for each feed in feeds
+            resp = Http(feed.url, "GET", {})
+            if resp.code = 200 and resp.body <> ""
+                parsed = ParseEspnScoreboard(resp.body, feed.league, feed.subLeague)
+                for each g in parsed
+                    allGames.Push(g)
+                end for
+            end if
+        end for
+        sortedGames = SortSportsGames(allGames)
+        m.top.result = { mode: "scores", requestId: m.top.requestId, data: { games: sortedGames } }
+        return
+    end if
     token = CreateObject("roRegistrySection", "GlzTV").Read("token")
     if token = ""
         ExtraError("Pair this Roku with GlzHub first.")
