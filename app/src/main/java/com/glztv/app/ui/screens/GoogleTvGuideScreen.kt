@@ -93,6 +93,7 @@ import kotlinx.coroutines.delay
 fun GoogleTvGuideScreen(
     channels: List<Channel>,
     guide: EpgGuide,
+    sportsGames: List<com.glztv.app.data.SportsGame> = emptyList(),
     activeTunedChannel: Channel?,
     favorites: Set<String>,
     onToggleFavorite: (String) -> Unit,
@@ -121,25 +122,37 @@ fun GoogleTvGuideScreen(
         }
     }
 
-    val hasLiveEvents = remember(channels) { channels.any { it.isLiveEvent() } }
+    val validLiveEvents = remember(channels, guide, sportsGames, now) {
+        com.glztv.app.data.SportsChannelMatcher.filterValidLiveEvents(channels, guide, sportsGames, now)
+    }
+    val validLiveEventKeys = remember(validLiveEvents) {
+        validLiveEvents.map { "${it.id}|${it.streamUrl}" }.toSet()
+    }
+    val hasLiveEvents = validLiveEvents.isNotEmpty()
     val categories = remember(channels, hasLiveEvents) {
-        val groups = channels.mapNotNull { it.group.takeIf(String::isNotBlank) }.distinct()
+        val groups = channels.mapNotNull { it.group.takeIf(String::isNotBlank) }.distinct().filterNot { grp ->
+            val u = grp.uppercase()
+            (u.contains("EVENT") || u.contains("PPV")) && !hasLiveEvents
+        }
         buildList {
             add("ALL")
             add("FAVORITES")
             if (hasLiveEvents) add("LIVE EVENTS")
             add("RECENT")
-            addAll(groups)
+            addAll(groups.filterNot { it.equals("LIVE EVENTS", ignoreCase = true) || it.equals("ALL", ignoreCase = true) })
         }
     }
 
-    val filteredChannels = remember(channels, selectedCategory, favorites) {
+    val filteredChannels = remember(channels, selectedCategory, favorites, validLiveEvents, validLiveEventKeys) {
+        val cleanChannels = channels.filter { ch ->
+            !ch.isLiveEvent() || "${ch.id}|${ch.streamUrl}" in validLiveEventKeys
+        }
         when (selectedCategory) {
-            "ALL" -> channels
-            "FAVORITES" -> channels.filter { it.id in favorites }
-            "LIVE EVENTS" -> channels.filter { it.isLiveEvent() }
-            "RECENT" -> channels.take(15)
-            else -> channels.filter { it.group.equals(selectedCategory, ignoreCase = true) }
+            "ALL" -> cleanChannels
+            "FAVORITES" -> cleanChannels.filter { it.id in favorites }
+            "LIVE EVENTS" -> validLiveEvents
+            "RECENT" -> cleanChannels.take(15)
+            else -> cleanChannels.filter { it.group.equals(selectedCategory, ignoreCase = true) }
         }
     }
 
@@ -236,8 +249,20 @@ fun GoogleTvGuideScreen(
                                 )
                             }
 
+                            val isViewingCurrentSlot = focusedProgramme == null ||
+                                (focusedProgramme!!.startMillis <= now && focusedProgramme!!.endMillis >= now)
+                            val enrichedCurrentTitle = remember(displayChannel, guide, sportsGames, now) {
+                                com.glztv.app.data.SportsChannelMatcher.resolveChannelShowTitle(
+                                    displayChannel, guide, sportsGames, now
+                                )
+                            }
+                            val resolvedTitle = if (isViewingCurrentSlot) {
+                                enrichedCurrentTitle
+                            } else {
+                                focusedProgramme?.title?.takeIf { it.isNotBlank() } ?: enrichedCurrentTitle
+                            }
                             Text(
-                                text = activeProg?.title ?: displayChannel.eventTitle ?: displayChannel.name,
+                                text = resolvedTitle,
                                 color = Color.White,
                                 fontSize = if (viewport.isCompactHeight) 18.sp else 21.sp,
                                 fontWeight = FontWeight.Normal,
